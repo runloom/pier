@@ -21,6 +21,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
@@ -28,10 +29,8 @@ import net from "node:net";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  assertCompiledIconStack,
-  layeredIconFingerprint,
-} from "./app-icon-layered.mjs";
+import { parseIcns } from "./app-icon-icns.mjs";
+import { macIconFingerprint } from "./app-icon-layered.mjs";
 import { withoutEsbuildBinaryOverride } from "./esbuild-process-env.mjs";
 
 const require = createRequire(import.meta.url);
@@ -47,9 +46,7 @@ const MAC_DEV_ELECTRON_APP_NAME = "PierDev";
 const MAC_DEV_ELECTRON_ICON_FILE = "electron.icns";
 const MAC_DEV_APP_ICON_FILE = "AppIcon.icns";
 const MAC_DEV_APP_ICON_NAME = "AppIcon";
-// Icon name inside the repo-committed build/Assets.car (see scripts/app-icon-layered.mjs).
-const MAC_TAHOE_ICON_NAME = "app-icon";
-const MAC_DEV_ELECTRON_ICON_REVISION = 9;
+const MAC_DEV_ELECTRON_ICON_REVISION = 12;
 const MAC_DEV_HELPER_VARIANTS = [
   { id: "helper", suffix: "" },
   { id: "helper.GPU", suffix: " (GPU)" },
@@ -60,39 +57,80 @@ const LSREGISTER =
   "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
 
 /**
- * Digest every authored and generated input that can change PierDev's Dock
- * identity. Missing inputs are explicit markers, so removing a source also
- * invalidates an existing runtime rather than accidentally reusing it.
+ * Digest only the generated files that PierDev actually installs or validates.
+ * The authored SVG is intentionally excluded: editing it before running the
+ * icon build must not make a cached runtime claim a new icon was installed.
  *
  * @param {string} worktreeRoot
  */
 export function macDevIconHash(worktreeRoot) {
   const buildDirectory = path.join(worktreeRoot, "build");
   const hash = createHash("sha256");
-  hash.update("pier-dev-icon-cache-v1\0");
-  for (const relative of [
-    "app-icon-16.svg",
-    "app-icon-master.svg",
-    "app-icon-small.svg",
-    "app-icon-tiny.svg",
-    "icon.icns",
-    "Assets.car",
-    "Assets.car.inputs",
-  ]) {
+  hash.update("pier-dev-icon-cache-v2\0");
+  for (const relative of ["icon.icns", "Assets.car.inputs"]) {
     const file = path.join(buildDirectory, relative);
     hash.update(relative);
     hash.update("\0");
-    hash.update(existsSync(file) ? readFileSync(file) : Buffer.from("<missing>"));
+    hash.update(
+      existsSync(file) ? readFileSync(file) : Buffer.from("<missing>")
+    );
     hash.update("\0");
   }
-  const iconDocument = path.join(buildDirectory, "app-icon.icon");
-  hash.update("app-icon.icon:fingerprint\0");
-  hash.update(
-    existsSync(iconDocument)
-      ? layeredIconFingerprint(iconDocument)
-      : "<missing-document>"
-  );
   return hash.digest("hex");
+}
+
+/**
+ * @param {string} worktreeRoot
+ */
+export function macDevIconAssetsAreFresh(worktreeRoot) {
+  const buildDirectory = path.join(worktreeRoot, "build");
+  const sourceSvg = path.join(buildDirectory, "app-icon-source.svg");
+  const iconFile = path.join(buildDirectory, "icon.icns");
+  const inputsFile = path.join(buildDirectory, "Assets.car.inputs");
+  if (
+    !(existsSync(sourceSvg) && existsSync(iconFile) && existsSync(inputsFile))
+  ) {
+    return false;
+  }
+  try {
+    const sourcePng = parseIcns(readFileSync(iconFile)).find(
+      ({ type }) => type === "ic10"
+    )?.data;
+    if (!sourcePng) {
+      return false;
+    }
+    return readFileSync(inputsFile).equals(
+      Buffer.from(macIconFingerprint(sourceSvg, sourcePng))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function staleMacDevIconAssetsError() {
+  return new Error(
+    "PierDev app icon assets are missing or stale. Run pnpm build:icons before pnpm dev."
+  );
+}
+
+/**
+ * Fold the PierDev icon revision into a valid three-component bundle version.
+ * When `iconHash` is present, the third component tracks ICNS content so the
+ * Dock cache cannot keep a previous raster under the same CFBundleVersion.
+ * Invalid or missing source components are treated as zero.
+ *
+ * @param {string} sourceVersion
+ * @param {string} [iconHash]
+ */
+export function macDevBundleVersion(sourceVersion, iconHash = "") {
+  const components = String(sourceVersion).split(".");
+  const numeric = (index) =>
+    /^\d+$/.test(components[index] ?? "") ? BigInt(components[index]) : 0n;
+  const digest = String(iconHash).slice(0, 6);
+  const iconPart = /^[0-9a-f]{6}$/i.test(digest)
+    ? BigInt(Number.parseInt(digest, 16))
+    : BigInt(MAC_DEV_ELECTRON_ICON_REVISION);
+  return `${numeric(0)}.${numeric(1)}.${iconPart}`;
 }
 
 /**
@@ -138,52 +176,29 @@ export function macDevElectronRuntimeIsCurrent(stamp, expected) {
 }
 
 /**
- * Install the same generated ICNS and native layered Assets.car used by release
- * packaging. The sidecar must match the authored Icon Composer document and
- * assetutil must confirm the complete three-layer vector stack, so PierDev can
- * never silently drift to a separately rasterized or corrupt icon.
+ * Install the same generated ICNS used by release packaging. PierDev uses the
+ * completed raster artwork directly; stale compiled icon catalogs and their
+ * CFBundleIconName route are removed so macOS cannot add another material pass.
  *
  * @param {string} worktreeRoot
  * @param {string} targetApp
  * @param {{ bundleVersion?: string }} [options]
- * @returns {string | false} applied CFBundleIconName, or false on failure
+ * @returns {true}
  */
 export function applyPierDevAppIcon(worktreeRoot, targetApp, options = {}) {
+  if (!macDevIconAssetsAreFresh(worktreeRoot)) {
+    throw staleMacDevIconAssetsError();
+  }
   const buildDirectory = path.join(worktreeRoot, "build");
   const iconFile = path.join(buildDirectory, "icon.icns");
-  const assetsCar = path.join(buildDirectory, "Assets.car");
-  const assetsInputs = path.join(buildDirectory, "Assets.car.inputs");
-  const iconDocument = path.join(buildDirectory, "app-icon.icon");
-  if (
-    !(
-      existsSync(iconFile) &&
-      existsSync(assetsCar) &&
-      existsSync(assetsInputs) &&
-      existsSync(iconDocument)
-    )
-  ) {
-    return false;
-  }
-  const expectedFingerprint = layeredIconFingerprint(iconDocument);
-  if (readFileSync(assetsInputs, "utf8") !== expectedFingerprint) {
-    return false;
-  }
-  if (process.platform === "darwin") {
-    try {
-      assertCompiledIconStack(assetsCar);
-    } catch (error) {
-      console.error(
-        `[dev-profile] invalid layered app icon: ${error instanceof Error ? error.message : String(error)}`
-      );
-      return false;
-    }
-  }
 
   const resources = path.join(targetApp, "Contents", "Resources");
   mkdirSync(resources, { recursive: true });
   copyFileSync(iconFile, path.join(resources, MAC_DEV_APP_ICON_FILE));
   copyFileSync(iconFile, path.join(resources, MAC_DEV_ELECTRON_ICON_FILE));
-  copyFileSync(assetsCar, path.join(resources, "Assets.car"));
+  rmSync(path.join(resources, "Assets.car"), { force: true });
+  const now = new Date();
+  utimesSync(targetApp, now, now);
   const leftover = path.join(resources, "pier.icns");
   rmSync(leftover, { force: true });
   const plist = path.join(targetApp, "Contents", "Info.plist");
@@ -191,14 +206,14 @@ export function applyPierDevAppIcon(worktreeRoot, targetApp, options = {}) {
     /** @type {Record<string, string>} */
     const entries = {
       CFBundleIconFile: MAC_DEV_APP_ICON_NAME,
-      CFBundleIconName: MAC_TAHOE_ICON_NAME,
     };
     if (options.bundleVersion) {
       entries.CFBundleVersion = options.bundleVersion;
     }
     upsertPlistStrings(plist, entries);
+    removePlistKey(plist, "CFBundleIconName");
   }
-  return MAC_TAHOE_ICON_NAME;
+  return true;
 }
 
 function upsertPlistStrings(plistFile, entries) {
@@ -215,19 +230,31 @@ function upsertPlistStrings(plistFile, entries) {
   }
 }
 
+function removePlistKey(plistFile, key) {
+  const result = spawnSync("plutil", ["-remove", key, plistFile], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (
+    result.status === 0 ||
+    result.stderr?.includes("No value to remove at key path")
+  ) {
+    return;
+  }
+  throw new Error(
+    `plutil -remove ${key} failed${result.stderr ? `:\n${result.stderr.trim()}` : ""}`
+  );
+}
+
 /**
  * Activity Monitor lists Helper processes as their own apps. Dev copies keep
  * `Electron Helper` + `com.github.Electron.helper`, so those rows keep the
  * stock Electron atom. Match the packaged app: rename + give them Pier icons.
  *
  * @param {string} targetApp
- * @param {string} [iconName] CFBundleIconName applied to the main bundle
  * @returns {boolean}
  */
-export function brandPierDevHelpers(
-  targetApp,
-  iconName = MAC_DEV_APP_ICON_NAME
-) {
+export function brandPierDevHelpers(targetApp) {
   const frameworks = path.join(targetApp, "Contents", "Frameworks");
   if (!existsSync(frameworks)) {
     return false;
@@ -238,7 +265,6 @@ export function brandPierDevHelpers(
     "Resources",
     MAC_DEV_APP_ICON_FILE
   );
-  const assetsCar = path.join(targetApp, "Contents", "Resources", "Assets.car");
   let branded = false;
   for (const { id, suffix } of MAC_DEV_HELPER_VARIANTS) {
     const oldName = `Electron Helper${suffix}`;
@@ -267,17 +293,18 @@ export function brandPierDevHelpers(
         path.join(helperResources, MAC_DEV_APP_ICON_FILE)
       );
     }
-    if (existsSync(assetsCar)) {
-      copyFileSync(assetsCar, path.join(helperResources, "Assets.car"));
-    }
+    rmSync(path.join(helperResources, "Assets.car"), { force: true });
     upsertPlistStrings(path.join(helperApp, "Contents", "Info.plist"), {
       CFBundleDisplayName: newName,
       CFBundleExecutable: newName,
       CFBundleIconFile: MAC_DEV_APP_ICON_NAME,
-      CFBundleIconName: iconName,
       CFBundleIdentifier: `io.pier.dev-electron.${id}`,
       CFBundleName: newName,
     });
+    removePlistKey(
+      path.join(helperApp, "Contents", "Info.plist"),
+      "CFBundleIconName"
+    );
     if (helperApp !== brandedApp) {
       renameSync(helperApp, brandedApp);
     }
@@ -1229,6 +1256,9 @@ function prepareMacDevElectronRuntime(profile, env) {
   const sourceVersion = existsSync(sourceVersionFile)
     ? readFileSync(sourceVersionFile, "utf8").trim()
     : "";
+  if (!macDevIconAssetsAreFresh(profile.worktreeRoot)) {
+    throw staleMacDevIconAssetsError();
+  }
   const targetRoot = path.join(profile.profileDir, "electron-runtime");
   const targetApp = path.join(targetRoot, `${MAC_DEV_ELECTRON_APP_NAME}.app`);
   const targetExec = path.join(
@@ -1262,31 +1292,21 @@ function prepareMacDevElectronRuntime(profile, env) {
       CFBundleIdentifier: "io.pier.dev-electron",
       CFBundleName: MAC_DEV_ELECTRON_APP_NAME,
     });
-    const iconApplied = applyPierDevAppIcon(profile.worktreeRoot, targetApp, {
-      bundleVersion: `${sourceVersion}.${MAC_DEV_ELECTRON_ICON_REVISION}`,
+    applyPierDevAppIcon(profile.worktreeRoot, targetApp, {
+      bundleVersion: macDevBundleVersion(sourceVersion, iconHash),
     });
-    if (!iconApplied) {
-      console.error(
-        "[dev-profile] PierDev app icon branding failed; next launch will retry"
-      );
-    }
-    brandPierDevHelpers(
-      targetApp,
-      typeof iconApplied === "string" ? iconApplied : undefined
-    );
+    brandPierDevHelpers(targetApp);
     runChecked("codesign", ["--force", "--deep", "--sign", "-", targetApp]);
     registerDevAppWithLaunchServices(targetApp);
-    if (iconApplied) {
-      writeJson(
-        stampFile,
-        macDevElectronRuntimeStamp({
-          iconApplied: true,
-          iconHash,
-          sourceApp,
-          sourceVersion,
-        })
-      );
-    }
+    writeJson(
+      stampFile,
+      macDevElectronRuntimeStamp({
+        iconApplied: true,
+        iconHash,
+        sourceApp,
+        sourceVersion,
+      })
+    );
   }
 
   return targetExec;

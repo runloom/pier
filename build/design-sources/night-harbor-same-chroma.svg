@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Pier app icon night-harbor same-chroma trial</title>
+  <defs>
+    <linearGradient id="pier-body-fill" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#252b38"/>
+      <stop offset="46%" stop-color="#161b28"/>
+      <stop offset="100%" stop-color="#0c1018"/>
+    </linearGradient>
+    <linearGradient id="pier-violet" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#b66cff"/>
+      <stop offset="46%" stop-color="#8549ff"/>
+      <stop offset="100%" stop-color="#542ee5"/>
+    </linearGradient>
+    <linearGradient id="pier-blue" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#b66cff"/>
+      <stop offset="46%" stop-color="#8549ff"/>
+      <stop offset="100%" stop-color="#542ee5"/>
+    </linearGradient>
+    <filter id="pier-relief" x="-16" y="-16" width="1056" height="1056" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feOffset in="SourceAlpha" dx="0" dy="6" result="top-shift"/>
+      <feComposite in="SourceAlpha" in2="top-shift" operator="out" result="top-band"/>
+      <feGaussianBlur in="top-band" stdDeviation="1.25" result="top-soft"/>
+      <feFlood flood-color="#ffffff" flood-opacity="0.32" result="top-color"/>
+      <feComposite in="top-color" in2="top-soft" operator="in" result="top-tint"/>
+      <feComposite in="top-tint" in2="SourceAlpha" operator="in" result="top-highlight"/>
+      <feOffset in="SourceAlpha" dx="0" dy="-8" result="bottom-shift"/>
+      <feComposite in="SourceAlpha" in2="bottom-shift" operator="out" result="bottom-band"/>
+      <feGaussianBlur in="bottom-band" stdDeviation="1.75" result="bottom-soft"/>
+      <feFlood flood-color="#07111f" flood-opacity="0.34" result="bottom-color"/>
+      <feComposite in="bottom-color" in2="bottom-soft" operator="in" result="bottom-tint"/>
+      <feComposite in="bottom-tint" in2="SourceAlpha" operator="in" result="bottom-shadow"/>
+      <feMerge>
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="top-highlight"/>
+        <feMergeNode in="bottom-shadow"/>
+      </feMerge>
+    </filter>
+    <clipPath id="pier-body-clip">
+      <rect x="102" y="102" width="820" height="820" rx="164"/>
+    </clipPath>
+  </defs>
+  <rect id="pier-body" x="102" y="102" width="820" height="820" rx="164" fill="url(#pier-body-fill)"/>
+  <g clip-path="url(#pier-body-clip)">
+    <g transform="translate(102 102) scale(0.80078125)">
+      <g id="pier-berth-relief" filter="url(#pier-relief)">
+        <path id="pier-berth" d="M0 664 H64 C176 664 180 850 320 850 H704 C844 850 848 664 960 664 H1024 V1024 H0 Z" fill="url(#pier-blue)"/>
+        <rect id="pier-berth-seam-guard" x="0" y="1008" width="1024" height="64" fill="url(#pier-blue)"/>
+      </g>
+      <path id="pier-chevron" d="M337 223 L522 405 L337 599" fill="none" stroke="url(#pier-violet)" stroke-width="104" stroke-linecap="round" stroke-linejoin="round" filter="url(#pier-relief)"/>
+      <path id="pier-underscore" d="M547 612 H770" fill="none" stroke="url(#pier-violet)" stroke-width="80" stroke-linecap="round" filter="url(#pier-relief)"/>
+    </g>
+  </g>
+</svg>

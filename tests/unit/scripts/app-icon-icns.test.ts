@@ -9,11 +9,6 @@ import {
 } from "../../../scripts/app-icon-icns.mjs";
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-const RENDITION_BY_TYPE = new Map([
-  ["ic11", "tiny"],
-  ["ic12", "small"],
-  ["ic07", "small"],
-]);
 const LEGACY_TYPES = ["is32", "s8mk", "il32", "l8mk"] as const;
 const RETINA_SOURCE_TYPES = new Map([
   ["ic13", "ic08"],
@@ -118,15 +113,9 @@ function legacyRgb(size: number): Buffer {
 }
 
 describe("Pier ICNS rendition merger", () => {
-  it("selects tiny at 32px, small at 64–128px, and master from 256px", () => {
+  it("selects every modern frame from the single complete PNG source", () => {
     const result = parseIcns(
-      mergeIcnsRenditions(
-        rendition("master"),
-        rendition("small"),
-        rendition("tiny"),
-        legacy16(),
-        legacy32()
-      )
+      mergeIcnsRenditions(rendition("complete"), legacy16(), legacy32())
     );
 
     expect(result.map((entry) => entry.type)).toEqual([
@@ -138,8 +127,7 @@ describe("Pier ICNS rendition merger", () => {
         continue;
       }
       const sourceType = RETINA_SOURCE_TYPES.get(entry.type) ?? entry.type;
-      const label = RENDITION_BY_TYPE.get(entry.type) ?? "master";
-      expect(pngMarker(entry.data)).toBe(`${sourceType}-${label}`);
+      expect(pngMarker(entry.data)).toBe(`${sourceType}-complete`);
     }
   });
 
@@ -213,13 +201,7 @@ describe("Pier ICNS rendition merger", () => {
     );
 
     expect(() =>
-      mergeIcnsRenditions(
-        wrongStandard,
-        rendition("small"),
-        rendition("tiny"),
-        legacy16(),
-        legacy32()
-      )
+      mergeIcnsRenditions(wrongStandard, legacy16(), legacy32())
     ).toThrow(/ic08.*256/);
   });
 
@@ -234,26 +216,14 @@ describe("Pier ICNS rendition merger", () => {
     );
 
     expect(() =>
-      mergeIcnsRenditions(
-        incomplete,
-        rendition("small"),
-        rendition("tiny"),
-        legacy16(),
-        legacy32()
-      )
+      mergeIcnsRenditions(incomplete, legacy16(), legacy32())
     ).toThrow(/missing ic09/);
   });
 
   it("requires the official legacy RGB and alpha entries for non-Retina frames", () => {
     const missingAlpha = encodeIcns([{ type: "is32", data: legacyRgb(16) }]);
     expect(() =>
-      mergeIcnsRenditions(
-        rendition("master"),
-        rendition("small"),
-        rendition("tiny"),
-        missingAlpha,
-        legacy32()
-      )
+      mergeIcnsRenditions(rendition("complete"), missingAlpha, legacy32())
     ).toThrow(/missing s8mk/);
 
     const wrongMask = encodeIcns([

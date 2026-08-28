@@ -1,5 +1,8 @@
 # Pier App Icon Gold Standard Design
 
+> Superseded later on 2026-08-28 by the approved PNG-first single-source
+> implementation. This document remains as historical design context.
+
 ## Status
 
 Approved by the user on 2026-08-28. This specification replaces the legacy

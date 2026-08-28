@@ -43,7 +43,8 @@ jobs:
               - 'scripts/**'
               - 'AGENTS.md'
               - 'docs/**'
-              - 'build/app-icon-*.svg'
+              - 'build/app-icon*.svg'
+              - 'build/app-icon*.png'
               - 'build/app-icon.icon/**'
               - 'build/design-sources/**'
               - 'build/icon.*'
@@ -60,6 +61,7 @@ jobs:
               - 'dependency-cruiser*'
               - '.pier/**'
               - '.github/workflows/ci.yml'
+              - '.github/workflows/release-app.yml'
               - 'playwright.config.ts'
               - 'electron-builder.yml'
             native:
@@ -73,7 +75,8 @@ jobs:
               - 'src/renderer/panel-kits/terminal/**'
               - '.github/workflows/ci.yml'
             mac_icons:
-              - 'build/app-icon-*.svg'
+              - 'build/app-icon*.svg'
+              - 'build/app-icon*.png'
               - 'build/app-icon.icon/**'
               - 'build/design-sources/**'
               - 'build/icon.*'
@@ -83,13 +86,21 @@ jobs:
               - 'scripts/app-icon-*.mjs'
               - 'scripts/build-app-icons.mjs'
               - 'scripts/dev-profile.mjs'
+              - 'scripts/build-dist.sh'
+              - 'scripts/mac-helper-icons.mjs'
+              - 'scripts/verify-mac-release-artifacts.mjs'
               - 'AGENTS.md'
               - 'docs/**'
               - 'tests/unit/scripts/app-icon-*.test.ts'
               - 'tests/unit/app/dev-profile-electron-icon.test.ts'
+              - 'tests/unit/main/preferences/mac-release-assets.test.ts'
+              - 'tests/unit/main/app-core/release-workflow.test.ts'
               - 'electron-builder.yml'
+              - '.gitignore'
+              - 'package.json'
               - 'pnpm-lock.yaml'
               - '.github/workflows/ci.yml'
+              - '.github/workflows/release-app.yml'
             windows_lsp:
               - 'native/lsp-windows-job/**'
               - 'src/main/**/lsp/**'
@@ -144,19 +155,19 @@ jobs:
   mac-icons:
     needs: [changes]
     if: needs.changes.outputs.mac_icons == 'true'
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - name: Select the pinned Xcode 26 toolchain
+      - name: Select the pinned Xcode 26.6 toolchain
         run: |
           set -euo pipefail
           test -z "${DEVELOPER_DIR:-}"
-          readonly pier_xcode_dir=/Applications/Xcode_26.3.app/Contents/Developer
+          readonly pier_xcode_dir=/Applications/Xcode_26.6.app/Contents/Developer
           test -d "$pier_xcode_dir"
           sudo xcode-select --switch "$pier_xcode_dir"
           test "$(xcode-select --print-path)" = "$pier_xcode_dir"
           xcodebuild -version
-          test "$(xcodebuild -version | sed -n '1p')" = "Xcode 26.3"
+          test "$(xcodebuild -version | sed -n '1p')" = "Xcode 26.6"
           xcrun --find actool
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -164,20 +175,22 @@ jobs:
           cache: pnpm
           node-version: 24
       - run: pnpm install --frozen-lockfile
-      - run: which rsvg-convert || brew install librsvg
       - name: Rebuild and verify committed icon freshness
         run: |
           pnpm build:icons
           git diff --exit-code -- build
       - run: >-
           pnpm exec vitest run tests/unit/scripts/app-icon-assets.test.ts
-          tests/unit/scripts/app-icon-canonical-sources.test.ts
+          tests/unit/scripts/app-icon-svg-source.test.ts
           tests/unit/scripts/app-icon-icns.test.ts
           tests/unit/scripts/app-icon-build.test.ts
           tests/unit/scripts/app-icon-layered-document.test.ts
           tests/unit/scripts/app-icon-small-output.test.ts
           tests/unit/scripts/app-icon-container-governance.test.ts
           tests/unit/app/dev-profile-electron-icon.test.ts
+          tests/unit/scripts/mac-helper-icons.test.ts
+          tests/unit/main/preferences/mac-release-assets.test.ts
+          tests/unit/main/app-core/release-workflow.test.ts
 
   native:
     needs: [changes]

@@ -1,5 +1,8 @@
 # Pier App Icon Gold Standard Implementation Plan
 
+> Superseded later on 2026-08-28 by the approved PNG-first single-source
+> implementation. This plan remains as historical implementation context.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace Pier's legacy app icon with the approved berthing-capsule visual system, preserve clarity at 16 px, and use one native macOS asset chain in development and production.
