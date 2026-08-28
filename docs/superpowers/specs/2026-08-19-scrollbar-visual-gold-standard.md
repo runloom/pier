@@ -18,7 +18,7 @@
 | 空闲 | 拇指不可见（`scrollbar-color` 透明） |
 | 显现 | 滚动 / 滚轮 / 触控 / 槽位悬停。禁止整容器 hover 当默认 |
 | 隐藏 | 停止活动后 900ms（`AUTO_HIDE_SCROLLBAR_IDLE_MS`） |
-| 颜色 | 相对 `--background` 的不透明混合，不随侧栏/画布底「染色」 |
+| 颜色 | 相对 `--background` 的不透明混合，不随侧栏/画布底「染色」。**Markdown 纸面（`data-reading-appearance`）换 token 时必须在该作用域同公式重混**——自定义属性在声明处求值后继承，:root 的拇指值不会跟随纸面（2026-08-28） |
 | 粗细 | Chromium `scrollbar-width: thin`。自绘重建跟 `--shell-scrollbar-width-legacy`（测到的 `thin` 槽宽；测不到用 11px） |
 | 圆角 | `--shell-scrollbar-radius`（胶囊） |
 | 轨道 | 透明 |
