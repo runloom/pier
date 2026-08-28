@@ -47,7 +47,8 @@
         "electron.vite.config.ts",
         "vitest.config.ts",
         "tailwind.config.ts",
-        "scripts/**"
+        "scripts/**",
+        "apps/mobile-web/**"
       ],
       "linter": {
         "rules": {

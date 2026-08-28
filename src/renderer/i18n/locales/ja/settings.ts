@@ -5,6 +5,7 @@ import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
+import { settingsRemoteAccess } from "./settings-remote-access.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
 import { settingsSkills } from "./settings-skills.ts";
 
@@ -23,6 +24,7 @@ export const settings = {
     workspace: "ワークスペース",
     agents: "エージェント",
     notifications: "通知",
+    remoteAccess: "リモートアクセス",
     pluginGroup: "プラグイン設定",
   },
   section: {
@@ -38,6 +40,7 @@ export const settings = {
     workspace: "ワークスペース",
     agents: "エージェント",
     notifications: "通知",
+    remoteAccess: "リモートアクセス",
   },
   projects: {
     addProject: "プロジェクトを追加",
@@ -256,6 +259,7 @@ export const settings = {
     setupHint: "作業ツリーを作成するときに実行します。",
   },
   appUpdate: settingsAppUpdate,
+  remoteAccess: settingsRemoteAccess,
   statusBar: {
     title: "ステータスバー",
     description:

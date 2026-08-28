@@ -71,6 +71,7 @@ import { createExternalNavigationService } from "./services/external-navigation.
 import { createGitAutofetchService } from "./services/git/autofetch-service.ts";
 import { abortMissingSingleInstanceLock } from "./startup-diagnostics.ts";
 import { reconcileOrphanedBackgroundProcesses } from "./state/background-task-process-ledger.ts";
+import { flushPairingState } from "./state/pairing-store.ts";
 import { migrateTerminalSessionScopesToRecordIds } from "./state/terminal-session-scope-migration.ts";
 import {
   migrateLegacyAgentSuccessTabs,
@@ -146,6 +147,9 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
       flushNotificationCenterHistory(),
     ]);
   });
+  // remote-control：先停监听（断开移动端连接）再 flush 配对状态落盘。
+  await appCore.services.remoteControl?.owner.stop();
+  await flushPairingState();
   // Clean quit：在销毁窗口前对 background 任务做 TERM→grace→KILL。
   await appCore.services.tasks.shutdownForQuit();
   await localControlRegistration.close();
@@ -179,6 +183,11 @@ const appQuitController = createAppQuitController({
     appCore.pluginHost.dispose();
     localControlRegistration.close().catch((error: unknown) => {
       appQuitLog.error("failed to close local control before quit", { error });
+    });
+    appCore.services.remoteControl?.owner.stop().catch((error: unknown) => {
+      appQuitLog.error("failed to stop remote control before quit", {
+        error,
+      });
     });
   },
   flushBeforeQuit: flushBeforeQuitConfirmed,
@@ -339,6 +348,9 @@ if (gotTheLock) {
       registerAgentRuntimeHostIpc(ipcMain, {
         eventBus: appCore.eventBus,
         index: appCore.services.agentRuntimeIndex,
+        ...(appCore.services.pendingInteractions
+          ? { pendingInteractions: appCore.services.pendingInteractions }
+          : {}),
       });
       registerPierResourceIpc(ipcMain);
       registerUsageDataIpc(ipcMain, appCore.services.usageData);

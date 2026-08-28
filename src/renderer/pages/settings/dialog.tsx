@@ -46,6 +46,7 @@ import { NotificationsSection } from "@/pages/settings/components/notifications-
 import { PluginConfigurationSection } from "@/pages/settings/components/plugin-configuration-section.tsx";
 import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
 import { ProjectsSection } from "@/pages/settings/components/project/section.tsx";
+import { RemoteAccessSection } from "@/pages/settings/components/remote-access-section.tsx";
 import { TerminalSection } from "@/pages/settings/components/terminal-section.tsx";
 import { WorkspaceSection } from "@/pages/settings/components/worktree-section.tsx";
 import {
@@ -324,6 +325,7 @@ export function SettingsDialog() {
             {activeSection === "appearance" ? <AppearanceSection /> : null}
             {activeSection === "terminal" ? <TerminalSection /> : null}
             {activeSection === "workspace" ? <WorkspaceSection /> : null}
+            {activeSection === "remoteAccess" ? <RemoteAccessSection /> : null}
             {activeSection === "keybindings" ? <KeybindingsSection /> : null}
             {activeSection === "updates" ? <AppUpdateSection /> : null}
             {activeSection === "plugins" ? <PluginsSection /> : null}

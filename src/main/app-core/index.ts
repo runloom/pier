@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app } from "electron";
+import { bootAppCoreRemoteControl } from "../adapters/remote-control/boot.ts";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
 import {
   getTerminalTaskLifecycleForTransfer,
@@ -21,6 +22,7 @@ import { createPluginRpcBus, type PluginRpcBus } from "../plugins/rpc-bus.ts";
 import { registerPluginRpcIpc } from "../plugins/rpc-ipc.ts";
 import { registerSandboxAuditIpc } from "../plugins/sandbox-audit-ipc.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
+import { createPendingInteractionRegistry } from "../services/agent-attention/pending-interactions.ts";
 import { createAgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import { createAgentDetectionService } from "../services/agents/detection-service.ts";
 import { createAgentUsageService } from "../services/agents/usage-service.ts";
@@ -114,6 +116,12 @@ export type { PierAppCore } from "./types.ts";
 function createPierAppCore(): PierAppCore {
   const eventBus = createPierEventBus();
   const clients = createClientRegistry();
+  // remote-control 装配：默认关（构造期零监听）；executeCommand 桥经
+  // setCommandRouter 延迟绑定到 return 前创建的 commandRouter。
+  const remoteControlBoot = bootAppCoreRemoteControl({
+    clients,
+    getServices: () => services,
+  });
   const rendererCommand = createRendererCommandService({
     host: { send: sendRendererCommand },
   });
@@ -389,6 +397,7 @@ function createPierAppCore(): PierAppCore {
     agentRuntimeIndex,
     foregroundActivity: createForegroundActivityFacade(),
     notificationCenter: createNotificationCenterCommandFacade(),
+    pendingInteractions: createPendingInteractionRegistry(),
     agentUsage,
     agentLaunchGate,
     agentMcpCatalog,
@@ -446,6 +455,8 @@ function createPierAppCore(): PierAppCore {
     terminalLaunches: terminalLaunchRegistry,
     window: windowService,
     panelTransfer: panelTransferRef,
+    // pairing + remoteControl：remoteAccess.* 命令面（Task 9）经此消费。
+    ...remoteControlBoot.services,
     workspace: workspaceService,
     worktrees: createWorktreeService({
       readPreferences: () => preferences.read(),
@@ -455,25 +466,23 @@ function createPierAppCore(): PierAppCore {
       const git = createGitService({
         resolveEnvironment: (cwd) => resolvePathEnv(processEnvironment, cwd),
       });
-      return {
-        git,
-        gitReview: new GitReviewService(),
-        gitWatch: createGitWatchService({
-          getStatus: (gitRoot, prefetched) =>
-            git.getStatus(gitRoot, prefetched),
-          isPollActive: () => windowManager.getFocused() !== null,
-        }),
-      };
+      const gitWatch = createGitWatchService({
+        getStatus: (gitRoot, prefetched) => git.getStatus(gitRoot, prefetched),
+        isPollActive: () => windowManager.getFocused() !== null,
+      });
+      return { git, gitReview: new GitReviewService(), gitWatch };
     })(),
   };
+  const commandRouter = createCommandRouter({
+    clients,
+    onEnvironmentsChanged,
+    onWorktreeCreateProgress: broadcastWorktreeCreateProgress,
+    services,
+  });
+  remoteControlBoot.setCommandRouter(commandRouter);
   return {
     clients,
-    commandRouter: createCommandRouter({
-      clients,
-      onEnvironmentsChanged,
-      onWorktreeCreateProgress: broadcastWorktreeCreateProgress,
-      services,
-    }),
+    commandRouter,
     eventBus,
     disposeManagedPluginDevRuntimeWatch: () =>
       managedPluginDevRuntimeWatches.dispose(),

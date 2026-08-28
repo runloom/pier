@@ -1,5 +1,9 @@
 import type { PierEventBus } from "@main/app-core/event-bus.ts";
 import { resolveAttentionLocale } from "@main/services/agent-attention/locale.ts";
+import {
+  type PendingInteractionRegistry,
+  pendingInteractionListener,
+} from "@main/services/agent-attention/pending-interactions.ts";
 import type { AgentAttentionService } from "@main/services/agent-attention/service.ts";
 import { createAgentAttentionService } from "@main/services/agent-attention/service.ts";
 import {
@@ -10,6 +14,7 @@ import type { AgentRuntimeIndexService } from "@main/services/agent-runtime-inde
 import { makeAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
 import { createLogger } from "@shared/logger.ts";
+import { onAgentHookEvent } from "../services/foreground-activity/agent-hook-event-fanout.ts";
 import { readPreferences } from "../state/preferences.ts";
 import { peekTerminalPanelContext } from "../state/terminal-session-state.ts";
 import {
@@ -31,6 +36,11 @@ export interface RegisterAgentAttentionArgs {
    * 保留字段以免启动接线改签名。
    */
   index?: AgentRuntimeIndexService;
+  /**
+   * M1：共享未决交互注册表（app-core services 持有，命令面与快照同源）；
+   * 缺省由服务自建（测试/独立接线）。
+   */
+  pendingInteractions?: PendingInteractionRegistry;
 }
 
 function liveAgentRefsFrom(next: ForegroundActivityBroadcast): Set<string> {
@@ -66,6 +76,9 @@ export function registerAgentAttention(
     ingestNotification: ingestHostNotification,
     resolveLocale: resolveAttentionLocale,
     settings: () => getAgentAttentionSettingsCached(),
+    ...(args.pendingInteractions
+      ? { pendingInteractions: args.pendingInteractions }
+      : {}),
     resolveLocation: ({ panelId, windowId }) => {
       const electronId = Number(windowId);
       if (!Number.isFinite(electronId)) {
@@ -91,6 +104,11 @@ export function registerAgentAttention(
       };
     },
   });
+
+  // 未决交互登记：fan-out 覆盖 JSONL hook 行（owner 路由后）与 reconciler
+  // 合成事件两条路径；只认严格 v3 交互事件，agentRef 由 windowId/panelId
+  // 组装（pendingInteractionListener）。
+  onAgentHookEvent(pendingInteractionListener(attention.pendingInteractions));
 
   let previous: ForegroundActivityBroadcast | null = null;
   onForegroundActivityPublished((next) => {

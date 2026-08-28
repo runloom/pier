@@ -1,31 +1,45 @@
 # Pier 移动端方案：业界调研与实现设计
 
 > 日期：2026-08-26（本版为结构化重写；同日第十二次修订：产品词改为「移动端」）
+>
 > 状态：草案（待评审）
+>
 > 前置文档：[2026-06-24 控制平面架构](../../archive/superpowers/specs/2026-06-24-remote-control-mcp-architecture-design.md)、[2026-07-15 agent 运行索引与 attention 设计](2026-07-15-agent-runtime-index-and-attention-design.md)
 >
 > 第十二次修订摘要：
 > ⑭ **产品词**——产品面统一为「Pier 移动端」，与本文标题一致；不再把客户端角色词写进产品名。
+>
 > 第十一次修订摘要：
 > ⑬ **审查修补**——局域网监听 ≠ 跨网只出站（本网可听直连，公网不开放入站）；吊销绑定 `deviceId`+`tokenEpoch` 并立即断开已连会话；Web 壳唯一 origin 是官方会合 HTTPS；S1 默认只有审批条，附件键与自由输入仅 D2。
+>
 > 第十次修订摘要：
 > ⑫ **核心体验必须完整**——产品故事是一条监督闭环，不是「先交局域网再交远程」。闭环 = 配对一次 + 打开见主机 + 会话里看终端/变更/文件 + 就地审批 + 远程经官方会合（不填主机地址）+ 离开时能叫醒进该会话。T2、App 锁屏、小程序是增强。工程可以同网切片，**不得把缺会合或缺叫醒的不完整切片写成可交付核心。**
+>
 > 第九次修订摘要：
 > ⑪ **「不做官方云」不是产品约束**——远程默认对齐 Codex：官方会合云 + 账号。仍不做云沙箱执行。
+>
 > 第八次修订摘要：
 > ⑩ **远程完整靠会合点，不是「知道电脑 IP」**——Codex / Claude / Cursor / Copilot 的客户端从不连局域网地址。第九次起会合点就是 Pier 官方云，不再写成未决。
+>
 > 第六次修订摘要：
 > ⑧ **配对一次、之后重连**——扫码换长期设备令牌，不是每次打开都配对。跨网远程仍可重连：同一令牌，不扫码。第十次起远程经官方会合，不再「查当前地址再直连」。
+>
 > 第五次修订摘要：
 > ⑦ **先主机、后投影**——移动端根面是主机管理（未配对空态 → 主机列表 → 当前主机工作台），会话终端 / 变更 / 只读文件挂在当前主机下。桌面出码与移动端扫入分成两面。交互流程与配对时序进 Canvas。
+>
 > 第四次修订摘要：
 > ⑥ **线框真源是 Canvas**——六面 IA 用 `.pier/canvases/mobile-companion/` 的 `ArtboardStage` + `Artboard`（360×680）实现，不再平行维护 HTML 稿。规格正文只保留文字对照表。
+>
 > 第三次修订摘要：
 > ④ **线框取代视觉稿**——前一版 HTML/截图是深色成品风界面，把未定的视觉（色、圆角、底栏、品牌）写成了「设计」。本版只保留信息架构线框：页面、区块、字段、动作、事实源；视觉另立。
+>
 > ⑤ **三壳共用协议**——移动端终态是 Web、原生 App、小程序都要能连同一宿主。`mobile-paired` 仍是唯一 client-kind；壳是设备元数据。首壳是 Web，但帧协议 / 信息架构 / T1 终端不得绑死浏览器 API。见 §11.3、D3。
+>
 > 第二次修订摘要（全部经代码库与业界专项核实）：
 > ① **终端投影分级**——初版把「终端 scrollback 投影」写成 M1 能力，核实后宿主唯一读口是 native `readViewportText`（viewport 纯文本，无 scrollback、无色彩、无输出流回调），scrollback 承诺当前无数据来源；业界金标准（Orca 移动端 + VibeTunnel 双样板）是「序列化水合 + 字节流增量 + 客户端真终端模拟器」。现改为 T1 快照档（同网切片即可）→ T2 金标准档（增强，现为 M3，需 native 输出订阅链路），见 §10.1。
+>
 > ② **推送主路径改为标准 Web Push（VAPID）**——自托管 ntfy 在 iOS 上必须经 ntfy.sh 官方 upstream + FCM/APNs 且手机需回连自托管服务器，「自托管 = 自主」叙事在 iOS 不成立；而 iOS 16.4+ 主屏 PWA 已支持标准 Web Push（无需开发者账号/证书），Safari 18.4+ Declarative Web Push 进一步免除 service worker 唤醒。第十次起 Web 壳叫醒并入核心交付（M2），不再单独排成「推送里程碑」。见 §12。
+>
 > ③ **宿主资产核实修正**——`app.snapshot` 已含 activity/agents/notifications/runtimes（缺口③已闭合、D5 已是事实而非开放决策）；`control.watch` 是 revision 门控的全量快照推送而非字段级增量；配对契约缺设备管理字段。见 §8、§9.1、§16。
 
 ---
@@ -651,7 +665,61 @@ Web 壳实现约束：独立轻量 SPA（React + Tailwind v4，按需 `@pier/ui`
 | D6 | 终端投影档位 | **T1（三壳必达，闭环可用）→ T2（M3，Web/App 增强）**。小程序可不做 T2。禁止把 viewport 快照宣传为 scrollback |
 | D7 | 小程序平台 | 默认微信。支付宝/其它不在本方案展开。没有官方会合 HTTPS 则不启动小程序壳 |
 
-### 17 总结
+### 17 协议与数据模型全书（冻结面）
+
+实现可以切片，协议与数据模型一次定义全。本节是 M1–M5 全部协议与数据模型的文字单一来源；代码单一来源是 `src/shared/contracts/remote.ts` 与 `src/shared/contracts/local-control/frames.ts`。M1 只实现标注「M1」的子集；标注「M2 冻结」的现在定义、M2 实现。D4（账号形态、应用层是否 E2E）仍开放——一切账号引用走不透明 `accountId`，本节不替 D4 做决定。
+
+#### 17.1 帧协议（`pier.control/v2`，WS 一条消息 = 一帧）
+
+| 帧 | 方向 | 关键字段 | 说明 |
+|---|---|---|---|
+| `client.hello` | → | `clientKind`、`auth`、`shell` | `mobile-paired` 用 `auth: { method: "device-token", deviceId, deviceToken, shell }`；令牌校验常数时间比较，失败断开并计入限速 |
+| `server.hello` | ← | `bootId`、`features`、`principalRef` | `features` 是能力广告（见 §17.4） |
+| `command`（M1 新增） | → | `requestId`、`command: PierCommand` | 进 command-router；授权 = client-registry 中该设备的配对能力集；每帧先过 `tokenEpoch` 门 |
+| `response` | ← | `requestId`、`ok`、`data \| error` | 语义与错误码同 local-control |
+| `request`（op 白名单） | → | `op` ∈ `control.snapshot` / `control.watch` / `agents.catalog` / `agents.list` / `agents.get` | 快照与 watch 流 |
+| `event` | ← | `subscriptionId`、`revision`、`mode`、`payload` | watch 推帧：digest 轮询、revision 变化推全量 |
+| `cancel` / `subscribe` / `unsubscribe` | → | 同 local-control | |
+| `server.error` | ← | `code`、`message` | 传输/握手级 |
+
+新增错误码：`device_revoked`（令牌或 epoch 失效，随断连）、`interaction_stale`（审批回写双重门拒绝）。配对赎回失败的 `pairing_expired` / `pairing_invalid` 走 `POST /pair` 的 403 响应体（§17.2），不占帧错误码。帧是纯 JSON 文本契约：不得依赖 window / DOM / Service Worker / IndexedDB（§11.3 冻结第 1 条）。
+
+#### 17.2 配对传输契约（HTTP，与 WS 同端口）
+
+- `POST /pair`：body 为 `PierPairingRequest { code, requestedCapabilities, shell? }`；200 返回 `PairingRedeemResult { deviceId, deviceToken, grantedCapabilities, tokenEpoch }`；403 返回 `{ reason: "pairing_expired" \| "pairing_invalid" }`。配对码一次性、5 分钟有效；令牌原文只出现在此次响应，宿主只存哈希。
+- QR payload（JSON 文本）：`{ pairingCode, fingerprint, host?, port?, relayHint }`。`relayHint` 在 M1 恒 `null`；`host`/`port` 仅同网直连时附。`fingerprint` = 宿主实例密钥 sha256 前 16 hex，M1 用于肉眼核验；D4 若选 E2E，实例密钥演进为宿主身份密钥，fingerprint 即其指纹。
+
+#### 17.3 数据模型
+
+宿主侧（M1 实现）：
+
+| 模型 | 字段 | 备注 |
+|---|---|---|
+| `PierPairedDevice` | deviceId / name / tokenHash / tokenEpoch / capabilities / shell / createdAt / lastSeenAt | 已在 `contracts/remote.ts`。M2 只追加可选 `accountId?`（账号归属），schema 演进只许 additive |
+| `PierRemoteSession` | clientId / deviceId / kind / tokenEpoch / capabilities / createdAt / expiresAt? | 已有；每条命令核对 epoch |
+| `PairingState`（磁盘） | devices / pendingPairing { codeHash, expiresAt } \| null / instanceSecret | userData JSON；instanceSecret 首启生成 |
+
+M2 冻结（现在定义、M2 实现）：
+
+| 模型 | 字段 | 语义 |
+|---|---|---|
+| `PierAccountRef` | `accountId: string` | 账号形态开放（D4）；所有引用走不透明 id |
+| `PierHostRegistration` | hostId / accountId / fingerprint / online / lastSeenAt | 会合云注册表条目：宿主出站拨号后置 online；同账号移动端按 accountId 列宿主 |
+| `PierPushHandle` | deviceId / shell / webPush? { endpoint, keys { p256dh, auth } } | 推送句柄按 shell 分叉（§11.4）；app / miniprogram 形态随各壳立项 |
+| `PierRelayEnvelope` | hostId / deviceId / frame | 会合转发信封：frame 为透传的 v2 帧，relay 不解读、不授权；tokenEpoch 核对永远发生在宿主侧 |
+
+#### 17.4 能力广告与终端分档
+
+`server.hello.features` 承担能力广告：T1（viewport 纯文本）恒在；`terminal.stream` 存在即 T2 可用（M3），缺席则壳隐藏 live 入口、停留 T1。任一侧协议主版本过旧即阻断并提示升级（§9 适配器末条）。
+
+#### 17.5 会合云边界（M2 实现，语义现在冻结）
+
+1. 宿主出站拨号会合云并注册 `PierHostRegistration`；换网、换地址、休眠恢复后重拨即可，移动端无感（§9.2）。
+2. 移动端以账号会话连会合云 → 按 `accountId` 列出宿主 → 帧包进 `PierRelayEnvelope` 经 relay 透传；hello 里的设备令牌与 M1 同一枚，不重扫码。
+3. relay 只按 `(hostId, deviceId)` 路由：不成为第二份事实源，不持有仓库、终端、凭据。
+4. 叫醒推送不经帧协议：NCS → `remotePush` 适配器 → 按 `PierPushHandle.shell` 分叉（§11.4、§12）。
+
+### 18 总结
 
 1. **移动端要做的事只有一件**：把桌面宿主的运行态投影到移动端上，并让用户就地闭环。映射状态与控制权，不映射界面，也**不在本方案里定视觉**。
 2. **壳会有三个，业务只有一份。** Web、App、小程序共用 `mobile-paired`、同一帧协议、同一「先主机后投影」线框。首壳只实现 Web；App / 小程序补的是容器、推送适配器和（App）锁屏。小程序生产环境连不上 LAN，所以官方会合 HTTPS 是小程序的硬前置。T1 文本终端是三壳必达档；T2 金标准只要求 Web/App，且不挡核心六条。

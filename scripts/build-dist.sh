@@ -245,21 +245,24 @@ fi
 # ---------- 构建 ----------
 # 先本地打齐双架构产物并硬校验，再按需 publish。避免 electron-builder 中途
 # 上传残缺资产后失败，把只有 zip、缺 arm64 dmg 的包挂到 Latest。
-echo "[build:dist] [1/5] app icons"
+echo "[build:dist] [1/6] app icons"
 pnpm build:icons
 
-echo "[build:dist] [2/5] universal native (arm64 + x86_64)"
+echo "[build:dist] [2/6] universal native (arm64 + x86_64)"
 NATIVE_ARCHS="arm64 x86_64" pnpm build:native
 
-echo "[build:dist] [3/5] package bundled plugins"
+echo "[build:dist] [3/6] package bundled plugins"
 pnpm plugins:pack
 
-echo "[build:dist] [4/5] electron-vite build (main / preload / renderer)"
+echo "[build:dist] [4/6] mobile-web SPA (out/mobile-web, remote-control 托管)"
+pnpm build:mobile-web
+
+echo "[build:dist] [5/6] electron-vite build (main / preload / renderer)"
 pnpm build:electron
 
 # macOS 系统 bash 3.2 对空数组 "${arr[@]}" 在 set -u 下会报 unbound，
 # 用 ${arr[@]+"${arr[@]}"} 惯用法兜住。
-echo "[build:dist] [5/5] electron-builder --mac --arm64 --x64 --publish never"
+echo "[build:dist] [6/6] electron-builder --mac --arm64 --x64 --publish never"
 pnpm exec electron-builder --mac --arm64 --x64 --publish never ${EB_EXTRA_ARGS[@]+"${EB_EXTRA_ARGS[@]}"}
 
 APP_VERSION="$(node -p "require('./package.json').version")"

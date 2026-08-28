@@ -96,6 +96,10 @@ import {
   type PierProjectSkillsAPI,
   projectSkillsApi,
 } from "./project-skills-api.ts";
+import {
+  createRemoteAccessPreloadApi,
+  type RemoteAccessPreloadApi,
+} from "./remote-access/api.ts";
 import { installRendererBootHandshake } from "./renderer-boot-handshake.ts";
 import { type PierTasksAPI, tasksApi } from "./task-api.ts";
 import { terminalApi } from "./terminal-api.ts";
@@ -199,6 +203,7 @@ export interface PierWindowAPI {
   plugins: PierPluginsAPI;
   preferences: PierPreferencesAPI;
   projectSkills: PierProjectSkillsAPI;
+  remoteAccess: RemoteAccessPreloadApi;
   rendererCommand: PierRendererCommandAPI;
   resources: PierResourceAPI;
   settings: PierSettingsAPI;
@@ -445,6 +450,7 @@ const api: PierWindowAPI = {
   pierHomeSkills: pierHomeSkillsApi,
   pierBindings: pierBindingsApi,
   rendererCommand: rendererCommandApi,
+  remoteAccess: createRemoteAccessPreloadApi(),
   settings: settingsApi,
   resources: pierResourceApi,
   tasks: tasksApi,

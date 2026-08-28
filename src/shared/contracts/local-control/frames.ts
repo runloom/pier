@@ -1,9 +1,10 @@
 /**
  * pier.control/v2 帧 schema（传输金标准单一来源）。
- * 产品终态：唯一主体 cli-human（auth.method none）。
+ * 主体：cli-human（auth.method none）与 mobile-paired（auth.method device-token，规格 §17.1）。
  * @see docs/superpowers/specs/2026-08-10-local-control-v1-v2-design.md
  */
 import { z } from "zod";
+import { pierCompanionShellSchema } from "../remote.ts";
 import {
   LOCAL_CONTROL_API_VERSION,
   LOCAL_CONTROL_ERROR_CODES,
@@ -12,14 +13,27 @@ import {
 const apiVersionSchema = z.literal(LOCAL_CONTROL_API_VERSION);
 const nonEmpty = z.string().min(1);
 
-export const localControlClientKindSchema = z.enum(["cli-human"]);
+export const localControlClientKindSchema = z.enum([
+  "cli-human",
+  "mobile-paired",
+]);
 export type LocalControlClientKind = z.infer<
   typeof localControlClientKindSchema
 >;
 
-export const localControlAuthSchema = z.object({
-  method: z.literal("none"),
-});
+/**
+ * hello 认证：cli-human 免认证；mobile-paired 持配对设备令牌（规格 §17.1）。
+ * shell 枚举复用 contracts/remote.ts 单一来源。
+ */
+export const localControlAuthSchema = z.discriminatedUnion("method", [
+  z.object({ method: z.literal("none") }),
+  z.object({
+    method: z.literal("device-token"),
+    deviceId: z.string().min(1),
+    deviceToken: z.string().min(1),
+    shell: pierCompanionShellSchema.default("web"),
+  }),
+]);
 
 export const localControlClientHelloSchema = z.object({
   apiVersion: apiVersionSchema,
@@ -73,6 +87,17 @@ export const localControlClientCancelSchema = z.object({
   type: z.literal("cancel"),
   requestId: nonEmpty,
 });
+/** 移动端命令通道帧：会话内承载 PierCommand（规格 §17.1）。 */
+export const localControlClientCommandSchema = z.object({
+  apiVersion: apiVersionSchema,
+  type: z.literal("command"),
+  requestId: nonEmpty,
+  /** 由 command-router 侧 pierCommandEnvelopeSchema 校验。 */
+  command: z.unknown(),
+});
+export type LocalControlClientCommand = z.infer<
+  typeof localControlClientCommandSchema
+>;
 
 export const localControlClientFrameSchema = z.discriminatedUnion("type", [
   localControlClientHelloSchema,
@@ -80,6 +105,7 @@ export const localControlClientFrameSchema = z.discriminatedUnion("type", [
   localControlClientSubscribeSchema,
   localControlClientUnsubscribeSchema,
   localControlClientCancelSchema,
+  localControlClientCommandSchema,
 ]);
 export type LocalControlClientFrame = z.infer<
   typeof localControlClientFrameSchema

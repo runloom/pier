@@ -5,6 +5,7 @@ import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
+import { settingsRemoteAccess } from "./settings-remote-access.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
 import { settingsSkills } from "./settings-skills.ts";
 
@@ -23,6 +24,7 @@ export const settings = {
     workspace: "워크스페이스",
     agents: "에이전트",
     notifications: "알림",
+    remoteAccess: "원격 접속",
     pluginGroup: "플러그인 설정",
   },
   section: {
@@ -38,6 +40,7 @@ export const settings = {
     workspace: "워크스페이스",
     agents: "에이전트",
     notifications: "알림",
+    remoteAccess: "원격 접속",
   },
   projects: {
     addProject: "프로젝트 추가",
@@ -254,6 +257,7 @@ export const settings = {
     setupHint: "작업 트리를 만들 때 실행합니다.",
   },
   appUpdate: settingsAppUpdate,
+  remoteAccess: settingsRemoteAccess,
   statusBar: {
     title: "상태 표시줄",
     description:

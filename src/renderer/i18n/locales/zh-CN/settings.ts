@@ -5,6 +5,7 @@ import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
+import { settingsRemoteAccess } from "./settings-remote-access.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
 import { settingsSkills } from "./settings-skills.ts";
 
@@ -23,6 +24,7 @@ export const settings = {
     workspace: "工作区",
     agents: "智能体",
     notifications: "通知",
+    remoteAccess: "远程访问",
     pluginGroup: "插件设置",
   },
   section: {
@@ -38,6 +40,7 @@ export const settings = {
     workspace: "工作区",
     agents: "智能体",
     notifications: "通知",
+    remoteAccess: "远程访问",
   },
   projects: {
     addProject: "添加项目",
@@ -242,6 +245,7 @@ export const settings = {
     setupHint: "创建工作树时运行。",
   },
   appUpdate: settingsAppUpdate,
+  remoteAccess: settingsRemoteAccess,
   statusBar: {
     title: "状态栏",
     description:

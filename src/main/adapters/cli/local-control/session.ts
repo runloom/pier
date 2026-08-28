@@ -18,7 +18,10 @@ import {
 import type { ResolveOriginPanel } from "./capability-hot-path.ts";
 import { controlErrorResponse } from "./discovery.ts";
 import { buildLocalControlFeatures, serverErrorFrame } from "./features.ts";
-import { resolveHelloPrincipal } from "./hello-auth.ts";
+import {
+  type MobileAuthenticator,
+  resolveHelloPrincipal,
+} from "./hello-auth.ts";
 import {
   createEffectReceiptStore,
   type EffectReceiptStore,
@@ -43,6 +46,8 @@ export interface LocalControlSession {
 }
 
 export interface CreateLocalControlSessionArgs {
+  /** mobile-paired hello 认证钩子（remote-control 装配注入）；缺省时 mobile-paired 一律 auth_failed。 */
+  authenticateMobile?: MobileAuthenticator | undefined;
   authorizer?: LocalControlAuthorizer | undefined;
   bootId: string;
   capabilityAuthority?: CapabilityAuthority | undefined;
@@ -78,7 +83,7 @@ export function createLocalControlSessionFromHello(
   const inflight: InflightMap = new Map();
   const subscriptions = new Map<string, SubscriptionRecord>();
 
-  const principal = resolveHelloPrincipal({ hello });
+  const principal = resolveHelloPrincipal(hello, args.authenticateMobile);
   if (!principal.ok) {
     return { ok: false, errorFrame: principal.errorFrame };
   }

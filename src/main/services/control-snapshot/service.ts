@@ -87,6 +87,14 @@ export interface ControlSnapshotSources {
     }>
   >;
   nowMs?: () => number;
+  /**
+   * M1：waiting 态 agent 摘要附未决交互 id（审批条 interactionId 数据源）。
+   * 返回 undefined → 该条目缺省字段；缺省整个解析器 → 全部缺省。
+   */
+  resolvePendingInteractionId?: (target: {
+    panelId: string;
+    windowId: string;
+  }) => string | undefined;
 }
 
 /** 未读优先，再按 ts 新→旧，截断到 snapshot 预算。 */
@@ -189,7 +197,21 @@ export function createControlSnapshotService(
       projectRootPath: t.projectRootPath,
       ...(t.rootTaskId ? { rootTaskId: t.rootTaskId } : {}),
     }));
-    const activity = sources.listActivity();
+    const activity = sources.listActivity().map((entry) => {
+      if (
+        entry.kind !== "agent" ||
+        entry.status !== "waiting" ||
+        !entry.panelId ||
+        !entry.windowId
+      ) {
+        return entry;
+      }
+      const pendingInteractionId = sources.resolvePendingInteractionId?.({
+        panelId: entry.panelId,
+        windowId: entry.windowId,
+      });
+      return pendingInteractionId ? { ...entry, pendingInteractionId } : entry;
+    });
     const notifications = selectSnapshotNotifications(
       sources.listNotifications?.() ?? []
     ).map((n) => ({

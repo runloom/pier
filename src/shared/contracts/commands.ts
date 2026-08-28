@@ -444,6 +444,11 @@ export type PierCommandErrorCode =
   | "internal_error"
   | "file_conflict"
   /**
+   * 审批回写双重门未过：未决交互登记缺失/不符，或 agent 当前非 waiting。
+   * 客户端应刷新快照后重读 pendingInteractionId，而非重试同一 interactionId。
+   */
+  | "interaction_stale"
+  /**
    * git CLI 退出非 0 时的统一错误码;message 含 git 返回的 stderr 摘要,
    * 插件可据此分类("already exists"、"not fully merged"、"dirty worktree" 等)。
    */

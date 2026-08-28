@@ -25,6 +25,7 @@ import {
 } from "./command-router-run-terminal.ts";
 import type { PierCoreServices } from "./command-router-services.ts";
 import { executeAgentAssetsCommand } from "./commands/agent-assets.ts";
+import { executeAgentAttentionRespondCommand } from "./commands/agent-attention-respond.ts";
 import { executeAiCommand } from "./commands/ai.ts";
 import { executeAppCliCommand } from "./commands/app-cli.ts";
 import { executeAppSnapshotCommand } from "./commands/app-snapshot.ts";
@@ -56,6 +57,7 @@ import { executePanelTransferCommand } from "./commands/panel-transfer.ts";
 import { executePierHomeCommand } from "./commands/pier-home.ts";
 import { executePluginCommand } from "./commands/plugin.ts";
 import { executeProjectSkillsCommand } from "./commands/project-skills.ts";
+import { executeRemoteAccessCommand } from "./commands/remote-access.ts";
 import { executeWorktreeCommand } from "./commands/worktree.ts";
 import { authorizeCommand } from "./permissions.ts";
 import { buildShellEnvironmentHostStatus } from "./shell-environment-commands.ts";
@@ -365,6 +367,9 @@ async function executeCommandByDomain(
   onWorktreeCreateProgress?: (progress: WorktreeCreateProgress) => void
 ): Promise<PierCommandResult | null> {
   const executors = [
+    (cmd: PierCommand) =>
+      executeAgentAttentionRespondCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executeRemoteAccessCommand(requestId, cmd, services),
     (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeAiCommand(requestId, cmd, services),
     (cmd: PierCommand) =>

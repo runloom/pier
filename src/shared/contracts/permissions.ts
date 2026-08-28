@@ -76,6 +76,9 @@ export const pierCapabilitySchema = z.enum([
   // 消息中心：CLI/宿主 list·get·watch 读；mark-read·focus 写（focus 不改 runtime 事实）。
   "notification:read",
   "notification:write",
+  /** 移动端远程接入：读 = 同网会话只读监视；控制 = 远程控制类动作（Task 9 消费）。 */
+  "remote-access:read",
+  "remote-access:control",
   /** 受管智能体资产注册：项目级 MCP 配置 + 规则托管段（pier.memory 插件消费）。 */
   "managedAssets:write",
 ]);
@@ -137,6 +140,8 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "notification:read",
     "notification:write",
     "managedAssets:write",
+    "remote-access:read",
+    "remote-access:control",
   ],
   "cli-local": [
     "app:read",
@@ -175,19 +180,16 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
   ],
   "mobile-paired": [
     "app:read",
+    "file:read",
+    "git:read",
+    "notification:read",
+    "notification:write",
+    "panel:read",
     "preferences:read",
+    "terminal:read",
+    "window:read",
     "workspace:read",
     "worktree:read",
-    "window:read",
-    "window:control",
-    "window:create",
-    "window:focus",
-    "window:close",
-    "panel:read",
-    "panel:control",
-    "terminal:read",
-    "terminal:control",
-    "notification:read",
   ],
   canvas: [
     "app:read",

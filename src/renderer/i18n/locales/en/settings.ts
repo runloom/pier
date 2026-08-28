@@ -5,6 +5,7 @@ import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
+import { settingsRemoteAccess } from "./settings-remote-access.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
 import { settingsSkills } from "./settings-skills.ts";
 
@@ -23,6 +24,7 @@ export const settings = {
     workspace: "Workspace",
     agents: "Agents",
     notifications: "Notifications",
+    remoteAccess: "Remote Access",
     pluginGroup: "Plugin Settings",
   },
   section: {
@@ -38,6 +40,7 @@ export const settings = {
     workspace: "Workspace",
     agents: "Agents",
     notifications: "Notifications",
+    remoteAccess: "Remote Access",
   },
   projects: {
     addProject: "Add project",
@@ -254,6 +257,7 @@ export const settings = {
     setupHint: "Runs when a worktree is created.",
   },
   appUpdate: settingsAppUpdate,
+  remoteAccess: settingsRemoteAccess,
   statusBar: {
     title: "Status Bar",
     description:

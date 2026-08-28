@@ -137,6 +137,12 @@ function startPluginWatchers() {
     "@pier/plugin-claude",
     "dev:renderer",
   ]);
+  // 移动端 Web 壳：vite build --watch，产物落 out/mobile-web/ 供 remote-control 托管
+  start("mobile-web vite watch", "pnpm", [
+    "--filter",
+    "@pier/mobile-web",
+    "dev",
+  ]);
 }
 
 const electron = start(

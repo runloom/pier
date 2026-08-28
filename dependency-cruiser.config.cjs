@@ -151,6 +151,21 @@ module.exports = {
       to: { path: "^src/" },
     },
     {
+      name: "apps-mobile-web-narrow-imports",
+      severity: "error",
+      comment:
+        "apps/mobile-web 独立 SPA：只允许 react/react-dom/zod/zustand 与 @shared/contracts/**（帧契约单一来源）；不 import 宿主 src/(main|renderer) 或 dockview 运行时",
+      from: { path: "^apps/mobile-web/src" },
+      to: {
+        pathNot: [
+          "^apps/mobile-web",
+          "^src/shared/contracts",
+          "^@shared/contracts",
+          "node_modules/(react|react-dom|zod|zustand)(/|$)",
+        ],
+      },
+    },
+    {
       name: "host-not-import-plugin-codex-source",
       severity: "error",
       comment:

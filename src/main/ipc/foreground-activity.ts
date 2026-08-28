@@ -30,6 +30,7 @@ import {
   isAgentStatusHooksIngestEnabled,
   setAgentStatusHooksIngestEnabled,
 } from "../services/agents/status-hooks-gate.ts";
+import { notifyAgentHookEventListeners } from "../services/foreground-activity/agent-hook-event-fanout.ts";
 import { createForegroundActivityAggregator } from "../services/foreground-activity/aggregator.ts";
 import { isBlankShellCommandLine } from "../services/foreground-activity/blank-command-line.ts";
 import { SUSPENDED_JOB_EXIT_CODES } from "../services/foreground-activity/entry.ts";
@@ -352,6 +353,10 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   agentTerminalReconciler = createAgentTerminalReconciler({
     readViewportText: readCursorViewportText,
     onTerminalEvent: (event) => {
+      // reconciler 合成的 v3 交互事件同样进旁路 fan-out（未决交互登记）；
+      // 与 JSONL hook 行共用同一 fan-out 点，见
+      // services/foreground-activity/agent-hook-event-fanout.ts。
+      notifyAgentHookEventListeners(event);
       foregroundActivityAggregator.ingestAgentEvent(
         event,
         resolveAgentEventIngestOptions({
@@ -389,6 +394,7 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
         return;
       }
       const routed = withResolvedOwner(event);
+      notifyAgentHookEventListeners(routed);
       const integration = getAgentHookIntegration(routed.agent);
       const options = resolveAgentEventIngestOptions({
         evidenceSource: "hook",

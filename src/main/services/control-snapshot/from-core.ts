@@ -2,6 +2,7 @@
  * 从 PierCoreServices 构造 ControlSnapshotSources（单一接线，避免 app.snapshot 与
  * local-control 漏字段）。
  */
+import { makeAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import type { ControlSnapshotPayload } from "@shared/contracts/local-control/control-snapshot.ts";
 import type { PierCoreServices } from "../../app-core/command-router-services.ts";
 import { listPanels } from "../../app-core/commands/panel.ts";
@@ -130,6 +131,10 @@ export function controlSnapshotSourcesFromCore(
         return [];
       }
     },
+    resolvePendingInteractionId: ({ panelId, windowId }) =>
+      services.pendingInteractions?.currentInteractionId(
+        makeAgentRef(windowId, panelId)
+      ),
     listTasks: () => {
       const snap = services.tasks.runsSnapshot();
       return Object.values(snap.runs).map((r) => ({
