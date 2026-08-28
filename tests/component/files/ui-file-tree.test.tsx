@@ -441,7 +441,7 @@ describe("PierFileTree", () => {
     const { join } = await import("node:path");
     const roots = [
       "src/plugins/builtin/files/renderer/tree/sidebar.tsx",
-      "src/plugins/builtin/git/renderer/review/panel-layout.tsx",
+      "src/plugins/builtin/git/renderer/review/tree/sidebar.tsx",
     ];
     for (const rel of roots) {
       const source = readFileSync(join(process.cwd(), rel), "utf8");

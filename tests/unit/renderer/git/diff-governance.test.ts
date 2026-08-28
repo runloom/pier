@@ -545,11 +545,16 @@ describe("Git diff renderer governance", () => {
       join(ROOT, "src/plugins/builtin/git/renderer/review/panel-layout.tsx"),
       "utf8"
     );
-    expect(reviewPanelLayout).toContain(
+    const reviewTreeSidebar = await readFile(
+      join(ROOT, "src/plugins/builtin/git/renderer/review/tree/sidebar.tsx"),
+      "utf8"
+    );
+    expect(reviewTreeSidebar).toContain(
       'PierFileTree,\n} from "@pier/ui/file/tree.tsx"'
     );
-    expect(reviewPanelLayout).toContain('from "@pier/ui/file/tree.tsx"');
-    expect(reviewPanelLayout.match(/<PierFileTree\b/gu)).toHaveLength(1);
+    expect(reviewTreeSidebar).toContain('from "@pier/ui/file/tree.tsx"');
+    expect(reviewTreeSidebar.match(/<PierFileTree\b/gu)).toHaveLength(1);
+    expect(reviewPanelLayout).toContain("<GitReviewTreeSidebar");
     expect(reviewDocumentView).toContain("<GitReviewPanelLayout");
     expect(projectionCommit).toContain(
       "renderedGenerationRef.current = projectionGeneration;"
