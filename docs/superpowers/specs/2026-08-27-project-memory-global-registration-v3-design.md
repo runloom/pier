@@ -34,7 +34,7 @@
 │ 2. 读 ~/.pier/memory/<key>/ledger.json:                      │
 │    缺失或 desiredState=enabled → 启用;disabled → 停用        │
 │ 3. 启用:spawn npx -y @modelcontextprotocol/server-memory     │
-│    @2026.7.4(MEMORY_FILE_PATH=<store>,stdio 透传,退出码跟随) │
+│    @2026.7.4;stdout 握手注入 instructions 后 splice         │
 │    停用/解析失败:内置空工具 MCP 应答(initialize 正常、       │
 │    tools/list 恒空),智能体侧不报连接错误                     │
 └───────────────────────────────────────────────────────────────┘
@@ -44,7 +44,7 @@
 
 - 目录 `~/.pier/memory/launcher/v{N}/memory-mcp.mjs` + `current` 符号链接 + `GENERATION` 指针;每次 Pier 启动按世代号幂等更新,`current` 原子切换。
 - 全局配置里写 **绝对路径**(用户级配置本就单机私有,绝对路径无跨机语义问题;智能体不做 `~` 展开)。
-- 启动器**零 npm 依赖**(纯 Node ≥18 标准库):stdio 透传用 `spawn(..., { stdio: "inherit" })`;空工具应答是唯一自研面(≤100 行 newline-delimited JSON-RPC:`initialize`/`initialized`/`tools/list`/`ping`),作为「引擎零自研」原则的显式豁免记录在此。
+- 启动器**零 npm 依赖**(纯 Node ≥18 标准库)。启用时 `stdio: ["pipe","pipe","inherit"]`:stdin 原样 pipe 进引擎,stdout 握手期注入 `instructions` 后 splice(`pipe({ end: false })`,引擎 EOF 不提前关掉客户端通道)。停用路径仍是空工具 NDJSON 应答。自研面 = 空工具应答 + 握手注入,见 [2026-08-28 引导随工具走](./2026-08-28-project-memory-mcp-instructions-design.md)。
 
 ### 项目解析顺序
 
@@ -76,7 +76,7 @@
 ### 保留与删除
 
 - **保留**:引擎锁定 `@2026.7.4`、`~/.pier/memory/<key>/memory.jsonl` 存储与权限、AGENTS.md 引导段(纯文本无机器路径,继续走仓库 + marker 幂等)、CLAUDE.md 引用、设置页表面与 list/delete/clear 命令、引擎预热、删除三元组校验、8MB 守卫。
-- **显式取舍——引导段只随显式开启写入**:默认启用(声明式)的项目**不**自动写 AGENTS.md,「零弄脏仓库」红线优先于引导覆盖率;代价是这些项目的智能体只有记忆工具、没有使用引导,记忆质量偏机会型。用户显式开启开关(自己看着 diff)才落引导段。L2 候选:经引擎包装注入 MCP `instructions` 字段,让引导随工具走、彻底脱离仓库文件。
+- **显式取舍——引导段只随显式开启写入**:默认启用(声明式)的项目**不**自动写 AGENTS.md,「零弄脏仓库」红线优先于仓库内引导覆盖率。用法引导改走启动器注入的 MCP `initialize.result.instructions`(见 [2026-08-28 引导随工具走](./2026-08-28-project-memory-mcp-instructions-design.md)),默认启用不再是「只有工具没有用法」。用户显式开启开关(自己看着 diff)才落 AGENTS.md 托管段,给不吃 `instructions` 的客户端兜底。
 - **删除**:项目级 MCP 目标写入/移除(五格式 per-project)、`selectMemoryTargets` 安装矩阵、确认门 + `trackedAcknowledged` + tracked 通知、默认启用扫描(`ensureDefaultEnabled` / `memoryDefaultsSweep`)、per-project targets/pending 账本段。
 
 ### v2 → v3 迁移(一次性)
@@ -91,7 +91,7 @@
 | 风险 | 缓解 |
 |---|---|
 | 智能体拉起 stdio server 的 env/cwd 透传差异 | Pier 内恒走 env 注入;外部走 cwd 兜底;两者皆无 = 空工具,无错误噪声。实现期逐智能体验证并记录 verifiedOn |
-| 空工具应答是自研面 | ≤100 行、契约测试锁定与官方 SDK 客户端握手兼容;唯一豁免点 |
+| 空工具应答与握手注入是自研面 | 契约测试锁定 stub 握手、instructions 注入、splice 后 SIGTERM;豁免见 2026-08-28 spec |
 | 用户手改全局配置条目 | registry 指纹判本体,漂移 → 设置页警示;显式重开开关触发全局重收敛(幂等修复),不静默覆盖 |
 | node 不在智能体 PATH | 与 v2 的 npx 前提同级;失败面等价 |
 | 关闭项目后运行中会话仍持有引擎 | 声明式语义:新会话生效;设置页文案注明 |

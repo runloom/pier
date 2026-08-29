@@ -98,6 +98,11 @@ describe("pier.memory governance", () => {
     );
     expect(v3).toContain("# 项目记忆 v3:全局注册 + 运行时解析");
     expect(v3).toContain("仓库内文件零写入");
+    expect(v3).toContain(
+      "2026-08-28-project-memory-mcp-instructions-design.md"
+    );
+    expect(v3).not.toContain('stdio: "inherit"');
+    expect(v3).toContain('stdio: ["pipe","pipe","inherit"]');
     // 红线:项目级 reconciler 不再写任何 MCP 目标(交付面唯一在 registry)。
     const reconcile = readFileSync(
       join(ROOT, "src/main/services/agent-managed-assets/reconcile.ts"),
@@ -105,5 +110,21 @@ describe("pier.memory governance", () => {
     );
     expect(reconcile).not.toContain("applyMemoryTarget");
     expect(reconcile).not.toContain("isTracked");
+  });
+
+  it("locks MCP instructions as the default-enable guidance path", () => {
+    const spec = readFileSync(
+      join(
+        ROOT,
+        "docs/superpowers/specs/2026-08-28-project-memory-mcp-instructions-design.md"
+      ),
+      "utf8"
+    );
+    expect(spec).toContain("# 项目记忆：引导随工具走");
+    expect(spec).toContain("initialize.result.instructions");
+    expect(spec).toContain("默认启用仍零写入仓库");
+    expect(spec).toContain("不接 OpenHuman / Obsidian");
+    expect(spec).toContain("握手改写按此为生产路径");
+    expect(spec).not.toContain("官方 MCP stdio");
   });
 });
