@@ -121,10 +121,28 @@ describe("terminal input-routing sash drag trace", () => {
     expect(sashOwnerIds()).toEqual(["dockview-sash-drag:2"]);
   });
 
-  it("suppresses native terminal surfaces for the sash drag session", () => {
+  it("does not hide native terminals while a dockview sash is dragged", () => {
     pressSash();
-    expect(useTerminalStore.getState().suppressTerminals).toBe(true);
-    expect(useTerminalStore.getState().placeholderVisible).toBe(true);
+    expect(sashOwnerIds()).toEqual(["dockview-sash-drag:1"]);
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().placeholderVisible).toBe(false);
+
+    window.dispatchEvent(new PointerEvent("pointerup"));
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().placeholderVisible).toBe(false);
+  });
+
+  it("does not hide native terminals while a floating panel is resized", () => {
+    const handle = document.createElement("div");
+    handle.className = "dv-resize-container";
+    document.body.append(handle);
+    handle.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, composed: true })
+    );
+
+    expect(sashOwnerIds()).toEqual(["dockview-sash-drag:1"]);
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().placeholderVisible).toBe(false);
 
     window.dispatchEvent(new PointerEvent("pointerup"));
     expect(useTerminalStore.getState().suppressTerminals).toBe(false);
