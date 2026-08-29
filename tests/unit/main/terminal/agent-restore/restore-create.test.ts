@@ -6,6 +6,7 @@ import {
   resolveCreateTerminalLaunch,
   withAgentSpawnGenerationEnv,
 } from "@main/ipc/terminal/create-launch.ts";
+import { shouldLatchResumePending } from "@main/ipc/terminal/create-restore.ts";
 import {
   agentRestoreCreateFields,
   resolveAgentResumeLaunch,
@@ -136,6 +137,70 @@ describe("host-teardown restore create", () => {
     expect(nextAgentSpawnGeneration({ restore: { spawnGeneration: 2 } })).toBe(
       3
     );
+  });
+
+  it("latches resumePending for host-teardown and overlay restart, not live PTY reuse", () => {
+    const resume = {
+      capturedAt: 1,
+      sessionId: "sess-1",
+      source: "hook" as const,
+    };
+    const launch = { agentId: "claude" as const, command: "claude", cwd: "/r" };
+    expect(
+      shouldLatchResumePending({
+        agentRestore: "resumed",
+        restoredAgent: {
+          agentId: "claude",
+          launch,
+          resume,
+          restore: {
+            cause: "host-teardown",
+            detachedAt: 1,
+            spawnGeneration: 1,
+          },
+          startedAt: 1,
+          status: "running",
+        },
+      })
+    ).toBe(true);
+    expect(
+      shouldLatchResumePending({
+        agentRestore: "resumed",
+        restoredAgent: {
+          agentId: "claude",
+          launch,
+          resume,
+          startedAt: 1,
+          status: "running",
+        },
+      })
+    ).toBe(true);
+    expect(
+      shouldLatchResumePending({
+        agentRestore: "resumed",
+        restoredAgent: {
+          agentId: "claude",
+          launch,
+          resume,
+          restore: { spawnGeneration: 2 },
+          startedAt: 1,
+          status: "running",
+        },
+      })
+    ).toBe(false);
+    expect(
+      shouldLatchResumePending({
+        agentRestore: "resumed",
+        restoredAgent: {
+          agentId: "claude",
+          launch,
+          resume,
+          restore: { resumePending: true, spawnGeneration: 2 },
+          startedAt: 1,
+          status: "running",
+        },
+      })
+    ).toBe(true);
   });
 });
 

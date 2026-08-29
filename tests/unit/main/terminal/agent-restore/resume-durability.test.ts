@@ -89,7 +89,45 @@ describe("agent resume durability", () => {
     expect(flush).not.toHaveBeenCalled();
   });
 
-  it("still accepts a new id after host-teardown (status stays running)", async () => {
+  it("pins the existing id after host-teardown until resume is confirmed", async () => {
+    const {
+      detachAgentsForWindow,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    await updateTerminalPanelAgent("record-main", "terminal-1", {
+      agentId: "omp",
+      launch: { agentId: "omp", command: "omp", cwd: "/repo" },
+      resume: {
+        capturedAt: 1,
+        sessionId: "sess-pinned",
+        source: "hook",
+      },
+      startedAt: 1,
+      status: "running",
+    });
+    await detachAgentsForWindow("record-main");
+    await expect(
+      updateTerminalPanelAgentResume("record-main", "terminal-1", {
+        agentId: "omp",
+        capturedAt: 20,
+        sessionId: "sess-after-detach",
+        source: "hook",
+      })
+    ).resolves.toBe("pinned");
+    await expect(
+      readTerminalPanelSession("record-main", "terminal-1")
+    ).resolves.toMatchObject({
+      agent: {
+        resume: { sessionId: "sess-pinned" },
+        restore: { cause: "host-teardown" },
+        status: "running",
+      },
+    });
+  });
+
+  it("applies the first hook id after host-teardown when none was pinned", async () => {
     const {
       detachAgentsForWindow,
       readTerminalPanelSession,
@@ -107,7 +145,7 @@ describe("agent resume durability", () => {
       updateTerminalPanelAgentResume("record-main", "terminal-1", {
         agentId: "omp",
         capturedAt: 20,
-        sessionId: "sess-after-detach",
+        sessionId: "sess-first",
         source: "hook",
       })
     ).resolves.toBe("applied");
@@ -115,7 +153,7 @@ describe("agent resume durability", () => {
       readTerminalPanelSession("record-main", "terminal-1")
     ).resolves.toMatchObject({
       agent: {
-        resume: { sessionId: "sess-after-detach" },
+        resume: { sessionId: "sess-first" },
         restore: { cause: "host-teardown" },
         status: "running",
       },

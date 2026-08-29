@@ -36,8 +36,9 @@ export const terminalAgentPanelMetadataSchema = z.object({
     .optional(),
   restore: z
     .object({
-      cause: z.literal("host-teardown").optional(),
+      cause: z.enum(["host-teardown", "resume-failed"]).optional(),
       detachedAt: z.number().int().nonnegative().optional(),
+      resumePending: z.boolean().optional(),
       spawnGeneration: z.number().int().positive().optional(),
     })
     .optional(),

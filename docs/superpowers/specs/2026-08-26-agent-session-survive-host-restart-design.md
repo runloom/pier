@@ -715,6 +715,10 @@ i18n：`terminal.agentSession.newSession`（zh-CN「新开会话」/ en「New se
 | A13 | restore spawn **成功**后窗内 `/exit` 能写成 `exited` 并出终态卡 |
 | A14 | `agentSessionEndedInForeground` 为 true 的 panel：`armAndDetachAgentsBeforeClose` 把它放进 `skipPanelIds`，L1 detach **不**写 host-teardown。detachAgentsForWindow 不 import FA |
 | A15 | 同 id resume 写入返回 `"unchanged"`，不额外 flush；新 id 返回 `"applied"` 且不经 500ms 就落进现有 json |
+| A16 | resumePending / host-teardown 钉住时，不同 SessionStart id 返回 `"pinned"`，磁盘 sessionId 不变 |
+| A17 | 同 id SessionStart 或 PromptSubmit 清闩后，随后不同 id 可 `applied`（`/clear`） |
+| A18 | pending 世代退出 → `exited` + `resume-failed` + 旧 id；readSession 不愈合为 running |
+| A19 | layout 水合前不 reconcile；hydrate 后第一次 restore 才 reconcile。`performDevSoftRelaunch` 不第二份 spawn |
 
 抽测：omp + claude 或 codex + 一家 unsupported。
 
@@ -739,6 +743,10 @@ i18n：`terminal.agentSession.newSession`（zh-CN「新开会话」/ en「New se
 | D13 | Slice 5 是 **验证 + 业界对齐**，不是产品暗翻。验证后 **仍不**自动 `omp --continue`。omp 不进 `CONTINUE_LAST_AGENTS`，本设计不返回 omp 的 `tryResumeLast`。「接回本目录最近会话」仅当验证与文档一致后另开 PR，文案必须写「该目录最新一场」并带多面板限制。 |
 | D14 | Slice 3 **仍删除** session 行（`close({ reason: "relaunch" })` → `removeTerminalPanelSession`）。接回靠 hint + 合成 agent。测试不得假设 close 后 `readSession` 还有 resume。标题 / tab 丢失是跟进。 |
 | D15 | SIGKILL 不另做 crash 垫片。unsupported = 原始 launch + 现有 `unsupported` 文案。 |
+| D16 | `--resume` 世代钉 id：`restore.resumePending`（及尚未 spawn 的 `host-teardown`）拒绝不同 hook id。同 id SessionStart 或 PromptSubmit 清闩后才允许 `/clear` 旋转。 |
+| D17 | 接回世代上、无 PromptSubmit 的进程退出写成 `cause: "resume-failed"` + `exited`，保留旧 sessionId。读路径 **不愈合**（避免空 jsonl 自动死循环）。 |
+| D18 | `resume-failed` 终态文案与窗内 `/exit` 分开；主按钮仍 resume 钉住的 id。 |
+| D19 | renderer layout 水合前不得 `reconcile`；空 dockview 初始 layout-change 不得标 `userTouched`。`hydrate` 是第一次权威 reconcile（A9）。 |
 
 ---
 

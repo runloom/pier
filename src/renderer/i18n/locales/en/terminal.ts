@@ -22,6 +22,8 @@ export const terminal = {
     coldStart: "Couldn’t resume the previous session. Started a fresh agent.",
     endedBody: "The previous session has exited. Restart to continue.",
     endedTitle: "Agent session ended",
+    resumeFailedBody: "Resume didn't finish. Try again, or start a new one.",
+    resumeFailedTitle: "Couldn't resume the previous session",
     fieldAgent: "Agent",
     fieldCommand: "Command",
     fieldCwd: "Working directory",
@@ -33,6 +35,7 @@ export const terminal = {
     restartFailed: "Couldn't restart agent — try again",
     statusEnded: "Ended normally",
     statusFailed: "Failed",
+    statusResumeFailed: "Did not resume",
     summaryTitle: "Session summary",
     tryResumeLast: "Resume latest in this folder",
     tryResumeLastFailed:

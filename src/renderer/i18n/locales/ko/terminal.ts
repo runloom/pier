@@ -22,6 +22,9 @@ export const terminal = {
     coldStart: "이전 세션을 이어가지 못했습니다. 새 에이전트를 시작했습니다.",
     endedBody: "이전 세션이 종료되었습니다. 다시 시작해 계속하세요.",
     endedTitle: "에이전트 세션이 종료됨",
+    resumeFailedBody:
+      "이어가기가 끝나지 않았습니다. 다시 시도하거나 새로 시작하세요.",
+    resumeFailedTitle: "이전 세션을 이어가지 못했습니다",
     fieldAgent: "에이전트",
     fieldCommand: "명령",
     fieldCwd: "작업 디렉터리",
@@ -33,6 +36,7 @@ export const terminal = {
     restartFailed: "에이전트를 다시 시작하지 못했습니다. 다시 시도하세요",
     statusEnded: "정상 종료",
     statusFailed: "실패",
+    statusResumeFailed: "이어가지 못함",
     summaryTitle: "세션 요약",
     tryResumeLast: "이 폴더의 최근 세션 이어가기",
     tryResumeLastFailed:
