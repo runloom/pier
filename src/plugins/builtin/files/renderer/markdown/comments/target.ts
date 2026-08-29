@@ -92,24 +92,11 @@ export function contentHashForBlock(block: MarkdownBlock): string | null {
 
 /**
  * 把已存 markdown 锚点解析回当前 IR 的块 key。
- * 优先 contentHash（精确块）；headingId 仅作章节级回退（避免段评挂到标题顶）。
+ * 只认 contentHash；headingId 不得回退钉到章节标题。
  */
 export function resolveMarkdownCommentBlockKey(input: {
-  readonly blocks: readonly MarkdownBlock[];
   readonly blockKeyByHash: ReadonlyMap<string, string>;
   readonly contentHash: string;
-  readonly headingId?: string | undefined;
 }): string | undefined {
-  const byHash = input.blockKeyByHash.get(input.contentHash);
-  if (byHash !== undefined) {
-    return byHash;
-  }
-  if (input.headingId === undefined || input.headingId.length === 0) {
-    return;
-  }
-  const headingId = input.headingId;
-  const headingBlock = input.blocks.find(
-    (block) => block.kind === "heading" && block.id === headingId
-  );
-  return headingBlock === undefined ? undefined : blockCommentKey(headingBlock);
+  return input.blockKeyByHash.get(input.contentHash);
 }

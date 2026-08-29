@@ -36,14 +36,7 @@ function projectMarkdownThread(
   if (!surface.filePresent) {
     return "missing";
   }
-  const { target } = thread;
-  if (
-    target.headingId !== undefined &&
-    surface.headingIds.has(target.headingId)
-  ) {
-    return "located";
-  }
-  if (surface.blockHashes.has(target.contentHash)) {
+  if (surface.blockHashes.has(thread.target.contentHash)) {
     return "located";
   }
   return "drifted";
@@ -226,12 +219,9 @@ export function useMarkdownPreviewComments(input: {
       }
       const status = projectMarkdownThread(thread, surface);
       if (status === "located") {
-        // contentHash 优先：段评不得因 nearest headingId 挂到章节标题顶。
         const blockKey = resolveMarkdownCommentBlockKey({
           blockKeyByHash,
-          blocks: document?.blocks ?? [],
           contentHash: target.contentHash,
-          headingId: target.headingId,
         });
         if (blockKey !== undefined) {
           const existing = located.get(blockKey);
@@ -255,13 +245,7 @@ export function useMarkdownPreviewComments(input: {
       }
     }
     return { locatedByBlockKey: located, driftComments: drift };
-  }, [
-    blockKeyByHash,
-    document?.blocks,
-    labels.authorYou,
-    pathThreads,
-    surface,
-  ]);
+  }, [blockKeyByHash, labels.authorYou, pathThreads, surface]);
 
   const reportFailure = useCallback(
     (title: string, result: { message?: string | null }) => {

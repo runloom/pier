@@ -23,7 +23,6 @@ export type CommentProjectionReason =
 export type CommentLocateKind =
   | "git-line"
   | "git-file"
-  | "markdown-heading"
   | "markdown-block"
   | "canvas-file"
   | "canvas-anchor";
@@ -31,7 +30,6 @@ export type CommentLocateKind =
 export interface CommentProjection {
   readonly locate?: {
     readonly kind: CommentLocateKind;
-    readonly headingId?: string;
     readonly line?: number;
     readonly side?: "new" | "old";
     readonly anchorId?: string;
@@ -147,16 +145,7 @@ function projectMarkdown(
   if (!surface.filePresent) {
     return missing("file-gone");
   }
-  if (
-    target.headingId !== undefined &&
-    surface.headingIds.has(target.headingId)
-  ) {
-    return located({
-      kind: "markdown-heading",
-      headingId: target.headingId,
-      path: target.path,
-    });
-  }
+  // headingId 只是章节提示，不是精确钉证据：同标题下段落改写必须 drift。
   if (surface.blockHashes.has(target.contentHash)) {
     return located({ kind: "markdown-block", path: target.path });
   }
