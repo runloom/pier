@@ -47,6 +47,16 @@ const AGENT_ID: AgentKind = "goose";
  *   PR README "To turn the plugin off, add it to disabledPlugins in
  *   ~/.config/goose/settings.json" 确认）——若含 "pier", install 直接
  *   跳过并告警（用户显式关闭, 不应静默覆盖）。
+ *
+ * 2026-08-29 审计留档：
+ * - `~/.agents/plugins` 是 agent-plugins.org 共享安装点：cline 会把 pier
+ *   目录列进插件发现（仅可见不执行，其 hooks 搜索路径不含插件目录）；
+ *   copilot 需用户手动 `copilot plugin install` 才会执行（届时事件标
+ *   agent=goose、被 foreign-agent 闸门丢弃）。均无静默执行面，暂不加
+ *   环境守卫；若上游任一开始自动执行共享插件 hooks，需按 cursor/claude
+ *   的 skip-env 模式补守卫。
+ * - deny 路径缺 Post 的缺口等上游 `PreToolUseResult`（decision=allow/deny，
+ *   main 已合、本机 1.47.0 尚无）发布后用值分发补 ToolComplete。
  */
 
 const GOOSE_HOOK_EVENT_FACTS: ReadonlyArray<{

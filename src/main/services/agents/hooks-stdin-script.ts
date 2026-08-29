@@ -135,9 +135,11 @@ function metadataFrom(payload) {
     const value = ownString(payload, key);
     if (value !== undefined) metadata[key] = value;
   }
+  // instruction：autohand pre-prompt 的提示字段名（官方 docs/hooks.md）。
   const prompt = firstOwnString(payload, [
     "prompt",
     "user_prompt",
+    "instruction",
     "content",
     "message",
   ]);

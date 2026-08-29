@@ -53,6 +53,7 @@ import {
   type TimerCtx,
 } from "./entry.ts";
 import { armHookTtlTimer } from "./hook-scope-projection.ts";
+import { createSubagentSessionRegistry } from "./subagent-session-registry.ts";
 import {
   applyTurnBookkeeping as bookkeepTurn,
   nextStatusAfterTurnBookkeeping,
@@ -93,6 +94,7 @@ export function createForegroundActivityAggregator(
 
   const timerCtx: TimerCtx = { now, scheduleEmit, slots };
   const { dropSlotIfEmpty, slotFor } = createPanelSlotRegistry(slots);
+  const subagentSessions = createSubagentSessionRegistry();
   function commandOwnedAgent(slot: PanelSlot | undefined) {
     return slot?.command?.kind === "agent-launch" ? slot.command.agentId : null;
   }
@@ -106,6 +108,7 @@ export function createForegroundActivityAggregator(
       clearSlotTimers(slot);
       slots.delete(key);
     }
+    subagentSessions.clearPanel(key);
     hookScopes.clearCooldownsForPanel(key);
     cooldown.map.set(key, now() + cooldown.ms);
     return slot !== undefined;
@@ -246,8 +249,10 @@ export function createForegroundActivityAggregator(
         });
         return false;
       }
+      subagentSessions.remember(key, event);
       if (
-        isSubagentHookEvent(event) &&
+        (isSubagentHookEvent(event) ||
+          subagentSessions.isRegistered(key, event)) &&
         !SUBAGENT_HOOK_EVENTS.has(event.event) &&
         semantics.category !== "session-end"
       ) {
@@ -421,7 +426,13 @@ export function createForegroundActivityAggregator(
     },
     transferPanelOwnership(input) {
       rekeyPanelOwnership(
-        { hookCooldownUntil, panelCooldownUntil, scheduleEmit, slots },
+        {
+          hookCooldownUntil,
+          panelCooldownUntil,
+          rekeySubagentSessions: subagentSessions.rekeyPanel,
+          scheduleEmit,
+          slots,
+        },
         input
       );
     },
@@ -481,6 +492,7 @@ export function createForegroundActivityAggregator(
         clearSlotTimers(slot);
       }
       slots.clear();
+      subagentSessions.clearAll();
       listeners.clear();
     },
   };

@@ -23,6 +23,7 @@ function pierAppend(log, line) {
 				}
 			}
 		} finally { try { fs.rmSync(candidate, { force: true }); } catch {} }
+		try { fs.appendFileSync(log, line); } catch {}
 		return;
 	}
 	import("node:fs/promises").then(async (fs) => {
@@ -41,6 +42,7 @@ function pierAppend(log, line) {
 				}
 			}
 		} finally { await fs.rm(candidate, { force: true }); }
+		try { await fs.appendFile(log, line); } catch {}
 	}).catch(() => {});
 }
 

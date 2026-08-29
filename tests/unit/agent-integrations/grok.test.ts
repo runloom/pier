@@ -76,7 +76,7 @@ describe("grokIntegration", () => {
     const installed = JSON.parse(
       await readFile(join(customHome, "hooks", "pier-status.json"), "utf8")
     );
-    expect(hookCommands(installed)).toHaveLength(13);
+    expect(hookCommands(installed)).toHaveLength(14);
   });
 
   it("空白 GROK_HOME 回落 HOME/.grok", async () => {
@@ -85,10 +85,10 @@ describe("grokIntegration", () => {
     await integration.install();
     expect(
       hookCommands(JSON.parse(await readFile(configPath(), "utf8")))
-    ).toHaveLength(13);
+    ).toHaveLength(14);
   });
 
-  it("写入专用文件 ~/.grok/hooks/pier-status.json，13 个事件各一条命令（不含 Notification）", async () => {
+  it("写入专用文件 ~/.grok/hooks/pier-status.json，14 个事件各一条命令（不含 Notification）", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
@@ -109,6 +109,7 @@ describe("grokIntegration", () => {
       "PostToolUseFailure",
       "PermissionDenied",
       "Stop",
+      "StopCancelled",
       "StopFailure",
       "SubagentStart",
       "SubagentStop",
@@ -122,21 +123,30 @@ describe("grokIntegration", () => {
     // 不装 Notification：Turn complete / Background task completed 会假 waiting
     expect(hooks.Notification).toBeUndefined();
 
-    // 所有命令都使用 strict v3；工具命令显式消费 Grok camelCase 身份键。
+    // 所有命令都使用 strict v3。
     for (const cmd of hookCommands(installed)) {
       expect(cmd).toContain(MARK);
       expect(cmd).toContain('"grok"');
       expect(cmd).toContain('"agentEventV3"');
     }
+    // 子会话识别 + 回合锚点：非 Subagent 命令提取 subagentType（actorHint
+    // 走 agent_type 非空判定）与 promptId（turnId）；camelCase
+    // toolUseId/toolName 由提取脚本固定别名组覆盖，无需路径参数。
     for (const event of [
       "PreToolUse",
       "PostToolUse",
       "PostToolUseFailure",
       "PermissionDenied",
+      "UserPromptSubmit",
+      "Stop",
+      "StopCancelled",
     ]) {
       const cmd = typedHooks[event]?.[0]?.hooks[0]?.command ?? "";
-      expect(cmd).toContain("toolUseId");
-      expect(cmd).toContain("toolName");
+      expect(cmd, event).toContain("subagentType");
+      expect(cmd, event).toContain("promptId");
+      expect(cmd, event).toContain(
+        '[ -n "$_pier_agent_type" ] && _pier_actor_hint=subagent'
+      );
     }
 
     // pierEvent 名称核验（本机 ~/.grok/docs/user-guide/10-hooks.md 对照）
@@ -147,6 +157,13 @@ describe("grokIntegration", () => {
       '"SessionEnd"'
     );
     expect(typedHooks.StopFailure?.[0]?.hooks[0]?.command).toContain('"error"');
+    // 取消/拒绝/超轮次的原生收口（1.0.13 StopCancelled，reason 落 nativeState）
+    expect(typedHooks.StopCancelled?.[0]?.hooks[0]?.command).toContain(
+      '"TurnInterrupted"'
+    );
+    expect(typedHooks.StopCancelled?.[0]?.hooks[0]?.command).toContain(
+      "reason"
+    );
     expect(typedHooks.PermissionDenied?.[0]?.hooks[0]?.command).toContain(
       '"ToolComplete"'
     );

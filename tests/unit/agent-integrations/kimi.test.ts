@@ -12,10 +12,13 @@ import {
 import {
   installKimiHooks,
   KIMI_HOOK_TIMEOUT_SECONDS_VALUE,
+  kimiCodeHomeDir,
   kimiConfigPath,
   kimiDetect,
   kimiIntegration,
+  kimiLegacyConfigPath,
   uninstallKimiHooks,
+  withoutOrphanPierKimiHookEntries,
   withoutPierKimiHooks,
   withPierKimiHooks,
 } from "../../../src/main/services/agents/integrations/kimi.ts";
@@ -273,6 +276,103 @@ describe("withoutPierKimiHooks (TOML 剔除)", () => {
     expect(withoutPierKimiHooks(raw)).toBe(raw);
   });
 
+  it("剔除 marker 块外的孤儿 pier [[hooks]] 条目（上游重写 TOML 丢 marker 实证）", () => {
+    // 本机 ~/.kimi/config.toml 实证形态：12 条孤儿（无 marker 包裹）+
+    // 12 条块内。孤儿必须按 isPierHookCommand 所有权剔除，用户条目保留。
+    const withBlock = withPierKimiHooks('user_setting = "keep"\n');
+    const pierCommandLine = withBlock
+      .split("\n")
+      .find((line) => COMMAND_LINE_RE.test(line));
+    expect(pierCommandLine).toBeDefined();
+    const orphan = [
+      "[[hooks]]",
+      'event = "SessionStart"',
+      pierCommandLine ?? "",
+      "timeout = 5",
+      "",
+      "[[hooks]]",
+      'event = "Stop"',
+      'command = "say user-owned"',
+      "timeout = 5",
+      "",
+    ].join("\n");
+    const dirty = `user_setting = "keep"\n\n${orphan}${withBlock.slice('user_setting = "keep"\n'.length)}`;
+    const cleaned = withoutPierKimiHooks(dirty);
+    expect(cleaned).toContain('user_setting = "keep"');
+    expect(cleaned).toContain('command = "say user-owned"');
+    expect(cleaned).not.toContain(MARK);
+    expect(cleaned).not.toContain("pier-agent-status:kimi");
+
+    // 安装路径同样先清孤儿：不会出现双份 pier 条目。
+    const reinstalled = withPierKimiHooks(
+      withoutOrphanPierKimiHookEntries(dirty)
+    );
+    const pierEntryCount = reinstalled
+      .split("\n")
+      .filter(
+        (line) => COMMAND_LINE_RE.test(line) && line.includes(MARK)
+      ).length;
+    expect(pierEntryCount).toBe(NATIVE_EVENTS.length);
+  });
+
+  it("更高世代孤儿不被旧客户端清掉", () => {
+    const withBlock = withPierKimiHooks("");
+    const commandLine = withBlock
+      .split("\n")
+      .find((line) => COMMAND_LINE_RE.test(line));
+    expect(commandLine).toBeDefined();
+    const higherLine = (commandLine ?? "").replace(
+      `pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}`,
+      `pier-hook-gen=${HIGHER_HOOK_GENERATION}`
+    );
+    const newer = [
+      "[[hooks]]",
+      'event = "SessionStart"',
+      higherLine,
+      "timeout = 5",
+      "",
+    ].join("\n");
+    expect(withoutOrphanPierKimiHookEntries(newer)).toContain(
+      `pier-hook-gen=${HIGHER_HOOK_GENERATION}`
+    );
+    expect(withPierKimiHooks(newer)).toBe(newer);
+  });
+
+  it("含多行字符串的 TOML 保守不改（避免误切表头）", () => {
+    const raw = [
+      'note = """',
+      "[[hooks]]",
+      'command = "echo not-a-table"',
+      '"""',
+      "",
+    ].join("\n");
+    expect(withoutOrphanPierKimiHookEntries(raw)).toBe(raw);
+  });
+
+  it("带行尾注释的 Pier command 与旧 curl 孤儿仍能清掉", () => {
+    const withBlock = withPierKimiHooks("");
+    const commandLine = withBlock
+      .split("\n")
+      .find((line) => COMMAND_LINE_RE.test(line));
+    expect(commandLine).toBeDefined();
+    const emitOrphan = [
+      "[[hooks]]",
+      'event = "Stop"',
+      `${commandLine} # trailing`,
+      "",
+    ].join("\n");
+    const curlOrphan = [
+      "[[hooks]]",
+      'event = "Stop"',
+      'command = "curl -s http://127.0.0.1:$PIER_AGENT_HOOK_PORT/hook"',
+      "",
+    ].join("\n");
+    expect(withoutOrphanPierKimiHookEntries(emitOrphan)).not.toContain(MARK);
+    expect(withoutOrphanPierKimiHookEntries(curlOrphan)).not.toContain(
+      "PIER_AGENT_HOOK_PORT"
+    );
+  });
+
   it("卸载会清除同一文件中的全部完整 Pier 块", () => {
     const begin =
       "# >>> pier-agent-status:kimi (managed by Pier; do not edit) >>>";
@@ -298,9 +398,10 @@ describe("withoutPierKimiHooks (TOML 剔除)", () => {
   });
 });
 
-describe("kimiConfigPath", () => {
+describe("kimiConfigPath / kimiLegacyConfigPath", () => {
   const originalHome = process.env.HOME;
   const originalShareDir = process.env.KIMI_SHARE_DIR;
+  const originalCodeHome = process.env.KIMI_CODE_HOME;
 
   afterEach(() => {
     process.env.HOME = originalHome;
@@ -309,17 +410,36 @@ describe("kimiConfigPath", () => {
     } else {
       process.env.KIMI_SHARE_DIR = originalShareDir;
     }
+    if (originalCodeHome === undefined) {
+      delete process.env.KIMI_CODE_HOME;
+    } else {
+      process.env.KIMI_CODE_HOME = originalCodeHome;
+    }
   });
 
-  it("默认路径为 ~/.kimi/config.toml", () => {
+  it("现行默认路径为 ~/.kimi-code/config.toml（Kimi Code 换代）", () => {
+    process.env.HOME = "/tmp/pier-kimi-home";
+    delete process.env.KIMI_CODE_HOME;
+    expect(kimiConfigPath()).toBe("/tmp/pier-kimi-home/.kimi-code/config.toml");
+  });
+
+  it("$KIMI_CODE_HOME 覆盖现行目录", () => {
+    process.env.KIMI_CODE_HOME = "/tmp/pier-kimi-code-home";
+    expect(kimiCodeHomeDir()).toBe("/tmp/pier-kimi-code-home");
+    expect(kimiConfigPath()).toBe("/tmp/pier-kimi-code-home/config.toml");
+  });
+
+  it("老 kimi-cli 路径为 ~/.kimi/config.toml（仅清理用）", () => {
     process.env.HOME = "/tmp/pier-kimi-home";
     delete process.env.KIMI_SHARE_DIR;
-    expect(kimiConfigPath()).toBe("/tmp/pier-kimi-home/.kimi/config.toml");
+    expect(kimiLegacyConfigPath()).toBe(
+      "/tmp/pier-kimi-home/.kimi/config.toml"
+    );
   });
 
-  it("$KIMI_SHARE_DIR 覆盖默认目录", () => {
+  it("$KIMI_SHARE_DIR 覆盖老目录", () => {
     process.env.KIMI_SHARE_DIR = "/tmp/pier-kimi-share";
-    expect(kimiConfigPath()).toBe("/tmp/pier-kimi-share/config.toml");
+    expect(kimiLegacyConfigPath()).toBe("/tmp/pier-kimi-share/config.toml");
   });
 });
 
@@ -328,12 +448,14 @@ describe("install/uninstallKimiHooks (文件 IO)", () => {
   let configPath: string;
   const originalHome = process.env.HOME;
   const originalShareDir = process.env.KIMI_SHARE_DIR;
+  const originalCodeHome = process.env.KIMI_CODE_HOME;
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "pier-kimi-io-"));
     // 隔离 HOME 防真机 ~/.config/agents/hooks 被遗留清理误碰。
     process.env.HOME = dir;
     delete process.env.KIMI_SHARE_DIR;
+    delete process.env.KIMI_CODE_HOME;
     configPath = join(dir, "config.toml");
   });
 
@@ -343,6 +465,11 @@ describe("install/uninstallKimiHooks (文件 IO)", () => {
       delete process.env.KIMI_SHARE_DIR;
     } else {
       process.env.KIMI_SHARE_DIR = originalShareDir;
+    }
+    if (originalCodeHome === undefined) {
+      delete process.env.KIMI_CODE_HOME;
+    } else {
+      process.env.KIMI_CODE_HOME = originalCodeHome;
     }
   });
 
@@ -381,6 +508,29 @@ describe("install/uninstallKimiHooks (文件 IO)", () => {
 
   it("卸载：config.toml 不存在时零副作用 no-op", async () => {
     await expect(uninstallKimiHooks(configPath)).resolves.toBeUndefined();
+  });
+
+  it("安装写现行路径，同时清理老 ~/.kimi/config.toml 的 pier 条目（含孤儿）", async () => {
+    const legacyPath = join(dir, "legacy-config.toml");
+    const legacyWithBlock = withPierKimiHooks('legacy_user = "keep"\n');
+    const pierCommandLine = legacyWithBlock
+      .split("\n")
+      .find((line) => COMMAND_LINE_RE.test(line));
+    // 老文件形态：marker 块 + 一条孤儿 pier 条目（marker 被上游剥离的残留）。
+    const legacyDirty = `${legacyWithBlock}\n[[hooks]]\nevent = "Stop"\n${pierCommandLine ?? ""}\ntimeout = 5\n`;
+    await writeFile(legacyPath, legacyDirty, "utf8");
+
+    await installKimiHooks(configPath, legacyPath);
+
+    const legacyAfter = await readFile(legacyPath, "utf8");
+    expect(legacyAfter).toContain('legacy_user = "keep"');
+    expect(legacyAfter).not.toContain(MARK);
+    expect(legacyAfter).not.toContain("pier-agent-status:kimi");
+    const installed = await readFile(configPath, "utf8");
+    expect(installed).toContain("pier-agent-status:kimi");
+
+    await uninstallKimiHooks(configPath, legacyPath);
+    expect(await readFile(configPath, "utf8")).not.toContain(MARK);
   });
 
   it("卸载：无 pier marker 的 config.toml 保持字节原样", async () => {

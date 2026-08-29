@@ -42,9 +42,14 @@ function qwenCommand(
     nativeEvent === "SubagentStart" || nativeEvent === "SubagentStop";
   return pierHookCommandV3WithStdin({
     agentId: "qwen-code",
+    // 官方文档：subagent 上下文内的**普通** hook 事件（Pre/PostToolUse 等）
+    // 也附带 agent_id——全事件开 actorHintFromAgentId，让子智能体的工具
+    // 事件按子会话旁路（subagent-detail-ignored），不混入主 scope 工作集
+    // （2026-08-29 审计，cursor Task 泄漏同族；主上下文事件无 agent_id，
+    // hint 缺席不受影响）。
+    actorHintFromAgentId: true,
     ...(isSubagent
       ? {
-          actorHintFromAgentId: true,
           agentInstanceIdFields: ["agent_id"],
           agentTypeFields: ["agent_type"],
           sessionIdAsParent: true,

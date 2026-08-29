@@ -125,6 +125,13 @@ export interface HookScope {
    * 「已结算 session 是否应压过尚未开新回合的 panel 兜底噪声」。
    */
   completionObservedAt: number | undefined;
+  /**
+   * 当前回合是否由 **显式提问**（PromptSubmit）建立。
+   * correlatable 心跳 / 工具认领不得点亮——否则泄漏 turnId 上的 processing
+   * 会把垃圾回合升成权威，真回合 stop 被 abandoned-turn 拒收。
+   * 权威活跃回合不得被旧回合的迟到 stop 拉回 ready（Esc 后重新提问）。
+   */
+  currentTurnAuthoritative: boolean;
   currentTurnId: string | undefined;
   /**
    * Transcript 问卷展示覆盖（对齐 CodeIsland waitingQuestion）。
@@ -135,6 +142,18 @@ export interface HookScope {
   identity: HookIdentityFacts;
   interactionHistoryIncomplete: boolean;
   key: string;
+  /**
+   * 最近一次被抢占、尚未被可信终态结算的回合。abandoned 集合只用来拒迟到
+   * 进展；封账白名单是这一格，避免更旧 abandoned 终态误封当前工作回合。
+   */
+  lastDisplacedTurnId: string | undefined;
+  /**
+   * 被 resetTurn 抢占/换代**抛弃**的回合（区别于被可信终态结算的
+   * recentSettledTurnIds）：迟到进展不得复活它（防 ping-pong），但其
+   * 迟到的**可信终态**仍可封账——provider 的 stop 可能带被抢占前的
+   * generation（Cursor Task 泄漏子智能体 generation 后的真回合 stop）。
+   */
+  recentAbandonedTurnIds: Set<string>;
   recentSettledTurnIds: Set<string>;
   /**
    * 是否见过显式提问（PromptSubmit）。子智能体独立 conversation 只发工具
@@ -307,11 +326,14 @@ export function newHookScope(
     anonymousToolCount: 0,
     completionObserved: false,
     completionObservedAt: undefined,
+    currentTurnAuthoritative: false,
     currentTurnId: undefined,
     displayQuestionId: undefined,
     identity,
     interactionHistoryIncomplete: false,
     key,
+    lastDisplacedTurnId: undefined,
+    recentAbandonedTurnIds: new Set(),
     recentSettledTurnIds: new Set(),
     sawExplicitPrompt: false,
     settledInteractionIds: new Set(),

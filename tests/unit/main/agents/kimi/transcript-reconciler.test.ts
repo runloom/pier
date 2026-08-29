@@ -63,15 +63,54 @@ describe("kimi transcript reconciler", () => {
     expect(await findKimiWireForSession(root, "sess-uuid")).toBe(path);
   });
 
+  it("v2 布局（agents/main/wire.jsonl）优先于 v1 顶层 wire.jsonl", async () => {
+    const v2Dir = join(root, "projecthash", "sess-uuid", "agents", "main");
+    await mkdir(v2Dir, { recursive: true });
+    const v2Path = join(v2Dir, "wire.jsonl");
+    writeFileSync(v2Path, '{"message":{"type":"TurnBegin","payload":{}}}\n');
+    expect(await findKimiWireForSession(root, "sess-uuid")).toBe(v2Path);
+  });
+
   it("TurnEnd 对账为 TurnCompleted", async () => {
     const received: AgentHookEventPayload[] = [];
     const reconciler = createKimiTranscriptReconciler({
       onTerminalEvent: (event) => received.push(event),
-      sessionsRoot: root,
+      sessionsRoots: [root],
     });
     await reconciler.observe(hookEvent());
     appendFileSync(
       path,
+      `${JSON.stringify({ message: { payload: {}, type: "TurnEnd" } })}\n`
+    );
+
+    await vi.waitFor(() => {
+      expect(received).toHaveLength(1);
+    });
+    expect(received[0]).toMatchObject({
+      event: "TurnCompleted",
+      nativeEvent: "kimi.wire.TurnEnd",
+      v: 3,
+    });
+    reconciler.dispose();
+  });
+
+  it("多根：会话落在第二个根（老 ~/.kimi）时同样对账", async () => {
+    const legacyRoot = join(dir, "legacy-sessions");
+    const legacyDir = join(legacyRoot, "otherhash", "legacy-sess");
+    await mkdir(legacyDir, { recursive: true });
+    const legacyPath = join(legacyDir, "wire.jsonl");
+    writeFileSync(
+      legacyPath,
+      '{"message":{"type":"TurnBegin","payload":{}}}\n'
+    );
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createKimiTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      sessionsRoots: [root, legacyRoot],
+    });
+    await reconciler.observe(hookEvent({ sessionId: "legacy-sess" }));
+    appendFileSync(
+      legacyPath,
       `${JSON.stringify({ message: { payload: {}, type: "TurnEnd" } })}\n`
     );
 

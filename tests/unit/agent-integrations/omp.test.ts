@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -766,23 +766,36 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
 });
 
 describe("ompHome", () => {
-  const ORIG = process.env.OMP_HOME;
+  const ORIG = process.env.PI_CODING_AGENT_DIR;
   afterEach(() => {
     if (ORIG === undefined) {
-      delete process.env.OMP_HOME;
+      delete process.env.PI_CODING_AGENT_DIR;
     } else {
-      process.env.OMP_HOME = ORIG;
+      process.env.PI_CODING_AGENT_DIR = ORIG;
     }
   });
 
   it("默认 ~/.omp/agent", () => {
-    delete process.env.OMP_HOME;
+    delete process.env.PI_CODING_AGENT_DIR;
     expect(ompHome()).toContain(join(".omp", "agent"));
   });
 
-  it("OMP_HOME 设置时使用该路径", () => {
-    process.env.OMP_HOME = "/custom/omp-home";
+  it("PI_CODING_AGENT_DIR 设置时跟随该路径", () => {
+    process.env.PI_CODING_AGENT_DIR = "/custom/omp-home";
     expect(ompHome()).toBe("/custom/omp-home");
+  });
+
+  it("不读已废除的 OMP_HOME", () => {
+    const origOmpHome = process.env.OMP_HOME;
+    delete process.env.PI_CODING_AGENT_DIR;
+    process.env.OMP_HOME = "/custom/omp-home";
+    expect(ompHome()).toContain(join(".omp", "agent"));
+    expect(ompHome()).not.toBe("/custom/omp-home");
+    if (origOmpHome === undefined) {
+      delete process.env.OMP_HOME;
+    } else {
+      process.env.OMP_HOME = origOmpHome;
+    }
   });
 });
 
@@ -801,17 +814,21 @@ describe("ompDetect", () => {
 
   it("home 目录存在时为真", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-omp-detect-"));
-    const orig = process.env.OMP_HOME;
-    process.env.OMP_HOME = dir;
+    const origHome = process.env.HOME;
+    const origOverride = process.env.PI_CODING_AGENT_DIR;
+    delete process.env.PI_CODING_AGENT_DIR;
+    process.env.HOME = dir;
+    await mkdir(join(dir, ".omp", "agent"), { recursive: true });
     vi.resetModules();
     const mod = await import(
       "../../../src/main/services/agents/integrations/omp.ts"
     );
     expect(mod.ompDetect()).toBe(true);
-    if (orig === undefined) {
-      delete process.env.OMP_HOME;
+    process.env.HOME = origHome;
+    if (origOverride === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR;
     } else {
-      process.env.OMP_HOME = orig;
+      process.env.PI_CODING_AGENT_DIR = origOverride;
     }
     vi.resetModules();
   });
@@ -878,6 +895,48 @@ describe("install/uninstallOmpExtension (文件 IO)", () => {
   it("uninstall 对不存在的文件零副作用（不抛异常）", async () => {
     await setup();
     await expect(uninstallOmpExtension(extPath)).resolves.toBeUndefined();
+  });
+
+  it("自定义 PI_CODING_AGENT_DIR 且路径上无 pi 插件时跟随并安装", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-omp-follow-env-"));
+    const origDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+    try {
+      vi.resetModules();
+      const mod = await import(
+        "../../../src/main/services/agents/integrations/omp.ts"
+      );
+      expect(mod.ompHome()).toBe(dir);
+      await mod.installOmpExtension();
+      const installed = await readFile(mod.ompExtensionPath(), "utf8");
+      expect(installed).toContain(mod.OMP_MARKER);
+      expect(installed).toContain('agent: "omp"');
+    } finally {
+      if (origDir === undefined) {
+        delete process.env.PI_CODING_AGENT_DIR;
+      } else {
+        process.env.PI_CODING_AGENT_DIR = origDir;
+      }
+      vi.resetModules();
+    }
+  });
+
+  it("pi 已占用同一 pier-agent-status.ts 时跳过并 warn，不改写", async () => {
+    await setup();
+    const { buildPiExtensionSource } = await import(
+      "../../../src/main/services/agents/integrations/pi.ts"
+    );
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(dir, "extensions"), { recursive: true });
+    const piSource = buildPiExtensionSource();
+    await writeFile(extPath, piSource, "utf8");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+      // swallow
+    });
+    await installOmpExtension(extPath);
+    expect(await readFile(extPath, "utf8")).toBe(piSource);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it("detect 为假时（无 home 目录、无 omp 命令）install 不写入任何文件", async () => {

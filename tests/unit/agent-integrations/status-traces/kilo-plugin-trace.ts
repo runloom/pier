@@ -147,16 +147,22 @@ const kiloActions: AgentStatusTraceAction[] = [
       status: { type: "idle" },
     })
   ),
-  action(
-    "session.idle",
-    "Stop",
-    "ready",
-    {
-      expectedEventFields: { sessionId: "kilo-main-1" },
-      expectedStatus: "ready",
-    },
-    event("session.idle", { info: { id: "kilo-main-1" } })
-  ),
+  // idle 是 advisory 候选（2026-08-29 降级对齐 opencode）：不产生 ready
+  // 覆盖，状态进入候选完成（无具体 status）。
+  {
+    checkpoints: [],
+    eventAssertions: [
+      {
+        expectedEvent: "Stop",
+        expectedEventFields: { sessionId: "kilo-main-1" },
+        expectedNativeEvent: "session.idle",
+      },
+    ],
+    expectedNativeEvents: ["session.idle"],
+    nativeEvent: "session.idle",
+    nonCoveringAssertion: { expectedStatusAbsent: true },
+    payload: event("session.idle", { info: { id: "kilo-main-1" } }),
+  },
   action(
     "session.deleted",
     "SessionEnd",
@@ -192,15 +198,7 @@ const kiloActions: AgentStatusTraceAction[] = [
 export const KILO_STATUS_TRACE = {
   actions: kiloActions,
   agentId: "kilo",
-  covers: [
-    "lifecycle",
-    "ready",
-    "processing",
-    "tool",
-    "waiting",
-    "error",
-    "subagent",
-  ],
+  covers: ["lifecycle", "processing", "tool", "waiting", "error", "subagent"],
   createProducer: createKiloPluginProducer,
   stopAuthority: kiloIntegration.runtime.stopAuthority,
 } as const satisfies AgentStatusTraceFixture;

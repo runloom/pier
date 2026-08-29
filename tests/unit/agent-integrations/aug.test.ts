@@ -94,7 +94,7 @@ describe("augIntegration", () => {
     await expect(readFile(managedScriptPath(), "utf8")).rejects.toThrow();
   });
 
-  it("只安装当前官方有状态证据的 5 个事件，command 只引用受管 .sh 文件", async () => {
+  it("只安装当前官方有状态证据的 6 个事件，command 只引用受管 .sh 文件", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
@@ -106,7 +106,7 @@ describe("augIntegration", () => {
     }
     const typedHooks = hooks as unknown as Record<string, Matcher[]>;
 
-    for (const evt of ["SessionStart", "Stop", "SessionEnd"]) {
+    for (const evt of ["SessionStart", "PromptSubmit", "Stop", "SessionEnd"]) {
       expect(hooks[evt], evt).toHaveLength(1);
       expect(typedHooks[evt]?.[0]?.matcher).toBeUndefined();
     }
@@ -116,10 +116,12 @@ describe("augIntegration", () => {
     }
     expect(hooks.PermissionRequest).toBeUndefined();
     expect(hooks.Notification).toBeUndefined();
+    // aug 的 per-turn 事件名是 PromptSubmit（0.36.0 binary），
+    // 不是 Claude 家族的 UserPromptSubmit——后者装了不会触发。
     expect(hooks.UserPromptSubmit).toBeUndefined();
 
     expect(hookCommands(installed)).toEqual(
-      Array.from({ length: 5 }, () => managedScriptPath())
+      Array.from({ length: 6 }, () => managedScriptPath())
     );
     const script = await readFile(managedScriptPath(), "utf8");
     expect(script.startsWith("#!/bin/sh\n")).toBe(true);
@@ -153,6 +155,14 @@ describe("augIntegration", () => {
     };
     for (const [event, payload] of [
       ["SessionStart", { ...common, hook_event_name: "SessionStart" }],
+      [
+        "PromptSubmit",
+        {
+          ...common,
+          hook_event_name: "PromptSubmit",
+          user_prompt: "帮我修一下这个测试",
+        },
+      ],
       [
         "PreToolUse",
         {
@@ -233,6 +243,12 @@ describe("augIntegration", () => {
         v: 3,
       },
       {
+        event: "PromptSubmit",
+        nativeEvent: "PromptSubmit",
+        sessionId: "conv-aug-1",
+        v: 3,
+      },
+      {
         event: "ToolStart",
         nativeEvent: "PreToolUse",
         sessionId: "conv-aug-1",
@@ -277,12 +293,12 @@ describe("augIntegration", () => {
         v: 3,
       },
     ]);
-    expect(rows[1]).not.toHaveProperty("toolUseId");
     expect(rows[2]).not.toHaveProperty("toolUseId");
+    expect(rows[3]).not.toHaveProperty("toolUseId");
 
     const aggregator = createForegroundActivityAggregator();
     const statuses: Array<string | undefined> = [];
-    for (const row of rows.slice(0, 4)) {
+    for (const row of rows.slice(0, 5)) {
       if (row.kind !== "agentEvent") continue;
       aggregator.ingestAgentEvent(row, {
         evidenceSource: "hook",
@@ -292,7 +308,13 @@ describe("augIntegration", () => {
       const activity = aggregator.snapshot().activities[0];
       statuses.push(activity?.kind === "agent" ? activity.status : undefined);
     }
-    expect(statuses).toEqual([undefined, "tool", "processing", undefined]);
+    expect(statuses).toEqual([
+      undefined,
+      "processing",
+      "tool",
+      "processing",
+      undefined,
+    ]);
   }, 30_000);
 
   it("幂等：重复安装不产生重复条目", async () => {

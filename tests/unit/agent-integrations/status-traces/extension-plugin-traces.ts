@@ -84,36 +84,37 @@ const piActions: AgentStatusTraceAction[] = [
     "pi-session-1",
     { isError: false, toolCallId: "pi-tool-1", toolName: "bash" }
   ),
+  // pi 的 waiting 来源是专为状态集成设计的 ui_prompt_start/end
+  // （docs/extensions.md；2026-08-29 移除误植的 ask 分支——ask 是 omp
+  // 自有工具）。上游深度计数保证最外层严格 1:1 配对，匿名交互计数安全。
   extensionAction(
-    "tool_execution_start.ask",
+    "ui_prompt_start",
     "InteractionRequested",
     "waiting",
     {
       expectedEventFields: {
-        interactionId: "pi-ask-1",
         interactionKind: "question",
+        nativeState: "select",
       },
       expectedStatus: "waiting",
     },
     "pi-session-1",
-    { toolCallId: "pi-ask-1", toolName: "ask" },
-    "tool_execution_start"
+    { kind: "select", title: "选择分支" }
   ),
   extensionAction(
-    "tool_execution_end.ask",
+    "ui_prompt_end",
     "InteractionResolved",
     "processing",
     {
       expectedEventFields: {
-        interactionId: "pi-ask-1",
         interactionKind: "question",
         interactionOutcome: "completed",
+        nativeState: "select",
       },
       expectedStatus: "processing",
     },
     "pi-session-1",
-    { isError: false, toolCallId: "pi-ask-1", toolName: "ask" },
-    "tool_execution_end"
+    { kind: "select", title: "选择分支" }
   ),
   extensionAction(
     "agent_settled",

@@ -355,6 +355,44 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     ).not.toHaveProperty("turnId");
   });
 
+  it("等锁超时降级为无锁 append，不再静默丢事件（外部持有者不受影响）", {
+    timeout: 20_000,
+  }, async () => {
+    const root = await makeTempDir();
+    const { userData, hooksHome } = await installPair(root);
+    const logPath = eventsJsonlPath(userData);
+    const lockPath = `${logPath}.lock`;
+    await mkdir(agentHooksDir(userData), { recursive: true });
+    // 模拟被 SIGKILL 的持有者残留主锁：emit 自旋 5s 后必须仍写出事件。
+    await writeFile(lockPath, "1.foreign-holder", "utf8");
+    const result = spawnSync(
+      "/bin/sh",
+      [emitScriptPath(hooksHome), "agentEventV3", "cursor", "Stop", "stop"],
+      {
+        env: {
+          ...process.env,
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+        },
+      }
+    );
+    expect(result.status, result.stderr.toString()).toBe(0);
+    const line = (await readFile(logPath, "utf8")).trim();
+    expect(agentHookEventSchema.parse(JSON.parse(line))).toMatchObject({
+      agent: "cursor",
+      event: "Stop",
+      v: 3,
+    });
+    // 非持有者不得删除他人主锁；等锁 candidate 已自清。
+    expect(await readFile(lockPath, "utf8")).toBe("1.foreign-holder");
+    const { readdir } = await import("node:fs/promises");
+    const leftovers = (await readdir(agentHooksDir(userData))).filter((name) =>
+      name.startsWith("events.jsonl.lock.")
+    );
+    expect(leftovers).toEqual([]);
+  });
+
   it("agentEventV3 spawn 写出可被严格 schema 解析的标准与交互事件", {
     timeout: 15_000,
   }, async () => {

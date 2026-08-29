@@ -88,6 +88,13 @@ export const PIER_HOOKS_CURRENT_NAME = "current";
  *      —— cmdline 里带真实换行会让 observer 按 `\n` split 拆行，破坏 JSON 结构。
  *      语义损失（多行命令折成一行）可接受：cmdline 只用于显示。
  *   3. `sed 's/\\/\\\\/g; s/"/\\"/g'` 转义 `\` 与 `"` 以嵌入 JSON string。
+ *
+ * 锁语义：等锁 5s（500×10ms）失败时先看锁主 pid——已死则摘锁再 ln 一次；
+ * 仍拿不到（活着的 rotation / 未知持有者）才**降级无锁 append**，避免丢
+ * stop。这是尽力而为：POSIX 只保证 ≤PIPE_BUF 的 append 原子，v3 长行
+ * 可能撕行（observer zod 丢行）；也不与活着的 rotate() rename/截断互斥。
+ * 等锁期间被 SIGKILL 残留的 candidate 由 observer sweepStaleLockCandidates
+ * 周期清扫。
  */
 const EMIT_SCRIPT = `#!/bin/sh
 [ -z "$PIER_PANEL_ID" ] && exit 0
@@ -103,8 +110,18 @@ _lock_attempt=0
 while ! ln "$_lock_candidate" "$_lock" 2>/dev/null; do
   _lock_attempt=$((_lock_attempt + 1))
   if [ "$_lock_attempt" -ge 500 ]; then
-    rm -f "$_lock_candidate"
-    exit 0
+    _holder=$(cat "$_lock" 2>/dev/null || true)
+    _holder_pid=\${_holder%%.*}
+    case "$_holder_pid" in
+      ''|*[!0-9]*) ;;
+      *)
+        if ! ps -p "$_holder_pid" >/dev/null 2>&1; then
+          rm -f "$_lock"
+          ln "$_lock_candidate" "$_lock" 2>/dev/null || true
+        fi
+        ;;
+    esac
+    break
   fi
   sleep 0.01
 done

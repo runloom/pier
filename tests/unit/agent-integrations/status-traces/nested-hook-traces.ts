@@ -367,13 +367,42 @@ export const NESTED_HOOK_STATUS_TRACES = [
   nestedTrace(
     "droid",
     DROID_HOOK_EVENTS,
-    ["lifecycle", "processing", "tool"],
-    commonTraceActions({
-      lifecycleEnd: true,
-      promptNativeEvent: "UserPromptSubmit",
-      toolCompleteNativeEvent: "PostToolUse",
-      toolStartNativeEvent: "PreToolUse",
-    })
+    ["lifecycle", "processing", "tool", "interrupted"],
+    [
+      ...commonTraceActions({
+        promptNativeEvent: "UserPromptSubmit",
+        toolCompleteNativeEvent: "PostToolUse",
+        toolStartNativeEvent: "PreToolUse",
+      }),
+      // 取消不发 Stop 只发 Notification（官方文档）；idle_prompt 唯一
+      // 发射点是用户取消路径 → TurnInterrupted 可信中断。
+      {
+        ...traceAction(
+          "Notification",
+          "TurnInterrupted",
+          "interrupted",
+          { expectedStatus: "ready" },
+          {
+            message: "Agent stopped by user and is waiting for input",
+            notification_type: "idle_prompt",
+          }
+        ),
+        checkpoints: [
+          // 矩阵 ready 仍 unsupported（无 completed 信号），只认领 interrupted。
+          {
+            dimension: "interrupted",
+            expectedEvent: "TurnInterrupted",
+            expectedEventFields: { nativeState: "idle_prompt" },
+            expectedNativeEvent: "Notification",
+            expectedStatus: "ready",
+          },
+        ],
+        scenarios: ["interrupted"],
+      },
+      traceAction("SessionEnd", "SessionEnd", "lifecycle", {
+        expectedAbsent: true,
+      }),
+    ]
   ),
   nestedTrace(
     "codebuddy",

@@ -33,6 +33,12 @@ function geminiStandardCommand(
  * 两条链路均不能覆盖完整等待闭环，因此不发射交互事件；ask_user 只报告
  * ToolStart / ToolComplete，聚合器也不按工具名升 waiting。
  *
+ * 已知有界 false-busy（2026-08-29 审计留档）：deny/Esc 中断路径可缺
+ * AfterTool 且中断不触发 AfterAgent（本机 0.56.0 bundle：abort 直接
+ * return，fireAfterAgentHookSafe 不执行）——被拒/被中断工具的匿名计数
+ * 悬挂到下一次 PromptSubmit 或 TTL。上游无 turn/tool id（结构性无
+ * 抢占面），矩阵 interrupted: unsupported 如实声明，接受该取舍。
+ *
  * subagent 风险备忘：AfterAgent 仅在最外层调用（activeCalls===1）时触发,
  * 且按 prompt_id 去重（client.ts fireBeforeAgentHookSafe / fireAfterAgentHookSafe）。
  * 上游无独立 SubagentStart/SubagentStop 事件。若未来 subagent 使用独立

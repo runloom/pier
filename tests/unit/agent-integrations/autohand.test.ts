@@ -137,7 +137,8 @@ describe("autohandIntegration", () => {
         "pre-prompt",
         {
           hook_event_name: "pre-prompt",
-          prompt: "Fix it",
+          // 官方载荷字段是 instruction（docs/hooks.md 固定提交 8595299）。
+          instruction: "Fix it",
           session_id: "session-a",
         },
       ],
@@ -155,8 +156,10 @@ describe("autohandIntegration", () => {
         {
           hook_event_name: "post-tool",
           session_id: "session-a",
-          status: "error",
           tool_name: "terminal",
+          tool_response: "command failed",
+          // 官方载荷是 tool_success 布尔；历史误写的 status 字段不存在。
+          tool_success: false,
           tool_use_id: "tool-1",
         },
       ],
@@ -190,9 +193,22 @@ describe("autohandIntegration", () => {
       toolUseId: "tool-1",
       v: 3,
     });
+    expect(rows[1]).toMatchObject({
+      event: "PromptSubmit",
+      v: 3,
+    });
+    // instruction 别名进入 metadata.promptSnippet（observer 富化时提升）。
+    const promptRow = rows[1];
+    if (promptRow?.kind !== "agentEvent") {
+      throw new Error("expected agent event");
+    }
+    const metadata = JSON.parse(
+      Buffer.from(promptRow.metadataBase64 ?? "", "base64").toString("utf8")
+    ) as Record<string, unknown>;
+    expect(metadata.promptSnippet).toBe("Fix it");
     expect(rows[3]).toMatchObject({
       event: "ToolComplete",
-      nativeState: "error",
+      nativeState: "false",
       toolUseId: "tool-1",
       v: 3,
     });

@@ -94,12 +94,18 @@ describe("buildOpencodePluginSource", () => {
   });
 
   it("无加载合成 SessionStart：factory 体到 return 之间无独立 emit（真实 session.created 覆盖）", () => {
-    const factoryStart = source.indexOf("export const PierAgentStatus");
+    const factoryStart = source.indexOf("const PierAgentStatus");
     const returnStatement = source.indexOf("return {", factoryStart);
     expect(factoryStart).toBeGreaterThanOrEqual(0);
     expect(returnStatement).toBeGreaterThan(factoryStart);
     const factoryPrelude = source.slice(factoryStart, returnStatement);
     expect(factoryPrelude).not.toContain("emitPierEvent(");
+    // v1 官方 PluginModule 形状：default {id, server}，单一顶层导出
+    // （legacy 具名导出遍历路径与 v1 路径不得双注册）。
+    expect(source).toContain(
+      'export default { id: "pier-agent-status", server: PierAgentStatus }'
+    );
+    expect(source).not.toContain("export const PierAgentStatus");
   });
 });
 
@@ -124,10 +130,10 @@ describe("opencode 生成插件的子会话身份继承", () => {
         event: (args: { event: Record<string, unknown> }) => void;
       }
       const moduleShim: {
-        exports: (() => GeneratedPlugin) | undefined;
+        exports: { server: () => GeneratedPlugin } | undefined;
       } = { exports: undefined };
       const source = buildOpencodePluginSource().replace(
-        "export const PierAgentStatus =",
+        "export default",
         "module.exports ="
       );
       const evaluate = new Function("module", source) as (
@@ -135,7 +141,7 @@ describe("opencode 生成插件的子会话身份继承", () => {
       ) => void;
       evaluate(moduleShim);
       if (!moduleShim.exports) throw new Error("生成插件没有导出 factory");
-      const plugin = moduleShim.exports();
+      const plugin = moduleShim.exports.server();
       plugin["chat.message"](
         { messageID: "message-1", sessionID: "main" },
         {
@@ -180,19 +186,18 @@ describe("opencode 生成插件的子会话身份继承", () => {
     const moduleShim = {
       exports: undefined as
         | undefined
-        | (() => {
-            event: (args: { event: Record<string, unknown> }) => void;
-            "tool.execute.before": (input: Record<string, unknown>) => void;
-          }),
+        | {
+            server: () => {
+              event: (args: { event: Record<string, unknown> }) => void;
+              "tool.execute.before": (input: Record<string, unknown>) => void;
+            };
+          },
     };
     new Function(
       "module",
-      buildOpencodePluginSource().replace(
-        "export const PierAgentStatus =",
-        "module.exports ="
-      )
+      buildOpencodePluginSource().replace("export default", "module.exports =")
     )(moduleShim);
-    const plugin = moduleShim.exports?.();
+    const plugin = moduleShim.exports?.server();
     if (!plugin) throw new Error("生成插件没有导出 factory");
     plugin.event({
       event: {
@@ -313,10 +318,10 @@ describe("opencode 生成插件的子会话身份继承", () => {
         "tool.execute.before": (...args: unknown[]) => void;
       }
       const moduleShim: {
-        exports: (() => GeneratedPlugin) | undefined;
+        exports: { server: () => GeneratedPlugin } | undefined;
       } = { exports: undefined };
       const source = buildOpencodePluginSource().replace(
-        "export const PierAgentStatus =",
+        "export default",
         "module.exports ="
       );
       const evaluate = new Function("module", source) as (
@@ -324,7 +329,7 @@ describe("opencode 生成插件的子会话身份继承", () => {
       ) => void;
       evaluate(moduleShim);
       if (!moduleShim.exports) throw new Error("生成插件没有导出 factory");
-      const plugin = moduleShim.exports();
+      const plugin = moduleShim.exports.server();
       plugin.event({
         event: {
           properties: { info: { id: "parent" } },
