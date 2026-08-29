@@ -164,7 +164,7 @@ export function RestoredAgentResultView({
         </EmptyHeader>
         <EmptyContent className="gap-5">
           {onRestart || onNewSession ? (
-            <div className="flex w-full max-w-sm justify-end gap-2">
+            <div className="flex items-center justify-center gap-2">
               {onNewSession ? (
                 <Button
                   data-testid="terminal-agent-new-session"
