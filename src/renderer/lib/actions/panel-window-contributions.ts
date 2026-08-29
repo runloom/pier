@@ -13,6 +13,8 @@ import type { ActionContribution } from "./contribution-types.ts";
 /**
  * Window relocate actions. Order: Move New → Copy New → Move Other → Copy Other
  * (destination-grouped; copy is files-only).
+ * Move/copy into an existing window is tab-menu only: the popup expands
+ * those items into a direct action (one other window) or a submenu (several).
  */
 export const PANEL_WINDOW_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
   [
@@ -85,7 +87,7 @@ export const PANEL_WINDOW_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
         return panelId == null || !canMovePanelToWindow(panelId);
       },
       sortOrder: 3,
-      surfaces: ["dockview-tab", "command-palette"],
+      surfaces: ["dockview-tab"],
       titleKey: "contextMenu.action.moveToWindow",
       when: "workspace.hasActivePanel",
     },
@@ -109,7 +111,7 @@ export const PANEL_WINDOW_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
         return panelId == null || !canCopyPanelToWindow(panelId);
       },
       sortOrder: 4,
-      surfaces: ["dockview-tab", "command-palette"],
+      surfaces: ["dockview-tab"],
       titleKey: "contextMenu.action.copyToWindow",
       when: "workspace.hasActivePanel",
     },

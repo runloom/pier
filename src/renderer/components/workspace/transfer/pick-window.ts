@@ -1,47 +1,28 @@
 /**
- * Pick another Pier window for move/copy panel relocate.
- * Selection always goes through the command-palette quick pick (same shell
- * as agents / SSH host list) — no content-dialog picker.
- *
- * Rows use workspace folder leaf as the scan key, a short right-side
- * qualifier, and the identity path as the second line.
+ * List other Pier windows for tab-menu relocate (move/copy).
+ * Count/id is cheap (window.list). Panel snapshots are fetched only when a
+ * submenu needs names, and only for a short budget so tab menus stay snappy.
  */
 
 import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { PanelSnapshot } from "@shared/contracts/panel.ts";
 import i18next from "i18next";
-import { Folder, FolderGit2 } from "lucide-react";
-import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
-import type { QuickPickItem } from "@/lib/command-palette/types.ts";
 import { getWindowContext, listWindows } from "@/lib/ipc/window-ipc.ts";
-import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
   buildWindowDisplays,
   type WindowDisplay,
-  type WindowDisplayIconKind,
   windowDisplayCopyFromI18n,
 } from "./window-display.ts";
 
+/** Cap for the optional panels.list enrichment on 2+ other windows. */
+export const OTHER_WINDOW_PANEL_LABEL_TIMEOUT_MS = 400;
+
 export interface OtherWindowOption {
   description?: string;
-  detail?: string;
-  icon?: QuickPickItem["icon"];
   id: string;
   label: string;
+  menuLabel: string;
   recordId: string;
-  searchTerms?: readonly string[];
-}
-
-function iconForKind(
-  kind: WindowDisplayIconKind | undefined
-): QuickPickItem["icon"] | undefined {
-  if (kind === "git") {
-    return FolderGit2;
-  }
-  if (kind === "folder") {
-    return Folder;
-  }
-  return;
 }
 
 function asGlobalPanelList(
@@ -54,106 +35,87 @@ function asGlobalPanelList(
   return listed.panels ?? [];
 }
 
-export async function listOtherWindows(): Promise<OtherWindowOption[]> {
-  const [context, windows, listed] = await Promise.all([
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("timeout"));
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+export async function listOtherWindowInfos(): Promise<WindowInfo[]> {
+  const [context, windows] = await Promise.all([
     getWindowContext(),
     listWindows(),
-    window.pier.panels.list(),
   ]);
-  const currentId = context.windowId;
-  const others: WindowInfo[] = windows
-    .filter((window) => window.id !== currentId)
+  return windows
+    .filter((candidate) => candidate.id !== context.windowId)
     .slice()
     .sort((a, b) => (b.lastFocusedAt ?? 0) - (a.lastFocusedAt ?? 0));
+}
 
-  const panels = asGlobalPanelList(listed);
+function optionFromWindow(
+  candidate: WindowInfo,
+  display?: WindowDisplay
+): OtherWindowOption {
+  if (display) {
+    return {
+      id: display.id,
+      label: display.label,
+      menuLabel: display.menuLabel,
+      recordId: display.recordId,
+      ...(display.description ? { description: display.description } : {}),
+    };
+  }
+  return {
+    id: candidate.id,
+    label: candidate.recordId,
+    menuLabel: candidate.recordId,
+    recordId: candidate.recordId,
+  };
+}
+
+async function panelsForMenuLabels(): Promise<PanelSnapshot[]> {
+  try {
+    const listed = await withTimeout(
+      window.pier.panels.list(),
+      OTHER_WINDOW_PANEL_LABEL_TIMEOUT_MS
+    );
+    return asGlobalPanelList(listed);
+  } catch {
+    return [];
+  }
+}
+
+function optionsFromDisplays(
+  others: readonly WindowInfo[],
+  panels: readonly PanelSnapshot[]
+): OtherWindowOption[] {
   const copy = windowDisplayCopyFromI18n((key, options) =>
     options === undefined ? i18next.t(key) : i18next.t(key, options)
   );
   const displays: WindowDisplay[] = buildWindowDisplays(others, panels, copy);
-
-  // Preserve recent-focus order of `others`.
   const byId = new Map(displays.map((display) => [display.id, display]));
-  return others.flatMap((window) => {
-    const display = byId.get(window.id);
-    if (!display) {
-      return [];
-    }
-    const icon = iconForKind(display.iconKind);
-    return [
-      {
-        id: display.id,
-        label: display.label,
-        recordId: display.recordId,
-        ...(display.description ? { description: display.description } : {}),
-        ...(display.detail ? { detail: display.detail } : {}),
-        ...(icon ? { icon } : {}),
-        searchTerms: display.searchTerms,
-      },
-    ];
-  });
+  return others.map((candidate) =>
+    optionFromWindow(candidate, byId.get(candidate.id))
+  );
 }
 
-/**
- * Resolve a target window id for relocate via the command-palette quick pick.
- * - 0 others → alert + null
- * - 1+ others → always open quick pick (unified with command-palette path)
- */
-export async function pickOtherWindowId(): Promise<string | null> {
-  let options: OtherWindowOption[];
-  try {
-    options = await listOtherWindows();
-  } catch (error) {
-    await showAppAlert({
-      body: error instanceof Error ? error.message : String(error),
-      title: i18next.t("workspace.panelTransfer.pickWindowFailed"),
-    });
-    return null;
+export async function listOtherWindows(): Promise<OtherWindowOption[]> {
+  const others = await listOtherWindowInfos();
+  if (others.length <= 1) {
+    return others.map((candidate) => optionFromWindow(candidate));
   }
-
-  if (options.length === 0) {
-    await showAppAlert({
-      body: i18next.t("workspace.panelTransfer.noOtherWindows"),
-      title: i18next.t("workspace.panelTransfer.pickWindowTitle"),
-    });
-    return null;
-  }
-
-  return await new Promise<string | null>((resolve) => {
-    let settled = false;
-    const finish = (windowId: string | null) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolve(windowId);
-    };
-
-    const items: QuickPickItem[] = options.map((option) => ({
-      id: option.id,
-      label: option.label,
-      ...(option.description ? { description: option.description } : {}),
-      ...(option.detail ? { detail: option.detail } : {}),
-      ...(option.icon ? { icon: option.icon } : {}),
-      searchTerms: [
-        option.id,
-        option.recordId,
-        ...(option.searchTerms ?? []),
-        ...(option.description ? [option.description] : []),
-        ...(option.detail ? [option.detail] : []),
-      ],
-    }));
-
-    useCommandPaletteController.getState().openQuickPick({
-      items,
-      onAccept: async (item) => {
-        finish(item.id);
-      },
-      onDismiss: () => {
-        finish(null);
-      },
-      placeholder: i18next.t("workspace.panelTransfer.pickWindowPlaceholder"),
-      title: i18next.t("workspace.panelTransfer.pickWindowTitle"),
-    });
-  });
+  const panels = await panelsForMenuLabels();
+  return optionsFromDisplays(others, panels);
 }

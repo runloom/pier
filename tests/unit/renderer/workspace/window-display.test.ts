@@ -74,6 +74,7 @@ describe("buildWindowDisplays", () => {
     );
     expect(displays).toHaveLength(1);
     expect(displays[0]?.label).toBe("pier");
+    expect(displays[0]?.menuLabel).toBe("pier");
     expect(displays[0]?.description).toBe("relocate.ts");
     expect(displays[0]?.detail).toBe("/Users/me/Xyz/pier");
     expect(displays[0]?.iconKind).toBe("folder");
@@ -151,6 +152,7 @@ describe("buildWindowDisplays", () => {
       copy
     );
     expect(displays[0]?.label).toBe("feat-bug-20260823");
+    expect(displays[0]?.menuLabel).toBe("feat-bug-20260823");
     expect(displays[0]?.description).toBe("feat/bug-20260829");
     expect(displays[0]?.detail).toBe(
       "/Users/xyz/ABC/pier.worktree/feat-bug-20260823"
@@ -258,6 +260,7 @@ describe("buildWindowDisplays", () => {
       copy
     );
     expect(displays.map((d) => d.label)).toEqual(["Window 1", "Window 2"]);
+    expect(displays.map((d) => d.menuLabel)).toEqual(["Window 1", "Window 2"]);
     expect(displays[0]?.description).toBe("Empty window");
     expect(displays[0]?.iconKind).toBeUndefined();
   });
@@ -294,6 +297,9 @@ describe("buildWindowDisplays", () => {
     expect(displays.map((d) => d.label).sort()).toEqual(
       ["pier · Xyz", "pier · worktrees"].sort()
     );
+    expect(displays.map((d) => d.menuLabel).sort()).toEqual(
+      ["pier · Xyz", "pier · worktrees"].sort()
+    );
   });
 
   it("disambiguates identical paths with index suffix", () => {
@@ -328,6 +334,9 @@ describe("buildWindowDisplays", () => {
     const labels = displays.map((d) => d.label);
     expect(labels).toContain("pier");
     expect(labels).toContain("pier · 2");
+    expect(displays.map((d) => d.menuLabel).sort()).toEqual(
+      ["pier · a.ts", "pier · b.ts"].sort()
+    );
   });
 
   it("prefers active panel over inactive for the file qualifier", () => {
@@ -400,5 +409,75 @@ describe("buildWindowDisplays", () => {
     );
     expect(displays.map((d) => d.label).sort()).toEqual(["pier", "website"]);
     expect(displays.map((d) => d.description)).toEqual(["main", "main"]);
+    expect(displays.map((d) => d.menuLabel).sort()).toEqual([
+      "pier",
+      "website",
+    ]);
+  });
+});
+
+describe("window menuLabel", () => {
+  it("keeps a unique leaf unqualified even when a branch exists", () => {
+    const displays = buildWindowDisplays(
+      [window("w1")],
+      [
+        panel({
+          active: true,
+          context: {
+            branch: "feat/x",
+            contextId: "c1",
+            gitRoot: "/repo/pier",
+            projectRootPath: "/repo/pier",
+            updatedAt: 1,
+            worktreeRoot: "/repo/pier",
+          },
+          display: { short: "a.ts" },
+          id: "p1",
+          windowId: "w1",
+        }),
+      ],
+      copy
+    );
+    expect(displays[0]?.menuLabel).toBe("pier");
+  });
+
+  it("qualifies colliding leaves with distinct branches before tab titles", () => {
+    const displays = buildWindowDisplays(
+      [window("w1"), window("w2")],
+      [
+        panel({
+          active: true,
+          context: {
+            branch: "main",
+            contextId: "a",
+            gitRoot: "/repo/pier",
+            projectRootPath: "/repo/pier",
+            updatedAt: 1,
+            worktreeRoot: "/repo/pier",
+          },
+          display: { short: "a.ts" },
+          id: "p1",
+          windowId: "w1",
+        }),
+        panel({
+          active: true,
+          context: {
+            branch: "feat/x",
+            contextId: "b",
+            gitRoot: "/repo/pier",
+            projectRootPath: "/repo/pier",
+            updatedAt: 1,
+            worktreeRoot: "/repo/pier",
+          },
+          display: { short: "b.ts" },
+          id: "p2",
+          windowId: "w2",
+        }),
+      ],
+      copy
+    );
+    expect(displays.map((d) => d.menuLabel).sort()).toEqual(
+      ["pier · feat/x", "pier · main"].sort()
+    );
   });
 });

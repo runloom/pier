@@ -62,11 +62,10 @@ export const workspace = {
     moveToWindowFailed:
       "そのウインドウへ移動できませんでした。もう一度お試しください",
     emptyWindowDescription: "空のウインドウ",
+    noOtherWindowsTitle: "ほかのウインドウがありません",
     noOtherWindows: "先に別のウインドウを開いてから、もう一度お試しください。",
     pickWindowFailed:
       "ウインドウ一覧を取得できませんでした。もう一度お試しください",
-    pickWindowPlaceholder: "ウインドウを検索…",
-    pickWindowTitle: "ウインドウを選ぶ",
     sameNameIndex: " · {{n}}",
     windowLabel: "ウインドウ {{n}}",
     unsupportedTitle: "このタブは別のウインドウへ移せません",

@@ -118,6 +118,21 @@ describe("action contributions", () => {
     ).toBe(true);
   });
 
+  it("keeps move/copy to another window on the tab menu only", () => {
+    const byId = (id: string) =>
+      PANEL_LAYOUT_ACTION_CONTRIBUTIONS.find((action) => action.id === id);
+    expect(byId("pier.panel.moveToWindow")?.surfaces).toEqual(["dockview-tab"]);
+    expect(byId("pier.panel.copyToWindow")?.surfaces).toEqual(["dockview-tab"]);
+    expect(byId("pier.panel.moveToNewWindow")?.surfaces).toEqual([
+      "dockview-tab",
+      "command-palette",
+    ]);
+    expect(byId("pier.panel.copyToNewWindow")?.surfaces).toEqual([
+      "dockview-tab",
+      "command-palette",
+    ]);
+  });
+
   it("gates split actions to an active workspace panel", () => {
     const splitActions = PANEL_LAYOUT_ACTION_CONTRIBUTIONS.filter((action) =>
       action.id.startsWith("pier.panel.split")

@@ -1,11 +1,15 @@
 /**
- * Human-readable rows for multi-window pickers (move/copy panel).
+ * Human-readable rows for multi-window pickers and single-line menus.
  *
- * Slot contract matches QuickPickDefaultRow:
- * - label: workspace folder leaf (the scan key)
- * - description: short qualifier only — distinct branch, else distinct tab
- *   title, else empty-window copy. Never echo the leaf. Never a path.
+ * Picker columns (label + description):
+ * - label: workspace folder leaf (the scan key), disambiguated on collision
+ * - description: short qualifier — distinct branch, else distinct tab title,
+ *   else empty-window copy. Never echo the leaf. Never a path.
  * - detail: identity path
+ *
+ * Single-line menu (menuLabel): leaf only. A qualifier is appended only when
+ * that leaf collides among the listed windows, cheapest first: branch, parent
+ * folder, tab title, then " · N".
  */
 
 import type { WindowInfo } from "@shared/contracts/events.ts";
@@ -19,6 +23,8 @@ export interface WindowDisplay {
   iconKind?: WindowDisplayIconKind;
   id: string;
   label: string;
+  /** Single-line label for native menus; qualifier only on identity collision. */
+  menuLabel: string;
   recordId: string;
   searchTerms: readonly string[];
 }
@@ -175,6 +181,7 @@ function shortTitleQualifier(
 
 interface Draft {
   baseLabel: string;
+  branch?: string;
   description?: string;
   detail?: string;
   iconKind?: WindowDisplayIconKind;
@@ -182,6 +189,7 @@ interface Draft {
   projectPath?: string;
   recordId: string;
   searchTerms: string[];
+  tabQualifier?: string;
 }
 
 function buildDraft(
@@ -195,7 +203,8 @@ function buildDraft(
     identityPathOf(active) ?? firstFromPanels(windowPanels, identityPathOf);
   const folderName = identityPath ? pathBasename(identityPath) : "";
   const title = activeTitleOf(active);
-  const branch = branchOf(active) ?? firstFromPanels(windowPanels, branchOf);
+  const branchName =
+    branchOf(active) ?? firstFromPanels(windowPanels, branchOf);
 
   let baseLabel: string;
   if (folderName.length > 0) {
@@ -206,12 +215,15 @@ function buildDraft(
     baseLabel = copy.emptyWindow(index + 1);
   }
 
-  let description: string | undefined;
-  if (branch && isDistinctQualifier(branch, baseLabel)) {
-    description = branch;
-  } else if (title) {
-    description = shortTitleQualifier(title, baseLabel);
-  }
+  const branch =
+    branchName && isDistinctQualifier(branchName, baseLabel)
+      ? branchName
+      : undefined;
+  const tabQualifier = title
+    ? shortTitleQualifier(title, baseLabel)
+    : undefined;
+
+  let description: string | undefined = branch ?? tabQualifier;
   if (!description && windowPanels.length === 0) {
     description = copy.emptyWindowDescription;
   }
@@ -228,7 +240,7 @@ function buildDraft(
     window.id,
     window.recordId,
     ...(identityPath ? [identityPath] : []),
-    ...(branch ? [branch] : []),
+    ...(branchName ? [branchName] : []),
     ...(title ? [title] : []),
     ...windowPanels
       .map((panel) => panel.display?.short)
@@ -240,12 +252,113 @@ function buildDraft(
     id: window.id,
     recordId: window.recordId,
     searchTerms,
+    ...(branch ? { branch } : {}),
+    ...(tabQualifier ? { tabQualifier } : {}),
     ...(description ? { description } : {}),
     ...(iconKind ? { iconKind } : {}),
     ...(identityPath
       ? { projectPath: identityPath, detail: identityPath }
       : {}),
   };
+}
+
+function uniqueQualifiers(
+  drafts: readonly Draft[],
+  indices: readonly number[],
+  pick: (draft: Draft) => string | undefined
+): string[] | null {
+  const values: string[] = [];
+  for (const index of indices) {
+    const draft = drafts[index];
+    if (!draft) {
+      return null;
+    }
+    const value = pick(draft)?.trim();
+    if (!(value && isDistinctQualifier(value, draft.baseLabel))) {
+      return null;
+    }
+    values.push(value);
+  }
+  if (new Set(values).size !== values.length) {
+    return null;
+  }
+  return values;
+}
+
+function withQualifier(identity: string, qualifier: string): string {
+  return `${identity} · ${qualifier}`;
+}
+
+/**
+ * Single-line menu names: identity only, then the cheapest unique qualifier
+ * among windows that share that identity.
+ */
+function computeMenuLabels(
+  drafts: readonly Draft[],
+  disambiguatedLabels: readonly string[]
+): string[] {
+  const groups = new Map<string, number[]>();
+  drafts.forEach((draft, index) => {
+    const list = groups.get(draft.baseLabel);
+    if (list) {
+      list.push(index);
+    } else {
+      groups.set(draft.baseLabel, [index]);
+    }
+  });
+
+  const menuLabels = drafts.map((draft) => draft.baseLabel);
+  for (const indices of groups.values()) {
+    if (indices.length === 1) {
+      continue;
+    }
+    const branches = uniqueQualifiers(drafts, indices, (draft) => draft.branch);
+    if (branches) {
+      indices.forEach((index, offset) => {
+        const draft = drafts[index];
+        const qualifier = branches[offset];
+        if (draft && qualifier) {
+          menuLabels[index] = withQualifier(draft.baseLabel, qualifier);
+        }
+      });
+      continue;
+    }
+    const parents = uniqueQualifiers(drafts, indices, (draft) =>
+      draft.projectPath
+        ? (pathParentBasename(draft.projectPath) ?? undefined)
+        : undefined
+    );
+    if (parents) {
+      indices.forEach((index, offset) => {
+        const draft = drafts[index];
+        const qualifier = parents[offset];
+        if (draft && qualifier) {
+          menuLabels[index] = withQualifier(draft.baseLabel, qualifier);
+        }
+      });
+      continue;
+    }
+    const tabs = uniqueQualifiers(
+      drafts,
+      indices,
+      (draft) => draft.tabQualifier
+    );
+    if (tabs) {
+      indices.forEach((index, offset) => {
+        const draft = drafts[index];
+        const qualifier = tabs[offset];
+        if (draft && qualifier) {
+          menuLabels[index] = withQualifier(draft.baseLabel, qualifier);
+        }
+      });
+      continue;
+    }
+    for (const index of indices) {
+      menuLabels[index] =
+        disambiguatedLabels[index] ?? drafts[index]?.baseLabel ?? "";
+    }
+  }
+  return menuLabels;
 }
 
 /**
@@ -309,8 +422,11 @@ export function disambiguateWindowLabels(
     }
   }
 
+  const menuLabels = computeMenuLabels(drafts, labels);
+
   return drafts.map((draft, index) => {
     const label = labels[index] ?? draft.baseLabel;
+    const menuLabel = menuLabels[index] ?? label;
     const description =
       draft.description && isDistinctQualifier(draft.description, label)
         ? draft.description
@@ -319,10 +435,12 @@ export function disambiguateWindowLabels(
     return {
       id: draft.id,
       label,
+      menuLabel,
       recordId: draft.recordId,
       searchTerms: [
         ...draft.searchTerms,
         ...(disambiguated ? [disambiguated] : []),
+        ...(menuLabel === label ? [] : [menuLabel]),
       ],
       ...(description ? { description } : {}),
       ...(draft.detail ? { detail: draft.detail } : {}),

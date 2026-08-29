@@ -14,8 +14,29 @@ import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { buildMenuEntries } from "./build-entries.ts";
+import { expandWindowRelocateMenu } from "./expand-window-relocate.ts";
 import { captureDomSelectionText } from "./selection-text.ts";
 import { shouldActivatePanelForContextMenu } from "./surface-profiles.ts";
+
+type MenuActionInterceptor = (
+  actionId: string,
+  invocation: ActionInvocation
+) => Promise<boolean> | boolean;
+
+const menuActionInterceptors: MenuActionInterceptor[] = [];
+
+/** Handle encoded menu ids that are not in actionRegistry (e.g. move to window). */
+export function registerMenuActionInterceptor(
+  interceptor: MenuActionInterceptor
+): () => void {
+  menuActionInterceptors.push(interceptor);
+  return () => {
+    const index = menuActionInterceptors.indexOf(interceptor);
+    if (index >= 0) {
+      menuActionInterceptors.splice(index, 1);
+    }
+  };
+}
 
 /**
  * useContextMenu options. IMPORTANT: 调用方若传入 options 对象, 必须用 useMemo
@@ -123,8 +144,20 @@ async function popupAndDispatch(
     },
     surface,
   };
-  const template = buildMenuEntries(surface, actionInvocation);
+  const template = await expandWindowRelocateMenu(
+    buildMenuEntries(surface, actionInvocation)
+  );
   await popupMenuTemplateAt(template, coords, async (actionId) => {
+    try {
+      for (const interceptor of menuActionInterceptors) {
+        if (await interceptor(actionId, actionInvocation)) {
+          return;
+        }
+      }
+    } catch (err: unknown) {
+      console.error(`[menu] action ${actionId} threw:`, err);
+      return;
+    }
     const action = actionRegistry.get(actionId);
     if (!action) {
       console.warn(
