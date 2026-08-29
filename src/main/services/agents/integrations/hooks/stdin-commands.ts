@@ -12,6 +12,12 @@ const SAFE_STDIN_FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export interface StdinExtractionOptions {
   actorHintFromAgentId?: boolean;
+  /**
+   * agent 类型字段非空时标 actorHint=subagent。适配「子会话事件只带
+   * 类型不带实例 id」的 provider（grok 子会话内的全局 hook 事件带
+   * subagentType）——主会话事件无该字段，hint 缺席不受影响。
+   */
+  actorHintFromAgentType?: boolean;
   agentInstanceIdFields?: readonly string[];
   agentTypeFields?: readonly string[];
   interactionIdFields?: readonly string[];
@@ -82,6 +88,9 @@ export function stdinIdentityExtractionLines(
     ...(options.actorHintFromAgentId
       ? ['[ -n "$_pier_agent_id" ] && _pier_actor_hint=subagent']
       : []),
+    ...(options.actorHintFromAgentType
+      ? ['[ -n "$_pier_agent_type" ] && _pier_actor_hint=subagent']
+      : []),
   ];
 }
 
@@ -143,6 +152,7 @@ export type PierHookCommandV3WithStdinSpec =
       ? Spec & StdinExtractionOptions
       : Spec & {
           actorHintFromAgentId?: boolean;
+          actorHintFromAgentType?: boolean;
           agentInstanceIdFields?: readonly string[];
           agentTypeFields?: readonly string[];
           interactionIdFields?: never;
@@ -168,6 +178,7 @@ export function pierHookCommandV3WithStdin(
 ): string {
   const {
     actorHintFromAgentId,
+    actorHintFromAgentType,
     agentInstanceIdFields,
     agentTypeFields,
     interactionIdFields,
@@ -184,6 +195,7 @@ export function pierHookCommandV3WithStdin(
   return [
     ...stdinIdentityExtractionLines({
       ...(actorHintFromAgentId ? { actorHintFromAgentId } : {}),
+      ...(actorHintFromAgentType ? { actorHintFromAgentType } : {}),
       ...(agentInstanceIdFields ? { agentInstanceIdFields } : {}),
       ...(agentTypeFields ? { agentTypeFields } : {}),
       ...(interactionIdFields ? { interactionIdFields } : {}),
@@ -198,7 +210,9 @@ export function pierHookCommandV3WithStdin(
     }),
     pierHookCommandV3({
       ...commandSpec,
-      ...(actorHintFromAgentId ? { actorHint: "$_pier_actor_hint" } : {}),
+      ...(actorHintFromAgentId || actorHintFromAgentType
+        ? { actorHint: "$_pier_actor_hint" }
+        : {}),
       agentInstanceId: "$_pier_agent_id",
       agentType: "$_pier_agent_type",
       ...(commandSpec.event === "InteractionRequested" ||
@@ -370,6 +384,14 @@ export interface StdinV3ValueDispatchSpec extends StdinExtractionOptions {
 export function pierHookCommandV3WithStdinValueDispatch(
   spec: StdinV3ValueDispatchSpec
 ): string {
+  for (const token of [
+    spec.fallbackPierEvent,
+    ...spec.cases.flatMap((entry) => [entry.nativeValue, entry.pierEvent]),
+  ]) {
+    if (!SAFE_STDIN_FIELD_NAME.test(token)) {
+      throw new Error(`unsafe stdin value-dispatch token: ${token}`);
+    }
+  }
   const arms = spec.cases
     .map((entry) => `${entry.nativeValue}) _pier_event="${entry.pierEvent}" ;;`)
     .concat(`*) _pier_event="${spec.fallbackPierEvent}" ;;`)
@@ -378,6 +400,9 @@ export function pierHookCommandV3WithStdinValueDispatch(
     ...stdinIdentityExtractionLines({
       ...(spec.actorHintFromAgentId
         ? { actorHintFromAgentId: spec.actorHintFromAgentId }
+        : {}),
+      ...(spec.actorHintFromAgentType
+        ? { actorHintFromAgentType: spec.actorHintFromAgentType }
         : {}),
       ...(spec.agentInstanceIdFields
         ? { agentInstanceIdFields: spec.agentInstanceIdFields }
@@ -400,7 +425,9 @@ export function pierHookCommandV3WithStdinValueDispatch(
     }),
     `case "$_pier_native_state" in ${arms} esac`,
     pierHookCommandV3({
-      ...(spec.actorHintFromAgentId ? { actorHint: "$_pier_actor_hint" } : {}),
+      ...(spec.actorHintFromAgentId || spec.actorHintFromAgentType
+        ? { actorHint: "$_pier_actor_hint" }
+        : {}),
       agentId: spec.agentId,
       agentInstanceId: "$_pier_agent_id",
       agentType: "$_pier_agent_type",

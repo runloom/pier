@@ -79,16 +79,22 @@ const PLUGIN_MARKER = pierManagedPluginMarker();
  *   session.created→SessionStart, session.idle→Stop, session.error→error,
  *   session.deleted→SessionEnd, session.status(busy/retry)→running、
  *   (idle)→Stop（kilo 是 opencode fork, EventSessionStatus 事件同源;
- *   Events 参考页 Session 分类明确列出 session.status——模型 busy/retry
- *   心跳是每回合必发的 TURN_RESET, 防 Stop 后工具事件被永久吸收;
- *   见聚合器不变式「映射 Stop 必须同时映射 TURN_RESET」）。
+ *   Events 参考页 Session 分类明确列出 session.status）。
+ *   **idle 只是 advisory 候选**（2026-08-29 审计降级）：与同源 opencode
+ *   相同，idle 不代表回合完成（回合中途 compaction/自动续跑间隙同样
+ *   idle，opencode 侧 #23503/#23650 未合入），且 busy/running 是 progress
+ *   类（无 turnId、无 turnStartAuthority）**不能重开已封账 scope**——
+ *   若把 idle 当 trusted 终态，中途 idle 封账后的工具事件会被 sealed-turn
+ *   全部拒收、面板冻结到下一条用户消息（与 2026-08-29 cursor 事故同构）。
+ *   fork 无「idle 语义已改进」的证据前禁止回抬 authoritative。
  *   permission 事件官方名 `permission.asked`/`permission.replied`
- *   （Events 参考页 Permission 分类明确列出; opencode SDK 里叫
- *   permission.updated, kilo fork 重命名了此事件, SOURCE）。
+ *   （Events 参考页 Permission 分类明确列出; opencode 1.18.23 二进制同为
+ *   permission.asked——上游已从旧 SDK 的 permission.updated 改名,
+ *   两家现名一致, SOURCE）。
  *   用户消息提交走官方插件的 direct `chat.message` hook；其 input/output
  *   提供 session/message/parts，生成 PromptSubmit 并从输出 parts 提取
- *   可读提示摘要。`session.status=busy` 仍是 Stop 后推进新回合的
- *   TURN_RESET，不能用它替代用户消息事实。
+ *   可读提示摘要。`session.status=busy` 是回合内推进心跳，不能用它
+ *   替代用户消息事实。
  *   tool：tool.execute.before→ToolStart, tool.execute.after→ToolComplete
  *   （与 opencode 集成同名事件, SOURCE 确认一致）。
  * - emit 用 appendFileSync（pierAppend 模板; Bun 宿主
@@ -240,8 +246,8 @@ function mapPierEvent(event) {
 		// SDK EventSessionStatus: properties.status.type = busy/retry/idle
 		// (kilo 是 opencode fork, SDK 事件同源; kilo.ai/docs/automate/extending/plugins
 		// Events 参考页 Session 分类确认 session.status)。
-		// busy/retry 是模型推进心跳——TURN_RESET, 防 Stop 后工具事件被吸收
-		// (聚合器不变式:映射 Stop 的集成必须同时映射 TURN_RESET 事件)。
+		// busy/retry 是回合内推进心跳(progress 类, 只取消 advisory 候选,
+		// 不能重开已封账 scope)；idle 是 advisory 候选终态(见文件头降级说明)。
 		const statusType =
 			event.properties && event.properties.status && event.properties.status.type;
 		if (statusType === "busy" || statusType === "retry") return "running";
@@ -443,7 +449,9 @@ export const kiloIntegration: AgentHookIntegration = {
   id: AGENT_ID,
   runtime: {
     emittedMappings: KILO_EMITTED_MAPPINGS,
-    stopAuthority: "authoritative",
+    // 与同源 opencode 对齐：session.idle 不是回合完成证据（见文件头
+    // 2026-08-29 降级说明），advisory 候选可被后续工作取消。
+    stopAuthority: "advisory",
   },
   install: () => installKiloHooks(),
   uninstall: () => uninstallKiloHooks(),

@@ -1,6 +1,7 @@
 import {
   PIER_CANVAS_FILE_ICON_SYMBOL_ID,
   PIER_CANVAS_FILE_ICON_TOKEN,
+  PIER_DART_FILE_ICON_SYMBOL_ID,
 } from "@pier/ui/file/icon-config.ts";
 import {
   PierFileTree,
@@ -143,6 +144,34 @@ describe("PierFileTree", () => {
     );
     expect(
       shadow?.querySelector(`#${PIER_CANVAS_FILE_ICON_SYMBOL_ID}`)
+    ).not.toBeNull();
+  });
+
+  it("renders the Pier dart glyph for *.dart rows in the tree shadow DOM", () => {
+    const { container } = render(
+      <PierFileTree
+        items={[{ kind: "file", path: "lib/main.dart" }]}
+        label="Project files"
+      />
+    );
+
+    const host = getFileTreeHost(container);
+    const shadow = host.shadowRoot;
+    expect(shadow).not.toBeNull();
+
+    const dartRow = within(getFileTree(container)).getByRole("treeitem", {
+      name: /main\.dart/,
+    });
+    const icon = dartRow.querySelector(
+      '[data-item-section="icon"] svg[data-icon-token="dart"]'
+    );
+    expect(icon).not.toBeNull();
+    expect(icon?.querySelector("use")).toHaveAttribute(
+      "href",
+      `#${PIER_DART_FILE_ICON_SYMBOL_ID}`
+    );
+    expect(
+      shadow?.querySelector(`#${PIER_DART_FILE_ICON_SYMBOL_ID}`)
     ).not.toBeNull();
   });
 

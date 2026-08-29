@@ -290,12 +290,21 @@ describe("Git diff renderer governance", () => {
     expect(shellSource).toContain('data-scrollbar="overlay"');
     expect(codeViewClassName).toContain("cv-scrollbar");
     expect(codeViewClassName).toContain("[scrollbar-gutter:auto]");
-    // 文件分隔只允许 inset 底边；向外的顶/底 shadow 会在 align:start 落点露出 1px 发丝
-    expect(codeViewClassName).toContain(
-      "shadow-[inset_0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))]"
+    // 文件分隔必须画在 shadow :host::after。light DOM 宿主 box-shadow
+    // （inset 被不透明文件头盖住；顶外阴影会在 align:start 露出 1px 发丝）
+    expect(customCss).toContain(":host::after");
+    expect(customCss).toContain(
+      "background-color: var(--diffshub-diff-separator, var(--border))"
     );
-    expect(codeViewClassName).not.toContain("shadow-[0_-1px");
-    expect(codeViewClassName).not.toContain("shadow-[0_1px_0");
+    expect(customCss).toMatch(/:host::after\s*\{[^}]*bottom:\s*0;/u);
+    expect(customCss).toMatch(/:host::after\s*\{[^}]*height:\s*1px;/u);
+    // z-index 必须压过 Pierre 文件头 2 与吸顶头 3，否则折叠列表仍看不见线
+    expect(customCss).toMatch(/:host::after\s*\{[^}]*z-index:\s*4;/u);
+    expect(customCss).toMatch(/:host::after\s*\{[^}]*position:\s*absolute;/u);
+    expect(customCss).toMatch(/:host::after\s*\{[^}]*pointer-events:\s*none;/u);
+    expect(codeViewClassName).not.toContain("shadow-[");
+    expect(codeViewClassName).not.toContain("color-border-opaque");
+    expect(appearanceSource).not.toContain("color-border-opaque");
     const packageJson = JSON.parse(
       await readFile(join(ROOT, "packages/ui/package.json"), "utf8")
     ) as { dependencies?: Record<string, string> };

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { resolveOmpHome } from "../integrations/omp.ts";
 import { createPiFamilyUsageScanner } from "./pi-family-scanner.ts";
 import type {
   AgentUsageCollector,
@@ -10,7 +10,8 @@ import type {
 /**
  * omp (oh-my-pi) 会话用量采集器。
  *
- * 数据源：`~/.omp/agent/sessions/<dir-encoded>/<timestamp>_<sessionId>.jsonl`。
+ * 数据源：`$PI_CODING_AGENT_DIR/sessions`（默认 `~/.omp/agent/sessions`）
+ * 下 `<dir-encoded>/<timestamp>_<sessionId>.jsonl`。
  * omp 是 pi 的 fork，会话 JSONL 格式一致，parser 复用 `pi-family-parser.ts`。
  * 唯一差异是 sessions root 路径。
  */
@@ -18,11 +19,7 @@ import type {
 const OMP_USAGE_SOURCE_ID = "omp-local-sessions";
 
 function resolveOmpSessionsRoot(env: NodeJS.ProcessEnv): string {
-  const override = env.OMP_HOME;
-  if (override && override.length > 0) {
-    return join(override, "agent", "sessions");
-  }
-  return join(env.HOME ?? homedir(), ".omp", "agent", "sessions");
+  return join(resolveOmpHome(env), "sessions");
 }
 
 export const createOmpUsageCollector: AgentUsageCollectorFactory = (

@@ -48,21 +48,15 @@ describe("buildPiExtensionSource", () => {
     expect(src).not.toContain("/agent-event");
   });
 
-  it("按固定提交中的公开事件注册，只有 agent_settled 结束回合", () => {
+  it("按公开事件注册，只有 agent_settled 结束回合", () => {
     const src = buildPiExtensionSource();
     expect(PI_EVENT_MAP).toEqual([
       { nativeEvent: "session_start", pierEvent: "SessionStart" },
       { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
       { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
-      {
-        nativeEvent: "tool_execution_start.ask",
-        pierEvent: "InteractionRequested",
-      },
       { nativeEvent: "tool_execution_end", pierEvent: "ToolComplete" },
-      {
-        nativeEvent: "tool_execution_end.ask",
-        pierEvent: "InteractionResolved",
-      },
+      { nativeEvent: "ui_prompt_start", pierEvent: "InteractionRequested" },
+      { nativeEvent: "ui_prompt_end", pierEvent: "InteractionResolved" },
       { nativeEvent: "agent_settled", pierEvent: "Stop" },
       { nativeEvent: "session_shutdown", pierEvent: "SessionEnd" },
     ]);
@@ -72,6 +66,8 @@ describe("buildPiExtensionSource", () => {
     expect(src).not.toContain('pi.on("agent_end"');
     expect(src).not.toContain('pi.on("agent_start"');
     expect(src).not.toContain("PermissionRequest");
+    // ask 是 omp 自有工具（pi 无内置同名工具），误植分支已移除。
+    expect(src).not.toContain('toolName === "ask"');
   });
 
   it("agent 字段为 pi", () => {
@@ -311,46 +307,47 @@ describe("生成源码行为（动态加载 + 假 pi 触发）", () => {
     expect(statuses).toEqual(["tool", "processing", "ready"]);
   });
 
-  it("ask 问卷走 InteractionRequested，不标成 ToolStart", async () => {
+  it("ui_prompt_start/end 走 Interaction 闭环（阻塞 UI 提示 = 等待用户）", async () => {
     const { factory, logPath } = await loadFreshExtension();
     const main = createFakePi();
     factory(main.pi);
     const ctx: PiEventCtx = {
       sessionManager: { getSessionId: () => "session-pi" },
     };
-    main.fire("tool_execution_start", ctx, {
-      toolCallId: "call-ask-1",
-      toolName: "ask",
-      type: "tool_execution_start",
+    // 上游 withUIPrompt：{type, reason:"ui_prompt", kind, title?}，深度
+    // 计数保证最外层严格 1:1 配对。
+    main.fire("ui_prompt_start", ctx, {
+      kind: "select",
+      title: "选择一个分支",
+      type: "ui_prompt_start",
     });
-    main.fire("tool_execution_end", ctx, {
-      toolCallId: "call-ask-1",
-      toolName: "ask",
-      type: "tool_execution_end",
+    main.fire("ui_prompt_end", ctx, {
+      kind: "select",
+      title: "选择一个分支",
+      type: "ui_prompt_end",
     });
     const records = await readEmittedRecords(logPath);
     expect(records).toMatchObject([
       {
         event: "InteractionRequested",
-        interactionId: "call-ask-1",
         interactionKind: "question",
-        nativeEvent: "tool_execution_start.ask",
-        toolName: "ask",
-        toolUseId: "call-ask-1",
+        nativeEvent: "ui_prompt_start",
+        nativeState: "select",
       },
       {
         event: "InteractionResolved",
-        interactionId: "call-ask-1",
         interactionKind: "question",
         interactionOutcome: "completed",
-        nativeEvent: "tool_execution_end.ask",
-        toolName: "ask",
-        toolUseId: "call-ask-1",
+        nativeEvent: "ui_prompt_end",
+        nativeState: "select",
       },
     ]);
+    for (const record of records) {
+      expect(agentHookEventSchema.safeParse(record).success).toBe(true);
+    }
   });
 
-  it("裁掉 ask toolCallId 的签名段，避免契约拒收", async () => {
+  it("裁掉工具 toolCallId 的签名段，避免契约拒收", async () => {
     const signedId =
       "call-03435de8-1557-4d10-b08f-e49c075729b1-0|K8TGf/h4nJMapPL8yM3t44JgGgk3TKEOI+jwKkoboyPoTTTb3qGLC3+8gxvAK1DM96zSbuGQwFAy5vs/5oMz/SIIxyEPUyabg33AkqAeL35VVtH4FOmWeTq2BqBolwQtzTZB8LIpjT21VOkwqa5vfiBNucbgZEBzgygMDAXFe+NW6AlFVX7Q3XZAgWBJRoR9UvnTIBEoug84EvXwJhXySOKLhuRKdFqoFRzaD7nZhdJBOULdabd2prc/NlU2iLaSMLoYp6g8AX0fGj3Jg5MMOtd8FTMnF0XYeH+JvS/+mQ2Yax8MoPwkE5Q9pO4gRJZQ9yUpzRmkhBKOk6FOLlxEqb5q2BNj4RkH7XFKbGcdlmpY43FSk5amhaAyNHfl0+uYghhTU8d/UA==";
     const { factory, logPath } = await loadFreshExtension();
@@ -361,14 +358,13 @@ describe("生成源码行为（动态加载 + 假 pi 触发）", () => {
       { sessionManager: { getSessionId: () => "session-pi" } },
       {
         toolCallId: signedId,
-        toolName: "ask",
+        toolName: "bash",
         type: "tool_execution_start",
       }
     );
     const records = await readEmittedRecords(logPath);
     expect(records[0]).toMatchObject({
-      event: "InteractionRequested",
-      interactionId: "call-03435de8-1557-4d10-b08f-e49c075729b1-0",
+      event: "ToolStart",
       toolUseId: "call-03435de8-1557-4d10-b08f-e49c075729b1-0",
     });
     expect(agentHookEventSchema.safeParse(records[0]).success).toBe(true);
@@ -486,6 +482,23 @@ describe("install/uninstallPiExtension (文件 IO)", () => {
   it("uninstall 对不存在的文件零副作用（不抛异常）", async () => {
     await setup();
     await expect(uninstallPiExtension(extPath)).resolves.toBeUndefined();
+  });
+
+  it("omp 已占用同一 pier-agent-status.ts 时跳过并 warn，不改写", async () => {
+    await setup();
+    const { buildOmpExtensionSource } = await import(
+      "../../../src/main/services/agents/integrations/omp.ts"
+    );
+    await mkdir(join(dir, "extensions"), { recursive: true });
+    const ompSource = buildOmpExtensionSource();
+    await writeFile(extPath, ompSource, "utf8");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+      // swallow
+    });
+    await installPiExtension(extPath);
+    expect(await readFile(extPath, "utf8")).toBe(ompSource);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it("detect 为假时（无 home 目录、无 pi 命令）install 不写入任何文件", async () => {

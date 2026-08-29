@@ -111,8 +111,11 @@ describe("codebuddyIntegration", () => {
         "PostToolUseFailure",
         {
           ...common,
+          // 2.138 实况：error + tool_error_code/tool_error_name（无 error_type）。
           error: "tests failed",
           hook_event_name: "PostToolUseFailure",
+          tool_error_code: 1,
+          tool_error_name: "ExecFailed",
           tool_input: { command: "pnpm test" },
           tool_name: "Bash",
           tool_use_id: "tool-cb-1",
@@ -167,8 +170,9 @@ describe("codebuddyIntegration", () => {
         "StopFailure",
         {
           ...common,
+          // 2.138 实况：error/error_details（无 error_type）。
           error: "rate limited",
-          error_type: "rate_limit",
+          error_details: "429 from provider",
           hook_event_name: "StopFailure",
         },
       ],
@@ -203,6 +207,7 @@ describe("codebuddyIntegration", () => {
       {
         event: "ToolComplete",
         nativeEvent: "PostToolUseFailure",
+        nativeState: "ExecFailed",
         toolName: "Bash",
         toolUseId: "tool-cb-1",
         v: 3,
@@ -238,7 +243,7 @@ describe("codebuddyIntegration", () => {
         v: 3,
       },
       { event: "Stop", v: 3 },
-      { event: "error", nativeState: "rate_limit", v: 3 },
+      { event: "error", nativeState: "rate limited", v: 3 },
       { event: "SessionEnd", v: 3 },
     ]);
 

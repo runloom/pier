@@ -292,4 +292,251 @@ describe("task sources", () => {
         .sort()
     ).toEqual(["dev", "docs:build"]);
   });
+
+  it("collects flutter pubspec builtins and skips commented sdk lines", async () => {
+    await writeFile(
+      join(projectRootPath, "pubspec.yaml"),
+      [
+        "name: demo",
+        "dependencies:",
+        "  flutter:",
+        "    sdk: flutter",
+        "dev_dependencies:",
+        "  build_runner: ^2.4.0",
+        "#    sdk: flutter",
+      ].join("\n")
+    );
+
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectRootPath,
+    });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "pubspec")
+        .map((task) => [task.label, task.commandSpec, task.tags])
+    ).toEqual([
+      [
+        "flutter pub get",
+        { command: "flutter pub get", kind: "shell" },
+        ["flutter"],
+      ],
+      ["flutter run", { command: "flutter run", kind: "shell" }, ["flutter"]],
+      ["flutter test", { command: "flutter test", kind: "shell" }, ["flutter"]],
+      [
+        "flutter analyze",
+        { command: "flutter analyze", kind: "shell" },
+        ["flutter"],
+      ],
+      [
+        "dart format .",
+        { command: "dart format .", kind: "shell" },
+        ["flutter"],
+      ],
+      [
+        "dart run build_runner build --delete-conflicting-outputs",
+        {
+          command: "dart run build_runner build --delete-conflicting-outputs",
+          kind: "shell",
+        },
+        ["dart"],
+      ],
+    ]);
+  });
+
+  it("uses fvm prefixes when .fvmrc exists for a dart pubspec", async () => {
+    await writeFile(
+      join(projectRootPath, "pubspec.yaml"),
+      "name: cli\nenvironment:\n  sdk: '>=3.0.0 <4.0.0'\n"
+    );
+    await writeFile(
+      join(projectRootPath, ".fvmrc"),
+      '{ "flutter": "3.24.0" }\n'
+    );
+
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectRootPath,
+    });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "pubspec")
+        .map((task) => task.label)
+    ).toEqual([
+      "fvm dart pub get",
+      "fvm dart test",
+      "fvm dart analyze",
+      "fvm dart format .",
+    ]);
+  });
+
+  it("collects go builtins from go.work without go.mod", async () => {
+    await writeFile(join(projectRootPath, "go.work"), "go 1.22\n");
+
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectRootPath,
+    });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "go")
+        .map((task) => task.label)
+    ).toEqual(["go build", "go test ./...", "go vet ./...", "go run ."]);
+  });
+
+  it("uses the maven wrapper and settings.gradle as a gradle root", async () => {
+    await writeFile(join(projectRootPath, "pom.xml"), "<project></project>\n");
+    await writeFile(join(projectRootPath, "mvnw"), "#!/bin/sh\n");
+    await writeFile(
+      join(projectRootPath, "settings.gradle.kts"),
+      'rootProject.name = "demo"\n'
+    );
+
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectRootPath,
+    });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "maven")
+        .map((task) => [task.label, task.commandSpec])
+    ).toEqual([
+      ["./mvnw test", { command: "./mvnw test", kind: "shell" }],
+      ["./mvnw package", { command: "./mvnw package", kind: "shell" }],
+    ]);
+    expect(
+      result.tasks
+        .filter((task) => task.source === "gradle")
+        .map((task) => task.label)
+    ).toEqual(["gradle test", "gradle build"]);
+  });
+
+  it("collects go / gradle wrapper / mix / dotnet toolchain builtins", async () => {
+    await writeFile(
+      join(projectRootPath, "go.mod"),
+      "module example.com/app\n"
+    );
+    await writeFile(join(projectRootPath, "build.gradle"), "plugins {}\n");
+    await writeFile(join(projectRootPath, "gradlew"), "#!/bin/sh\n");
+    await writeFile(
+      join(projectRootPath, "mix.exs"),
+      "defmodule Demo.MixProject do\nend\n"
+    );
+    await writeFile(
+      join(projectRootPath, "Demo.csproj"),
+      "<Project></Project>\n"
+    );
+    await writeFile(join(projectRootPath, "pom.xml"), "<project></project>\n");
+    await writeFile(
+      join(projectRootPath, "Package.swift"),
+      "// swift-tools-version: 5.9\n"
+    );
+    await writeFile(
+      join(projectRootPath, "build.zig"),
+      'const std = @import("std");\n'
+    );
+    await writeFile(join(projectRootPath, "build.sbt"), 'name := "demo"\n');
+
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectRootPath,
+    });
+
+    const bySource = Object.fromEntries(
+      ["go", "gradle", "mix", "dotnet", "maven", "swiftpm", "zig", "sbt"].map(
+        (source) => [
+          source,
+          result.tasks
+            .filter((task) => task.source === source)
+            .map((task) => task.label),
+        ]
+      )
+    );
+
+    expect(bySource).toEqual({
+      dotnet: ["dotnet build", "dotnet test"],
+      go: ["go build", "go test ./...", "go vet ./...", "go run ."],
+      gradle: ["./gradlew test", "./gradlew build"],
+      maven: ["mvn test", "mvn package"],
+      mix: ["mix deps.get", "mix compile", "mix test"],
+      sbt: ["sbt compile", "sbt test"],
+      swiftpm: ["swift build", "swift test"],
+      zig: ["zig build", "zig build test"],
+    });
+  });
+
+  it("collects cmake configure, build, and test from CMakeLists.txt", async () => {
+    await writeFile(
+      join(projectRootPath, "CMakeLists.txt"),
+      "cmake_minimum_required(VERSION 3.20)\n"
+    );
+
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectRootPath,
+    });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "cmake")
+        .map((task) => [task.label, task.commandSpec])
+    ).toEqual([
+      [
+        "cmake -S . -B build",
+        { command: "cmake -S . -B build", kind: "shell" },
+      ],
+      [
+        "cmake --build build",
+        { command: "cmake --build build", kind: "shell" },
+      ],
+      [
+        "ctest --test-dir build",
+        { command: "ctest --test-dir build", kind: "shell" },
+      ],
+    ]);
+  });
+
+  it("adds pytest and ruff builtins from pyproject.toml", async () => {
+    await mkdir(join(projectRootPath, "tests"));
+    await writeFile(
+      join(projectRootPath, "pyproject.toml"),
+      ["[project]", 'name = "demo"', "[tool.ruff]", "line-length = 88"].join(
+        "\n"
+      )
+    );
+
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectRootPath,
+    });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "pyproject")
+        .map((task) => task.label)
+    ).toEqual(["python -m pytest", "ruff check .", "ruff format ."]);
+  });
+
+  it("uses uv run for pytest when uv.lock is present", async () => {
+    await writeFile(
+      join(projectRootPath, "pyproject.toml"),
+      "[tool.pytest.ini_options]\naddopts = '-q'\n"
+    );
+    await writeFile(join(projectRootPath, "uv.lock"), "version = 1\n");
+
+    const result = await collectTaskCandidates({
+      homeDir,
+      projectRootPath,
+    });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "pyproject")
+        .map((task) => task.label)
+    ).toEqual(["uv run pytest"]);
+  });
 });

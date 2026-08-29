@@ -2,6 +2,7 @@
  * Extended PATH language matrix rows + display-only entries.
  */
 
+import { FVM_PROJECT_MARKERS } from "./fvm.ts";
 import type { LanguageMatrixRow } from "./types.ts";
 
 const GIT = [".git"] as const;
@@ -77,8 +78,25 @@ export const EXTENDED_PATH_LANGUAGE_MATRIX: readonly LanguageMatrixRow[] = [
       displayName: "Dart",
       id: "dart",
       installCommand:
-        "Install Dart SDK (https://dart.dev/get-dart) so `dart` is on PATH",
+        "Install Dart SDK (https://dart.dev/get-dart) or FVM so `dart` / `fvm` is on PATH",
       languageIds: ["dart"],
+      launchCandidates: [
+        { args: ["language-server", "--protocol=lsp"], command: "dart" },
+        {
+          args: ["dart", "language-server", "--protocol=lsp"],
+          command: "fvm",
+        },
+      ],
+      preferLaunchCommandsWhenMarkers: {
+        commands: ["fvm"],
+        markers: [...FVM_PROJECT_MARKERS],
+      },
+      workspaceRelativeCommands: [
+        {
+          args: ["language-server", "--protocol=lsp"],
+          command: ".fvm/flutter_sdk/bin/dart",
+        },
+      ],
       priority: 70,
       rootMarkers: ["pubspec.yaml", ".git"],
     },
@@ -230,7 +248,7 @@ export const EXTENDED_PATH_LANGUAGE_MATRIX: readonly LanguageMatrixRow[] = [
   },
   {
     editorLanguageId: "scala",
-    extensions: [".scala", ".sc"],
+    extensions: [".scala", ".sc", ".sbt"],
     id: "scala",
     lsp: {
       binaryHint: "metals",

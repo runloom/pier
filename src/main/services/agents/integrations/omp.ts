@@ -80,21 +80,28 @@ const OMP_EVENTS: ReadonlyArray<{
 ];
 
 /**
- * `$OMP_HOME` 默认 `~/.omp/agent`（loomdesk ompHome 同款：`~` 展开、
- * `~/` 前缀展开、其余原样使用）。
+ * omp 配置根：`$PI_CODING_AGENT_DIR`，默认 `~/.omp/agent`。
+ * 上游不识别 `OMP_HOME`。与 pi 共用该变量时，家目录可能重合——冲突在
+ * install 跳过已占用的 `pier-agent-status.ts`，不把 hook 写到进程读不到
+ * 的默认目录。`~` 展开与 pi 同款。
  */
-export function ompHome(): string {
-  const raw = (process.env.OMP_HOME ?? "").trim();
+export function resolveOmpHome(env: NodeJS.ProcessEnv = process.env): string {
+  const home = env.HOME ?? homedir();
+  const raw = (env.PI_CODING_AGENT_DIR ?? "").trim();
   if (!raw) {
-    return join(homedir(), ".omp", "agent");
+    return join(home, ".omp", "agent");
   }
   if (raw === "~") {
-    return homedir();
+    return home;
   }
   if (raw.startsWith("~/")) {
-    return join(homedir(), raw.slice(2));
+    return join(home, raw.slice(2));
   }
   return raw;
+}
+
+export function ompHome(): string {
+  return resolveOmpHome();
 }
 
 export function ompExtensionPath(): string {
@@ -115,17 +122,21 @@ export function ompDetect(): boolean {
  * 异步 append 下会乱序）, 也保证宿主退出前最后的 session_shutdown 落盘。
  * 三 PIER_ 环境变量任一缺失即静默 no-op——非 Pier 启动的 agent 不受影响。
  *
- * 角色判定（主会话 vs task subagent, 见 OMP_SUBAGENT_EVENTS 注释）：
- * - TUI/RPC 主会话 `ctx.hasUI === true`；
- * - print/headless 主会话 hasUI=false, 靠「进程内首个实例必是主会话」
- *   兜底——subagent 只能由已运行的主 loop spawn, 必然后加载；
- * - 其余（非首实例且无 UI）判为 subagent。模块级计数在同进程多次工厂
- *   调用间共享（loader 以相同 mtime URL 复用同一模块实例）。
+ * 角色判定（主会话 vs task subagent）——**现状：不判定**（cbb3b80ba 起）：
+ * 历史的 hasUI/首实例计数猜测已删除（测试锁定「不按 ctx.hasUI 猜测」），
+ * 因为那是推断不是 provider 事实。18.0.10 上游 task subagent 同进程创建
+ * AgentSession、继承父 extensionRoots 并为子会话完整运行本扩展
+ * （registry/agent-registry.ts、executor.ts:3188/3379-3434）——子会话
+ * 事件以**自己的 sessionId** 直发、零父子标记；`ctx.sessionManager` 只
+ * 暴露 getSessionId/getCwd/getSessionFile 等（2026-08-29 二进制核对），
+ * **没有任何父子标识可用**，扩展侧无法不猜地补 actorHint/parentSessionId。
  *
- * 取舍：判定含糊时宁可漏报（静默）不可误报——若 omp 未来整个移除 hasUI
- * 字段, 本判定仍靠计数器正确降级（首实例=主, 其余=子）；反向方案
- * （要求 hasUI === false 才判子）在同一情形下会把全部实例判成主,
- * 子实例事件直发打穿主状态, 正是本次修的 bug。
+ * 残留风险与依赖的宿主防线：子会话事件按 sessionId 落独立 scope（不打穿
+ * 主 scope 账本）；主回合可信终态（agent_end.* 三路 trusted）时
+ * peer-seal 的 promptless-derivative 规则统一封掉这些无 PromptSubmit 的
+ * 衍生 scope。回合内窗口里子 scope 的 tool/waiting 仍可能经投影优先级
+ * 盖过主 scope 状态（假忙碌），上游为扩展 API 暴露父子标识前无解——
+ * 跟踪上游 ExtensionContext 增补后再恢复标记。
  *
  * `ask` 是阻塞问卷（与 Hermes clarify 同型）：tool_execution_start 期间
  * TUI 等人，不得标成 ToolStart（否则状态栏假「执行工具中」）。
@@ -353,6 +364,18 @@ export async function installOmpExtension(
   path: string = ompExtensionPath()
 ): Promise<void> {
   if (!ompDetect()) {
+    return;
+  }
+  const existing = await readExtensionRaw(path);
+  if (
+    existing !== null &&
+    isPierManagedPluginContent(existing) &&
+    existing.includes('agent: "pi"')
+  ) {
+    console.warn(
+      "[agent-hooks:omp] pi plugin already owns this path, skip install:",
+      path
+    );
     return;
   }
   await writeManagedPluginFile({

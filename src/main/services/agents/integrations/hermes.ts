@@ -147,6 +147,25 @@ def _pier_string(value: dict[str, Any], *keys: str) -> str | None:
     return None
 
 
+# 外来回合登记（2026-08-29 审计）：后台 review fork 复用父 session_id
+# （background_review.py: review_agent.session_id = agent.session_id, 为
+# prompt 前缀缓存保温）, 其 pre_llm_call 带 parent_session_id 但后续
+# pre/post_tool_call 与 on_session_end 不带——若不标记, review 的工具事件
+# 会以外来 turn_id 抢占父 scope（回合结束后幽灵忙态）, failed 收尾还会给
+# 用户会话打假 error 终态。delegate 子代理的 pre_llm_call 同样带 parent,
+# 一并登记后其裸工具事件也按子会话旁路。上限防泄漏（FIFO 驱逐）。
+_PIER_FOREIGN_TURN_IDS: dict[str, None] = {}
+_PIER_FOREIGN_TURN_CAP = 256
+
+
+def _pier_remember_foreign_turn(turn_id: str) -> None:
+    _PIER_FOREIGN_TURN_IDS.pop(turn_id, None)
+    _PIER_FOREIGN_TURN_IDS[turn_id] = None
+    while len(_PIER_FOREIGN_TURN_IDS) > _PIER_FOREIGN_TURN_CAP:
+        oldest = next(iter(_PIER_FOREIGN_TURN_IDS))
+        _PIER_FOREIGN_TURN_IDS.pop(oldest, None)
+
+
 def _pier_emit(
     pier_event: str,
     native_event: str,
@@ -187,7 +206,10 @@ def _pier_emit(
         spawn_generation = int(spawn_raw)
         if spawn_generation >= 1:
             body["spawnGeneration"] = spawn_generation
-    turn_id = _pier_string(payload, "turn_id", "parent_turn_id", "task_id")
+    # task_id 不作 turnId 回退：它是终端/浏览器隔离 id、跨回合稳定,
+    # 一旦某路径 turn_id 缺席会把整个会话判成同一回合（首个终态后全部
+    # settled 拒收）。turn_id 实测恒非空（turn_context 必生成）。
+    turn_id = _pier_string(payload, "turn_id", "parent_turn_id")
     if turn_id:
         body["turnId"] = turn_id
     tool_use_id = _pier_string(payload, "tool_call_id")
@@ -199,6 +221,15 @@ def _pier_emit(
     parent_session_id = _pier_string(payload, "parent_session_id")
     if parent_session_id:
         body["parentSessionId"] = parent_session_id
+        # 只登记 pre_llm_call：它是外来回合（review fork / delegate 子代理）
+        # 的开场事件, turn_id 属于该外来回合。subagent_start/stop 的
+        # parent_turn_id 是父回合 id（刻意归父账）, 不得登记。
+        if turn_id and native_event == "pre_llm_call":
+            _pier_remember_foreign_turn(turn_id)
+    elif turn_id and turn_id in _PIER_FOREIGN_TURN_IDS:
+        # review fork / delegate 子代理的后续事件（无 parent 字段）按已
+        # 登记的外来 turn_id 补子会话标记, 由宿主子会话旁路丢弃。
+        body["actorHint"] = "subagent"
     if native_event in ("subagent_start", "subagent_stop"):
         body["actorHint"] = "subagent"
         # cbecd72 tools/delegate_tool.py 的真实 start/stop 调用点都从同一个
@@ -246,20 +277,19 @@ def _pier_emit(
         os.remove(candidate)
     except OSError:
         pass
-    if not acquired:
-        return
     try:
         with open(log, "a", encoding="utf-8") as fp:
             fp.write(line)
     except OSError:
         pass
     finally:
-        try:
-            with open(lock, encoding="ascii") as fp:
-                if fp.read() == token:
-                    os.remove(lock)
-        except OSError:
-            pass
+        if acquired:
+            try:
+                with open(lock, encoding="ascii") as fp:
+                    if fp.read() == token:
+                        os.remove(lock)
+            except OSError:
+                pass
 
 
 def _pier_approval_outcome(choice: Any) -> tuple[str, str]:

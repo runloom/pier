@@ -1,10 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
-import { link, readFile, rm, writeFile } from "node:fs/promises";
+import { link, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 
 export const OFFSET_SUFFIX = ".offset";
 export const ROTATING_SUFFIX = ".rotating";
 export const LOCK_SUFFIX = ".lock";
+
+/**
+ * 锁候选文件（`events.jsonl.lock.<token>`）的清扫年龄阈值。
+ * 活体 waiter 的 candidate 生命周期 ≤5s（emit 与 rotation 同为 5s 等锁上限），
+ * 10 分钟给出 120 倍余量；超龄一律视为 SIGKILL 残留。
+ */
+export const LOCK_CANDIDATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 export interface RotationRecovery {
   offset: number;
@@ -56,6 +64,31 @@ export async function persistOffset(
   value: number
 ): Promise<void> {
   await writeFile(offsetPath, String(value)).catch(() => undefined);
+}
+
+/**
+ * 清扫超龄锁候选残留（emit 脚本 / rotation waiter 在等锁期间被 SIGKILL
+ * 时 trap 不执行，`<lock>.<token>` 文件会永久残留——实测单实例累积数千个）。
+ * 只按 mtime 年龄判定；不碰主锁本体（那归 reapStaleRotationLock 按 pid 回收）。
+ */
+export async function sweepStaleLockCandidates(
+  lockPath: string,
+  maxAgeMs: number = LOCK_CANDIDATE_MAX_AGE_MS
+): Promise<void> {
+  const dir = dirname(lockPath);
+  const prefix = `${basename(lockPath)}.`;
+  const entries = await readdir(dir).catch(() => [] as string[]);
+  const cutoff = Date.now() - maxAgeMs;
+  for (const name of entries) {
+    if (!name.startsWith(prefix)) {
+      continue;
+    }
+    const candidatePath = join(dir, name);
+    const candidateStat = await stat(candidatePath).catch(() => null);
+    if (candidateStat && candidateStat.mtimeMs < cutoff) {
+      await rm(candidatePath, { force: true }).catch(() => undefined);
+    }
+  }
 }
 
 /** 单一 observer 所有的死亡锁回收；外部 writer 禁止调用。 */

@@ -430,6 +430,43 @@ describe("jsonl-observer", () => {
     observer.dispose();
   });
 
+  it("启动即清扫超龄锁候选残留，保留新鲜候选与主锁", async () => {
+    writeFileSync(jsonlPath, "");
+    const { utimes, writeFile: writeFileAsync } = await import(
+      "node:fs/promises"
+    );
+    const staleCandidate = `${jsonlPath}.lock.12345.1780000000000000000`;
+    const freshCandidate = `${jsonlPath}.lock.${process.pid}.fresh`;
+    const lockPath = `${jsonlPath}.lock`;
+    await writeFileAsync(staleCandidate, "12345.1780000000000000000");
+    await writeFileAsync(freshCandidate, `${process.pid}.fresh`);
+    // 主锁由活进程持有：候选清扫不得碰它（pid 回收是另一条机制）。
+    await writeFileAsync(lockPath, `${process.pid}.live-holder`);
+    const staleTime = new Date(Date.now() - 60 * 60 * 1000);
+    await utimes(staleCandidate, staleTime, staleTime);
+
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent() {},
+      onCommandFinished() {},
+      onCommandStart() {},
+    });
+    await vi.waitFor(
+      async () => {
+        await expect(stat(staleCandidate)).rejects.toMatchObject({
+          code: "ENOENT",
+        });
+      },
+      { timeout: 2500 }
+    );
+    await expect(stat(freshCandidate)).resolves.toBeTruthy();
+    await expect(stat(lockPath)).resolves.toBeTruthy();
+
+    observer.dispose();
+    await rm(freshCandidate, { force: true });
+    await rm(lockPath, { force: true });
+  });
+
   it("原始 hook payload 只读取顶层身份字段，不受 tool_input 同名字段污染", async () => {
     writeFileSync(jsonlPath, "");
     const received: AgentHookEventPayload[] = [];
@@ -512,6 +549,55 @@ describe("jsonl-observer", () => {
       toolUseId: "tool-call-1",
       v: 3,
     });
+    observer.dispose();
+  });
+
+  it("Subagent 事件不从 metadata 回填 sessionId/turnId（保留适配器抑制）", async () => {
+    writeFileSync(jsonlPath, "");
+    const received: AgentHookEventPayload[] = [];
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent: (event) => received.push(event),
+      onCommandFinished() {},
+      onCommandStart() {},
+    });
+    // codex Subagent 载荷：子回合字段恰好叫 turn_id、子会话号叫 session_id。
+    // shell 侧 sessionIdAsParent/suppressTurnId 已抑制顶层字段；enrichment
+    // 若回填即撤销抑制（评审 F1）。toolUseId 等非身份字段仍应照常补全。
+    const metadata = {
+      session_id: "parent-session-1",
+      tool_call_id: "tool-call-sub",
+      turn_id: "subagent-turn-1",
+    };
+    appendFileSync(
+      jsonlPath,
+      `${JSON.stringify({
+        agent: "codex",
+        event: "SubagentStart",
+        kind: "agentEvent",
+        metadataBase64: Buffer.from(JSON.stringify(metadata)).toString(
+          "base64"
+        ),
+        nativeEvent: "SubagentStart",
+        panelId: "panel-1",
+        parentSessionId: "parent-session-1",
+        v: 3,
+        windowId: "1",
+      })}\n`
+    );
+    await observer.pollNow();
+
+    expect(received[0]).toMatchObject({
+      parentSessionId: "parent-session-1",
+      toolUseId: "tool-call-sub",
+      v: 3,
+    });
+    const subagentEvent = received[0] as {
+      sessionId?: string;
+      turnId?: string;
+    };
+    expect(subagentEvent.sessionId).toBeUndefined();
+    expect(subagentEvent.turnId).toBeUndefined();
     observer.dispose();
   });
 

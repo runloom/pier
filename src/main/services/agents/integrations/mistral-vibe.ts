@@ -79,6 +79,8 @@ export function vibeDetect(): boolean {
  */
 export function buildVibeHookBlock(): string {
   const entries = VIBE_HOOK_EVENTS.map((event) => {
+    // tool_name/tool_call_id 由提取脚本固定别名组覆盖；历史的单段
+    // toolNamePaths/toolUseIdPaths 会被 ≥2 段规则过滤（死配置），已移除。
     const command = pierHookCommandV3WithStdin({
       agentId: AGENT_ID,
       event: event.pierEvent,
@@ -87,8 +89,6 @@ export function buildVibeHookBlock(): string {
         ? { nativeStateFields: ["tool_status"] }
         : {}),
       parentSessionIdFields: ["parent_session_id"],
-      toolNamePaths: ["tool_name"],
-      toolUseIdPaths: ["tool_call_id"],
     });
     const commandLiteral = JSON.stringify(command);
     const nameLiteral = JSON.stringify(`pier-${event.nativeType}`);

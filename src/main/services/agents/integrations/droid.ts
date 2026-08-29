@@ -11,6 +11,7 @@ import {
   maxPierHookGenerationInSettings,
   type NestedJsonIntegrationSpec,
   pierHookCommandV3WithStdin,
+  pierHookCommandV3WithStdinValueDispatch,
   preflightPierNestedHooksInstall,
   readJsonConfig,
   transformJsonConfig,
@@ -34,6 +35,26 @@ import {
  * Notification 的 permission_prompt / elicitation_dialog 只有无关联 ID 的
  * 请求通知，没有结果 hook，不能形成 waiting 闭环。Droid 没有 SubagentStart，
  * 单独安装 SubagentStop 无法建立身份与开始边界，故不安装。
+ *
+ * **取消路径（2026-08-29 审计，@factory/cli 0.202.0 二进制一手证据）**：
+ * 用户取消（Esc）发 `Notification` 而**不发 Stop**（官方文档「Cancellation
+ * emits the informational Notification hook instead of Stop」）。binary 全量
+ * 只有三种 notification_type：`idle_prompt`（唯一发射点在
+ * requestCancelledByUser 路径，message="Agent stopped by user and is
+ * waiting for input"）、`permission_prompt`、`elicitation_dialog`。因此
+ * Notification 按 `notification_type` 在命令内分发：`idle_prompt` →
+ * TurnInterrupted（可信中断终态；否则取消后在飞工具钉住「执行工具中」
+ * 直到下次提问或 30 分钟 TTL）；其余请求型通知落 processing（回合内
+ * 等审批仍是推进，避免 TTL 早衰；无结果 hook 不能进 waiting）。
+ * 注意 droid 的 Notification 派发**不给 matcher 传值**（binary：payload
+ * 第二参 void 0，roA(!H)=true 直接放行）——config 级 matcher 对
+ * Notification 不过滤，必须走 stdin 值分发。
+ *
+ * 子会话锚点：SessionStart 载荷含 `calling_session_id`（由工具调用派生的
+ * 会话，binary sessionOrigin 字段）——映射 parentSessionId。该 SessionStart
+ * 会被子会话旁路丢掉，聚合器在丢弃前登记 child→parent，后续只有子
+ * sessionId 的工具事件仍按子会话丢弃，不建幽灵主 scope。
+ * `previous_session_id` 是 resume 语义，不得映射 parent。
  */
 const droidConfigPath = () => join(homedir(), ".factory", "hooks.json");
 const droidLegacySettingsPath = () =>
@@ -184,7 +205,15 @@ const DROID_SPEC: NestedJsonIntegrationSpec = {
     commandExistsOnPath("droid"),
   events: [
     {
-      buildCommand: droidStandardCommand("SessionStart", "SessionStart"),
+      buildCommand: (agentId) =>
+        pierHookCommandV3WithStdin({
+          agentId,
+          event: "SessionStart",
+          nativeEvent: "SessionStart",
+          // calling_session_id = 由工具调用派生的子会话锚点（binary 一手
+          // 证据）；resume 语义的 previous_session_id 不得映射 parent。
+          parentSessionIdFields: ["calling_session_id"],
+        }),
       nativeEvent: "SessionStart",
       pierEvent: "SessionStart",
     },
@@ -202,6 +231,22 @@ const DROID_SPEC: NestedJsonIntegrationSpec = {
       buildCommand: droidStandardCommand("Stop", "Stop"),
       nativeEvent: "Stop",
       pierEvent: "Stop",
+    },
+    {
+      // 取消不发 Stop 只发 Notification（见文件头「取消路径」）。matcher
+      // 对 Notification 无效（droid 不传匹配值），按 notification_type
+      // 在命令内分发：idle_prompt=用户取消后等输入 → TurnInterrupted。
+      buildCommand: (agentId) =>
+        pierHookCommandV3WithStdinValueDispatch({
+          agentId,
+          cases: [{ nativeValue: "idle_prompt", pierEvent: "TurnInterrupted" }],
+          fallbackPierEvent: "processing",
+          nativeEvent: "Notification",
+          nativeStateFields: ["notification_type"],
+        }),
+      emittedPierEvents: ["TurnInterrupted", "processing"],
+      nativeEvent: "Notification",
+      pierEvent: "processing",
     },
     {
       buildCommand: droidStandardCommand("processing", "PreCompact"),

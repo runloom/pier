@@ -7,6 +7,7 @@ export function transferPanelOwnership(
   ctx: {
     hookCooldownUntil: Map<string, number>;
     panelCooldownUntil: Map<string, number>;
+    rekeySubagentSessions: (sourceKey: string, targetKey: string) => void;
     scheduleEmit: () => void;
     slots: Map<string, PanelSlot>;
   },
@@ -28,29 +29,23 @@ export function transferPanelOwnership(
   const sourceKey = panelKey(sourceWindowId, panelId);
   const targetKey = panelKey(targetWindowId, panelId);
   const slot = ctx.slots.get(sourceKey);
-  if (!slot) {
-    // Still migrate cooldown maps so late source hooks do not revive source.
-    for (const map of [ctx.panelCooldownUntil, ctx.hookCooldownUntil]) {
-      if (map.has(sourceKey)) {
-        map.set(targetKey, map.get(sourceKey)!);
-        map.delete(sourceKey);
-      }
+  if (slot) {
+    ctx.slots.delete(sourceKey);
+    if (slot.command) {
+      slot.command.windowId = targetWindowId;
     }
-    return;
+    if (slot.hook) {
+      slot.hook.windowId = targetWindowId;
+    }
+    ctx.slots.set(targetKey, slot);
+    ctx.scheduleEmit();
   }
-  ctx.slots.delete(sourceKey);
-  if (slot.command) {
-    slot.command.windowId = targetWindowId;
-  }
-  if (slot.hook) {
-    slot.hook.windowId = targetWindowId;
-  }
-  ctx.slots.set(targetKey, slot);
+  // Slot may be absent; still move cooldowns/registry so source hooks cannot revive.
   for (const map of [ctx.panelCooldownUntil, ctx.hookCooldownUntil]) {
     if (map.has(sourceKey)) {
       map.set(targetKey, map.get(sourceKey)!);
       map.delete(sourceKey);
     }
   }
-  ctx.scheduleEmit();
+  ctx.rekeySubagentSessions(sourceKey, targetKey);
 }

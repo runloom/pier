@@ -36,6 +36,28 @@ function claudeStandardCommand(
 }
 
 /**
+ * Subagent 生命周期专用提取（2026-08-29 审计）：载荷用**父会话**
+ * session_id + agent_id/agent_type——sessionIdAsParent 让实例别名承担
+ * 子智能体身份，并行子智能体不再共享 `session:<父>` 别名（否则第二个
+ * SubagentStart 复用第一个的 work 关联：计数停在 1、首个 Stop 提前清账、
+ * 第二个 Stop 被 settled 丢弃）。prompt_id 是主回合恒定值，保留提取。
+ */
+function claudeSubagentCommand(
+  event: "SubagentStart" | "SubagentStop",
+  nativeEvent: string
+): (agentId: AgentKind) => string {
+  return (agentId) =>
+    pierHookCommandV3WithStdin({
+      actorHintFromAgentId: true,
+      agentId,
+      event,
+      nativeEvent,
+      sessionIdAsParent: true,
+      turnIdFields: ["prompt_id"],
+    });
+}
+
+/**
  * Claude Code hook 事件 → pier 事件名。
  * 依据官方 hooks reference（code.claude.com/docs/en/hooks）：
  * - 不装 PermissionRequest / Elicitation / ElicitationResult：
@@ -64,8 +86,21 @@ const CLAUDE_SPEC: NestedJsonIntegrationSpec = {
   configPath: () => join(homedir(), ".claude", "settings.json"),
   // claude 为旗舰集成：无条件安装（配置不存在则创建）, 保持既有行为。
   detect: () => true,
-  // Grok 默认兼容加载 Claude hooks；保留用户兼容设置，但不得重复上报为 Claude。
-  skipWhenEnvPresent: ["GROK_HOOK_EVENT"],
+  // 兼容宿主守卫：Grok、cursor-agent、devin 都会加载
+  // `~/.claude/settings.json`（cursor-agent 2026.08.25 bundle：
+  // claudeUserConfigPath + Claude 事件名映射表；devin 官方
+  // read_config_from.claude 默认开启），命中宿主标志时跳过，避免在别家
+  // 会话内重复上报为 Claude——cursor 会话内实测每个工具调用双写
+  // agent=claude 行，被 foreign-agent 闸门丢弃但白耗 emit 进程与锁竞争，
+  // 且先到者会错锁面板身份。宿主标志（各自 hook 子进程恒注入、真 Claude
+  // 不设置）：GROK_HOOK_EVENT（grok）、CURSOR_VERSION（cursor-agent
+  // buildHookEnvironment）、DEVIN_PROJECT_DIR（devin hooks 文档）。
+  // 注意 CLAUDE_PROJECT_DIR 三家宿主都兼容注入，绝不可作判据。
+  skipWhenEnvPresent: [
+    "GROK_HOOK_EVENT",
+    "CURSOR_VERSION",
+    "DEVIN_PROJECT_DIR",
+  ],
   events: [
     {
       buildCommand: claudeStandardCommand("SessionStart", "SessionStart"),
@@ -115,12 +150,12 @@ const CLAUDE_SPEC: NestedJsonIntegrationSpec = {
       pierEvent: "TurnCompleted",
     },
     {
-      buildCommand: claudeStandardCommand("SubagentStart", "SubagentStart"),
+      buildCommand: claudeSubagentCommand("SubagentStart", "SubagentStart"),
       nativeEvent: "SubagentStart",
       pierEvent: "SubagentStart",
     },
     {
-      buildCommand: claudeStandardCommand("SubagentStop", "SubagentStop"),
+      buildCommand: claudeSubagentCommand("SubagentStop", "SubagentStop"),
       nativeEvent: "SubagentStop",
       pierEvent: "SubagentStop",
     },

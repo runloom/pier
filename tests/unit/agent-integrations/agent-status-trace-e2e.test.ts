@@ -140,6 +140,9 @@ describe("智能体状态官方轨迹跨层验收", () => {
     // host-Esc 抬升的 ready/interrupted 不计入 matrixCoverage（见 expectedActiveCoverage）
     // aug ready/interrupted 降级为 host-Esc reconciled 后退出 fixture 覆盖
     // （158 − aug:ready − aug:interrupted）。
+    // +1：droid interrupted（Notification.idle_prompt→TurnInterrupted，
+    // 2026-08-29 取消路径修复）；−1：kilo ready（idle 降级 advisory 候选，
+    // 对齐同源 opencode）。
     expect(actualCoverage.size).toBe(156);
     // Fixture covers must not invent dimensions outside the matrix claim.
     for (const key of actualCoverage) {

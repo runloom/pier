@@ -32,6 +32,29 @@ function codexStandardCommand(
 }
 
 /**
+ * Subagent 生命周期专用提取（2026-08-29 审计，codex 0.150.1 二进制 schema）：
+ * 上游 SubagentStart/Stop 载荷带**父会话 session_id + 子回合 turn_id**
+ * （Rust 局部名 subagent_turn_id）。子回合 turn_id 进入主 scope 会被
+ * foreign-turn 拒收（计数全丢）或在并发时抢账——一律抑制；session_id
+ * 转挂 parentSessionId，子智能体身份由 agent_id 实例别名承担（并行
+ * 子智能体不再在 `session:<父>` 别名上塌缩）。
+ */
+function codexSubagentCommand(
+  event: "SubagentStart" | "SubagentStop",
+  nativeEvent: string
+): (agentId: AgentKind) => string {
+  return (agentId) =>
+    pierHookCommandV3WithStdin({
+      actorHintFromAgentId: true,
+      agentId,
+      event,
+      nativeEvent,
+      sessionIdAsParent: true,
+      suppressTurnId: true,
+    });
+}
+
+/**
  * `$CODEX_HOME` 解析（未设置时默认 `~/.codex`）：
  * - 未设置/空 → `~/.codex`。
  * - 以 `~` 开头 → 展开为 homedir()（仅处理开头, shell tilde-expansion 语义）。
@@ -124,12 +147,12 @@ const CODEX_SPEC: NestedJsonIntegrationSpec = {
       pierEvent: "processing",
     },
     {
-      buildCommand: codexStandardCommand("SubagentStart", "SubagentStart"),
+      buildCommand: codexSubagentCommand("SubagentStart", "SubagentStart"),
       nativeEvent: "SubagentStart",
       pierEvent: "SubagentStart",
     },
     {
-      buildCommand: codexStandardCommand("SubagentStop", "SubagentStop"),
+      buildCommand: codexSubagentCommand("SubagentStop", "SubagentStop"),
       nativeEvent: "SubagentStop",
       pierEvent: "SubagentStop",
     },

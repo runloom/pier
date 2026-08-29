@@ -5,6 +5,7 @@ import { CORE_LSP_CATALOG } from "@main/services/lsp/core-catalog.ts";
 import { languageForPath } from "@plugins/builtin/files/renderer/editor/language-detection.ts";
 import {
   editorExtensionMapFromMatrix,
+  FVM_PROJECT_MARKERS,
   PATH_LANGUAGE_MATRIX,
   pathCatalogFromMatrix,
   pathLspDescriptorsFromMatrix,
@@ -65,6 +66,17 @@ describe("language matrix governance (scheme A)", () => {
     expect(languageForPath("/repo/Dockerfile")).toBe("dockerfile");
     expect(PATH_LANGUAGE_MATRIX.some((r) => r.id === "zig" && r.lsp)).toBe(
       true
+    );
+  });
+
+  it("Dart prefers FVM when project markers exist", () => {
+    const dart = PATH_LANGUAGE_MATRIX.find((row) => row.id === "dart");
+    expect(dart?.lsp?.preferLaunchCommandsWhenMarkers).toEqual({
+      commands: ["fvm"],
+      markers: [...FVM_PROJECT_MARKERS],
+    });
+    expect(dart?.lsp?.workspaceRelativeCommands?.[0]?.command).toBe(
+      ".fvm/flutter_sdk/bin/dart"
     );
   });
 

@@ -51,28 +51,48 @@ function localizedTooltipValue(
   switch (value) {
     case "Cargo":
       return t("commandPalette.run.taskTab.source.cargo");
+    case "CMake":
+      return t("commandPalette.run.taskTab.source.cmake");
     case "Composer":
       return t("commandPalette.run.taskTab.source.composer");
     case "Deno":
       return t("commandPalette.run.taskTab.source.deno");
+    case ".NET":
+      return t("commandPalette.run.taskTab.source.dotnet");
+    case "Go":
+      return t("commandPalette.run.taskTab.source.go");
+    case "Gradle":
+      return t("commandPalette.run.taskTab.source.gradle");
     case "Recently Run":
       return t("commandPalette.run.taskTab.source.history");
     case "Justfile":
       return t("commandPalette.run.taskTab.source.just");
     case "Makefile":
       return t("commandPalette.run.taskTab.source.make");
+    case "Maven":
+      return t("commandPalette.run.taskTab.source.maven");
     case "mise":
       return t("commandPalette.run.taskTab.source.mise");
+    case "Mix":
+      return t("commandPalette.run.taskTab.source.mix");
     case "package.json":
       return t("commandPalette.run.taskTab.source.packageScript");
+    case "pubspec":
+      return t("commandPalette.run.taskTab.source.pubspec");
     case "pyproject.toml":
       return t("commandPalette.run.taskTab.source.pyproject");
+    case "sbt":
+      return t("commandPalette.run.taskTab.source.sbt");
+    case "Swift Package":
+      return t("commandPalette.run.taskTab.source.swiftpm");
     case "Taskfile":
       return t("commandPalette.run.taskTab.source.taskfile");
     case "VS Code":
       return t("commandPalette.run.taskTab.source.vscode");
     case "Zed":
       return t("commandPalette.run.taskTab.source.zed");
+    case "Zig":
+      return t("commandPalette.run.taskTab.source.zig");
     default:
       return value;
   }

@@ -259,6 +259,126 @@ describe("withPierCursorHooks", () => {
     } satisfies Partial<AgentActivity>);
   }, 15_000);
 
+  it("Task 派发按 Subagent 生命周期上报：抑制子智能体 generation、会话转挂父级", async () => {
+    // 2026-08-29 实证：Task preToolUse 带主 conversation_id + 子智能体
+    // generation_id 且从不发 postToolUse；按 ToolStart 记账会抢占主回合，
+    // 让真回合的 stop 被 settled-turn 拒收（面板钉死「执行工具中」）。
+    const root = await mkdtemp(join(tmpdir(), "pier-cursor-task-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const hooks = withPierCursorHooks({}).hooks as Record<
+      string,
+      Array<{ command: string }>
+    >;
+    const env = {
+      ...process.env,
+      PATH: pathForHookSpawn(process.env.PATH),
+      PIER_AGENT_EVENT_LOG: logPath,
+      PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+      PIER_PANEL_ID: "p1",
+      PIER_WINDOW_ID: "w1",
+    };
+    const taskPayload = {
+      conversation_id: "main-conversation-1",
+      generation_id: "subagent-generation-leak",
+      tool_name: "Task",
+      tool_use_id: "call-task-1",
+    };
+    for (const cmd of [
+      hooks.preToolUse?.[0]?.command ?? "",
+      hooks.postToolUse?.[0]?.command ?? "",
+    ]) {
+      const result = spawnSync("/bin/sh", ["-c", cmd], {
+        env,
+        input: JSON.stringify(taskPayload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      {
+        agent: "cursor",
+        event: "SubagentStart",
+        nativeEvent: "preToolUse",
+        parentSessionId: "main-conversation-1",
+        toolName: "Task",
+        toolUseId: "call-task-1",
+        v: 3,
+      },
+      {
+        agent: "cursor",
+        event: "SubagentStop",
+        nativeEvent: "postToolUse",
+        parentSessionId: "main-conversation-1",
+        toolName: "Task",
+        toolUseId: "call-task-1",
+        v: 3,
+      },
+    ]);
+    for (const row of rows) {
+      expect(row).not.toHaveProperty("sessionId");
+      expect(row).not.toHaveProperty("turnId");
+    }
+
+    // 聚合器闭环：Task 只计数不改状态，真回合 stop 正常封账。
+    const aggregator = createForegroundActivityAggregator();
+    const ingestOptions = {
+      evidenceSource: "hook",
+      stopAuthority: "advisory",
+      turnStartAuthority: "none",
+    } as const;
+    aggregator.ingestAgentEvent(
+      {
+        agent: "cursor",
+        event: "PromptSubmit",
+        kind: "agentEvent",
+        nativeEvent: "beforeSubmitPrompt",
+        panelId: "p1",
+        sessionId: "main-conversation-1",
+        turnId: "5eb99524-9ef4-48a3-af34-f549d81b70ad",
+        v: 3,
+        windowId: "w1",
+      },
+      ingestOptions
+    );
+    const startRow = rows[0];
+    if (startRow?.kind !== "agentEvent") {
+      throw new Error("expected agent event");
+    }
+    aggregator.ingestAgentEvent(
+      { ...startRow, panelId: "p1", windowId: "w1" },
+      ingestOptions
+    );
+    expect(aggregator.snapshot().activities[0]).toMatchObject({
+      status: "processing",
+      subagentCount: 1,
+    } satisfies Partial<AgentActivity>);
+    aggregator.ingestAgentEvent(
+      {
+        agent: "cursor",
+        event: "TurnCompleted",
+        kind: "agentEvent",
+        nativeEvent: "stop",
+        panelId: "p1",
+        sessionId: "main-conversation-1",
+        turnId: "5eb99524-9ef4-48a3-af34-f549d81b70ad",
+        v: 3,
+        windowId: "w1",
+      },
+      ingestOptions
+    );
+    expect(aggregator.snapshot().activities[0]).toMatchObject({
+      status: "ready",
+      subagentCount: 0,
+    } satisfies Partial<AgentActivity>);
+    aggregator.dispose();
+  }, 15_000);
+
   it("CreatePlan preToolUse 上报 InteractionRequested，普通工具仍 ToolStart", async () => {
     const root = await mkdtemp(join(tmpdir(), "pier-cursor-plan-"));
     const userData = join(root, "userData");

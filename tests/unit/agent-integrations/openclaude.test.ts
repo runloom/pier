@@ -147,16 +147,16 @@ describe("openclaudeIntegration", () => {
       });
       expect(result.status, result.stderr.toString()).toBe(0);
     };
+    // openclaude 的 hook input base 无 prompt_id（2026-08-29 审计：全仓
+    // 该字段只出现在 PromptSuggestion proto）——事件不携带 turnId。
     run({
       hook_event_name: "PreToolUse",
-      prompt_id: "prompt-1",
       session_id: "session-1",
       tool_name: "Bash",
       tool_use_id: "tool-1",
     });
     run({
       hook_event_name: "PreToolUse",
-      prompt_id: "prompt-2",
       session_id: "session-1",
       tool_name: "ExitPlanMode",
       tool_use_id: "plan-exit-1",
@@ -173,7 +173,6 @@ describe("openclaudeIntegration", () => {
         sessionId: "session-1",
         toolName: "Bash",
         toolUseId: "tool-1",
-        turnId: "prompt-1",
         v: 3,
       },
       {
@@ -185,10 +184,12 @@ describe("openclaudeIntegration", () => {
         sessionId: "session-1",
         toolName: "ExitPlanMode",
         toolUseId: "plan-exit-1",
-        turnId: "prompt-2",
         v: 3,
       },
     ]);
+    for (const row of rows) {
+      expect(row).not.toHaveProperty("turnId");
+    }
   }, 15_000);
 
   it("幂等：重复安装不产生重复条目", async () => {

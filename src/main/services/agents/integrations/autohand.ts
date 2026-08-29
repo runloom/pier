@@ -138,6 +138,11 @@ export function withPierAutohandHooks(
   const kept = hooksArray(section).filter(
     (entry) => !isPierHookCommand(entry?.command)
   );
+  // 2026-08-29 审计修正（官方 docs/hooks.md 固定提交 8595299 + main 双核）：
+  // post-tool 载荷是 `tool_success`(bool)，不存在历史误写的 `status` 字段；
+  // session-error 载荷带 `error/error_code`，补提取供诊断。tool_name/
+  // tool_use_id 是顶层字段，固定别名组已覆盖，单段 path 参数是被 ≥2 段
+  // 规则过滤的死配置，一并移除。
   const pierEntries: AutohandHookEntry[] = AUTOHAND_HOOK_EVENTS.map(
     (event) => ({
       command: pierHookCommandV3WithStdin({
@@ -145,10 +150,11 @@ export function withPierAutohandHooks(
         event: event.pierEvent,
         nativeEvent: event.nativeEvent,
         ...(event.nativeEvent === "post-tool"
-          ? { nativeStateFields: ["status"] }
+          ? { nativeStateFields: ["tool_success"] }
           : {}),
-        toolNamePaths: ["tool_name"],
-        toolUseIdPaths: ["tool_use_id"],
+        ...(event.nativeEvent === "session-error"
+          ? { nativeStateFields: ["error_code", "error"] }
+          : {}),
       }),
       enabled: true,
       event: event.nativeEvent,

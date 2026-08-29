@@ -16,6 +16,15 @@ const AGENT_ID: AgentKind = "kiro";
  * Kiro 默认终端路径没有可证明会被加载的全局 hook 配置。集成仅扫描
  * `~/.kiro/agents/*.json`，移除旧版本曾写入用户自定义智能体的 Pier 条目；
  * install 与 uninstall 都不再创建或注入任何 hook。
+ *
+ * cleanup-only 是必要而非仅谨慎：官方文档明示 agent 配置的 hooks 由
+ * CLI 与 IDE 双向加载（kiro.dev/docs/custom-agents/configuration-reference：
+ * "Both the CLI and the IDE accept hooks written in this format, so an
+ * agent profile built for Kiro CLI loads in the IDE without rewriting its
+ * hooks"）——任何写回 agents/*.json 的 hook 都会在 Kiro IDE 会话内触发。
+ * Kiro CLI 3.0 已把 hooks 迁到独立 `.kiro/hooks/*.json`
+ * （PascalCase 事件名，kiro.dev/docs/cli/v3/hooks-migration），未来若做
+ * 真集成应走该路径而非 agents 配置。
  */
 
 interface KiroHookEntry {

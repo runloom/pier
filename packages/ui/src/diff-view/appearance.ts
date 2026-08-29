@@ -187,6 +187,18 @@ ${SCROLLBAR_SYSTEM_CSS}
     }
   }
 
+  /* 文件间 1px：:host::after。宿主 inset shadow 会被不透明头盖住；禁顶外阴影。 */
+  :host { position: relative; }
+  :host::after {
+    position: absolute;
+    right: 0; bottom: 0; left: 0;
+    z-index: 4;
+    height: 1px;
+    pointer-events: none;
+    content: "";
+    background-color: var(--diffshub-diff-separator, var(--border));
+  }
+
   /*
    * Host attrs (data-pier-file-host / estimate) live on <diffs-container>.
    * Inside shadow CSS they must be addressed with :host(...), not as
@@ -253,7 +265,7 @@ ${SCROLLBAR_SYSTEM_CSS}
 
   /*
    * estimate 槽：shadow 内真实节点 [data-pier-estimate-skeleton]
-   * （estimate-skeleton.ts 注入）。禁止 :host::after 画条。
+   * （estimate-skeleton.ts 注入）。禁止 :host::after 画骨架条。
    * 固定 5 条；槽高由 geometry.skeletonSlotHeight，不按 numstat 拉高。
    */
   :host([data-pier-estimate="true"]) {

@@ -21,7 +21,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
       waiting: "native",
       error: "native",
       completed: "reconciled",
-      interrupted: "reconciled",
+      interrupted: "native",
       subagent: "native",
     },
     eventMappings: facts(
@@ -59,6 +59,9 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
       nativeFact("processing", "PreCompact", "processing"),
       nativeFact("processing", "PostCompact", "processing"),
       nativeFact("error", "StopFailure", "error"),
+      // 1.0.13 起原生 StopCancelled（reason：user_interrupt/permission_*/
+      // max_turns/no_progress/unknown）；updates.jsonl 对账仍是旧版兜底。
+      nativeFact("interrupted", "StopCancelled", "TurnInterrupted"),
       fact(
         "interrupted",
         "reconciled",
@@ -302,7 +305,13 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
         "TurnInterrupted"
       ),
       nativeFact("subagent", "subagentStart", "SubagentStart"),
-      nativeFact("subagent", "subagentStop", "SubagentStop")
+      nativeFact("subagent", "subagentStop", "SubagentStop"),
+      // Task 派发工具按 Subagent 生命周期分发（2026-08-29 events.jsonl 实证：
+      // preToolUse 带主 conversation_id + 子智能体 generation_id 且永无
+      // postToolUse；原生 subagentStart/Stop 在当前 CLI 版本不触发）。
+      nativeFact("subagent", "preToolUse", "SubagentStart"),
+      nativeFact("subagent", "postToolUse", "SubagentStop"),
+      nativeFact("subagent", "postToolUseFailure", "SubagentStop")
     ),
     upstream: upstream(
       "https://cursor.com/docs/hooks",

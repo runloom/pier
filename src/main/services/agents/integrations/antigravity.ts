@@ -90,6 +90,9 @@ function antigravityStopEmit(
 /**
  * Antigravity 的 Stop 是带分支的状态快照，不是无条件回合完成：
  * error 优先；只有 fullyIdle=true 才结算；其余保持 processing。
+ * error 判定同时认 `error` 消息与 `terminationReason=error`——官方文档中
+ * `error` 字段是「if termination was caused by a system error」的可选补充，
+ * 系统错误终止时 message 可能缺席，不能只凭 message 非空判 error。
  */
 function antigravityStopCommand(): string {
   const emit = [
@@ -99,7 +102,7 @@ function antigravityStopCommand(): string {
     '_pier_error="$_pier_native_state"',
     extractStoredNativeState("terminationReason"),
     '_pier_termination_reason="$_pier_native_state"',
-    `if [ -n "$_pier_error" ]; then _pier_native_state="$_pier_error"; ${antigravityStopEmit(
+    `if [ -n "$_pier_error" ] || [ "$_pier_termination_reason" = "error" ]; then _pier_native_state="\${_pier_error:-$_pier_termination_reason}"; ${antigravityStopEmit(
       "error",
       "Stop.error"
     )}; elif [ "$_pier_fully_idle" = "true" ]; then _pier_native_state="$_pier_termination_reason"; ${antigravityStopEmit(

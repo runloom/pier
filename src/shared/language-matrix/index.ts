@@ -10,6 +10,7 @@ export {
   pathCatalogFromMatrix,
   pathLspDescriptorsFromMatrix,
 } from "./derive.ts";
+export { FVM_PROJECT_MARKERS } from "./fvm.ts";
 export { PATH_LANGUAGE_MATRIX } from "./path-rows.ts";
 export type {
   LanguageMatrixLspSpec,

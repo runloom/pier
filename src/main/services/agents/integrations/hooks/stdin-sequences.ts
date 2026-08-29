@@ -23,6 +23,12 @@ export interface StdinInteractiveToolDispatchSpec
   extends StdinExtractionOptions {
   agentId: AgentKind;
   nativeEvent: string;
+  /**
+   * 子智能体派发工具（如 Cursor `Task`）：Pre → SubagentStart，
+   * Post/Failure → SubagentStop。会话号转挂 parentSessionId 并抑制
+   * turnId——派发工具的 generation 属于子智能体，不得抢占主回合身份。
+   */
+  subagentDispatchTools?: readonly string[];
   tools: readonly InteractiveBlockingToolCase[];
 }
 
@@ -69,11 +75,52 @@ function interactiveToolAssignArms(
     .join(" ");
 }
 
+/**
+ * 子智能体派发工具臂：事件改写为 Subagent 生命周期，主会话号转挂
+ * parentSessionId（对齐原生 subagentStart 的 sessionIdAsParent），并清空
+ * turnId——它是子智能体的 generation，进入主 scope 会触发外来回合抢占。
+ */
+function subagentDispatchAssignArms(
+  toolNames: readonly string[],
+  subagentEvent: "SubagentStart" | "SubagentStop"
+): string {
+  if (toolNames.length === 0) {
+    return "";
+  }
+  assertSafeInteractiveToolNames([
+    { interactionKind: "external-block", toolNames },
+  ]);
+  const pattern = toolNames.join("|");
+  return (
+    `${pattern}) _pier_event="${subagentEvent}"; ` +
+    '_pier_parent_session_id="$_pier_session_id"; _pier_session_id=; ' +
+    "_pier_turn_id= ;;"
+  );
+}
+
+function assertSubagentToolsDisjointFromInteractive(
+  tools: readonly InteractiveBlockingToolCase[],
+  subagentTools: readonly string[]
+): void {
+  const interactive = new Set(tools.flatMap((entry) => entry.toolNames));
+  for (const name of subagentTools) {
+    if (interactive.has(name)) {
+      throw new Error(
+        `subagent dispatch tool also listed as interactive: ${name}`
+      );
+    }
+  }
+}
+
+function joinCaseArms(...arms: string[]): string {
+  return arms.filter((arm) => arm.length > 0).join(" ");
+}
+
 function stdinCommonPayload(
   spec: StdinExtractionOptions & { agentId: AgentKind; nativeEvent: string }
 ) {
   return {
-    ...(spec.actorHintFromAgentId
+    ...(spec.actorHintFromAgentId || spec.actorHintFromAgentType
       ? { actorHint: "$_pier_actor_hint" as const }
       : {}),
     agentId: spec.agentId,
@@ -122,11 +169,21 @@ export function pierHookCommandV3WithStdinPermissionAcceptedThenToolStart(
 export function pierHookCommandV3WithStdinInteractiveToolStart(
   spec: StdinInteractiveToolDispatchSpec
 ): string {
-  const common = stdinCommonPayload(spec);
-  const arms = interactiveToolAssignArms(
+  assertSubagentToolsDisjointFromInteractive(
     spec.tools,
-    (kind) =>
-      `_pier_event="InteractionRequested"; _pier_interaction_kind="${kind}"; _pier_interaction_id="$_pier_tool_use_id"`
+    spec.subagentDispatchTools ?? []
+  );
+  const common = stdinCommonPayload(spec);
+  const arms = joinCaseArms(
+    interactiveToolAssignArms(
+      spec.tools,
+      (kind) =>
+        `_pier_event="InteractionRequested"; _pier_interaction_kind="${kind}"; _pier_interaction_id="$_pier_tool_use_id"`
+    ),
+    subagentDispatchAssignArms(
+      spec.subagentDispatchTools ?? [],
+      "SubagentStart"
+    )
   );
   return [
     ...stdinIdentityExtractionLines(spec),
@@ -148,11 +205,18 @@ export function pierHookCommandV3WithStdinInteractiveToolStart(
 export function pierHookCommandV3WithStdinInteractiveToolResolve(
   spec: StdinInteractiveToolResolveSpec
 ): string {
-  const common = stdinCommonPayload(spec);
-  const arms = interactiveToolAssignArms(
+  assertSubagentToolsDisjointFromInteractive(
     spec.tools,
-    (kind) =>
-      `_pier_event="InteractionResolved"; _pier_interaction_kind="${kind}"; _pier_interaction_id="$_pier_tool_use_id"; _pier_interaction_outcome="${spec.interactionOutcome}"`
+    spec.subagentDispatchTools ?? []
+  );
+  const common = stdinCommonPayload(spec);
+  const arms = joinCaseArms(
+    interactiveToolAssignArms(
+      spec.tools,
+      (kind) =>
+        `_pier_event="InteractionResolved"; _pier_interaction_kind="${kind}"; _pier_interaction_id="$_pier_tool_use_id"; _pier_interaction_outcome="${spec.interactionOutcome}"`
+    ),
+    subagentDispatchAssignArms(spec.subagentDispatchTools ?? [], "SubagentStop")
   );
   return [
     ...stdinIdentityExtractionLines(spec),

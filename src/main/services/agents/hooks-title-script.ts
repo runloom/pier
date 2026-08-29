@@ -17,5 +17,9 @@
  *     （后台工具让位）落 processing 不落 TurnCompleted。
  * 13 = hook helper 改由显式 node/sh 解释器读取；不再直接执行带 macOS
  *     provenance 的脚本，避免 Gatekeeper 检查异常拖到 provider timeout。
+ * 14 = emit 等锁超时降级无锁 append；cursor Task 按 Subagent 分发；
+ *     claude 命令加 CURSOR_VERSION 跳过守卫。
+ * 15 = emit 等锁超时先回收已死锁主再降级无锁 append（活着的 rotation
+ *     仍可能重叠，不保证原子）；JS/Python writer 超时仍写出。
  */
-export const PIER_HOOK_COMMAND_GENERATION = 13;
+export const PIER_HOOK_COMMAND_GENERATION = 15;
