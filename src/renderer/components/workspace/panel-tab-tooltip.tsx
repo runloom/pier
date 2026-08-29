@@ -167,14 +167,14 @@ export function tabAriaLabel(
 
 /**
  * Running 态指示 — soft shimmer 顶轨（与状态栏 agent 扫光同语汇）。
- * 仅 dockview tab：视觉在外层 `.dv-tab::before`；本节点仅 a11y 锚点。
+ * 仅 dockview tab：视觉在 `.pier-tab-running-bar`（不占竖分割线 ::before）。
  * overflow 列表不得复用顶轨 loading（见 `surface: "menu"`）。
  */
 function tabRunningTopBar(displayLabel: string): ReactNode {
   return (
     <span
       aria-label={displayLabel}
-      className="pier-tab-running-bar pointer-events-none absolute overflow-hidden"
+      className="pier-tab-running-bar pointer-events-none absolute"
       data-panel-tab-state-indicator="running"
       data-tab-status="running"
       role="img"
@@ -217,7 +217,7 @@ function tabStatusIcon(
 }
 
 /**
- * @param surface `"tab"` (default) uses strip top-shimmer for running.
+ * @param surface `"tab"` (default) uses the strip top-shimmer bar for running.
  *   `"menu"` uses a compact spinner/icon — never the tab-strip loading chrome.
  */
 export function tabStatusIndicator(

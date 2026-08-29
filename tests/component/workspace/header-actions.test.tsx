@@ -1314,6 +1314,7 @@ describe("WorkspaceHeaderActions", () => {
         id: "terminal-123",
         position: {
           direction: "within",
+          index: 1,
           referenceGroup: originalGroup,
         },
       })
@@ -1631,6 +1632,7 @@ describe("WorkspaceHeaderActions", () => {
           },
           position: {
             direction: "within",
+            index: 1,
             referenceGroup: originalGroup,
           },
         })

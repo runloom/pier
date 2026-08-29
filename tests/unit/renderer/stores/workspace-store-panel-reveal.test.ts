@@ -256,4 +256,62 @@ describe("workspace.store panel reveal policy", () => {
     expect(scrollLeftFor(root)).toBe(88);
     root.remove();
   });
+
+  it("inserts a welcome tab at the end of the active group", () => {
+    const first = terminalPanel("terminal-1");
+    const second = terminalPanel("terminal-2");
+    const activeGroup = {
+      activePanel: first,
+      id: "group-1",
+      panels: [first, second],
+    };
+    const api = {
+      activeGroup,
+      addPanel: vi.fn(),
+      panels: [first, second],
+    };
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().addTab();
+
+    expect(api.addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        component: "welcome",
+        position: {
+          direction: "within",
+          index: 2,
+          referenceGroup: activeGroup,
+        },
+      })
+    );
+  });
+
+  it("inserts a new terminal after the active tab", () => {
+    const first = terminalPanel("terminal-1");
+    const second = terminalPanel("terminal-2");
+    const activeGroup = {
+      activePanel: first,
+      id: "group-1",
+      panels: [first, second],
+    };
+    const api = {
+      activeGroup,
+      activePanel: first,
+      addPanel: vi.fn(),
+      panels: [first, second],
+    };
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().addTerminal();
+
+    expect(api.addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        position: {
+          direction: "within",
+          index: 1,
+          referenceGroup: activeGroup,
+        },
+      })
+    );
+  });
 });

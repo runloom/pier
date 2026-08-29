@@ -7,6 +7,7 @@ import {
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { runPanelCloseGuards } from "@/lib/workspace/panel-close-guards.ts";
 import { activatePanelCloseSuccessor } from "@/lib/workspace/panel-close-successor.ts";
+import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
 import {
   clearCurrentWindowLayout,
   panelsInSameGroup,
@@ -17,6 +18,19 @@ import { closeNativeTerminalPanel } from "@/stores/workspace-terminal-close.ts";
 export type WorkspaceCloseGet = () => {
   api: DockviewApi | null;
 };
+
+function revealSuccessorAfterClosingActive(
+  api: DockviewApi,
+  closedActive: boolean
+): void {
+  if (!closedActive) {
+    return;
+  }
+  const nextId = api.activePanel?.id;
+  if (nextId) {
+    scheduleRevealDockviewTabByPanelId(nextId);
+  }
+}
 
 export async function closeActivePanel(
   get: WorkspaceCloseGet
@@ -80,6 +94,7 @@ export async function closeActivePanel(
     return true;
   }
   // adjacent：关 active 时先切邻接 tab；recent：交给 dockview 组内 MRU。
+  const closedActive = api.activePanel?.id === panel.id;
   activatePanelCloseSuccessor({
     activePanelId: api.activePanel?.id,
     closingPanelId: panel.id,
@@ -92,6 +107,7 @@ export async function closeActivePanel(
     closeNativeTerminalPanel(panel.id);
   }
   api.removePanel(panel);
+  revealSuccessorAfterClosingActive(api, closedActive);
   noteHangBreadcrumb({
     kind: "panel-close",
     phase: "end",
@@ -168,6 +184,7 @@ export async function closePanel(
     return true;
   }
   // 关 inactive：不改 active。关 active：按 panelCloseFocusPolicy 选 successor。
+  const closedActive = api.activePanel?.id === panel.id;
   activatePanelCloseSuccessor({
     activePanelId: api.activePanel?.id,
     closingPanelId: panel.id,
@@ -178,6 +195,7 @@ export async function closePanel(
     closeNativeTerminalPanel(panel.id);
   }
   api.removePanel(panel);
+  revealSuccessorAfterClosingActive(api, closedActive);
   noteHangBreadcrumb({
     kind: "panel-close",
     phase: "end",

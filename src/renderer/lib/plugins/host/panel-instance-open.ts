@@ -8,6 +8,7 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { resolvePanelPathAnchor } from "@/stores/workspace-panel-helpers.ts";
 import { activateWorkspacePanel } from "../../workspace/panel-activation.ts";
+import { withinGroupPosition } from "../../workspace/panel-insert.ts";
 import { scheduleRevealDockviewTabByPanelId } from "../../workspace/tab-visibility.ts";
 import { getPluginPanelRegistrations } from "../panel-registry.ts";
 import {
@@ -206,19 +207,14 @@ function addNewPanelInstance(input: {
   registration: PluginPanelRegistration;
   title: string;
 }): void {
+  const insertGroup =
+    input.addPanelTargetGroup ?? input.api.activeGroup ?? null;
   input.api.addPanel({
     id: input.options.instanceId,
     component: input.options.componentId,
     title: input.title,
     params: input.panelParams,
-    ...(input.addPanelTargetGroup
-      ? {
-          position: {
-            referenceGroup: input.addPanelTargetGroup,
-            direction: "within",
-          },
-        }
-      : {}),
+    ...(insertGroup ? { position: withinGroupPosition(insertGroup) } : {}),
   });
   upsertPanelInstanceDescriptor(
     input.descriptorStore,

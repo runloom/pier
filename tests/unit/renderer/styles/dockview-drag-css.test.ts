@@ -83,7 +83,7 @@ describe("Pier dockview drag CSS", () => {
     );
     const idleTabRule = css.slice(idleTabRuleStart, contentRuleStart);
     expect(idleTabRule).toContain("max-width: none");
-    expect(idleTabRule).toContain("padding-inline: 6px 3px");
+    expect(idleTabRule).toContain("padding-inline: 12px 6px");
     expect(idleTabRule).toContain("gap: 4px");
     expect(idleTabRule).not.toContain("max-width: 280px");
     // 默认标题槽不限宽；仅 OSC free-form 限宽（与 panel-tab-layout 常量交叉校验）。
@@ -119,7 +119,7 @@ describe("Pier dockview drag CSS", () => {
     );
 
     expect(css).toContain('&[data-pier-tab-has-active-task="true"]');
-    expect(css).toContain("padding-left: 14px");
+    expect(css).toContain("padding-left: 18px");
     // drag/ghost 的 padding-inline !important 不得盖掉 gutter
     expect(css).toContain(
       '.dv-default-tab[data-pier-tab-has-active-task="true"]'
