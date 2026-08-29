@@ -57,6 +57,25 @@ describe("GitReviewToolbar", () => {
     expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
   });
 
+  it("shows the commit action only when showCommit is set", () => {
+    renderToolbar(
+      <GitReviewToolbar
+        allCollapsed={false}
+        context={context}
+        onRefresh={vi.fn()}
+        onToggleCollapseAll={vi.fn()}
+        refreshing={false}
+        setViewOptions={vi.fn()}
+        showCommit
+        viewOptions={{ diffStyle: "unified", wrapLines: false }}
+      />
+    );
+    expect(screen.getByTestId("git-review-commit")).toHaveTextContent("Commit");
+    expect(
+      screen.getByTestId("git-review-toolbar").lastElementChild
+    ).toHaveAttribute("data-testid", "git-review-commit");
+  });
+
   it("toggles icons for layout, wrap, and collapse; refresh stays an action", () => {
     const onRefresh = vi.fn();
     const onToggleCollapseAll = vi.fn();

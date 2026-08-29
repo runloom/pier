@@ -4,6 +4,7 @@ import {
   registerRebaseAction,
   registerSwitchBranchAction,
 } from "./branch-actions.ts";
+import { registerCommitAction } from "./commit/action.ts";
 import {
   registerMergeAbortAction,
   registerRebaseAbortAction,
@@ -41,6 +42,7 @@ export function registerGitActions(context: RendererPluginContext): () => void {
     registerRebaseContinueAction(context),
     registerCherryPickActions(context),
     registerRevertActions(context),
+    registerCommitAction(context),
     registerUndoCommitAction(context),
   ];
   return () => {

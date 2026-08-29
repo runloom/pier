@@ -413,6 +413,7 @@ function ReviewDocumentsComponent(
           refreshing={props.indexRefreshing === true}
           responsiveUnified={responsiveUnified}
           setViewOptions={responsiveViewOptions.setOptions}
+          showCommit={!committed}
           viewOptions={responsiveViewOptions.effectiveOptions}
         />
       }

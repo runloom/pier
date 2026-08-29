@@ -80,6 +80,7 @@ const LOOMDESK_GIT_ACTION_IDS = [
   "pier.git.revert",
   "pier.git.revertAbort",
   "pier.git.revertContinue",
+  "pier.git.commit",
   "pier.git.undoLastCommit",
 ] as const;
 
@@ -464,6 +465,9 @@ describe("action search", () => {
     ["撤销提交", "pier.git.undoLastCommit"],
     ["贮藏", "pier.git.stash"],
     ["git stash -u", "pier.git.stashIncludeUntracked"],
+    ["git commit", "pier.git.commit"],
+    ["commit changes", "pier.git.commit"],
+    ["提交更改", "pier.git.commit"],
   ])("matches every LoomDesk git command keyword: %s", (query, expectedId) => {
     expect(
       rankActionSearchDocuments(gitCommandDocs, query)[0]?.document.id
@@ -500,6 +504,7 @@ describe("action search", () => {
     ["en", "git: Stash", ["pier.git.stash"]],
     ["en", "git stash pop", ["pier.git.stashPop"]],
     ["en", "git: undo", ["pier.git.undoLastCommit"]],
+    ["en", "git: commit", ["pier.git.commit"]],
     ["zh-CN", "git: 合并", ["pier.git.merge"]],
     ["zh-CN", "git 合并", ["pier.git.merge"]],
     [
@@ -509,6 +514,7 @@ describe("action search", () => {
     ],
     ["zh-CN", "git: 变基", ["pier.git.rebase"]],
     ["zh-CN", "git: 撤销", ["pier.git.undoLastCommit"]],
+    ["zh-CN", "git: 提交", ["pier.git.commit"]],
   ])("matches prefixed git queries against %s titles: %s", (titleLocale, query, expectedIds) => {
     const docs = titleLocale === "zh-CN" ? gitCommandDocsZh : gitCommandDocs;
     expect(expectedIds).toContain(

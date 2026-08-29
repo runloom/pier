@@ -910,6 +910,52 @@ describe("Git review panel", () => {
       within(switcher).queryByRole("tab", { name: "Staged Changes" })
     ).toBeNull();
     expect(within(switcher).queryByText("All Changes")).toBeNull();
+    expect(view.getByTestId("git-review-commit")).toBeVisible();
+  });
+
+  it("commit 与 branch scope 的审查 header 不显示提交", async () => {
+    const context = pluginContext({
+      getReviewFileDocument: vi.fn(async () => documentResult(0)),
+      getReviewIndex: vi.fn(async () => indexResult([entry(0)])),
+    });
+    const Panel = createGitChangesPanel(context);
+    const props = panelProps(createPanelHarness().api);
+    const commitOid = "a".repeat(40);
+    const view = render(
+      <Panel
+        {...({
+          ...props,
+          params: {
+            context: panelContext,
+            source: {
+              contextId: panelContext.contextId,
+              gitRootPath: ROOT,
+              target: { kind: "commit", oid: commitOid },
+            },
+          },
+        } as IDockviewPanelProps)}
+      />
+    );
+    await view.findByTestId("git-review-toolbar");
+    expect(view.queryByTestId("git-review-commit")).toBeNull();
+
+    view.rerender(
+      <Panel
+        {...({
+          ...props,
+          params: {
+            context: panelContext,
+            source: {
+              contextId: panelContext.contextId,
+              gitRootPath: ROOT,
+              target: { kind: "branch", ref: "main" },
+            },
+          },
+        } as IDockviewPanelProps)}
+      />
+    );
+    await view.findByTestId("git-review-toolbar");
+    expect(view.queryByTestId("git-review-commit")).toBeNull();
   });
 
   it("复用 Files 的 header、可折叠侧栏与树内搜索交互", async () => {
