@@ -1,6 +1,10 @@
 // Class B: version probes after host env (curl/npm/brew with optional PES env).
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { extractVersionFromOutput } from "@shared/agent-lifecycle/version-compare.ts";
+import { fetchBrewLatest } from "./latest-brew.ts";
 import { fetchLatestProbe } from "./latest-http.ts";
 import {
   brewPackageTokenFromBinPath,
@@ -10,10 +14,14 @@ import { isPathLikeSource } from "./plan/source-policy.ts";
 import type { AgentLifecycleSpec } from "./specs/types.ts";
 import { resolveUpdateMode } from "./specs/types.ts";
 
+export { parseBrewInfoVersion } from "./latest-brew.ts";
+
 const NPM_VIEW_TIMEOUT_MS = 15_000;
-const BREW_INFO_TIMEOUT_MS = 20_000;
 const PYPI_TIMEOUT_MS = 15_000;
-const CACHE_TTL_MS = 20 * 60 * 1000;
+/** Align with host-catalog agent-cli remote TTL (10 min). */
+const CACHE_TTL_OK_MS = 10 * 60 * 1000;
+/** Short negative cache so a flaky probe does not stick for a full window. */
+const CACHE_TTL_MISS_MS = 60 * 1000;
 
 /**
  * Callback-style execFile → Promise. Avoid util.promisify(execFile): Node's
@@ -52,14 +60,20 @@ function execFileAsync(
   });
 }
 
-const latestCache = new Map<string, { at: number; version: string | null }>();
+const latestCache = new Map<
+  string,
+  { at: number; version: string | null; ttlMs: number }
+>();
 
-function cacheGet(key: string): string | null | undefined {
+function cacheGet(key: string, force?: boolean): string | null | undefined {
+  if (force === true) {
+    return;
+  }
   const hit = latestCache.get(key);
   if (!hit) {
     return;
   }
-  if (Date.now() - hit.at > CACHE_TTL_MS) {
+  if (Date.now() - hit.at > hit.ttlMs) {
     latestCache.delete(key);
     return;
   }
@@ -67,7 +81,11 @@ function cacheGet(key: string): string | null | undefined {
 }
 
 function cacheSet(key: string, version: string | null): void {
-  latestCache.set(key, { at: Date.now(), version });
+  latestCache.set(key, {
+    at: Date.now(),
+    version,
+    ttlMs: version === null ? CACHE_TTL_MISS_MS : CACHE_TTL_OK_MS,
+  });
 }
 
 function resolveNpmPackage(spec: AgentLifecycleSpec): string | null {
@@ -105,16 +123,41 @@ function resolvePypiPackage(spec: AgentLifecycleSpec): string | null {
   return resolveUvPackage(spec) ?? resolvePipxPackage(spec);
 }
 
-/**
- * PyPI JSON for uv-tool packages (e.g. mistral-vibe). Not interchangeable
- * with npmPackageForLatest when the npm name is a different product line.
- */
+function resolveClaudeConfigDir(
+  env: NodeJS.ProcessEnv | undefined,
+  homeDir: string | undefined
+): string {
+  const override =
+    env?.CLAUDE_CONFIG_DIR?.trim() ||
+    (env === undefined ? process.env.CLAUDE_CONFIG_DIR?.trim() : "");
+  if (override) {
+    return override;
+  }
+  return join(homeDir ?? homedir(), ".claude");
+}
+
+/** Claude native channel from CLAUDE_CONFIG_DIR/settings.json; default latest. */
+export async function readClaudeAutoUpdatesChannel(options?: {
+  env?: NodeJS.ProcessEnv;
+  homeDir?: string;
+}): Promise<"latest" | "stable"> {
+  const configDir = resolveClaudeConfigDir(options?.env, options?.homeDir);
+  try {
+    const raw = await readFile(join(configDir, "settings.json"), "utf8");
+    const parsed = JSON.parse(raw) as { autoUpdatesChannel?: unknown };
+    return parsed.autoUpdatesChannel === "stable" ? "stable" : "latest";
+  } catch {
+    return "latest";
+  }
+}
+
 async function fetchPypiLatest(
   packageName: string,
-  env?: NodeJS.ProcessEnv
+  env?: NodeJS.ProcessEnv,
+  force?: boolean
 ): Promise<string | null> {
   const cacheKey = `pypi:${packageName}`;
-  const cached = cacheGet(cacheKey);
+  const cached = cacheGet(cacheKey, force);
   if (cached !== undefined) {
     return cached;
   }
@@ -144,10 +187,11 @@ async function fetchPypiLatest(
 
 async function fetchNpmLatest(
   packageName: string,
-  env?: NodeJS.ProcessEnv
+  env?: NodeJS.ProcessEnv,
+  force?: boolean
 ): Promise<string | null> {
   const cacheKey = `npm:${packageName}`;
-  const cached = cacheGet(cacheKey);
+  const cached = cacheGet(cacheKey, force);
   if (cached !== undefined) {
     return cached;
   }
@@ -183,56 +227,6 @@ async function fetchNpmLatest(
   }
 }
 
-async function fetchBrewLatest(
-  name: string,
-  env?: NodeJS.ProcessEnv,
-  isCask?: boolean
-): Promise<string | null> {
-  const cacheKey = `brew:${isCask ? "cask:" : ""}${name}`;
-  const cached = cacheGet(cacheKey);
-  if (cached !== undefined) {
-    return cached;
-  }
-  try {
-    // Casks need --cask for some tokens; bare info also returns `casks` for
-    // known cask names (claude-code@latest, copilot-cli, codex).
-    const args =
-      isCask === true
-        ? (["info", "--json=v2", "--cask", name] as const)
-        : (["info", "--json=v2", name] as const);
-    const { stdout } = await execFileAsync("brew", [...args], {
-      ...(env === undefined ? {} : { env }),
-      timeout: BREW_INFO_TIMEOUT_MS,
-      windowsHide: true,
-    });
-    const version = parseBrewInfoVersion(stdout);
-    cacheSet(cacheKey, version);
-    return version;
-  } catch {
-    cacheSet(cacheKey, null);
-    return null;
-  }
-}
-
-/** Exported for unit tests — formula stable first, then cask version. */
-export function parseBrewInfoVersion(stdout: string): string | null {
-  try {
-    const parsed = JSON.parse(stdout) as {
-      casks?: Array<{ version?: string }>;
-      formulae?: Array<{ versions?: { stable?: string } }>;
-    };
-    const formulaStable = parsed.formulae?.[0]?.versions?.stable ?? null;
-    const caskVersion = parsed.casks?.[0]?.version ?? null;
-    const stable = formulaStable ?? caskVersion;
-    if (!stable) {
-      return null;
-    }
-    return extractVersionFromOutput(stable) ?? stable;
-  } catch {
-    return null;
-  }
-}
-
 function resolveBrewChannel(spec: AgentLifecycleSpec): {
   formula: string;
   tap?: string;
@@ -249,6 +243,15 @@ function resolveBrewChannel(spec: AgentLifecycleSpec): {
     : { formula: brew.formula, cask };
 }
 
+export interface FetchLatestVersionOptions {
+  defaultBinPath?: string | null;
+  /** Bypass in-memory latest cache (settings refresh / catalog force). */
+  force?: boolean;
+  /** Override home for Claude channel settings (tests). */
+  homeDir?: string;
+  installSource?: string | null;
+}
+
 /**
  * Best-effort latest version. Prefer the channel that matches the install
  * source so brew/uv installs are not compared against an unrelated npm tag
@@ -256,21 +259,22 @@ function resolveBrewChannel(spec: AgentLifecycleSpec): {
  *
  * Brew queries use the installed Cellar/Caskroom token when known
  * (`claude-code@latest` ≠ stable `claude-code`). Fall through only within
- * the same install ecosystem (brew↔npm for JS tools; uv/pipx PyPI for
- * Python tools). Path/script uses `latestProbe` when declared (Claude native,
- * Cursor script, Kimi Code); else PyPI for uv/pipx agents. Never compare
- * Claude / Kimi Code path installs to a different package line.
+ * the same install ecosystem when source is unknown. Path/script uses
+ * `latestProbe` when declared (Claude native, Cursor script, Kimi Code,
+ * Goose GitHub). Never compare Claude / Kimi Code path installs to a
+ * different package line.
  */
 export async function fetchLatestVersion(
   spec: AgentLifecycleSpec,
   env?: NodeJS.ProcessEnv,
-  options?: { defaultBinPath?: string | null; installSource?: string | null }
+  options?: FetchLatestVersionOptions
 ): Promise<string | null> {
   const mode = resolveUpdateMode(spec);
   if (mode !== "versioned") {
     return null;
   }
 
+  const force = options?.force === true;
   const source = (options?.installSource ?? "").toLowerCase();
   const npmPkg = resolveNpmPackage(spec);
   const brew = resolveBrewChannel(spec);
@@ -293,39 +297,60 @@ export async function fetchLatestVersion(
     }
     const installedToken = brewPackageTokenFromBinPath(options?.defaultBinPath);
     const name = resolveBrewQueryName(brew, installedToken);
-    return fetchBrewLatest(name, env, brew.cask);
+    const cacheKey = `brew:${brew.cask ? "cask:" : ""}${name}`;
+    const cached = cacheGet(cacheKey, force);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const version = await fetchBrewLatest(name, env, brew.cask);
+    cacheSet(cacheKey, version);
+    return version;
   };
   const tryNpm = async (): Promise<string | null> => {
     if (!npmPkg) {
       return null;
     }
-    return fetchNpmLatest(npmPkg, env);
+    return fetchNpmLatest(npmPkg, env, force);
   };
   const tryPypi = async (): Promise<string | null> => {
     if (!pypiPkg) {
       return null;
     }
-    return fetchPypiLatest(pypiPkg, env);
+    return fetchPypiLatest(pypiPkg, env, force);
   };
   const tryHttp = async (): Promise<string | null> => {
     if (!spec.latestProbe) {
       return null;
     }
-    const cacheKey = `http:${spec.latestProbe.kind}:${spec.latestProbe.url}`;
-    const cached = cacheGet(cacheKey);
+    let httpChannel: "latest" | "stable" | null = null;
+    if (
+      spec.agentId === "claude" &&
+      spec.latestProbe.kind === "http-text" &&
+      spec.latestProbe.stableUrl
+    ) {
+      httpChannel = await readClaudeAutoUpdatesChannel({
+        ...(env === undefined ? {} : { env }),
+        ...(options?.homeDir === undefined ? {} : { homeDir: options.homeDir }),
+      });
+    }
+    const cacheKey = `http:${spec.latestProbe.kind}:${spec.latestProbe.url}:${httpChannel ?? "default"}`;
+    const cached = cacheGet(cacheKey, force);
     if (cached !== undefined) {
       return cached;
     }
-    const version = await fetchLatestProbe(spec.latestProbe, env);
+    const version = await fetchLatestProbe(spec.latestProbe, env, {
+      httpChannel,
+    });
     cacheSet(cacheKey, version);
     return version;
   };
 
   if (preferBrew) {
-    return (await tryBrew()) ?? (await tryNpm());
+    // Same install ecosystem only — do not compare brew installs to npm tags.
+    return tryBrew();
   }
   if (preferNpm) {
-    return (await tryNpm()) ?? (await tryBrew());
+    return tryNpm();
   }
   if (preferPypi) {
     // Never fall back to npm when uv/pipx is the install source — different

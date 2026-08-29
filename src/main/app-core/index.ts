@@ -330,7 +330,7 @@ function createPierAppCore(): PierAppCore {
     detect: () => agentDetection.detect(),
     getEnv: resolveAgentEnv,
     listPlugins: () => managedPlugins.listCatalogSnapshot(),
-    probe: (checkLatest) => agentLifecycle.probe({ checkLatest }),
+    probe: agentLifecycle.probe,
     refreshPluginIndex: async (force) => {
       await httpIndex.refresh({ force });
     },

@@ -1,35 +1,13 @@
 // Class B: latest-version probe over allowlisted hosts with host env (curl).
 import { execFile } from "node:child_process";
 import { extractVersionFromOutput } from "@shared/agent-lifecycle/version-compare.ts";
+import { assertLatestHttpsUrl } from "./latest-hosts.ts";
 import type { AgentLatestProbe } from "./specs/types.ts";
 
 const HTTP_TIMEOUT_MS = 15_000;
 
-const ALLOWED_LATEST_HOSTS = new Set([
-  "cursor.com",
-  "www.cursor.com",
-  "downloads.claude.ai",
-  "code.kimi.com",
-]);
-
 const CURSOR_LAB_VERSION_RE =
   /https:\/\/downloads\.cursor\.com\/lab\/([^/\s"'\\]+)\//i;
-
-function assertLatestProbeUrl(url: string): URL {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error(`Invalid latest URL: ${url}`);
-  }
-  if (parsed.protocol !== "https:") {
-    throw new Error(`Latest URL must be https: ${url}`);
-  }
-  if (!ALLOWED_LATEST_HOSTS.has(parsed.hostname)) {
-    throw new Error(`Latest host not allowed: ${parsed.hostname}`);
-  }
-  return parsed;
-}
 
 function execFileUtf8(
   file: string,
@@ -77,12 +55,27 @@ export function parseHttpTextVersion(body: string): string | null {
   return extractVersionFromOutput(line);
 }
 
+/** GitHub Releases API: strip leading `v` from tag_name. */
+export function parseGithubLatestReleaseVersion(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body) as { tag_name?: string };
+    const raw = parsed.tag_name?.trim();
+    if (!raw) {
+      return null;
+    }
+    const withoutV = raw.replace(/^v/i, "");
+    return extractVersionFromOutput(withoutV) ?? withoutV;
+  } catch {
+    return null;
+  }
+}
+
 async function curlText(
   url: string,
   env?: NodeJS.ProcessEnv
 ): Promise<string | null> {
   try {
-    assertLatestProbeUrl(url);
+    assertLatestHttpsUrl(url);
     const { stdout } = await execFileUtf8("curl", ["-fsSL", url], {
       ...(env === undefined ? {} : { env }),
       timeout: HTTP_TIMEOUT_MS,
@@ -93,11 +86,36 @@ async function curlText(
   }
 }
 
+/**
+ * Resolve which URL to hit for an http-text probe (Claude stable vs latest).
+ */
+export function resolveHttpTextProbeUrl(
+  probe: Extract<AgentLatestProbe, { kind: "http-text" }>,
+  channel?: "latest" | "stable" | null
+): string {
+  if (channel === "stable" && probe.stableUrl) {
+    return probe.stableUrl;
+  }
+  return probe.url;
+}
+
 export async function fetchLatestProbe(
   probe: AgentLatestProbe,
-  env?: NodeJS.ProcessEnv
+  env?: NodeJS.ProcessEnv,
+  options?: { httpChannel?: "latest" | "stable" | null }
 ): Promise<string | null> {
-  const body = await curlText(probe.url, env);
+  if (probe.kind === "github-latest-release") {
+    const body = await curlText(probe.url, env);
+    if (body === null) {
+      return null;
+    }
+    return parseGithubLatestReleaseVersion(body);
+  }
+  const url =
+    probe.kind === "http-text"
+      ? resolveHttpTextProbeUrl(probe, options?.httpChannel)
+      : probe.url;
+  const body = await curlText(url, env);
   if (body === null) {
     return null;
   }

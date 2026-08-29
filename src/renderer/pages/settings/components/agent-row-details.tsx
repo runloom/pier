@@ -97,6 +97,11 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
   return (
     <div className="flex basis-full flex-col gap-4 text-xs">
       <Separator />
+      {probe?.latestCheckFailed === true ? (
+        <div className="text-muted-foreground">
+          {t("settings.agents.row.latestCheckFailed")}
+        </div>
+      ) : null}
       <div className="grid gap-2 sm:grid-cols-3">
         <div className="min-w-0">
           <div className="font-medium text-muted-foreground">

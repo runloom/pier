@@ -17,7 +17,10 @@ import type { CatalogProvider } from "../types.ts";
 export interface AgentCliCatalogProviderOptions {
   detect: () => Promise<{ detectedIds: readonly AgentKind[] }>;
   persist: DomainSnapshotStore;
-  probe: (checkLatest: boolean) => Promise<readonly AgentLifecycleProbe[]>;
+  probe: (options: {
+    checkLatest: boolean;
+    force?: boolean;
+  }) => Promise<readonly AgentLifecycleProbe[]>;
 }
 
 function presenceOf(probe: AgentLifecycleProbe): CatalogItem["presence"] {
@@ -132,12 +135,15 @@ export function createAgentCliCatalogProvider(
     },
     async probeDerived() {
       const previous = await options.persist.read();
-      const probes = await options.probe(false);
+      const probes = await options.probe({ checkLatest: false });
       return snapshotFromItems(probes.map(itemFromProbe), previous.fingerprint);
     },
-    async probeRemote() {
+    async probeRemote(env) {
       const previous = await options.persist.read();
-      const probes = await options.probe(true);
+      const probes = await options.probe({
+        checkLatest: true,
+        ...(env.force === true ? { force: true } : {}),
+      });
       return snapshotFromItems(probes.map(itemFromProbe), previous.fingerprint);
     },
     readPersisted: () => options.persist.read(),

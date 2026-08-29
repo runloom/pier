@@ -142,6 +142,8 @@ export const settingsAgents = {
     uninstallCommandPlaceholder: "비우면 Pier 기본 제거 절차",
     env: "추가 환경 변수",
     envDesc: "이 에이전트를 시작할 때 더하는 변수",
+    latestCheckFailed:
+      "최신 버전을 확인하지 못했습니다. 목록 오른쪽 위 새로고침 후 다시 시도하세요.",
   },
   sessionTitleRefine: {
     label: "세션 이름을 자동으로 지정",

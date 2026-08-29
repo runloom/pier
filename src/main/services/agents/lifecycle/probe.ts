@@ -23,6 +23,7 @@ export async function probeOneAgent(
     deep: boolean;
     checkLatest: boolean;
     envDegraded: boolean;
+    force?: boolean;
     host: "posix" | "win";
   }
 ): Promise<AgentLifecycleProbe> {
@@ -46,6 +47,7 @@ export async function probeOneAgent(
       installedButBroken: false,
       installs: [],
       isConflict: false,
+      latestCheckFailed: false,
       latestVersion: null,
       support: spec.support,
       updateAvailable: false,
@@ -79,6 +81,7 @@ export async function probeOneAgent(
     : (defaultInstall?.version ?? null);
 
   let latestVersion: string | null = null;
+  let latestCheckFailed = false;
   if (
     opts.checkLatest &&
     updateMode === "versioned" &&
@@ -88,7 +91,9 @@ export async function probeOneAgent(
     latestVersion = await fetchLatestVersion(spec, env, {
       defaultBinPath: defaultInstall?.path ?? null,
       installSource: defaultInstall?.source ?? null,
+      ...(opts.force === true ? { force: true } : {}),
     });
+    latestCheckFailed = latestVersion === null;
   }
 
   const updateAvailable =
@@ -126,6 +131,7 @@ export async function probeOneAgent(
     installedButBroken,
     installs,
     isConflict: isInstallConflict(installs),
+    latestCheckFailed,
     latestVersion,
     support: spec.support,
     updateAvailable,
@@ -159,6 +165,7 @@ export async function probeAgents(
       : listAgentLifecycleSpecs().map((s) => s.agentId);
   const deep = request.deep === true;
   const checkLatest = request.checkLatest === true;
+  const force = request.force === true;
   const results: AgentLifecycleProbe[] = [];
   const concurrency = 4;
   for (let i = 0; i < ids.length; i += concurrency) {
@@ -169,6 +176,7 @@ export async function probeAgents(
           deep,
           checkLatest,
           envDegraded,
+          force,
           host: options.host,
         })
       )

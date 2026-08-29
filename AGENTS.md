@@ -349,6 +349,16 @@ section 根节点下的裸子节点。
 - Agent 提供方（Provider）原生 session / transcript 只可作为对应适配器内部的兼容输入；宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放
 - 命令行 → 智能体身份只走 `src/shared/agent-command-detection.ts` 的 `matchAgentCommand`（OSC 133 C 先验点亮）：词元只来自 catalog 命令字段，产品 id / label 不参与（`cursor .` / `kiro` / `continue` 是启动器或内置命令，不得点亮）；`agent` / `acli` 泛名进 `AGENT_OSC_BIN_DENYLIST`；`qoder` / `qodercn` 合一启动器按 argv 分流 CLI/IDE；安装探测 `expectedBins`（除 denylist）必须能被 OSC 认到。检查点：`tests/unit/agent/command-detection-governance.test.ts`、`tests/unit/agent/command-detection.test.ts` 与 `tests/unit/main/agents/lifecycle/specs.test.ts` 的 expectedBins 词元锁
 
+#### 智能体 CLI 版本检测与更新 — 金标准
+
+权威规格：[`docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md`](docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md)。
+
+- **latest 权威远端**：brew core → `formulae.brew.sh`（miss 不回退本机 `brew info`）；npm → registry；uv/pipx → PyPI；path/script → `latestProbe`（HTTP / GitHub Releases / Cursor 脚本）。禁止把本机过期 `brew info` 索引当最新（第三方 tap 例外）。
+- **同线比较**：已装 brew token（`claude-code@latest` ≠ `claude-code`）；Claude native 读 `CLAUDE_CONFIG_DIR`（缺省 `~/.claude`）的 `autoUpdatesChannel`；已知安装源不跨生态取 latest / 更新计划。
+- **force 穿透**：catalog `ensureFresh({ force })` → `probe({ checkLatest, force })` → `fetchLatestVersion({ force })`；成功缓存 10 min 对齐 catalog remote TTL；失败负缓存 60s；`latestCheckFailed` 在设置详情可见。
+- **执行端新鲜度**：runner 禁注 `HOMEBREW_NO_AUTO_UPDATE=1`；brew 执行走短节流 auto-update（`HOMEBREW_AUTO_UPDATE_SECS=300`），否则检测新、执行旧 → 更新恒报「版本未变化」。
+- 检查点：`tests/unit/main/agents/lifecycle/latest-source.test.ts`、`latest-governance.test.ts`、`latest-probe.test.ts`、`plan.test.ts`（brew 计划无 npm）、`child-env.test.ts`。
+
 #### 终端 tab 标题与 Agent 身份（标题 ≠ 身份）— 金标准
 
 **单一真源（对齐 Ghostty）**：终端 tab short = 进程/TUI **OSC 0/2**；无 OSC → **cwd basename**。路径型 OSC（shell 把 cwd 写进标题）short 收成**叶子目录名**（与文件 tab 一致），全文进 long/tooltip。宿主不得用 prompt 截断、catalog 占位抢 tab。入口：`terminalPanelDescriptor`。

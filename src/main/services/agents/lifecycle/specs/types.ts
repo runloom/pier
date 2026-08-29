@@ -56,7 +56,17 @@ export type UninstallChannel =
 /** Remote latest for channels without npm/brew/PyPI (official script). */
 export type AgentLatestProbe =
   | { kind: "cursor-install-script"; url: string }
-  | { kind: "http-text"; url: string };
+  | {
+      kind: "http-text";
+      url: string;
+      /** Optional stable-channel URL (Claude native `autoUpdatesChannel`). */
+      stableUrl?: string;
+    }
+  | {
+      /** GitHub Releases API JSON (`tag_name`). */
+      kind: "github-latest-release";
+      url: string;
+    };
 
 export interface AgentLifecycleSpec {
   readonly agentId: AgentKind;

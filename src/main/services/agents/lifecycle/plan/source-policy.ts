@@ -53,7 +53,8 @@ const UPDATE_PRIORITY: Readonly<Record<string, readonly UpdateChannelKind[]>> =
     pnpm: ["self", "npm-latest", "reinstall"],
     yarn: ["self", "npm-latest", "reinstall"],
     bun: ["self", "npm-latest", "reinstall"],
-    brew: ["brew-upgrade", "self", "npm-latest", "reinstall"],
+    // No npm-latest: brew upgrade failure must not dual-install via npm.
+    brew: ["brew-upgrade", "self", "reinstall"],
     pipx: ["pipx-upgrade", "reinstall"],
     uv: ["uv-upgrade", "reinstall"],
   };

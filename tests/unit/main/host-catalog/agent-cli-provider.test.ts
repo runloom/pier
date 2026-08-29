@@ -179,52 +179,24 @@ describe("createAgentCliCatalogProvider", () => {
     ).toBe(false);
   });
 
-  it("keeps install capability on missing items from previous probe details", async () => {
-    const previous = probe({
-      agentId: "codex",
-      canInstall: true,
-      detected: true,
-      version: "1.2.3",
-    });
+  it("passes force into probeRemote lifecycle probe", async () => {
+    const seen: Array<{ checkLatest: boolean; force?: boolean }> = [];
     const provider = createAgentCliCatalogProvider({
       detect: async () => ({ detectedIds: [] }),
       persist: {
         flush: async () => undefined,
-        read: async () => ({
-          ...emptyDomainSnapshot("agent-cli"),
-          items: [
-            {
-              details: previous,
-              domain: "agent-cli",
-              id: "codex",
-              label: "Codex",
-              localVersion: previous.version,
-              presence: "present",
-              remoteVersion: null,
-              updateOffered: false,
-            },
-          ],
-        }),
+        read: async () => emptyDomainSnapshot("agent-cli"),
         write: async () => undefined,
       },
-      probe: async () => [],
+      probe: async (opts) => {
+        seen.push(opts);
+        return [];
+      },
     });
-
-    const snapshot = await provider.probeLocal({
-      env: { PATH: "/opt/bin" },
-      now: 20,
-    });
-    const codex = snapshot.items.find((item) => item.id === "codex");
-    expect(codex?.presence).toBe("missing");
-    expect(codex?.localVersion).toBeNull();
-    expect(codex?.details).toMatchObject({
-      agentId: "codex",
-      canInstall: true,
-      canUninstall: false,
-      detected: false,
-      installedButBroken: false,
-      installs: [],
-      version: null,
-    });
+    if (!provider.probeRemote) {
+      throw new Error("expected probeRemote");
+    }
+    await provider.probeRemote({ env: {}, force: true, now: 30 });
+    expect(seen).toEqual([{ checkLatest: true, force: true }]);
   });
 });

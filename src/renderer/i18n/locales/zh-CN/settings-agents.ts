@@ -139,6 +139,7 @@ export const settingsAgents = {
     uninstallCommandPlaceholder: "留空则使用 Pier 默认卸载步骤",
     env: "附加环境变量",
     envDesc: "启动此智能体时一并注入",
+    latestCheckFailed: "最新版本检查失败。可点列表右上角刷新后重试。",
   },
   sessionTitleRefine: {
     label: "自动命名会话",

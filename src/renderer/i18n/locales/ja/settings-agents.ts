@@ -148,6 +148,8 @@ export const settingsAgents = {
     uninstallCommandPlaceholder: "空にすると Pier の既定アンインストール手順",
     env: "追加の環境変数",
     envDesc: "このエージェント起動時に足す変数",
+    latestCheckFailed:
+      "新しいバージョンを確認できませんでした。一覧右上の更新を押して再試行してください。",
   },
   sessionTitleRefine: {
     label: "セッション名を自動で付ける",

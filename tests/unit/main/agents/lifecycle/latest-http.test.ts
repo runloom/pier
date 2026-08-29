@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   parseCursorInstallScriptVersion,
+  parseGithubLatestReleaseVersion,
   parseHttpTextVersion,
+  resolveHttpTextProbeUrl,
 } from "../../../../../src/main/services/agents/lifecycle/latest-http.ts";
 
 describe("parseCursorInstallScriptVersion", () => {
@@ -27,5 +29,34 @@ describe("parseHttpTextVersion", () => {
     expect(
       parseHttpTextVersion("<!DOCTYPE html><html><body>not a version</body>")
     ).toBeNull();
+  });
+});
+
+describe("parseGithubLatestReleaseVersion", () => {
+  it("strips leading v from tag_name", () => {
+    expect(
+      parseGithubLatestReleaseVersion(JSON.stringify({ tag_name: "v1.48.0" }))
+    ).toBe("1.48.0");
+  });
+
+  it("returns null for malformed json", () => {
+    expect(parseGithubLatestReleaseVersion("not-json")).toBeNull();
+  });
+});
+
+describe("resolveHttpTextProbeUrl", () => {
+  const probe = {
+    kind: "http-text" as const,
+    url: "https://downloads.claude.ai/claude-code-releases/latest",
+    stableUrl: "https://downloads.claude.ai/claude-code-releases/stable",
+  };
+
+  it("uses stableUrl when channel is stable", () => {
+    expect(resolveHttpTextProbeUrl(probe, "stable")).toBe(probe.stableUrl);
+  });
+
+  it("uses latest url by default", () => {
+    expect(resolveHttpTextProbeUrl(probe, "latest")).toBe(probe.url);
+    expect(resolveHttpTextProbeUrl(probe, null)).toBe(probe.url);
   });
 });

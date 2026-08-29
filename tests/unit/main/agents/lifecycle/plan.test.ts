@@ -236,7 +236,7 @@ describe("agent lifecycle plan", () => {
     });
   });
 
-  it("uses brew cask upgrade first for brew-sourced claude, with self/npm fallbacks", () => {
+  it("uses brew cask upgrade first for brew-sourced claude (no npm dual-install)", () => {
     const plan = buildUpdatePlan(getAgentLifecycleSpec("claude"), {
       host: "posix",
       defaultBinPath: "/opt/homebrew/bin/claude",
@@ -256,7 +256,7 @@ describe("agent lifecycle plan", () => {
         args: ["update"],
       });
     }
-    // If cask is not actually installed, runner can fall through.
+    // If cask is not actually installed, runner can fall through to self.
     expect(
       plan?.steps.some(
         (s) =>
@@ -265,6 +265,7 @@ describe("agent lifecycle plan", () => {
           s.args[0] === "update"
       )
     ).toBe(true);
+    // Cross-ecosystem npm must not appear — would dual-install beside brew.
     expect(
       plan?.steps.some(
         (s) =>
@@ -272,7 +273,7 @@ describe("agent lifecycle plan", () => {
           s.file === "npm" &&
           s.args.some((a) => a.includes("@anthropic-ai/claude-code"))
       )
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("uses self-update for path-sourced claude under homebrew bin prefix", () => {

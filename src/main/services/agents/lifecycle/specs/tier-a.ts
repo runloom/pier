@@ -6,10 +6,12 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
     agentId: "claude",
     expectedBins: ["claude"],
     npmPackageForLatest: "@anthropic-ai/claude-code",
-    // Native/script installs: official latest file, not the deprecated npm line.
+    // Native/script installs: official release files (not the deprecated npm line).
+    // `stableUrl` when autoUpdatesChannel is stable.
     latestProbe: {
       kind: "http-text",
       url: "https://downloads.claude.ai/claude-code-releases/latest",
+      stableUrl: "https://downloads.claude.ai/claude-code-releases/stable",
     },
     support: "full",
     // Official recommended: native installer first, then Homebrew cask, npm last.

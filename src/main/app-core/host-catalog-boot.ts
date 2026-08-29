@@ -25,7 +25,10 @@ export function createBootedHostCatalogRuntime(options: {
   getAppStatus?: () => AppUpdateSnapshot;
   getEnv: () => Promise<NodeJS.ProcessEnv>;
   listPlugins?: () => Promise<ManagedPluginCatalogSnapshot>;
-  probe: (checkLatest: boolean) => Promise<readonly AgentLifecycleProbe[]>;
+  probe: (options: {
+    checkLatest: boolean;
+    force?: boolean;
+  }) => Promise<readonly AgentLifecycleProbe[]>;
   refreshPluginIndex?: (force: boolean) => Promise<void>;
   userDataDir: string;
   waitForHostEnv: () => Promise<void>;
@@ -89,7 +92,10 @@ export function wireHostCatalogAndAppUpdates(options: {
   detect: () => Promise<{ detectedIds: readonly AgentKind[] }>;
   getEnv: () => Promise<NodeJS.ProcessEnv>;
   listPlugins: () => Promise<ManagedPluginCatalogSnapshot>;
-  probe: (checkLatest: boolean) => Promise<readonly AgentLifecycleProbe[]>;
+  probe: (options: {
+    checkLatest: boolean;
+    force?: boolean;
+  }) => Promise<readonly AgentLifecycleProbe[]>;
   refreshPluginIndex: (force: boolean) => Promise<void>;
   runtimeMode: AppUpdateRuntimeMode;
   userDataDir: string;

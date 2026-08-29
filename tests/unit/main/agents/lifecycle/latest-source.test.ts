@@ -20,31 +20,38 @@ const execFileMock = vi.hoisted(() =>
       callback?: (err: Error | null, stdout: string, stderr: string) => void
     ) => {
       const cb = typeof options === "function" ? options : callback;
-      const name = args.at(-1);
       const respond = (err: Error | null, stdout: string) => {
         cb?.(err, stdout, "");
       };
-      if (file === "brew" && name === "claude-code@latest") {
-        respond(
-          null,
-          JSON.stringify({
-            formulae: [],
-            casks: [{ version: "2.1.227" }],
-          })
-        );
+      const urlArg = args.find(
+        (arg) => typeof arg === "string" && arg.startsWith("http")
+      );
+
+      if (
+        file === "curl" &&
+        typeof urlArg === "string" &&
+        urlArg.includes("formulae.brew.sh/api/cask/claude-code%40latest.json")
+      ) {
+        respond(null, JSON.stringify({ version: "2.1.251" }));
         return;
       }
-      if (file === "brew" && name === "claude-code") {
-        respond(
-          null,
-          JSON.stringify({
-            formulae: [],
-            casks: [{ version: "2.1.220" }],
-          })
-        );
+      if (
+        file === "curl" &&
+        typeof urlArg === "string" &&
+        urlArg.includes("formulae.brew.sh/api/cask/claude-code.json")
+      ) {
+        respond(null, JSON.stringify({ version: "2.1.236" }));
         return;
       }
-      if (file === "brew" && name === "anomalyco/tap/opencode") {
+      if (
+        file === "curl" &&
+        typeof urlArg === "string" &&
+        urlArg.includes("formulae.brew.sh/api/formula/")
+      ) {
+        respond(null, JSON.stringify({ versions: { stable: "1.18.14" } }));
+        return;
+      }
+      if (file === "brew" && args.includes("anomalyco/tap/opencode")) {
         respond(
           null,
           JSON.stringify({
@@ -54,23 +61,37 @@ const execFileMock = vi.hoisted(() =>
         );
         return;
       }
+      if (file === "brew" && args.includes("claude-code@latest")) {
+        // Stale local index — remote API must win when used.
+        respond(
+          null,
+          JSON.stringify({
+            formulae: [],
+            casks: [{ version: "2.1.245" }],
+          })
+        );
+        return;
+      }
       if (
         file === "curl" &&
-        args.some((arg) => arg.includes("pypi.org/pypi/mistral-vibe/json"))
+        typeof urlArg === "string" &&
+        urlArg.includes("pypi.org/pypi/mistral-vibe/json")
       ) {
         respond(null, JSON.stringify({ info: { version: "1.2.3" } }));
         return;
       }
       if (
         file === "curl" &&
-        args.some((arg) => arg.includes("code.kimi.com/kimi-code/latest"))
+        typeof urlArg === "string" &&
+        urlArg.includes("code.kimi.com/kimi-code/latest")
       ) {
         respond(null, "0.39.1\n");
         return;
       }
       if (
         file === "curl" &&
-        args.some((arg) => arg.includes("cursor.com/install"))
+        typeof urlArg === "string" &&
+        urlArg.includes("cursor.com/install")
       ) {
         respond(
           null,
@@ -80,11 +101,26 @@ const execFileMock = vi.hoisted(() =>
       }
       if (
         file === "curl" &&
-        args.some((arg) =>
-          arg.includes("downloads.claude.ai/claude-code-releases/latest")
-        )
+        typeof urlArg === "string" &&
+        urlArg.includes("downloads.claude.ai/claude-code-releases/latest")
       ) {
-        respond(null, "2.1.241\n");
+        respond(null, "2.1.251\n");
+        return;
+      }
+      if (
+        file === "curl" &&
+        typeof urlArg === "string" &&
+        urlArg.includes("downloads.claude.ai/claude-code-releases/stable")
+      ) {
+        respond(null, "2.1.236\n");
+        return;
+      }
+      if (
+        file === "curl" &&
+        typeof urlArg === "string" &&
+        urlArg.includes("api.github.com/repos/aaif-goose/goose/releases/latest")
+      ) {
+        respond(null, JSON.stringify({ tag_name: "v1.48.0" }));
         return;
       }
       if (file === "npm" && args.includes("@moonshot-ai/kimi-code")) {
@@ -109,6 +145,7 @@ import {
   clearLatestVersionCache,
   fetchLatestVersion,
   parseBrewInfoVersion,
+  readClaudeAutoUpdatesChannel,
 } from "../../../../../src/main/services/agents/lifecycle/latest.ts";
 import {
   brewPackageTokenFromBinPath,
@@ -207,8 +244,8 @@ describe("resolveBrewQueryName", () => {
   });
 });
 
-describe("fetchLatestVersion brew token", () => {
-  it("queries claude-code@latest when that cask is installed", async () => {
+describe("fetchLatestVersion brew remote API", () => {
+  it("queries formulae.brew.sh for claude-code@latest (not stale brew info)", async () => {
     const latest = await fetchLatestVersion(
       getAgentLifecycleSpec("claude"),
       {},
@@ -218,16 +255,21 @@ describe("fetchLatestVersion brew token", () => {
         installSource: "brew",
       }
     );
-    expect(latest).toBe("2.1.227");
+    expect(latest).toBe("2.1.251");
+    expect(execFileMock.mock.calls.map((call) => call[0])).toContain("curl");
     expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
-      expect.arrayContaining(["--cask", "claude-code@latest"])
+      expect.arrayContaining([
+        expect.stringContaining(
+          "formulae.brew.sh/api/cask/claude-code%40latest.json"
+        ),
+      ])
     );
-    expect(execFileMock.mock.calls.map((call) => call[1])).not.toContainEqual(
-      expect.arrayContaining(["--cask", "claude-code"])
+    expect(execFileMock.mock.calls.map((call) => call[0])).not.toContain(
+      "brew"
     );
   });
 
-  it("queries spec claude-code when the stable cask is installed", async () => {
+  it("queries formulae.brew.sh stable cask when claude-code is installed", async () => {
     const latest = await fetchLatestVersion(
       getAgentLifecycleSpec("claude"),
       {},
@@ -236,9 +278,11 @@ describe("fetchLatestVersion brew token", () => {
         installSource: "brew",
       }
     );
-    expect(latest).toBe("2.1.220");
+    expect(latest).toBe("2.1.236");
     expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
-      expect.arrayContaining(["--cask", "claude-code"])
+      expect.arrayContaining([
+        expect.stringContaining("formulae.brew.sh/api/cask/claude-code.json"),
+      ])
     );
   });
 
@@ -254,19 +298,68 @@ describe("fetchLatestVersion brew token", () => {
           installSource: "brew",
         }
       );
-      expect(latest).toBe("2.1.227");
-      expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
-        expect.arrayContaining(["--cask", "claude-code@latest"])
-      );
-      expect(execFileMock.mock.calls.map((call) => call[1])).not.toContainEqual(
-        expect.arrayContaining(["--cask", "claude-code"])
-      );
+      expect(latest).toBe("2.1.251");
     } finally {
       cleanup();
     }
   });
 
-  it("queries tap-qualified opencode when Cellar reports the bare formula", async () => {
+  it("does not call brew when core formulae.brew.sh misses", async () => {
+    const originalImpl = execFileMock.getMockImplementation();
+    execFileMock.mockImplementation(
+      (
+        file: string,
+        args: readonly string[],
+        options:
+          | ((err: Error | null, stdout: string, stderr: string) => void)
+          | object,
+        callback?: (err: Error | null, stdout: string, stderr: string) => void
+      ) => {
+        const cb = typeof options === "function" ? options : callback;
+        if (file === "curl") {
+          cb?.(
+            new Error("curl: (22) The requested URL returned error: 404"),
+            "",
+            ""
+          );
+          return;
+        }
+        if (file === "brew") {
+          cb?.(
+            null,
+            JSON.stringify({
+              formulae: [],
+              casks: [{ version: "9.9.9" }],
+            }),
+            ""
+          );
+          return;
+        }
+        cb?.(new Error(`unexpected ${file} ${args.join(" ")}`), "", "");
+      }
+    );
+    try {
+      const latest = await fetchLatestVersion(
+        getAgentLifecycleSpec("claude"),
+        {},
+        {
+          defaultBinPath: "/opt/homebrew/Caskroom/claude-code/2.1.220/claude",
+          installSource: "brew",
+        }
+      );
+      expect(latest).toBeNull();
+      expect(execFileMock.mock.calls.map((call) => call[0])).toContain("curl");
+      expect(execFileMock.mock.calls.map((call) => call[0])).not.toContain(
+        "brew"
+      );
+    } finally {
+      if (originalImpl) {
+        execFileMock.mockImplementation(originalImpl);
+      }
+    }
+  });
+
+  it("falls back to local brew info for tap-qualified opencode", async () => {
     const latest = await fetchLatestVersion(
       getAgentLifecycleSpec("opencode"),
       {},
@@ -276,9 +369,39 @@ describe("fetchLatestVersion brew token", () => {
       }
     );
     expect(latest).toBe("1.18.14");
+    expect(execFileMock.mock.calls.map((call) => call[0])).toContain("brew");
     expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
       expect.arrayContaining(["anomalyco/tap/opencode"])
     );
+  });
+});
+
+describe("fetchLatestVersion force cache bypass", () => {
+  it("re-fetches when force is true even within TTL", async () => {
+    const opts = {
+      defaultBinPath:
+        "/opt/homebrew/Caskroom/claude-code@latest/2.1.222/claude",
+      installSource: "brew" as const,
+    };
+    expect(
+      await fetchLatestVersion(getAgentLifecycleSpec("claude"), {}, opts)
+    ).toBe("2.1.251");
+    const firstCalls = execFileMock.mock.calls.length;
+    expect(
+      await fetchLatestVersion(getAgentLifecycleSpec("claude"), {}, opts)
+    ).toBe("2.1.251");
+    expect(execFileMock.mock.calls.length).toBe(firstCalls);
+    expect(
+      await fetchLatestVersion(
+        getAgentLifecycleSpec("claude"),
+        {},
+        {
+          ...opts,
+          force: true,
+        }
+      )
+    ).toBe("2.1.251");
+    expect(execFileMock.mock.calls.length).toBeGreaterThan(firstCalls);
   });
 });
 
@@ -390,13 +513,96 @@ describe("fetchLatestVersion http latestProbe", () => {
       {},
       { installSource: "path" }
     );
-    expect(latest).toBe("2.1.241");
+    expect(latest).toBe("2.1.251");
     expect(execFileMock.mock.calls.map((call) => call[0])).toContain("curl");
     expect(execFileMock.mock.calls.map((call) => call[0])).not.toContain("npm");
     expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
       expect.arrayContaining([
         expect.stringContaining(
           "downloads.claude.ai/claude-code-releases/latest"
+        ),
+      ])
+    );
+  });
+
+  it("reads Claude stable channel when autoUpdatesChannel is stable", async () => {
+    const home = mkdtempSync(join(tmpdir(), "pier-claude-settings-"));
+    try {
+      mkdirSync(join(home, ".claude"), { recursive: true });
+      writeFileSync(
+        join(home, ".claude", "settings.json"),
+        JSON.stringify({ autoUpdatesChannel: "stable" })
+      );
+      expect(await readClaudeAutoUpdatesChannel({ homeDir: home })).toBe(
+        "stable"
+      );
+      const latest = await fetchLatestVersion(
+        getAgentLifecycleSpec("claude"),
+        {},
+        { installSource: "path", homeDir: home }
+      );
+      expect(latest).toBe("2.1.236");
+      expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            "downloads.claude.ai/claude-code-releases/stable"
+          ),
+        ])
+      );
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("reads Claude stable channel from CLAUDE_CONFIG_DIR, not ~/.claude", async () => {
+    const configDir = mkdtempSync(join(tmpdir(), "pier-claude-config-"));
+    const ignoredHome = mkdtempSync(join(tmpdir(), "pier-claude-home-"));
+    try {
+      writeFileSync(
+        join(configDir, "settings.json"),
+        JSON.stringify({ autoUpdatesChannel: "stable" })
+      );
+      mkdirSync(join(ignoredHome, ".claude"), { recursive: true });
+      writeFileSync(
+        join(ignoredHome, ".claude", "settings.json"),
+        JSON.stringify({ autoUpdatesChannel: "latest" })
+      );
+      expect(
+        await readClaudeAutoUpdatesChannel({
+          env: { CLAUDE_CONFIG_DIR: configDir },
+          homeDir: ignoredHome,
+        })
+      ).toBe("stable");
+      const latest = await fetchLatestVersion(
+        getAgentLifecycleSpec("claude"),
+        { CLAUDE_CONFIG_DIR: configDir },
+        { installSource: "path", homeDir: ignoredHome }
+      );
+      expect(latest).toBe("2.1.236");
+      expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            "downloads.claude.ai/claude-code-releases/stable"
+          ),
+        ])
+      );
+    } finally {
+      rmSync(configDir, { recursive: true, force: true });
+      rmSync(ignoredHome, { recursive: true, force: true });
+    }
+  });
+
+  it("reads Goose path latest from GitHub Releases", async () => {
+    const latest = await fetchLatestVersion(
+      getAgentLifecycleSpec("goose"),
+      {},
+      { installSource: "path" }
+    );
+    expect(latest).toBe("1.48.0");
+    expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          "api.github.com/repos/aaif-goose/goose/releases/latest"
         ),
       ])
     );
