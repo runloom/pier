@@ -1,26 +1,11 @@
 import { Button } from "@pier/ui/button.tsx";
-import {
-  ImagePreviewCanvas,
-  type ImagePreviewCanvasLabels,
-} from "@pier/ui/image-preview/canvas.tsx";
 import { HtmlWorldCanvas } from "@pier/ui/image-preview/world-canvas.tsx";
 import { Mermaid } from "@pier/ui/mermaid.tsx";
 import { X } from "lucide-react";
-import {
-  type SyntheticEvent,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { toast } from "sonner";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { acquireTerminalSurfaceSuppression } from "@/panel-kits/terminal/layout-coordinator.ts";
-import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
-  type ContentPreviewImageSource,
   type ContentPreviewPayload,
   closeContentPreview,
   useContentPreviewStore,
@@ -30,6 +15,10 @@ import {
   registerTerminalFullscreenWebOverlay,
   requestTerminalWebFocus,
 } from "@/stores/terminal-input-routing-slice.ts";
+import {
+  ImagePreviewBody,
+  useImagePreviewLabels,
+} from "./content-preview-image.tsx";
 
 const PREVIEW_OVERLAY_ID = "content-preview";
 const PREVIEW_KEYBINDING_SCOPE = "overlay:content-preview" as const;
@@ -42,207 +31,6 @@ const PREVIEW_ESC_YIELD_SELECTOR = [
   '[data-slot="popover-content"][data-state="open"]',
   '[data-slot="context-menu-content"][data-state="open"]',
 ].join(",");
-
-function useImagePreviewLabels(): ImagePreviewCanvasLabels {
-  const t = useT();
-  return useMemo(
-    () => ({
-      actualSize: t("dialog.imagePreview.actualSize"),
-      controlsLabel: t("dialog.imagePreview.controlsLabel"),
-      copyImage: t("dialog.imagePreview.copyImage"),
-      fit: t("dialog.imagePreview.fit"),
-      loadFailedDescription: t("dialog.imagePreview.loadFailedDescription"),
-      loadFailedTitle: t("dialog.imagePreview.loadFailedTitle"),
-      loading: t("dialog.imagePreview.loading"),
-      viewerLabel: t("dialog.imagePreview.viewerLabel"),
-      zoomIn: t("dialog.imagePreview.zoomIn"),
-      zoomLevel: t("dialog.imagePreview.zoomLevel"),
-      zoomOut: t("dialog.imagePreview.zoomOut"),
-    }),
-    [t]
-  );
-}
-
-const CLIPBOARD_WRITABLE_IMAGE_TYPES: Record<string, true> = {
-  "image/jpeg": true,
-  "image/png": true,
-  "image/webp": true,
-};
-
-/** Rasterize a non-writable image blob (e.g. SVG) to PNG for clipboard write. */
-function rasterizeImageBlobToPng(blob: Blob): Promise<Blob> {
-  const { promise, resolve, reject } = Promise.withResolvers<Blob>();
-  const objectUrl = URL.createObjectURL(blob);
-  const image = new Image();
-  image.onload = () => {
-    URL.revokeObjectURL(objectUrl);
-    const canvas = document.createElement("canvas");
-    canvas.width = image.naturalWidth || 300;
-    canvas.height = image.naturalHeight || 150;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      reject(new Error("Canvas 2D context unavailable"));
-      return;
-    }
-    ctx.drawImage(image, 0, 0);
-    canvas.toBlob((png) => {
-      if (png) {
-        resolve(png);
-      } else {
-        reject(new Error("Canvas toBlob failed"));
-      }
-    }, "image/png");
-  };
-  image.onerror = () => {
-    URL.revokeObjectURL(objectUrl);
-    reject(new Error("Image rasterization failed"));
-  };
-  image.src = objectUrl;
-  return promise;
-}
-
-function ImagePreviewBody({
-  alt,
-  source,
-}: {
-  alt: string;
-  source: ContentPreviewImageSource;
-}) {
-  const labels = useImagePreviewLabels();
-  const t = useT();
-  const [src, setSrc] = useState<string | null>(
-    source.kind === "url" ? source.src : null
-  );
-  const [status, setStatus] = useState<"error" | "loading" | "ready">(
-    "loading"
-  );
-  const ticketRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (source.kind === "url") {
-      setSrc(source.src);
-      setStatus("loading");
-      return;
-    }
-    let cancelled = false;
-    const previousTicket = ticketRef.current;
-    setStatus("loading");
-    setSrc(null);
-    window.pier.mediaPreviews
-      .issueAbsolute({
-        absolutePath: source.path,
-        ...(previousTicket ? { previousTicket } : {}),
-      })
-      .then((result) => {
-        if (cancelled) {
-          if (result.issued) {
-            window.pier.mediaPreviews
-              .releaseAbsolute({ ticket: result.ticket })
-              .catch(() => undefined);
-          }
-          return;
-        }
-        if (!result.issued) {
-          ticketRef.current = null;
-          setSrc(null);
-          setStatus("error");
-          return;
-        }
-        ticketRef.current = result.ticket;
-        setSrc(result.url);
-        setStatus("loading");
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-        ticketRef.current = null;
-        setSrc(null);
-        setStatus("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [source]);
-
-  useEffect(
-    () => () => {
-      const ticket = ticketRef.current;
-      if (ticket) {
-        window.pier.mediaPreviews
-          .releaseAbsolute({ ticket })
-          .catch(() => undefined);
-        ticketRef.current = null;
-      }
-    },
-    []
-  );
-
-  const handleError = (_event: SyntheticEvent<HTMLImageElement>) => {
-    const ticket = ticketRef.current;
-    ticketRef.current = null;
-    setStatus("error");
-    setSrc(null);
-    if (ticket) {
-      window.pier.mediaPreviews
-        .releaseAbsolute({ ticket })
-        .catch(() => undefined);
-    }
-  };
-
-  const handleCopyImage = useCallback(async () => {
-    if (!src) {
-      return;
-    }
-    // 能力检测：无 ClipboardItem / clipboard.write 的环境直接归因失败，
-    // 而不是抛 ReferenceError 落进泛化 catch。
-    if (
-      typeof window.ClipboardItem === "undefined" ||
-      typeof navigator.clipboard?.write !== "function"
-    ) {
-      showAppAlert({
-        title: t("dialog.imagePreview.copyImageFailed"),
-        body: "ClipboardItem / navigator.clipboard.write unavailable",
-      });
-      return;
-    }
-    try {
-      const blob = await (await fetch(src)).blob();
-      const writable =
-        Boolean(blob.type) &&
-        Boolean(CLIPBOARD_WRITABLE_IMAGE_TYPES[blob.type]);
-      const clipboardBlob = writable
-        ? blob
-        : await rasterizeImageBlobToPng(blob);
-      const item = new ClipboardItem({
-        [clipboardBlob.type || "image/png"]: clipboardBlob,
-      });
-      await navigator.clipboard.write([item]);
-      toast.success(t("dialog.imagePreview.imageCopied"));
-    } catch (error) {
-      // 失败带技术详情走 showAppAlert（仓库反馈规范；toast 不带 description）。
-      showAppAlert({
-        title: t("dialog.imagePreview.copyImageFailed"),
-        body: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }, [src, t]);
-
-  return (
-    <ImagePreviewCanvas
-      alt={alt}
-      className="min-h-0 w-full flex-1 bg-background"
-      labels={labels}
-      loading={status === "loading"}
-      onCopyImage={handleCopyImage}
-      onEmptyClick={closeContentPreview}
-      onError={handleError}
-      onLoad={() => setStatus("ready")}
-      src={src}
-      status={status}
-    />
-  );
-}
 
 function MermaidPreviewBody({
   payload,
@@ -299,7 +87,15 @@ function HtmlWorldPreviewBody({
 
 function PreviewBody({ payload }: { payload: ContentPreviewPayload }) {
   if (payload.type === "image") {
-    return <ImagePreviewBody alt={payload.alt ?? ""} source={payload.source} />;
+    return (
+      <ImagePreviewBody
+        alt={payload.alt ?? ""}
+        source={payload.source}
+        {...(payload.placeholderSrc
+          ? { placeholderSrc: payload.placeholderSrc }
+          : {})}
+      />
+    );
   }
   if (payload.type === "mermaid") {
     return <MermaidPreviewBody payload={payload} />;

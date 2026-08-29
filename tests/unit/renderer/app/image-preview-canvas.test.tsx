@@ -272,7 +272,7 @@ describe("ImagePreviewCanvas", () => {
     expect(screen.getByText("105%")).toBeVisible();
   });
 
-  it("renders a copy-image button that invokes onCopyImage", async () => {
+  it("renders a copy-image button that invokes onCopyImage after decode", async () => {
     const onCopyImage = vi.fn(async () => undefined);
     render(
       <ImagePreviewCanvas
@@ -283,11 +283,43 @@ describe("ImagePreviewCanvas", () => {
         status="ready"
       />
     );
+    expect(screen.queryByRole("button", { name: "Copy image" })).toBeNull();
+    fireEvent.load(screen.getByRole("img", { name: "shot" }));
     const copyButton = screen.getByRole("button", { name: "Copy image" });
     fireEvent.click(copyButton);
     await waitFor(() => {
       expect(onCopyImage).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("marks ticketed preview URLs CORS-anonymous so canvas copy is not tainted", () => {
+    render(
+      <ImagePreviewCanvas
+        alt="shot"
+        labels={labels}
+        src="pier-file-preview://file/ticket-test"
+        status="ready"
+      />
+    );
+    const image = screen.getByRole("img", { name: "shot" });
+    expect(image).toHaveAttribute("crossorigin", "anonymous");
+    expect(image.outerHTML.indexOf("crossorigin")).toBeLessThan(
+      image.outerHTML.indexOf(" src=")
+    );
+  });
+
+  it("does not set crossorigin on data URLs", () => {
+    render(
+      <ImagePreviewCanvas
+        alt="shot"
+        labels={labels}
+        src="data:image/png;base64,xx"
+        status="ready"
+      />
+    );
+    expect(screen.getByRole("img", { name: "shot" })).not.toHaveAttribute(
+      "crossorigin"
+    );
   });
 
   it("omits the copy-image button when onCopyImage is not provided", () => {
@@ -300,5 +332,98 @@ describe("ImagePreviewCanvas", () => {
       />
     );
     expect(screen.queryByRole("button", { name: "Copy image" })).toBeNull();
+  });
+
+  it("does not pulse a skeleton once a preview src is on the canvas", () => {
+    render(
+      <ImagePreviewCanvas
+        alt="shot"
+        labels={labels}
+        src="data:image/png;base64,xx"
+        status="loading"
+      />
+    );
+    expect(document.querySelector('[data-slot="skeleton"]')).toBeNull();
+    expect(screen.getByRole("img", { name: "shot" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Image viewer" })
+    ).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("keeps the live image painted while a replacement src decodes", () => {
+    const view = render(
+      <ImagePreviewCanvas
+        alt="shot"
+        labels={labels}
+        src="data:image/png;base64,aa"
+        status="ready"
+      />
+    );
+    const live = screen.getByRole("img", { name: "shot" });
+    fireEvent.load(live);
+    expect(live).toHaveAttribute("src", "data:image/png;base64,aa");
+
+    view.rerender(
+      <ImagePreviewCanvas
+        alt="shot"
+        labels={labels}
+        src="data:image/png;base64,bb"
+        status="ready"
+      />
+    );
+    expect(screen.getByRole("img", { name: "shot" })).toHaveAttribute(
+      "src",
+      "data:image/png;base64,aa"
+    );
+    const pending = document.querySelector(
+      '[data-slot="image-preview-pending"]'
+    );
+    expect(pending).not.toBeNull();
+    expect(pending).toHaveAttribute("src", "data:image/png;base64,bb");
+    fireEvent.load(pending!);
+    expect(screen.getByRole("img", { name: "shot" })).toHaveAttribute(
+      "src",
+      "data:image/png;base64,bb"
+    );
+    expect(
+      document.querySelector('[data-slot="image-preview-pending"]')
+    ).toBeNull();
+  });
+
+  it("keeps the live image and reports pending error when the replacement fails", () => {
+    const onError = vi.fn();
+    const onPendingError = vi.fn();
+    const view = render(
+      <ImagePreviewCanvas
+        alt="shot"
+        labels={labels}
+        onError={onError}
+        onPendingError={onPendingError}
+        src="data:image/png;base64,aa"
+        status="ready"
+      />
+    );
+    fireEvent.load(screen.getByRole("img", { name: "shot" }));
+    view.rerender(
+      <ImagePreviewCanvas
+        alt="shot"
+        labels={labels}
+        onError={onError}
+        onPendingError={onPendingError}
+        src="data:image/png;base64,bb"
+        status="ready"
+      />
+    );
+    const pending = document.querySelector(
+      '[data-slot="image-preview-pending"]'
+    );
+    expect(pending).not.toBeNull();
+    fireEvent.error(pending!);
+    expect(onPendingError).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+    expect(screen.getByRole("img", { name: "shot" })).toHaveAttribute(
+      "src",
+      "data:image/png;base64,aa"
+    );
   });
 });

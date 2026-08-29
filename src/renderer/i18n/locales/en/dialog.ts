@@ -37,6 +37,8 @@ export const dialog = {
     controlsLabel: "Image controls",
     copyImage: "Copy image",
     copyImageFailed: "Couldn't copy the image",
+    copyImageNotReady:
+      "The image is still loading. Wait until it appears, then try copying again.",
     fit: "Fit to window",
     loadFailedDescription: "Couldn't load the image, or it changed after open.",
     loadFailedTitle: "Unable to display image",

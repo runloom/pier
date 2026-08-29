@@ -35,6 +35,9 @@ export function TerminalComposerAttachmentRail({
           type: "image",
           source: { kind: "absolutePath", path: attachment.path },
           alt: attachment.name,
+          ...(attachment.previewDataUrl
+            ? { placeholderSrc: attachment.previewDataUrl }
+            : {}),
         },
         title: t("dialog.imagePreview.title"),
       });

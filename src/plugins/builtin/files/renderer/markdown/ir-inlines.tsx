@@ -161,7 +161,6 @@ function renderInline(
     case "image":
       return (
         <MarkdownResourceImage
-          imagePreviewFailedLabel={context.labels.imagePreviewFailed}
           imagePreviewTitle={context.labels.imagePreviewTitle}
           inline={inline}
           openFullscreenLabel={context.labels.openFullscreen}

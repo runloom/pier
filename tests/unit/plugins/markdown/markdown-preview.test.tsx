@@ -1335,6 +1335,7 @@ describe("MarkdownPreview", () => {
     );
 
     const image = await screen.findByRole("img", { name: "Diagram" });
+    expect(image).toHaveAttribute("crossorigin", "anonymous");
     expect(image).toHaveAttribute(
       "src",
       "pier-file-preview://file/markdown-image-00000000"
@@ -1349,7 +1350,7 @@ describe("MarkdownPreview", () => {
     });
   });
 
-  it("issues a dedicated ticket for image fullscreen and releases it on close", async () => {
+  it("opens image fullscreen from the already-issued inline preview URL", async () => {
     let ticketSerial = 0;
     const issue = vi.fn<RendererPluginContext["filePreviews"]["issue"]>(
       async () => {
@@ -1412,10 +1413,8 @@ describe("MarkdownPreview", () => {
     await screen.findByRole("img", { name: "Diagram" });
     expect(issue).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "View fullscreen" }));
-    await waitFor(() => {
-      expect(openImage).toHaveBeenCalledTimes(1);
-    });
-    expect(issue).toHaveBeenCalledTimes(2);
+    expect(openImage).toHaveBeenCalledTimes(1);
+    expect(issue).toHaveBeenCalledTimes(1);
     const request = openImage.mock.calls[0]?.[0] as {
       onClose?: () => void;
       source: { kind: string; src: string };
@@ -1423,13 +1422,10 @@ describe("MarkdownPreview", () => {
     };
     expect(request.title).toBe("Diagram");
     expect(request.source.src).toBe(
-      "pier-file-preview://file/markdown-image-00000002"
+      "pier-file-preview://file/markdown-image-00000001"
     );
-    expect(release).not.toHaveBeenCalledWith("markdown-image-00000002");
-    request.onClose?.();
-    await waitFor(() => {
-      expect(release).toHaveBeenCalledWith("markdown-image-00000002");
-    });
+    expect(request.onClose).toBeUndefined();
+    expect(release).not.toHaveBeenCalled();
   });
 
   it("places the find bar like the source editor (shared overlay class)", async () => {

@@ -20,6 +20,11 @@ export type ContentPreviewImageSource =
 export type ContentPreviewPayload =
   | {
       alt?: string;
+      /**
+       * Already-decoded preview (thumbnail / inline ticket URL). Shown
+       * immediately while `absolutePath` issues a dedicated ticket.
+       */
+      placeholderSrc?: string;
       source: ContentPreviewImageSource;
       type: "image";
     }
@@ -56,6 +61,7 @@ export interface ImageLightboxRequest {
   alt?: string;
   id?: string;
   onClose?: () => void;
+  placeholderSrc?: string;
   source: ContentPreviewImageSource;
   title: string;
 }
@@ -135,6 +141,9 @@ export function openImagePreview(request: ImageLightboxRequest): void {
       type: "image",
       source: request.source,
       ...(request.alt ? { alt: request.alt } : {}),
+      ...(request.placeholderSrc
+        ? { placeholderSrc: request.placeholderSrc }
+        : {}),
     },
     title: request.title,
   });

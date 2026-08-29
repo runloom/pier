@@ -34,6 +34,7 @@ export const dialog = {
     controlsLabel: "图片控件",
     copyImage: "复制图片",
     copyImageFailed: "无法复制图片",
+    copyImageNotReady: "图片还在加载。等显示出来后再复制。",
     fit: "适应窗口",
     loadFailedDescription: "无法加载图片，或文件已在打开后变化。",
     loadFailedTitle: "无法显示图片",
