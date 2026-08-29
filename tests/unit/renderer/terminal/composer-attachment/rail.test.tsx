@@ -204,6 +204,16 @@ describe("TerminalComposerAttachmentRail", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "shot.png" }));
     expect(openContentPreview).toHaveBeenCalledTimes(1);
+    expect(openContentPreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          alt: "shot.png",
+          placeholderSrc: "data:image/png;base64,xx",
+          source: { kind: "absolutePath", path: "/tmp/shot.png" },
+          type: "image",
+        }),
+      })
+    );
 
     fireEvent.click(
       screen.getByRole("button", { name: "粘贴内容，第 2 个附件" })

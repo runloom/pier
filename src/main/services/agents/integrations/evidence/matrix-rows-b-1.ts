@@ -13,7 +13,9 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_1 = {
     transport: ["hosted-plugin"],
     evidence: {
       lifecycle: "native",
-      ready: "native",
+      // 2026-08-29 降级：session.idle 是 advisory 候选（同源 opencode 的
+      // idle 语义，回合中途 compaction/续跑间隙同样 idle），非 ready 证据。
+      ready: "unsupported",
       processing: "native",
       tool: "native",
       waiting: "native",
@@ -25,8 +27,8 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_1 = {
     eventMappings: facts(
       nativeFact("lifecycle", "session.created", "SessionStart"),
       nativeFact("lifecycle", "session.deleted", "SessionEnd"),
-      nativeFact("ready", "session.idle", "Stop"),
-      nativeFact("ready", "session.status=idle", "Stop"),
+      nativeFact("control", "session.idle", "Stop"),
+      nativeFact("control", "session.status=idle", "Stop"),
       nativeFact("processing", "chat.message", "PromptSubmit"),
       nativeFact(
         "processing",
@@ -133,6 +135,8 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_1 = {
       nativeFact("lifecycle", "SessionStart", "SessionStart"),
       nativeFact("lifecycle", "SessionEnd", "SessionEnd"),
       nativeFact("control", "Stop", "Stop"),
+      // auggie 0.36.0 已发货 PromptSubmit（binary 实证；官方文档待收录）。
+      nativeFact("processing", "PromptSubmit", "PromptSubmit"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
       nativeFact("tool", "PreToolUse", "ToolStart"),
       nativeFact("error", "Stop", "error")

@@ -34,6 +34,7 @@ const AVAILABLE_VIOLATION_PATTERNS: ReadonlyArray<{ id: string; re: RegExp }> =
 export const REQUIRED_SHIPPED_COMMAND_NAMES = [
   "status",
   "open",
+  "path",
   "windows list",
   "windows focus",
   "panels list",

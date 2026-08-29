@@ -1,4 +1,10 @@
 import { createHash } from "node:crypto";
+import {
+  applyEdits,
+  modify,
+  type ParseError,
+  parse as parseJsonc,
+} from "jsonc-parser";
 import { parse as parseToml } from "smol-toml";
 
 export const SERVER_KEY = "pier-memory";
@@ -27,6 +33,85 @@ export interface PlanFail {
 }
 
 const sha = (value: string) => createHash("sha256").update(value).digest("hex");
+
+const JSONC_EDIT = {
+  formattingOptions: { insertSpaces: true, tabSize: 2 },
+};
+
+function parseConfigObject(
+  raw: string
+): { doc: Record<string, unknown>; ok: true } | PlanFail {
+  const errors: ParseError[] = [];
+  const parsed: unknown = parseJsonc(raw, errors, { allowTrailingComma: true });
+  if (
+    errors.length > 0 ||
+    parsed === null ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed)
+  ) {
+    return { ok: false, reason: "config is not valid JSON" };
+  }
+  return { doc: parsed as Record<string, unknown>, ok: true };
+}
+
+function managedEntryOf(
+  doc: Record<string, unknown>,
+  topLevelKey: "mcp" | "mcpServers"
+): unknown {
+  const sectionRaw = doc[topLevelKey];
+  if (
+    sectionRaw === null ||
+    typeof sectionRaw !== "object" ||
+    Array.isArray(sectionRaw)
+  ) {
+    return;
+  }
+  return (sectionRaw as Record<string, unknown>)[SERVER_KEY];
+}
+
+function foreignEntryConflict(
+  existing: unknown,
+  entry: Record<string, unknown>,
+  ownedFingerprint?: string
+): PlanFail | null {
+  if (existing === undefined) {
+    return null;
+  }
+  const existingSha = sha(JSON.stringify(existing));
+  if (
+    existingSha !== sha(JSON.stringify(entry)) &&
+    existingSha !== ownedFingerprint
+  ) {
+    return {
+      ok: false,
+      reason: `${SERVER_KEY} already defined by someone else`,
+    };
+  }
+  return null;
+}
+
+function withTrailingNewline(value: string): string {
+  return value.endsWith("\n") ? value : `${value}\n`;
+}
+
+function isEmptyObjectText(raw: string): boolean {
+  return raw.trim().replaceAll(/\s+/gu, "") === "{}";
+}
+
+function applyJsoncEdit(
+  raw: string,
+  path: Array<string | number>,
+  value: unknown
+): string | PlanFail {
+  try {
+    return applyEdits(raw, modify(raw, path, value, JSONC_EDIT));
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 
 export function buildServerEntry(storePath: string): Record<string, unknown> {
   return {
@@ -123,7 +208,77 @@ export function planOpenCodeUpsert(
   entry: Record<string, unknown>,
   ownedFingerprint?: string
 ): PlanOk | PlanFail {
-  return upsertJson(raw, entry, "mcp", ownedFingerprint);
+  if (raw === null) {
+    return upsertJson(null, entry, "mcp", ownedFingerprint);
+  }
+  const parsed = parseConfigObject(raw);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  const conflict = foreignEntryConflict(
+    managedEntryOf(parsed.doc, "mcp"),
+    entry,
+    ownedFingerprint
+  );
+  if (conflict) {
+    return conflict;
+  }
+  const mcp = parsed.doc.mcp;
+  if (
+    mcp !== undefined &&
+    (mcp === null || typeof mcp !== "object" || Array.isArray(mcp))
+  ) {
+    return { ok: false, reason: "mcp is not an object" };
+  }
+  const next = applyJsoncEdit(raw, ["mcp", SERVER_KEY], entry);
+  if (typeof next !== "string") {
+    return next;
+  }
+  return {
+    fingerprint: sha(JSON.stringify(entry)),
+    next: withTrailingNewline(next),
+    ok: true,
+  };
+}
+
+function planOpenCodeRemove(raw: string): PlanOk | PlanFail {
+  const parsed = parseConfigObject(raw);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  const existing = managedEntryOf(parsed.doc, "mcp");
+  if (existing === undefined) {
+    return { ok: false, reason: "managed entry not found" };
+  }
+  const fingerprint = sha(JSON.stringify(existing));
+  const sectionRaw = parsed.doc.mcp;
+  const sectionSize =
+    sectionRaw !== null &&
+    typeof sectionRaw === "object" &&
+    !Array.isArray(sectionRaw)
+      ? Object.keys(sectionRaw as Record<string, unknown>).length
+      : 0;
+  const stripped = applyJsoncEdit(raw, ["mcp", SERVER_KEY], undefined);
+  if (typeof stripped !== "string") {
+    return stripped;
+  }
+  let next = stripped;
+  if (sectionSize === 1) {
+    const withoutSection = applyJsoncEdit(next, ["mcp"], undefined);
+    if (typeof withoutSection !== "string") {
+      return withoutSection;
+    }
+    next = withoutSection;
+  }
+  const after = parseConfigObject(next);
+  if (
+    after.ok &&
+    Object.keys(after.doc).length === 0 &&
+    isEmptyObjectText(next)
+  ) {
+    return { fingerprint, next: null, ok: true };
+  }
+  return { fingerprint, next: withTrailingNewline(next), ok: true };
 }
 
 function tomlBlock(entry: Record<string, unknown>): string {
@@ -224,6 +379,9 @@ export function planRemove(
       ok: true,
     };
   }
+  if (format === "opencode-json") {
+    return planOpenCodeRemove(raw);
+  }
   try {
     const parsed: unknown = JSON.parse(raw);
     if (
@@ -234,7 +392,7 @@ export function planRemove(
       return { ok: false, reason: "config root is not an object" };
     }
     const doc = { ...(parsed as Record<string, unknown>) };
-    const key = format === "opencode-json" ? "mcp" : "mcpServers";
+    const key = "mcpServers";
     const sectionRaw = doc[key];
     if (
       sectionRaw === null ||
@@ -271,7 +429,7 @@ export function inferMemoryFormat(path: string): MemoryConfigFormat {
   if (path.endsWith(".toml")) {
     return "codex-toml";
   }
-  if (path.endsWith("opencode.json")) {
+  if (path.endsWith("opencode.json") || path.endsWith("opencode.jsonc")) {
     return "opencode-json";
   }
   return "mcp-servers-json";
@@ -295,6 +453,14 @@ export function fingerprintManagedSlice(
       raw.charAt(blockEnd) === "\n" ? blockEnd + 1 : blockEnd;
     return sha(raw.slice(beginAt, afterNewline));
   }
+  if (format === "opencode-json") {
+    const parsed = parseConfigObject(raw);
+    if (!parsed.ok) {
+      return "absent";
+    }
+    const entry = managedEntryOf(parsed.doc, "mcp");
+    return entry === undefined ? "absent" : sha(JSON.stringify(entry));
+  }
   try {
     const parsed: unknown = JSON.parse(raw);
     if (
@@ -305,8 +471,7 @@ export function fingerprintManagedSlice(
       return "absent";
     }
     const doc = parsed as Record<string, unknown>;
-    const key = format === "opencode-json" ? "mcp" : "mcpServers";
-    const sectionRaw = doc[key];
+    const sectionRaw = doc.mcpServers;
     if (
       sectionRaw === null ||
       typeof sectionRaw !== "object" ||

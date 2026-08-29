@@ -20,6 +20,7 @@ import {
   filterUpdateChannels,
   type InstallSourceHint,
   reinstallStepMatchesSource,
+  sourceHasMatchingInstallChannel,
 } from "./source-policy.ts";
 import {
   type PlannedInvocation,
@@ -291,7 +292,14 @@ export function buildUpdatePlan(
           source
         )
       );
-      raw.push(...(filtered.length > 0 ? filtered : all));
+      if (filtered.length > 0) {
+        raw.push(...filtered);
+      } else if (!sourceHasMatchingInstallChannel(spec.install, source)) {
+        // Leftover unmanaged source (uv kimi-cli): migrate via remaining
+        // install steps. Do not dump `all` when the matching channel was
+        // only host-dropped (brew cask on Linux → npm dual-install).
+        raw.push(...all);
+      }
       continue;
     }
     const step = updateChannelStep(

@@ -50,3 +50,24 @@ export function resolveRestoredAgentNativeLaunch(args: {
   }
   return { agentRestore, nativeLaunchBase, restoreCwd };
 }
+
+/** Pin the resume id only for a real `--resume` spawn, not live PTY reuse. */
+export function shouldLatchResumePending(args: {
+  agentRestore: TerminalAgentRestoreOutcome | undefined;
+  restoredAgent: TerminalAgentPanelMetadata | undefined;
+}): boolean {
+  if (args.agentRestore !== "resumed") {
+    return false;
+  }
+  const sessionId = args.restoredAgent?.resume?.sessionId.trim();
+  if (!sessionId) {
+    return false;
+  }
+  const restore = args.restoredAgent?.restore;
+  if (restore?.resumePending === true) {
+    return true;
+  }
+  const liveSurfaceReuse =
+    restore?.cause === undefined && (restore?.spawnGeneration ?? 0) >= 1;
+  return !liveSurfaceReuse;
+}

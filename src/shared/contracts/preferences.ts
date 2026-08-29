@@ -104,6 +104,7 @@ export const MIN_WINDOW_ZOOM_LEVEL = -3;
 export const MAX_WINDOW_ZOOM_LEVEL = 5;
 export const DEFAULT_GIT_AUTO_FETCH_ENABLED = true;
 export const DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES = 5;
+export const DEFAULT_RECEIVE_CANDIDATE_UPDATES = false;
 export const DEFAULT_LSP_WORKTREES_ENABLED = false;
 export const DEFAULT_LSP_MAX_LOCAL_WORKSPACES = 3;
 export const DEFAULT_LSP_MAX_REMOTE_WORKSPACES = 2;
@@ -206,6 +207,10 @@ export const projectPreferencesSchema = z.object({
     .min(1)
     .max(120)
     .default(DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES),
+  /** 是否接收宿主候选版本（vX.Y.Z-rc.N prerelease）更新；默认只跟正式版 Latest。 */
+  receiveCandidateUpdates: z
+    .boolean()
+    .default(DEFAULT_RECEIVE_CANDIDATE_UPDATES),
   lsp: lspPolicyPrefsSchema.default(DEFAULT_LSP_POLICY_PREFS),
   shellEnvironment: shellEnvironmentPrefsSchema.default(
     DEFAULT_SHELL_ENVIRONMENT_PREFS

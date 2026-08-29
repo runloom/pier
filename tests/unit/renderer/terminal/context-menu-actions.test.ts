@@ -21,6 +21,10 @@ import { registerTerminalActions } from "@/panel-kits/terminal/register-actions.
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { useTaskRunSelectionStore } from "@/stores/task-run-selection.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
+import {
+  registerTerminalComposerTakeover,
+  resetTerminalComposerTakeoverForTests,
+} from "@/stores/terminal-composer-takeover.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 function terminalPanel(id: string) {
@@ -218,6 +222,7 @@ describe("terminal content context menu actions", () => {
       initialized: false,
       snapshot: { runs: {}, version: 0 },
     });
+    resetTerminalComposerTakeoverForTests();
   });
 
   function registerActions(): void {
@@ -651,7 +656,7 @@ describe("terminal content context menu actions", () => {
       ids.indexOf("pier.terminal.clearScreen")
     );
     expect(findAction(entries, "pier.terminal.openAgentComposer")?.label).toBe(
-      "切换增强输入"
+      "打开增强输入"
     );
     expect(action.enabled?.()).toBe(true);
 
@@ -662,6 +667,35 @@ describe("terminal content context menu actions", () => {
         detail: { panelId: "terminal-1" },
         type: "pier:terminal:open-composer",
       })
+    );
+  });
+
+  it("labels rich input close when the composer is already open", async () => {
+    useForegroundActivityStore.setState({
+      activities: {
+        "terminal-1": {
+          agentId: "codex",
+          kind: "agent",
+          panelId: "terminal-1",
+          source: "hook",
+          spawnedAt: 1,
+          status: "processing",
+          subagentCount: 0,
+          updatedAt: 2,
+          windowId: "win-1",
+        },
+      },
+      ts: 1,
+    });
+    registerTerminalComposerTakeover("terminal-1", () => true);
+    await registerActions();
+
+    const entries = buildMenuEntries("terminal/content", {
+      sourcePanelId: "terminal-1",
+      surface: "terminal/content",
+    });
+    expect(findAction(entries, "pier.terminal.openAgentComposer")?.label).toBe(
+      "关闭增强输入"
     );
   });
 

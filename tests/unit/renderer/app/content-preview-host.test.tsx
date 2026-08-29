@@ -111,6 +111,82 @@ describe("ContentPreviewHost", () => {
     expect(useTerminalStore.getState().suppressTerminals).toBe(false);
   });
 
+  it("shows copy when the clipboard can write images", async () => {
+    class ClipboardItemStub {
+      items: Record<string, Blob>;
+      constructor(items: Record<string, Blob>) {
+        this.items = items;
+      }
+    }
+    Object.defineProperty(window, "ClipboardItem", {
+      configurable: true,
+      value: ClipboardItemStub,
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { write: vi.fn(async () => undefined) },
+    });
+    render(<ContentPreviewHost />);
+    openImagePreview({
+      alt: "shot",
+      source: { kind: "url", src: "data:image/png;base64,xx" },
+      title: "preview",
+    });
+    fireEvent.load(await screen.findByAltText("shot"));
+    expect(
+      await screen.findByRole("button", { name: /copy image|复制图片/i })
+    ).toBeInTheDocument();
+  });
+
+  it("hides copy when the clipboard cannot write images", async () => {
+    Reflect.deleteProperty(window, "ClipboardItem");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {},
+    });
+    render(<ContentPreviewHost />);
+    openImagePreview({
+      alt: "shot",
+      source: { kind: "url", src: "data:image/png;base64,xx" },
+      title: "preview",
+    });
+    await screen.findByTestId("content-preview");
+    expect(
+      screen.queryByRole("button", { name: /copy image|复制图片/i })
+    ).toBeNull();
+  });
+
+  it("opens a url source without a loading skeleton", async () => {
+    render(<ContentPreviewHost />);
+    openImagePreview({
+      alt: "inline",
+      source: { kind: "url", src: "data:image/png;base64,xx" },
+      title: "preview",
+    });
+    const image = await screen.findByAltText("inline");
+    expect(image).toHaveAttribute("src", "data:image/png;base64,xx");
+    expect(document.querySelector('[data-slot="skeleton"]')).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Image preview" })
+    ).toHaveAttribute("aria-busy", "false");
+  });
+
+  it("shows a placeholder immediately while an absolute path issues", async () => {
+    render(<ContentPreviewHost />);
+    openContentPreview({
+      payload: {
+        type: "image",
+        alt: "shot.png",
+        placeholderSrc: "data:image/png;base64,thumb",
+        source: { kind: "absolutePath", path: "/tmp/shot.png" },
+      },
+      title: "shot.png",
+    });
+    const image = await screen.findByAltText("shot.png");
+    expect(image).toHaveAttribute("src", "data:image/png;base64,thumb");
+    expect(document.querySelector('[data-slot="skeleton"]')).toBeNull();
+  });
+
   it("closes when clicking empty viewport around the media", async () => {
     render(<ContentPreviewHost />);
     openImagePreview({

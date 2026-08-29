@@ -2,6 +2,7 @@ import { fireEvent, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   popupContextMenuAt,
+  registerMenuActionInterceptor,
   useContextMenu,
 } from "@/lib/context-menu/use-menu.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -169,6 +170,38 @@ describe("useContextMenu", () => {
     );
 
     expect(setActive).not.toHaveBeenCalled();
+  });
+
+  it("lets registered interceptors handle encoded menu actions", async () => {
+    const interceptor = vi.fn(async () => true);
+    const unregister = registerMenuActionInterceptor(interceptor);
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        menu: {
+          popup: vi.fn(async () => ({
+            actionId: "pier.panel.moveToWindow:w-2",
+          })),
+        },
+      },
+    });
+
+    try {
+      await popupContextMenuAt(
+        "dockview-tab",
+        { x: 1, y: 2 },
+        { sourcePanelId: "panel-1" }
+      );
+      expect(interceptor).toHaveBeenCalledWith(
+        "pier.panel.moveToWindow:w-2",
+        expect.objectContaining({
+          sourcePanelId: "panel-1",
+          surface: "dockview-tab",
+        })
+      );
+    } finally {
+      unregister();
+    }
   });
 
   it("does not setActive for panel/content viewport menus", async () => {

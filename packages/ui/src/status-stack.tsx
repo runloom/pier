@@ -77,9 +77,9 @@ function StatusStackItemRow({
   return (
     <div
       className={cn(
-        "relative grid w-full gap-0.5 text-left text-foreground text-sm",
+        "relative grid w-full gap-0.5 text-left text-foreground text-sm leading-5",
         iconKind
-          ? "grid-cols-[auto_1fr] gap-x-2.5 *:[data-slot=status-icon]:row-span-2 *:[data-slot=status-icon]:translate-y-0.5"
+          ? "grid-cols-[auto_1fr] items-start gap-x-2.5 *:[data-slot=status-icon]:self-start"
           : null,
         // Reserve corner only for dismiss; action lives in its own footer row.
         showDismiss ? "pr-10" : null
@@ -87,7 +87,7 @@ function StatusStackItemRow({
       data-slot="status-stack-item"
       data-tone={item.tone}
     >
-      {iconKind ? <StatusIcon kind={iconKind} /> : null}
+      {iconKind ? <StatusIcon kind={iconKind} size="md" /> : null}
       <div
         className={cn(
           "min-w-0 font-medium text-foreground",

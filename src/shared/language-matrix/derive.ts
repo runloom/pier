@@ -46,6 +46,24 @@ export function pathLspDescriptorsFromMatrix(
             })),
           }
         : {}),
+      ...(lsp.workspaceRelativeCommands
+        ? {
+            workspaceRelativeCommands: lsp.workspaceRelativeCommands.map(
+              (c) => ({
+                command: c.command,
+                args: c.args ? [...c.args] : [],
+              })
+            ),
+          }
+        : {}),
+      ...(lsp.preferLaunchCommandsWhenMarkers
+        ? {
+            preferLaunchCommandsWhenMarkers: {
+              commands: [...lsp.preferLaunchCommandsWhenMarkers.commands],
+              markers: [...lsp.preferLaunchCommandsWhenMarkers.markers],
+            },
+          }
+        : {}),
       ...(row.basenameMatchers
         ? { basenameMatchers: [...row.basenameMatchers] }
         : {}),

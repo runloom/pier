@@ -3,7 +3,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { CURSOR_INTERACTIVE_BLOCKING_TOOLS } from "./interactive-blocking-tools.ts";
+import {
+  CURSOR_INTERACTIVE_BLOCKING_TOOLS,
+  CURSOR_SUBAGENT_DISPATCH_TOOLS,
+} from "./interactive-blocking-tools.ts";
 import {
   commandExistsOnPath,
   isManagedPierHookCommand,
@@ -55,6 +58,11 @@ type StandardV3Event = Exclude<
  *   waiting 由 `transcript/cursor-reconciler.ts` 读主会话 jsonl 对账。
  * - CreatePlan / SwitchMode 若走到 preToolUse，按审批门分发 Interaction*，
  *   避免方案卡停在「执行工具中」。transcript `turn_ended` 补常缺的 stop。
+ * - **`Task` 派发子智能体按 Subagent 生命周期分发**（见
+ *   CURSOR_SUBAGENT_DISPATCH_TOOLS）：其 preToolUse 带主 conversation_id +
+ *   子智能体 generation_id 且从不发 postToolUse——按普通 ToolStart 记账会以
+ *   外来 turnId 抢占主回合并让后续 `stop` 被 settled-turn 拒收（2026-08-29
+ *   events.jsonl 实证的「执行工具中」滞留）。
  */
 export const CURSOR_EVENTS: ReadonlyArray<{
   nativeEvent: string;
@@ -220,6 +228,7 @@ function cursorInteractiveToolCommand(
     ...cursorStdinExtraction(nativeEvent),
     agentId: AGENT_ID,
     nativeEvent,
+    subagentDispatchTools: CURSOR_SUBAGENT_DISPATCH_TOOLS,
     tools: CURSOR_INTERACTIVE_BLOCKING_TOOLS,
   };
   if (nativeEvent === "preToolUse") {
@@ -369,6 +378,7 @@ export const cursorIntegration: AgentHookIntegration = {
               nativeEvent: event.nativeEvent,
               pierEvent: "InteractionRequested",
             },
+            { nativeEvent: event.nativeEvent, pierEvent: "SubagentStart" },
           ];
         }
         if (
@@ -381,6 +391,7 @@ export const cursorIntegration: AgentHookIntegration = {
               nativeEvent: event.nativeEvent,
               pierEvent: "InteractionResolved",
             },
+            { nativeEvent: event.nativeEvent, pierEvent: "SubagentStop" },
           ];
         }
         return [event];

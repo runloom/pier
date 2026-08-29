@@ -59,9 +59,13 @@ function codebuddyCommand(
       : {}),
     event,
     nativeEvent,
-    ...(nativeEvent === "PostToolUseFailure" || nativeEvent === "StopFailure"
-      ? { nativeStateFields: ["error_type", "error"] }
+    // 2.138 实况（2026-08-29 二进制核对）：StopFailure 载荷是
+    // error/error_details，PostToolUseFailure 是 error/tool_error_code/
+    // tool_error_name——历史的 error_type 永不命中。
+    ...(nativeEvent === "PostToolUseFailure"
+      ? { nativeStateFields: ["tool_error_name", "error"] }
       : {}),
+    ...(nativeEvent === "StopFailure" ? { nativeStateFields: ["error"] } : {}),
   });
 }
 

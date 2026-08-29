@@ -48,14 +48,12 @@ describe("Pier dockview tab focus CSS", () => {
   });
 
   it("paints running solid slider flush to top edge (not under selection)", () => {
-    // 与选中线同盒同槽：外层 ::before top:0 挨紧顶部，inset-inline:0 满宽
-    expect(css).toContain('.dv-tab:has([data-tab-status="running"])::before');
+    expect(css).toContain(".dv-tab .pier-tab-running-bar");
     expect(css).toContain("pier-tab-running-slider");
     expect(css).toContain("--pier-tab-running-accent");
     expect(css).toContain("--pier-tab-shimmer-trough");
     expect(css).toContain("--pier-tab-shimmer-highlight");
     expect(css).not.toContain("--pier-tab-shimmer-base");
-    expect(css).toContain("inset-inline: 0");
     // slider：稳底 trough + 纯色块 background-image
     expect(css).toContain("background-color: var(--pier-tab-shimmer-trough)");
     expect(css).toContain("pier-tab-running-slider 1.5s infinite ease-in-out");
@@ -63,23 +61,21 @@ describe("Pier dockview tab focus CSS", () => {
     expect(css).not.toContain("pier-tab-running-bg");
     expect(css).not.toContain("pier-tab-running-bounce");
     expect(css).not.toContain("background-size: 25% 100%");
-    const runningBeforeStart = css.indexOf(
-      '.dv-tab:has([data-tab-status="running"])::before'
+    const runningBarStart = css.indexOf(
+      ".dockview-theme-pier .dv-tab .pier-tab-running-bar"
     );
-    expect(runningBeforeStart).toBeGreaterThanOrEqual(0);
-    const runningBeforeBlock = css.slice(
-      runningBeforeStart,
-      runningBeforeStart + 650
-    );
+    expect(runningBarStart).toBeGreaterThanOrEqual(0);
+    const runningBarBlock = css.slice(runningBarStart, runningBarStart + 650);
     // S1 默认：细 1px + top:0 挨紧顶部；S2/S3 再抬到 2px
-    expect(runningBeforeBlock).toContain("top: 0");
-    expect(runningBeforeBlock).toContain("left: auto");
-    expect(runningBeforeBlock).toContain("width: auto");
-    expect(runningBeforeBlock).toContain("height: 1px");
-    expect(runningBeforeBlock).not.toContain("height: 2px");
-    expect(runningBeforeBlock).not.toContain("top: 1px");
-    expect(runningBeforeBlock).not.toContain("top: 2px");
-    expect(runningBeforeBlock).not.toContain("top: 3px");
+    expect(runningBarBlock).toContain("top: 0");
+    expect(runningBarBlock).toContain("left: 0");
+    expect(runningBarBlock).toContain("width: 100%");
+    expect(runningBarBlock).toContain("height: 1px");
+    expect(runningBarBlock).not.toContain("overflow: hidden");
+    expect(runningBarBlock).not.toContain("height: 2px");
+    expect(runningBarBlock).not.toContain("top: 1px");
+    expect(runningBarBlock).not.toContain("top: 2px");
+    expect(runningBarBlock).not.toContain("top: 3px");
     // running 时顶缘由 shimmer 独占：关闭实心选中 ::after
     expect(css).toMatch(
       /:has\(\[data-tab-status="running"\]\)::after[\s\S]*?display:\s*none/
@@ -93,38 +89,96 @@ describe("Pier dockview tab focus CSS", () => {
     expect(css).toContain("var(--pier-tab-running-accent) 78%");
     expect(css).toContain("var(--foreground)");
     // S3 running：2px 粗轨 + primary 路径（:root:not window-focused false）
-    const s3RunningBeforeStart = css.indexOf(
-      ':root:not([data-window-focused="false"])\n  .dockview-theme-pier\n  .dv-groupview.dv-active-group\n  > .dv-tabs-and-actions-container\n  .dv-tabs-container\n  > .dv-tab.dv-active-tab:has([data-tab-status="running"])::before'
+    const s3RunningBarStart = css.indexOf(
+      ':root:not([data-window-focused="false"])\n  .dockview-theme-pier\n  .dv-groupview.dv-active-group\n  > .dv-tabs-and-actions-container\n  .dv-tabs-container\n  > .dv-tab.dv-active-tab\n  .pier-tab-running-bar'
     );
-    expect(s3RunningBeforeStart).toBeGreaterThanOrEqual(0);
-    const s3RunningBeforeBlock = css.slice(
-      s3RunningBeforeStart,
-      s3RunningBeforeStart + 350
+    expect(s3RunningBarStart).toBeGreaterThanOrEqual(0);
+    const s3RunningBarBlock = css.slice(
+      s3RunningBarStart,
+      s3RunningBarStart + 350
     );
-    expect(s3RunningBeforeBlock).toContain("height: 2px");
-    // 内层 DOM 条在 dockview 中裁成 a11y 锚点；overflow 菜单不再复用顶轨 shimmer
+    expect(s3RunningBarBlock).toContain("height: 2px");
     expect(css).not.toContain("pier-tab-running-bar--menu");
-    expect(css).toContain(".dv-tab .pier-tab-running-bar");
   });
 
-  it("beats dockview divider ::before on non-first running tabs", () => {
-    const dividerTwin =
-      '.dv-tabs-container.dv-horizontal\n  .dv-tab:not(:first-child):has([data-tab-status="running"])::before';
-    const verticalTwin =
-      '.dv-tabs-container.dv-vertical\n  .dv-tab:not(:first-child):has([data-tab-status="running"])::before';
-    expect(css).toContain(dividerTwin);
-    expect(css).toContain(verticalTwin);
-    expect(css).toContain("left: auto");
-    expect(css).toContain("width: auto");
+  it("keeps dockview tab dividers off the running track slot", () => {
+    expect(css).toContain("--dv-tab-divider-color: transparent");
+    expect(css).not.toContain(
+      '.dv-tab:not(:first-child):has([data-tab-status="running"])::before'
+    );
     const reduceStart = css.indexOf("@media (prefers-reduced-motion: reduce)");
     expect(reduceStart).toBeGreaterThanOrEqual(0);
-    const reduceBlock = css.slice(reduceStart, reduceStart + 900);
-    expect(reduceBlock).toContain(
-      '.dv-tabs-container.dv-horizontal\n    .dv-tab:not(:first-child):has([data-tab-status="running"])::before'
+    const reduceBlock = css.slice(reduceStart, reduceStart + 500);
+    expect(reduceBlock).toContain(".dv-tab .pier-tab-running-bar");
+    expect(reduceBlock).not.toContain(
+      '.dv-tab:not(:first-child):has([data-tab-status="running"])::before'
     );
-    expect(reduceBlock).toContain(
-      '.dv-tabs-container.dv-vertical\n    .dv-tab:not(:first-child):has([data-tab-status="running"])::before'
+  });
+
+  it("paints loomdesk-style short ticks as real nodes, not dockview ::before", () => {
+    expect(css).toContain('[data-slot="panel-tab-separator"]');
+    expect(css).toContain(".dv-tabs-container.dv-horizontal .dv-tab::before");
+    const killStart = css.indexOf(
+      ".dockview-theme-pier .dv-tabs-container.dv-horizontal .dv-tab::before"
     );
+    expect(killStart).toBeGreaterThanOrEqual(0);
+    expect(css.slice(killStart, killStart + 120)).toContain("content: none");
+
+    const tickStart = css.indexOf(
+      '.dockview-theme-pier [data-slot="panel-tab-separator"]'
+    );
+    expect(tickStart).toBeGreaterThanOrEqual(0);
+    const tickBlock = css.slice(tickStart, tickStart + 420);
+    expect(tickBlock).toContain("width: 1px");
+    expect(tickBlock).toContain("height: 0.875rem");
+    expect(tickBlock).toContain("top: 50%");
+    expect(tickBlock).toContain("left: 0");
+    expect(tickBlock).toContain("translateY(-50%)");
+    expect(tickBlock).toContain("var(--foreground) 14%");
+    expect(tickBlock).not.toContain("var(--foreground) 20%");
+    expect(tickBlock).not.toContain("var(--foreground) 32%");
+    expect(css).toContain(".dv-tab:not(.dv-tab ~ .dv-tab)");
+    expect(css).toContain(
+      '.dv-tab.dv-active-tab [data-slot="panel-tab-separator"]'
+    );
+    // Hover must not hide the tick (panel tabs have no Chrome raised shape).
+    expect(css).not.toContain(
+      '.dv-tab:hover [data-slot="panel-tab-separator"]'
+    );
+    expect(css).not.toContain(
+      '.dv-tab:hover\n  + .dv-tab\n  [data-slot="panel-tab-separator"]'
+    );
+  });
+
+  it("keeps 12/6 tab gutters, list-hover fill, and hover title foreground", () => {
+    const tabPadStart = css.indexOf(".dockview-theme-pier .dv-tab {");
+    expect(tabPadStart).toBeGreaterThanOrEqual(0);
+    expect(css.slice(tabPadStart, tabPadStart + 80)).toContain("padding: 0");
+
+    const innerStart = css.indexOf(
+      ".dockview-theme-pier .dv-tab .dv-default-tab,"
+    );
+    expect(innerStart).toBeGreaterThanOrEqual(0);
+    const innerBlock = css.slice(innerStart, innerStart + 900);
+    expect(innerBlock).toContain("padding-inline: 12px 6px");
+    expect(innerBlock).toContain("padding-left: 18px");
+    expect(innerBlock).not.toContain("padding-left: 14px");
+    expect(innerBlock).not.toContain("padding-inline: 6px 3px");
+    expect(innerBlock).not.toContain("padding-inline: 8px 4px");
+
+    const hoverStart = css.indexOf(
+      ".dockview-theme-pier\n  .dv-groupview\n  > .dv-tabs-and-actions-container\n  .dv-tabs-container\n  > .dv-tab.dv-inactive-tab:hover"
+    );
+    expect(hoverStart).toBeGreaterThanOrEqual(0);
+    const hoverBlock = css.slice(hoverStart, hoverStart + 720);
+    expect(hoverBlock).toContain("background-color: var(--list-hover-bg)");
+    expect(hoverBlock).toContain(".dv-default-tab-content");
+    expect(hoverBlock).toContain("color: var(--foreground)");
+    expect(hoverBlock).not.toContain("var(--background)");
+    expect(css).not.toMatch(
+      /^\.dockview-theme-pier \.dv-tab\.dv-inactive-tab:hover \{/m
+    );
+    expect(css).toContain("2026-08-29-panel-tab-chrome-gold-standard.md");
   });
 
   it("locks S2 running track at 2px for inactive-group and window-blur", () => {
@@ -140,9 +194,8 @@ describe("Pier dockview tab focus CSS", () => {
     const s2RunningBlock = css.slice(s2RunningHeightStart, s3RunningStart);
     expect(s2RunningBlock).toContain(".dv-groupview.dv-inactive-group");
     expect(s2RunningBlock).toContain(':root[data-window-focused="false"]');
-    expect(s2RunningBlock).toContain(
-      '.dv-tab.dv-active-tab:has([data-tab-status="running"])::before'
-    );
+    expect(s2RunningBlock).toContain(".dv-tab.dv-active-tab");
+    expect(s2RunningBlock).toContain(".pier-tab-running-bar");
     expect(s2RunningBlock).toContain("height: 2px");
   });
 

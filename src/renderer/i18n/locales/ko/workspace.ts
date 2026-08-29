@@ -55,12 +55,10 @@ export const workspace = {
     moveToNewWindowFailed: "새 윈도우에서 열지 못했습니다. 다시 시도하세요",
     moveToWindowFailed: "해당 윈도우로 옮기지 못했습니다. 다시 시도하세요",
     emptyWindowDescription: "빈 윈도우",
+    noOtherWindowsTitle: "다른 윈도우가 없습니다",
     noOtherWindows: "다른 윈도우를 먼저 연 다음 다시 시도하세요.",
     pickWindowFailed: "윈도우 목록을 가져오지 못했습니다. 다시 시도하세요",
-    pickWindowPlaceholder: "윈도우 검색…",
-    pickWindowTitle: "윈도우 선택",
     sameNameIndex: " · {{n}}",
-    tabCount: "탭 {{count}}개",
     windowLabel: "윈도우 {{n}}",
     unsupportedTitle: "이 탭은 다른 윈도우로 옮길 수 없습니다",
     unsupportedBody:

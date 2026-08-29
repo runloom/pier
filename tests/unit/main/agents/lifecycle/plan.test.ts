@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assertAllowedScriptUrl } from "../../../../../src/main/services/agents/lifecycle/official-script.ts";
+import { sourceHasMatchingInstallChannel } from "../../../../../src/main/services/agents/lifecycle/plan/source-policy.ts";
 import {
   brewPackageTokenFromBinPath,
   buildGuideCommands,
@@ -93,14 +94,28 @@ describe("agent lifecycle plan", () => {
     expect(plan?.preview).toContain("--ignore-scripts");
   });
 
-  it("prefers script reinstall over npm for path-sourced agents without self", () => {
+  it("installs kimi via native kimi-code script, not deprecated python installer", () => {
+    const plan = buildInstallPlan(getAgentLifecycleSpec("kimi"), "posix");
+    expect(plan?.steps[0]).toMatchObject({
+      kind: "official-script",
+      url: "https://code.kimi.com/kimi-code/install.sh",
+    });
+    expect(plan?.preview).toContain("@moonshot-ai/kimi-code");
+    expect(plan?.preview).not.toContain("https://code.kimi.com/install.sh");
+  });
+
+  it("prefers official kimi-code script for path-sourced kimi (not deprecated python installer)", () => {
     const kimi = buildUpdatePlan(getAgentLifecycleSpec("kimi"), {
       host: "posix",
-      defaultBinPath: "/Users/x/.local/bin/kimi",
+      defaultBinPath: "/Users/x/.kimi-code/bin/kimi",
       installSource: "path",
     });
-    expect(kimi?.steps[0]?.kind).toBe("official-script");
-    expect(kimi?.preview).toContain("code.kimi.com");
+    expect(kimi?.steps[0]).toMatchObject({
+      kind: "official-script",
+      url: "https://code.kimi.com/kimi-code/install.sh",
+    });
+    expect(kimi?.preview).toContain("code.kimi.com/kimi-code/install.sh");
+    expect(kimi?.preview).not.toContain("https://code.kimi.com/install.sh");
 
     const cont = buildUpdatePlan(getAgentLifecycleSpec("continue"), {
       host: "posix",
@@ -109,17 +124,17 @@ describe("agent lifecycle plan", () => {
     expect(cont?.steps[0]?.kind).toBe("official-script");
   });
 
-  it("upgrades uv-sourced kimi with uv tool upgrade kimi-cli", () => {
+  it("migrates leftover uv kimi-cli via official kimi-code script, not uv upgrade", () => {
     const plan = buildUpdatePlan(getAgentLifecycleSpec("kimi"), {
       host: "posix",
       defaultBinPath: "/Users/x/.local/share/uv/tools/kimi-cli/bin/kimi",
       installSource: "uv",
     });
     expect(plan?.steps[0]).toMatchObject({
-      kind: "argv",
-      file: "uv",
-      args: ["tool", "upgrade", "kimi-cli"],
+      kind: "official-script",
+      url: "https://code.kimi.com/kimi-code/install.sh",
     });
+    expect(plan?.preview).not.toContain("uv tool upgrade");
   });
 
   it("uses npm-latest first for npm-sourced droid (self refuses npm)", () => {
@@ -222,7 +237,7 @@ describe("agent lifecycle plan", () => {
     });
   });
 
-  it("uses brew cask upgrade first for brew-sourced claude, with self/npm fallbacks", () => {
+  it("uses brew cask upgrade first for brew-sourced claude (no npm dual-install)", () => {
     const plan = buildUpdatePlan(getAgentLifecycleSpec("claude"), {
       host: "posix",
       defaultBinPath: "/opt/homebrew/bin/claude",
@@ -242,7 +257,7 @@ describe("agent lifecycle plan", () => {
         args: ["update"],
       });
     }
-    // If cask is not actually installed, runner can fall through.
+    // If cask is not actually installed, runner can fall through to self.
     expect(
       plan?.steps.some(
         (s) =>
@@ -251,6 +266,7 @@ describe("agent lifecycle plan", () => {
           s.args[0] === "update"
       )
     ).toBe(true);
+    // Cross-ecosystem npm must not appear — would dual-install beside brew.
     expect(
       plan?.steps.some(
         (s) =>
@@ -258,7 +274,21 @@ describe("agent lifecycle plan", () => {
           s.file === "npm" &&
           s.args.some((a) => a.includes("@anthropic-ai/claude-code"))
       )
+    ).toBe(false);
+    // Brew spec has a brew channel, so empty reinstall filter must skip
+    // rather than dump npm. kimi has no uv channel (leftover migrate).
+    expect(
+      sourceHasMatchingInstallChannel(
+        getAgentLifecycleSpec("claude").install,
+        "brew"
+      )
     ).toBe(true);
+    expect(
+      sourceHasMatchingInstallChannel(
+        getAgentLifecycleSpec("kimi").install,
+        "uv"
+      )
+    ).toBe(false);
   });
 
   it("uses self-update for path-sourced claude under homebrew bin prefix", () => {

@@ -20,7 +20,7 @@ type TerminalGetCommand = Extract<PierCommand, { type: "terminal.get" }>;
 type TerminalSendCommand = Extract<PierCommand, { type: "terminal.send" }>;
 type TerminalKeyCommand = Extract<PierCommand, { type: "terminal.key" }>;
 
-function agentIdFromParams(
+export function agentIdFromParams(
   params: Record<string, unknown> | undefined
 ): string | undefined {
   if (!params) {
@@ -55,7 +55,7 @@ function agentIdsByPanelId(services: PierCoreServices): Map<string, string> {
   return map;
 }
 
-function toLocator(
+export function toLocator(
   panel: {
     id: string;
     windowId: string;

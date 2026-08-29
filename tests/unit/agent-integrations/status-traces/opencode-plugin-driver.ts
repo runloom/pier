@@ -50,15 +50,12 @@ export async function createOpenCodePluginProducer(): Promise<AgentStatusTracePr
   process.env.PIER_AGENT_EVENT_LOG = logPath;
   process.env.PIER_PANEL_ID = "p1";
   process.env.PIER_WINDOW_ID = "w1";
-  const moduleShim: { exports?: () => OpenCodePlugin } = {};
+  const moduleShim: { exports?: { server: () => OpenCodePlugin } } = {};
   new Function(
     "module",
-    buildOpencodePluginSource().replace(
-      "export const PierAgentStatus =",
-      "module.exports ="
-    )
+    buildOpencodePluginSource().replace("export default", "module.exports =")
   )(moduleShim);
-  const plugin = moduleShim.exports?.();
+  const plugin = moduleShim.exports?.server();
   if (!plugin) throw new Error("OpenCode 生成插件没有导出 factory");
   let consumedLines = 0;
   return {

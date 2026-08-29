@@ -1,7 +1,13 @@
 name: Release App
 
-# Publishes the macOS Pier host app to GitHub Releases Latest for electron-updater.
+# Publishes the macOS Pier host app.
+# - Stable tags vX.Y.Z → GitHub Latest for electron-updater + blog.
+# - Candidate tags vX.Y.Z-rc.N → GitHub prerelease (never Latest, no blog).
 # Plugin releases must stay prerelease (--latest=false) so they never own /releases/latest.
+# After Latest is verified (stable only), calls Publish Release to Blog. Do not rely on
+# on.release: this workflow creates the GitHub Release with GITHUB_TOKEN, which does not
+# start other workflows (GitHub recursive-run guard).
+# Spec: docs/superpowers/specs/2026-08-29-host-release-candidate-gold-standard.md
 
 on:
   push:
@@ -10,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag including v prefix (e.g. v0.2.0). Must match package.json version.'
+        description: 'Release tag including v prefix (e.g. v0.2.0 or v0.2.0-rc.1). Must match package.json version.'
         required: true
 
 permissions:
@@ -19,6 +25,10 @@ permissions:
 jobs:
   release:
     runs-on: macos-26
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      channel: ${{ steps.version.outputs.channel }}
     steps:
       - name: Resolve release version
         id: version
@@ -32,13 +42,24 @@ jobs:
           case "$RAW_TAG" in
             v*) VERSION="${RAW_TAG#v}" ;;
             *)
-              echo "tag must look like vX.Y.Z, got: $RAW_TAG" >&2
+              echo "tag must look like vX.Y.Z or vX.Y.Z-rc.N, got: $RAW_TAG" >&2
               exit 1
               ;;
           esac
+          # Hard whitelist: any other prerelease shape (beta/alpha/…) would fall
+          # into the stable path and steal Latest before the isolation gate runs.
+          if printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            CHANNEL=stable
+          elif printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$'; then
+            CHANNEL=candidate
+          else
+            echo "tag $RAW_TAG is not a stable (vX.Y.Z) or candidate (vX.Y.Z-rc.N) host tag" >&2
+            exit 1
+          fi
           echo "tag=$RAW_TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Resolved app release tag=$RAW_TAG version=$VERSION"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "Resolved app release tag=$RAW_TAG version=$VERSION channel=$CHANNEL"
 
       - uses: actions/checkout@v4
         with:
@@ -118,7 +139,26 @@ jobs:
           APPLE_KEYCHAIN_PROFILE: ${{ secrets.APPLE_KEYCHAIN_PROFILE }}
           # build-dist.sh blocks CSC_LINK publish unless explicitly allowed.
           PIER_DIST_ALLOW_CSC_LINK_PUBLISH: "1"
-        run: pnpm build:dist --publish=always
+          CHANNEL: ${{ steps.version.outputs.channel }}
+        run: |
+          set -euo pipefail
+          if [ "$CHANNEL" = "candidate" ]; then
+            pnpm build:dist --publish=always --prerelease
+          else
+            pnpm build:dist --publish=always
+          fi
+
+      - name: Force candidate release off Latest
+        if: steps.version.outputs.channel == 'candidate'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          # Idempotent: electron-builder releaseType=prerelease should already mark it;
+          # force --latest=false so a mis-publish cannot steal /releases/latest.
+          gh release edit "$TAG" --prerelease --latest=false
+          echo "Ensured $TAG is prerelease and not Latest"
 
       - name: Verify dual-arch mac artifacts exist locally
         run: |
@@ -130,6 +170,7 @@ jobs:
             --version "$VERSION"
 
       - name: Verify GitHub Latest is host channel
+        if: steps.version.outputs.channel == 'stable'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -139,3 +180,23 @@ jobs:
           # Plugin prereleases must never own Latest (electron-updater reads only Latest).
           node ./scripts/verify-github-latest-isolation.mjs \
             --expect-version "${{ steps.version.outputs.version }}"
+
+      - name: Verify candidate stays off Latest
+        if: steps.version.outputs.channel == 'candidate'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Latest must remain the previous stable host release (no --expect-version).
+          # This candidate tag must itself be prerelease.
+          node ./scripts/verify-github-latest-isolation.mjs \
+            --candidate-tag "${{ steps.version.outputs.tag }}"
+
+  publish-blog:
+    needs: release
+    if: needs.release.outputs.channel == 'stable'
+    uses: ./.github/workflows/release-to-blog.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit

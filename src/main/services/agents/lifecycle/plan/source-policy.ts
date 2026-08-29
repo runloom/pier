@@ -53,7 +53,8 @@ const UPDATE_PRIORITY: Readonly<Record<string, readonly UpdateChannelKind[]>> =
     pnpm: ["self", "npm-latest", "reinstall"],
     yarn: ["self", "npm-latest", "reinstall"],
     bun: ["self", "npm-latest", "reinstall"],
-    brew: ["brew-upgrade", "self", "npm-latest", "reinstall"],
+    // No npm-latest: brew upgrade failure must not dual-install via npm.
+    brew: ["brew-upgrade", "self", "reinstall"],
     pipx: ["pipx-upgrade", "reinstall"],
     uv: ["uv-upgrade", "reinstall"],
   };
@@ -184,6 +185,32 @@ export function filterUninstallChannels(
   }
   // Unknown source: do not invent a managed uninstall.
   return [];
+}
+
+/**
+ * Whether the spec declares an install channel for this source.
+ * Empty reinstall filter + matching channel (e.g. brew cask dropped on
+ * Linux) must skip, not dump npm. Empty filter without a matching channel
+ * (leftover uv kimi-cli) may fall through to remaining install steps.
+ */
+export function sourceHasMatchingInstallChannel(
+  channels: readonly InstallChannel[],
+  source: InstallSourceHint
+): boolean {
+  const s = (source ?? "").toLowerCase();
+  if (s === "brew") {
+    return channels.some((c) => c.kind === "brew");
+  }
+  if (isNpmFamilySource(s)) {
+    return channels.some((c) => c.kind === "npm");
+  }
+  if (s === "pipx") {
+    return channels.some((c) => c.kind === "pipx");
+  }
+  if (s === "uv" || s.includes("uv")) {
+    return channels.some((c) => c.kind === "uv");
+  }
+  return false;
 }
 
 /** Which reinstall steps match a source (for update reinstall expansion). */

@@ -11,7 +11,8 @@ import type { ProjectRoot, TargetRow } from "./types.ts";
 export const SECTION_BEGIN = "<!-- pier-managed:memory begin -->";
 export const SECTION_END = "<!-- pier-managed:memory end -->";
 
-const GUIDANCE_BODY = [
+/** 必须与 resources/memory-launcher/memory-mcp.mjs 的 MEMORY_INSTRUCTIONS 字节相等。 */
+export const GUIDANCE_BODY = [
   "# Project memory (managed by Pier)",
   "",
   'You have persistent project memory tools from the "pier-memory" MCP server.',

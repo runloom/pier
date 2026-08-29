@@ -47,8 +47,8 @@ import {
 import {
   executePanelFocusCommand,
   executePanelListCommand,
-  executePanelOpenCommand,
 } from "./commands/panel.ts";
+import { executePanelOpenCommand } from "./commands/panel-open.ts";
 import {
   executePanelEqualizeCommand,
   executePanelSetSizeCommand,

@@ -2,6 +2,7 @@ import type { AgentStatusEvidenceDimension } from "@main/services/agents/integra
 import { getAgentHookIntegration } from "@main/services/agents/integrations/registry.ts";
 import { resolveAgentEventIngestOptions } from "@main/services/agents/integrations/runtime/event-authority.ts";
 import { createForegroundActivityAggregator } from "@main/services/foreground-activity/aggregator.ts";
+import { enrichAgentEventFromRawPayload } from "@main/services/foreground-activity/jsonl-enrichment.ts";
 import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
 import { agentHookEventSchema } from "@shared/contracts/agent/session.ts";
 import type { AgentActivity } from "@shared/contracts/foreground-activity.ts";
@@ -41,7 +42,11 @@ export async function runAgentStatusTrace(
       const snapshotBefore = aggregator.snapshot();
       const rawEvents = await producer.run(action);
       const actionEvents = rawEvents.map((raw) => {
-        const parsed = agentHookEventSchema.parse(raw);
+        // 与生产 jsonl-observer 一致：ingest 前必须过 enrichment（metadata
+        // 回填），否则测试验证的是生产中不存在的中间态（评审 F1）。
+        const parsed = enrichAgentEventFromRawPayload(
+          agentHookEventSchema.parse(raw)
+        );
         if (parsed.kind !== "agentEvent" || parsed.v !== 3) {
           throw new Error(`${fixture.agentId} 轨迹输出不是严格 v3 agentEvent`);
         }

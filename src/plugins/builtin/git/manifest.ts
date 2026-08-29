@@ -1,5 +1,8 @@
 import type { PluginManifest } from "@shared/contracts/plugin.ts";
-import { GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY } from "./settings.ts";
+import {
+  GIT_COMMIT_PUSH_AFTER_SETTING_KEY,
+  GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY,
+} from "./settings.ts";
 
 // 插件 id 属于插件包自身(与 files 插件对称);宿主侧经 registry entry 的
 // manifest.id 消费,不再从 shared 契约取常量。
@@ -148,6 +151,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "git",
+      id: "pier.git.commit",
+      permissions: ["git:write"],
+      title: "git: Commit",
+    },
+    {
+      category: "git",
       id: "pier.git.undoLastCommit",
       permissions: ["git:write"],
       title: "git: Undo Last Commit",
@@ -290,6 +299,13 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
         description:
           "Ask for confirmation before syncing (pull then push) from the status bar sync item.",
         order: 13,
+        type: "boolean",
+      },
+      [GIT_COMMIT_PUSH_AFTER_SETTING_KEY]: {
+        default: false,
+        description:
+          "When the commit dialog opens, start with push after commit turned on. You can still turn it off for this commit.",
+        order: 14,
         type: "boolean",
       },
       [GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY]: {

@@ -15,8 +15,9 @@ const qodercliConfigPath = () => join(homedir(), ".qoder", "settings.json");
  * Qoder CLI hook 事件 → pier 事件名。
  * 按当前官方 CLI hooks 文档逐项声明，不继承其他产品的字段假设：
  * - 工具事件提供 tool_use_id；PostToolUseFailure 只结算对应工具。
- * - Elicitation/ElicitationResult 都携带同一 elicitation_id，形成具名
- *   question 闭环。
+ * - Elicitation/ElicitationResult 携带同一 `elicitation_id` 时形成具名
+ *   question 闭环；该字段是**可选**的（binary 1.1.34：仅 MCP 提供
+ *   elicitationId 才写入），缺失时两侧都走匿名计数仍可配对。
  * - PermissionRequest 文档载荷未提供请求 ID；PermissionDenied 虽有
  *   tool_use_id，但只表示分类器拒绝且可请求重试，不能解除人工授权等待，
  *   均不安装。

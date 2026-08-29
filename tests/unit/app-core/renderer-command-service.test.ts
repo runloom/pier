@@ -33,13 +33,13 @@ describe("createRendererCommandService", () => {
     });
 
     const promise = service.execute({
-      context,
-      type: "panel.open",
+      panelId: "terminal-1",
+      type: "panel.focus",
     });
     expect(sent).toEqual({
       command: {
-        context,
-        type: "panel.open",
+        panelId: "terminal-1",
+        type: "panel.focus",
       },
       requestId: "renderer-req-1",
     });
@@ -254,8 +254,8 @@ describe("createRendererCommandService", () => {
 
     const promise = service.execute({
       focus: false,
-      context,
-      type: "panel.open",
+      panelId: "terminal-1",
+      type: "panel.focus",
     });
     expect(focus).toBe(false);
     service.resolve(
@@ -337,7 +337,7 @@ describe("createRendererCommandService", () => {
     });
 
     await expect(
-      service.execute({ context, type: "panel.open" })
+      service.execute({ panelId: "terminal-1", type: "panel.focus" })
     ).resolves.toEqual({
       error: {
         code: "platform_unavailable",
@@ -356,7 +356,10 @@ describe("createRendererCommandService", () => {
       timeoutMs: 1000,
     });
 
-    const promise = service.execute({ context, type: "panel.open" });
+    const promise = service.execute({
+      panelId: "terminal-1",
+      type: "panel.focus",
+    });
     vi.advanceTimersByTime(1000);
 
     await expect(promise).resolves.toEqual({
@@ -408,7 +411,10 @@ describe("createRendererCommandService", () => {
       timeoutMs: 1000,
     });
 
-    const promise = service.execute({ context, type: "panel.open" });
+    const promise = service.execute({
+      panelId: "terminal-1",
+      type: "panel.focus",
+    });
     service.resolve(
       {
         error: { message: "workspace api not ready" },
@@ -432,7 +438,10 @@ describe("createRendererCommandService", () => {
       timeoutMs: 1000,
     });
 
-    const promise = service.execute({ context, type: "panel.open" });
+    const promise = service.execute({
+      panelId: "terminal-1",
+      type: "panel.focus",
+    });
     service.resolve(
       {
         data: { panelId: "wrong" },

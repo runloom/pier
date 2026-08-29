@@ -55,12 +55,10 @@ export const workspace = {
     moveToNewWindowFailed: "Couldn't open in a new window — try again",
     moveToWindowFailed: "Couldn't move into that window — try again",
     emptyWindowDescription: "Empty window",
+    noOtherWindowsTitle: "No other window is open",
     noOtherWindows: "Open another window first, then try again.",
     pickWindowFailed: "Couldn't list windows — try again",
-    pickWindowPlaceholder: "Search windows…",
-    pickWindowTitle: "Choose a Window",
     sameNameIndex: " · {{n}}",
-    tabCount: "{{count}} tabs",
     windowLabel: "Window {{n}}",
     unsupportedTitle: "This tab can’t be moved to another window",
     unsupportedBody:

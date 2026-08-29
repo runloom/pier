@@ -333,12 +333,15 @@ grokActions.push(
     ["interrupted"]
   ),
   {
+    // promptId=turn-2：真实 StopFailure 携带当前回合的 promptId（1.0.13
+    // 起全事件携带）；同回合 error 比 interrupted 更强，走终态纠正通道。
+    // 若像 BASE_PAYLOAD 那样带旧回合 id，会被 settled-turn 正确拒收。
     ...traceAction(
       "StopFailure",
       "error",
       "error",
       { expectedStatus: "error" },
-      { error: "provider request failed" }
+      { error: "provider request failed", prompt_id: "turn-2" }
     ),
     scenarios: ["error"],
   },

@@ -185,7 +185,7 @@ function pierInteraction(event, kind, outcome) {
     }
   );
 }
-export const PierAgentStatus = () => {
+const PierAgentStatus = () => {
   return {
     event: ({ event }) => {
       if (!event || typeof event.type !== "string") return;
@@ -246,6 +246,11 @@ export const PierAgentStatus = () => {
     },
   };
 };
+// v1 官方 PluginModule 形状（最低 opencode 1.18.23：loader 优先 readV1Plugin
+// 消费 default {id, server}）。不再保留 legacy 具名导出——1.18.23 上 v1 与
+// legacy 双注册会重复记账。更旧、只遍历具名导出的 loader 将静默不装本插件。
+// 对照组 mimo 仍双导出，因为其 loader 下限不同。
+export default { id: "pier-agent-status", server: PierAgentStatus };
 `;
 }
 

@@ -10,16 +10,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { AppUpdateSection } from "@/pages/settings/components/app-update-section.tsx";
 import { useAppUpdateStore } from "@/stores/app-update.store.ts";
+import { useAppUpdatePreferencesStore } from "@/stores/app-update-preferences.store.ts";
 
 describe("AppUpdateSection", () => {
   beforeEach(async () => {
     await initI18n();
     useAppUpdateStore.getState().reset();
+    useAppUpdatePreferencesStore.setState({ receiveCandidateUpdates: false });
   });
 
   afterEach(() => {
     cleanup();
     useAppUpdateStore.getState().reset();
+    useAppUpdatePreferencesStore.setState({ receiveCandidateUpdates: false });
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -80,6 +83,54 @@ describe("AppUpdateSection", () => {
     expect(
       screen.getByRole("button", { name: "Restart and Install" })
     ).toBeEnabled();
+  });
+
+  it("persists the candidate opt-in and re-checks on enable", async () => {
+    const check = vi.fn(async () => ({
+      currentVersion: "0.1.0",
+      state: "not-available" as const,
+    }));
+    const update = vi.fn(async (patch: Record<string, unknown>) => ({
+      receiveCandidateUpdates: Boolean(patch.receiveCandidateUpdates),
+    }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        appUpdate: {
+          check,
+          download: vi.fn(),
+          onChanged: vi.fn(() => () => {}),
+          quitAndInstall: vi.fn(),
+          status: vi.fn(async () => ({
+            currentVersion: "0.1.0",
+            state: "idle",
+          })),
+        },
+        preferences: {
+          onChanged: vi.fn(() => () => {}),
+          read: vi.fn(async () => ({ receiveCandidateUpdates: false })),
+          update,
+        },
+      },
+    });
+    useAppUpdateStore.setState({
+      snapshot: { currentVersion: "0.1.0", state: "idle" },
+    });
+
+    render(<AppUpdateSection />);
+    fireEvent.click(
+      await screen.findByRole("switch", { name: "Receive release candidates" })
+    );
+
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledWith({ receiveCandidateUpdates: true });
+    });
+    await waitFor(() => {
+      expect(check).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      useAppUpdatePreferencesStore.getState().receiveCandidateUpdates
+    ).toBe(true);
   });
 
   it("renders a friendly error with next step and raw detail", async () => {

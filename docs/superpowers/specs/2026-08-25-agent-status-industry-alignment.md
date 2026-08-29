@@ -32,7 +32,7 @@
 | Provider | 通道 | 状态词汇 |
 |---|---|---|
 | Codex app-server | JSON-RPC（IDE 同款；stdio/WS/Unix socket；`codex app-server generate-json-schema` 可产版本精确 schema） | `thread.status: notLoaded\|idle\|systemError\|active{activeFlags[]}`，`activeFlags:["waitingOnApproval"]`；`turn/completed{status: completed\|interrupted\|failed}`；`turn/steer` 官方排队语义 |
-| OpenCode | `opencode serve` HTTP + SSE（`GET /global/event`） | `session.status: {type:"idle"}\|{type:"retry",attempt,message,next}\|{type:"busy"}`——唯一官方「运行态枚举」；`permission.updated/replied`；Session.parentID + `/children` 子会话 |
+| OpenCode | `opencode serve` HTTP + SSE（`GET /global/event`） | `session.status: {type:"idle"}\|{type:"retry",attempt,message,next}\|{type:"busy"}`——唯一官方「运行态枚举」；`permission.asked/replied`（1.18.23 起改名，旧 SDK 叫 permission.updated）；Session.parentID + `/children` 子会话 |
 | MCP Tasks 扩展（2026-07-28，SEP-1686） | `tasks/get` 轮询或订阅 | `working\|input_required\|completed\|failed\|cancelled`——`input_required` 显式对应 attention |
 | Amp | `thread.state.running/idle/error`（+`.resolved`）原生事件（Pier amp 插件已部分消费） | running/idle/error 三态 |
 

@@ -11,11 +11,16 @@ export interface TerminalAgentResumeMetadata {
 }
 
 /** Host tore down the PTY; conversation still belongs to the agent. */
-export type TerminalAgentRestoreCause = "host-teardown";
+export type TerminalAgentRestoreCause = "host-teardown" | "resume-failed";
 
 export interface TerminalAgentRestoreMetadata {
   cause?: TerminalAgentRestoreCause | undefined;
   detachedAt?: number | undefined;
+  /**
+   * True while this spawn is a pinned `--resume` that has not yet been
+   * confirmed (matching SessionStart) or unlocked (PromptSubmit).
+   */
+  resumePending?: boolean | undefined;
   spawnGeneration?: number | undefined;
 }
 

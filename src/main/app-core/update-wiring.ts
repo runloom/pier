@@ -12,6 +12,7 @@ import {
   createAppUpdateService,
 } from "../services/app-updates/service.ts";
 import { resolveAppUpdateUiLocale } from "../services/app-updates/ui-locale.ts";
+import { readPreferences } from "../state/preferences.ts";
 import { broadcastAppUpdateChanged } from "./window-broadcasts.ts";
 
 export function createWiredAppUpdateService(
@@ -50,7 +51,13 @@ export function createWiredAppUpdateService(
     },
     runtimeMode,
     ...(runtimeMode === "production"
-      ? { updater: createElectronAppUpdaterAdapter() }
+      ? {
+          updater: createElectronAppUpdaterAdapter({
+            currentVersion: app.getVersion(),
+            getReceiveCandidates: async () =>
+              (await readPreferences()).receiveCandidateUpdates,
+          }),
+        }
       : {}),
   });
 }

@@ -22,6 +22,7 @@ export function recordAgentResumeSession(args: {
   agentId: AgentKind;
   panelId: string;
   sessionId: string | undefined;
+  unlockRotation?: boolean | undefined;
   windowId: string;
 }): void {
   const sessionId = args.sessionId?.trim();
@@ -51,14 +52,24 @@ export function recordAgentResumeSession(args: {
     });
     return;
   }
-  updateTerminalPanelAgentResume(recordId, args.panelId, {
-    agentId: args.agentId,
-    capturedAt: Date.now(),
-    sessionId,
-    source: "hook",
-  })
+  updateTerminalPanelAgentResume(
+    recordId,
+    args.panelId,
+    {
+      agentId: args.agentId,
+      capturedAt: Date.now(),
+      sessionId,
+      source: "hook",
+    },
+    args.unlockRotation ? { unlockRotation: true } : {}
+  )
     .then((result) => {
-      if (result === "applied" || result === "pending") {
+      if (
+        result === "applied" ||
+        result === "pending" ||
+        result === "unchanged" ||
+        result === "pinned"
+      ) {
         return;
       }
       log.warn("agent resume metadata not written", {

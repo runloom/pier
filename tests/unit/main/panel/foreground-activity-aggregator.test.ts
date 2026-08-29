@@ -351,6 +351,61 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
+  it("子会话 SessionStart 登记后，后续裸 sessionId 不得创建幽灵主 scope", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "SessionStart", sessionId: "main-1" })
+    );
+    advance(250);
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        event: "PromptSubmit",
+        sessionId: "main-1",
+        turnId: "turn-1",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        event: "ToolStart",
+        sessionId: "main-1",
+        toolUseId: "parent-tool",
+        turnId: "turn-1",
+      })
+    );
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          event: "SessionStart",
+          parentSessionId: "main-1",
+          sessionId: "child-1",
+        })
+      )
+    ).toBe(false);
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          event: "ToolStart",
+          sessionId: "child-1",
+          toolUseId: "child-tool",
+        })
+      )
+    ).toBe(false);
+    const activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.sessionId).toBe("main-1");
+    expect(activity.status).toBe("tool");
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        event: "TurnCompleted",
+        sessionId: "main-1",
+        turnId: "turn-1",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
   it("子智能体生命周期按 parentSessionId 归入主 scope，不参与状态与身份竞选", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(
@@ -4236,6 +4291,61 @@ describe("ForegroundActivityAggregator", () => {
     expect(agg.snapshot("1").activities).toHaveLength(0);
     expect(agg.snapshot("2").activities).toHaveLength(1);
     expect(agg.snapshot("2").activities[0]?.panelId).toBe("panel-a");
+    agg.dispose();
+  });
+
+  it("transferPanelOwnership 后裸子 sessionId 仍不得创建幽灵主 scope", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        event: "SessionStart",
+        panelId: "panel-a",
+        sessionId: "main-1",
+        windowId: "1",
+      })
+    );
+    advance(250);
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        event: "PromptSubmit",
+        panelId: "panel-a",
+        sessionId: "main-1",
+        turnId: "turn-1",
+        windowId: "1",
+      })
+    );
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          event: "SessionStart",
+          panelId: "panel-a",
+          parentSessionId: "main-1",
+          sessionId: "child-1",
+          windowId: "1",
+        })
+      )
+    ).toBe(false);
+
+    agg.transferPanelOwnership({
+      panelId: "panel-a",
+      sourceWindowId: "1",
+      targetWindowId: "2",
+    });
+    advance(100);
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          event: "ToolStart",
+          panelId: "panel-a",
+          sessionId: "child-1",
+          toolUseId: "child-tool",
+          windowId: "2",
+        })
+      )
+    ).toBe(false);
+    const activity = agg.snapshot("2").activities[0] as AgentActivity;
+    expect(activity.sessionId).toBe("main-1");
     agg.dispose();
   });
 });

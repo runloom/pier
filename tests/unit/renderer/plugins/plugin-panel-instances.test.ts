@@ -202,17 +202,21 @@ function createMockApi(
     });
   }
 
+  const resolveActiveGroup = () => {
+    if (options.activeGroupId === null) {
+      return null;
+    }
+    if (options.activeGroupId) {
+      return groups.find((group) => group.id === options.activeGroupId) ?? null;
+    }
+    return groups[0] ?? null;
+  };
   const api = {
     get activeGroup() {
-      if (options.activeGroupId === null) {
-        return null;
-      }
-      if (options.activeGroupId) {
-        return (
-          groups.find((group) => group.id === options.activeGroupId) ?? null
-        );
-      }
-      return groups[0] ?? null;
+      return resolveActiveGroup();
+    },
+    get activePanel() {
+      return resolveActiveGroup()?.panels[0] ?? null;
     },
     addPanel: vi.fn((addOptions: AddPanelOptions) => {
       if (options.throwOnAddPanel) {
@@ -477,7 +481,13 @@ describe("plugin panel instances", () => {
 
     expect(result).toEqual({ kind: "opened" });
     expect(api.addPanel).toHaveBeenCalledWith(
-      expect.not.objectContaining({ position: expect.anything() })
+      expect.objectContaining({
+        position: {
+          direction: "within",
+          index: 0,
+          referenceGroup: api.activeGroup,
+        },
+      })
     );
   });
 
@@ -691,8 +701,58 @@ describe("plugin panel instances", () => {
       expect.objectContaining({
         position: {
           direction: "within",
+          index: 2,
           referenceGroup: groups[1],
         },
+      })
+    );
+  });
+
+  it("splits relative to the active panel when placement has no live reference", () => {
+    const leader = mockPanel("leader", "terminal");
+    const { api } = createMockApi(
+      [leader],
+      [{ id: "group-a", panels: [leader] }]
+    );
+    useWorkspaceStore.setState({ api });
+    const context = createRendererPluginContext(entryWithPanel());
+    context.panels.register(testPanelRegistration);
+
+    context.panels.openInstance({
+      componentId: "pier.files.filePanel",
+      instanceId: "split-file",
+      placement: "split-right",
+      title: "a.ts",
+    });
+
+    expect(api.addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        position: { direction: "right", referencePanel: "leader" },
+      })
+    );
+  });
+
+  it("falls back to the active panel when split referencePanelId is stale", () => {
+    const leader = mockPanel("leader", "terminal");
+    const { api } = createMockApi(
+      [leader],
+      [{ id: "group-a", panels: [leader] }]
+    );
+    useWorkspaceStore.setState({ api });
+    const context = createRendererPluginContext(entryWithPanel());
+    context.panels.register(testPanelRegistration);
+
+    context.panels.openInstance({
+      componentId: "pier.files.filePanel",
+      instanceId: "split-file",
+      placement: "split-below",
+      referencePanelId: "gone",
+      title: "a.ts",
+    });
+
+    expect(api.addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        position: { direction: "below", referencePanel: "leader" },
       })
     );
   });

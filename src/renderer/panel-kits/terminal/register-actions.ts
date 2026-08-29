@@ -16,6 +16,7 @@ import {
 } from "@/lib/agent-runtime/rename-agent-session.ts";
 import { selectedTextFromInvocation } from "@/lib/context-menu/selection-text.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { isTerminalComposerOpen } from "@/stores/terminal-composer-takeover.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import {
   dispatchTerminalComposerAttach,
@@ -26,6 +27,15 @@ import { dispatchTerminalOpenSearch } from "./search-events.ts";
 
 function resolveTerminalPanelId(invocation?: ActionInvocation): string | null {
   return invocation?.sourcePanelId ?? activeTerminalPanelId();
+}
+
+function agentComposerTitle(invocation?: ActionInvocation): string {
+  const panelId = resolveTerminalPanelId(invocation);
+  return i18next.t(
+    panelId != null && isTerminalComposerOpen(panelId)
+      ? "contextMenu.action.closeRichInput"
+      : "contextMenu.action.openRichInput"
+  );
 }
 
 async function runTerminalOperation(
@@ -172,6 +182,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     },
     sortOrder: 2,
     surfaces: ["terminal/content", "command-palette"],
+    title: agentComposerTitle,
     titleKey: "contextMenu.action.openRichInput",
     when: "terminal.hasActivePanel",
   },

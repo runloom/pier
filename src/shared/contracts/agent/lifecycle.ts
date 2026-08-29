@@ -90,6 +90,11 @@ export const agentLifecycleProbeSchema = z.object({
   installedButBroken: z.boolean(),
   installs: z.array(agentInstallInfoSchema),
   isConflict: z.boolean(),
+  /**
+   * True when checkLatest ran for a versioned agent but remote latest could
+   * not be resolved (distinct from “already up to date”).
+   */
+  latestCheckFailed: z.boolean().optional(),
   latestVersion: z.string().nullable(),
   support: agentLifecycleSupportSchema,
   /** True when a newer version is known (versioned mode only). */
@@ -187,6 +192,11 @@ export interface AgentLifecycleProbeRequest {
   checkLatest?: boolean;
   /** When true, force multi-path enumeration. */
   deep?: boolean;
+  /**
+   * When true with checkLatest, bypass in-memory latest-version caches
+   * (settings refresh / catalog force).
+   */
+  force?: boolean;
 }
 
 /** Live install/update progress (main → renderer broadcast). */

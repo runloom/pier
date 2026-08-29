@@ -28,15 +28,22 @@ export function listLanIPv4Addresses(): string[] {
   return addresses;
 }
 
-function probePort(port: number): Promise<boolean> {
+function probePort(port: number, host: string): Promise<boolean> {
   const { promise, resolve } = Promise.withResolvers<boolean>();
   const probe = createServer();
   probe.once("error", () => resolve(false));
   probe.once("listening", () => {
     probe.close(() => resolve(true));
   });
-  probe.listen(port, "0.0.0.0");
+  probe.listen(port, host);
   return promise;
+}
+
+async function probePortFree(port: number): Promise<boolean> {
+  // 0.0.0.0 空闲不代表 127.0.0.1 空闲（本机 Pier 常只绑 loopback / LAN）。
+  return (
+    (await probePort(port, "0.0.0.0")) && (await probePort(port, "127.0.0.1"))
+  );
 }
 
 /**
@@ -61,7 +68,7 @@ export async function pickPortInRange(preferred?: number): Promise<number> {
     }
   }
   for (const port of candidates) {
-    if (await probePort(port)) {
+    if (await probePortFree(port)) {
       return port;
     }
   }

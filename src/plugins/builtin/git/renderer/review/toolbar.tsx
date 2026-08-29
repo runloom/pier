@@ -12,6 +12,7 @@ import {
   UnfoldVertical,
   WrapText,
 } from "lucide-react";
+import { GitReviewCommitButton } from "../commit/button.tsx";
 import { pluginText } from "../plugin-text.ts";
 import type { ReviewViewOptions } from "./document/ui-state.ts";
 
@@ -24,6 +25,7 @@ export function GitReviewToolbar({
   refreshing,
   responsiveUnified = false,
   setViewOptions,
+  showCommit = false,
   viewOptions,
 }: {
   /** true = 当前为全部折叠，图标显示「展开」。 */
@@ -35,6 +37,7 @@ export function GitReviewToolbar({
   /** Split preference is temporarily shown inline because the panel is narrow. */
   readonly responsiveUnified?: boolean;
   readonly setViewOptions: (patch: Partial<ReviewViewOptions>) => void;
+  readonly showCommit?: boolean;
   readonly viewOptions: ReviewViewOptions;
 }): React.JSX.Element {
   const split = viewOptions.diffStyle === "split";
@@ -105,6 +108,9 @@ export function GitReviewToolbar({
       >
         <RefreshCw className={cn(spinRefresh && "animate-spin")} data-icon />
       </ToolbarIconButton>
+      {showCommit ? (
+        <GitReviewCommitButton className="ms-1" context={context} />
+      ) : null}
     </div>
   );
 }

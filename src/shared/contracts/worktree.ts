@@ -225,8 +225,8 @@ export type WorktreeOpenTerminalRequest = z.infer<
 
 /**
  * worktree.open / worktree.openTerminal 的成功载荷。
- * 生产方是 renderer 的 panel.open / terminal.open 命令处理器
- * (workspace-renderer-commands.ts),经 main 透传回调用方。
+ * 生产方是 main `executePanelOpenCommand` / `terminal.open`，经 renderer
+ * 命令处理器透传回调用方。
  */
 export const worktreeOpenResultSchema = z.object({
   context: panelContextSchema,

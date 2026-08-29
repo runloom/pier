@@ -8,14 +8,20 @@ import {
 import { statusWithDisplayQuestion } from "./display-question.ts";
 import type { HookScope } from "./entry.ts";
 import { isPlanApprovalToolName } from "./plan-approval.ts";
+import {
+  clearActiveWork,
+  hookScopeHasActiveInteractions,
+  hookScopeHasActiveTools,
+  reopenNamedWork,
+  settleNamedWork,
+  type TerminalRetiredWork,
+} from "./turn-ledger.ts";
 
-const MAX_SETTLED_IDS_PER_KIND = 256;
-
-export interface TerminalRetiredWork {
-  interactionCount: number;
-  subagentCount: number;
-  toolCount: number;
-}
+export {
+  hookScopeHasActiveInteractions,
+  hookScopeHasActiveTools,
+  type TerminalRetiredWork,
+} from "./turn-ledger.ts";
 
 export type TurnTransition =
   | "none"
@@ -24,6 +30,7 @@ export type TurnTransition =
   | "terminal-trusted";
 
 export type TurnBookkeepingRejectionReason =
+  | "abandoned-turn"
   | "foreign-turn"
   | "sealed-turn"
   | "settled-turn"
@@ -49,29 +56,6 @@ const TERMINAL_EVIDENCE_STRENGTH: Readonly<
   interrupted: 2,
   error: 3,
 };
-
-function reopenNamedWork(settledIds: Set<string>, id: string): void {
-  settledIds.delete(id);
-}
-
-function settleNamedWork(
-  settledIds: Set<string>,
-  id: string,
-  markHistoryIncomplete?: () => void
-): boolean {
-  if (settledIds.has(id)) {
-    return false;
-  }
-  settledIds.add(id);
-  if (settledIds.size > MAX_SETTLED_IDS_PER_KIND) {
-    const oldestId = settledIds.values().next().value;
-    if (oldestId !== undefined) {
-      settledIds.delete(oldestId);
-      markHistoryIncomplete?.();
-    }
-  }
-  return true;
-}
 
 function reject(reason: TurnBookkeepingRejectionReason): TurnBookkeepingResult {
   return { accepted: false, reason };
@@ -134,10 +118,20 @@ function resetTurn(
 ): void {
   const previousTurnId = normalizeAgentTurnId(scope.currentTurnId);
   if (previousTurnId && previousTurnId !== eventTurnId) {
-    settleNamedWork(scope.recentSettledTurnIds, previousTurnId);
+    // 旧回合只是被抢占/换代抛弃，不等于已由可信终态结算：迟到进展仍然
+    // 拒收（防 ping-pong），但迟到的可信终态可经 abandoned 分支封账。
+    // 已被终态结算的回合（turnEnded 后开新回合）保持 settled 语义不动。
+    if (scope.turnEnded) {
+      settleNamedWork(scope.recentSettledTurnIds, previousTurnId);
+      scope.lastDisplacedTurnId = undefined;
+    } else {
+      settleNamedWork(scope.recentAbandonedTurnIds, previousTurnId);
+      scope.lastDisplacedTurnId = previousTurnId;
+    }
   }
   if (eventTurnId) {
     reopenNamedWork(scope.recentSettledTurnIds, eventTurnId);
+    reopenNamedWork(scope.recentAbandonedTurnIds, eventTurnId);
   }
   scope.turnEnded = false;
   scope.turnEndedAt = undefined;
@@ -145,6 +139,8 @@ function resetTurn(
   scope.completionObservedAt = undefined;
   scope.turnResetAt = at;
   scope.terminalEvidence = undefined;
+  // 默认非权威；只有 explicit-prompt 的 turn-start 才点亮。
+  scope.currentTurnAuthoritative = false;
   clearActiveWork(scope);
   scope.currentTurnId = eventTurnId;
 }
@@ -228,11 +224,28 @@ export function applyTurnBookkeeping(
   }
   if (
     eventTurnId &&
-    scope.recentSettledTurnIds.has(eventTurnId) &&
     !isTerminalCorrection &&
     semantics.resetEvidence !== "explicit-prompt"
   ) {
-    return reject("settled-turn");
+    if (scope.recentSettledTurnIds.has(eventTurnId)) {
+      return reject("settled-turn");
+    }
+    // 被抛弃回合：进展/候选一律拒收（防复活 ping-pong）。可信终态只放行
+    // **最近一次被抢占**的那一格，且当前回合不是显式提问建立的——避免
+    // Prompt A→B→泄漏 C 后迟到的 A 终态误封。correlatable 心跳不得点亮
+    // 权威。已知取舍：Esc 后无 PromptSubmit 直接 ToolStart（方案 Build）
+    // 与事故同形，迟到旧 stop 仍会封账；适配器层应阻止泄漏 turnId。
+    const abandonedTerminalSeal =
+      semantics.category === "terminal-trusted" &&
+      !scope.turnEnded &&
+      !scope.currentTurnAuthoritative &&
+      eventTurnId === scope.lastDisplacedTurnId;
+    if (
+      scope.recentAbandonedTurnIds.has(eventTurnId) &&
+      !abandonedTerminalSeal
+    ) {
+      return reject("abandoned-turn");
+    }
   }
   if (semantics.category === "turn-start") {
     if (semantics.resetEvidence === "explicit-prompt") {
@@ -241,7 +254,13 @@ export function applyTurnBookkeeping(
     const decision = turnStartDecision(scope, semantics, eventTurnId);
     if (decision === "reset") {
       resetTurn(scope, eventTurnId, at);
+      if (semantics.resetEvidence === "explicit-prompt") {
+        scope.currentTurnAuthoritative = true;
+      }
       return { accepted: true, transition: "reset" };
+    }
+    if (semantics.resetEvidence === "explicit-prompt") {
+      scope.currentTurnAuthoritative = true;
     }
   }
   let adoptedUnsettledTurn = false;
@@ -253,6 +272,8 @@ export function applyTurnBookkeeping(
   ) {
     if (canAdoptUnsettledTurn(semantics)) {
       resetTurn(scope, eventTurnId, at);
+      // 工具 work 事件认领的回合可能是泄漏的子智能体 generation，不算
+      // 权威建立；可信终态认领后立即封账，标记值不参与后续判定。
       adoptedUnsettledTurn = true;
     } else {
       return reject("foreign-turn");
@@ -282,6 +303,10 @@ export function applyTurnBookkeeping(
     const settledTurnId = eventTurnId ?? scope.currentTurnId;
     if (settledTurnId) {
       settleNamedWork(scope.recentSettledTurnIds, settledTurnId);
+      scope.recentAbandonedTurnIds.delete(settledTurnId);
+      if (scope.lastDisplacedTurnId === settledTurnId) {
+        scope.lastDisplacedTurnId = undefined;
+      }
       scope.currentTurnId = settledTurnId;
     }
     scope.turnEnded = true;
@@ -414,55 +439,6 @@ export function applyTurnBookkeeping(
   return adoptedUnsettledTurn
     ? { accepted: true, transition: "reset" }
     : ACCEPTED_NONE;
-}
-
-function clearActiveWork(scope: HookScope): TerminalRetiredWork | undefined {
-  const terminalRetiredWork = {
-    interactionCount:
-      scope.activeInteractionIds.size + scope.anonymousInteractionCount,
-    subagentCount: scope.activeSubagentIds.size + scope.anonymousSubagentCount,
-    toolCount: scope.activeToolIds.size + scope.anonymousToolCount,
-  };
-  if (
-    scope.activeInteractionIds.size > 0 ||
-    scope.anonymousInteractionCount > 0 ||
-    scope.settledInteractionIds.size > 0
-  ) {
-    scope.interactionHistoryIncomplete = true;
-  }
-  if (
-    scope.activeToolIds.size > 0 ||
-    scope.anonymousToolCount > 0 ||
-    scope.settledToolIds.size > 0
-  ) {
-    scope.toolHistoryIncomplete = true;
-  }
-  scope.activeInteractionIds.clear();
-  scope.activePlanInteractionIds.clear();
-  scope.activeSubagentIds.clear();
-  scope.activeToolIds.clear();
-  scope.anonymousInteractionCount = 0;
-  scope.anonymousSubagentCount = 0;
-  scope.anonymousToolCount = 0;
-  scope.settledInteractionIds.clear();
-  scope.settledSubagentIds.clear();
-  scope.settledToolIds.clear();
-  scope.subagentCount = 0;
-  return terminalRetiredWork.interactionCount > 0 ||
-    terminalRetiredWork.subagentCount > 0 ||
-    terminalRetiredWork.toolCount > 0
-    ? terminalRetiredWork
-    : undefined;
-}
-
-export function hookScopeHasActiveTools(scope: HookScope): boolean {
-  return scope.activeToolIds.size > 0 || scope.anonymousToolCount > 0;
-}
-
-export function hookScopeHasActiveInteractions(scope: HookScope): boolean {
-  return (
-    scope.activeInteractionIds.size > 0 || scope.anonymousInteractionCount > 0
-  );
 }
 
 /** ToolComplete 后若仍有未完成工具则维持 tool，否则沿用映射表（通常 processing）。 */

@@ -1,14 +1,6 @@
 /**
- * Camera interaction model for canvas board shells (world stage).
- *
- * One transform (`translate(x, y) scale(s)`) instead of CSS zoom + scroll:
- * plain wheel / two-finger scroll pans, ctrl+wheel (trackpad pinch) zooms at
- * the cursor, background drag pans, double-click toggles fit ↔ 100%. The
- * camera is free — a soft constraint only keeps the content from being flung
- * out of the viewport. Pure math lives in `canvas-math.ts`.
- *
- * Document-style viewers (image / mermaid / fit cards) stay on
- * `useZoomPanViewport`; both hooks share the same math module.
+ * World-stage camera: one `translate + scale`. Math is in `canvas-math.ts`.
+ * Document viewers stay on `useZoomPanViewport`.
  */
 import {
   type CSSProperties,
@@ -61,6 +53,7 @@ export function useWorldCamera({
   shouldCapturePointer?: (event: ReactPointerEvent<HTMLElement>) => boolean;
 }) {
   const viewportRef = useRef<HTMLElement | null>(null);
+  const enabledRef = useRef(false);
   const [camera, setCamera] = useState<WorldCamera | null>(null);
   /** `fit` follows viewport/content resizes; any user move flips to `free`. */
   const [mode, setMode] = useState<"fit" | "free">("fit");
@@ -184,16 +177,22 @@ export function useWorldCamera({
   );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey is the world identity trigger
-  useEffect(() => {
-    setMode("fit");
-    setCamera(null);
-  }, [resetKey]);
-
   useLayoutEffect(() => {
+    setMode("fit");
+    modeRef.current = "fit";
     if (!enabled) {
       return;
     }
-    measureFit();
+    measureFit(true);
+  }, [resetKey]);
+
+  useLayoutEffect(() => {
+    const becameEnabled = enabled && !enabledRef.current;
+    enabledRef.current = enabled;
+    if (!enabled) {
+      return;
+    }
+    measureFit(becameEnabled);
   }, [enabled, measureFit]);
 
   useEffect(() => {

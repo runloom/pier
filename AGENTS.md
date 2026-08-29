@@ -109,7 +109,12 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 3. **控件密度**：弹窗表单主路径 Select / Input / Button 用默认 28px 密度；**禁止**为「显得紧凑」给主表单 `SelectTrigger size="sm"` / footer `Button size="sm"`。列表内图标排序等次要 hit 可用 `icon-xs`。
 4. **设置页即时偏好**：设置页内水平 `*Row`；若在 content dialog 里做即时偏好，字段布局必须与提交型 dialog 一致（垂直堆叠、全宽 Select/Input，参考 worktree）。不得自挂 Dialog，不得用设置页水平 `SelectRow` 样式塞进 content dialog。多实例列表用 `Item outline` 表达块边界。**添加/创建类草稿** 走 **二级 content dialog**（`openAppContentDialog` + sticky `取消|确认`）。
 5. **校验**：提交型在 submit 时校验并用 `FieldError`；`prompt` 走 `validate`。即时偏好以合法枚举/开关为主，避免半填草稿。
-6. **检查点**：`tests/unit/renderer/app/dialog-form-governance.test.ts`（与本节标题绑定）。
+6. **提交型 dialog 的可选勾选 / 开关默认值（禁止第三套「记住上次」）**：先判定字段性质；禁止 dialog host 或通用 `rememberDialogField`。
+   - **情境决策**（跟这次 status / 候选 / 远程资格绑定）：每次从当前快照推导；取消与 Esc 丢弃；禁止 `localStorage` / 上次勾选。例：git 确认提交的「包含未暂存」；SSH 导入勾选主机；账号切换同步到其他工具。dialog 里对设置初值的**这一次改动**（如关掉「提交后推送」）同样不回写。
+   - **稳定工作流习惯**（同一人反复同一套，且与这次快照无关）：仅允许该表面旁的小模块，**显式切换即写**（取消窗不清缓存；也不靠提交才写）。例：新建工作树的命名方式 / 立即开始任务。不得把草稿（说明、名称、路径）一并记住。
+   - **能在设置里叫出名字的**（提交后推送默认值、退出确认）：走设置页（宿主 `ProjectPreferences` 或插件 `configuration`）；dialog **只读初值**，勾选不回写。未做设置前用安全默认，禁止用粘滞勾选冒充。
+   - 即时视图偏好仍走该表面已有 store（审查 diff、Markdown 阅读、侧栏收起），不经提交型 dialog 记忆层。
+7. **检查点**：`tests/unit/renderer/app/dialog-form-governance.test.ts`（与本节标题绑定）。
 
 ### 浮层后打开 Dialog / 设置
 
@@ -343,6 +348,26 @@ section 根节点下的裸子节点。
 - 模块内不 import `services/agents/`（agent 只是 activity 的一种 kind，边界单向）
 - Agent 提供方（Provider）原生 session / transcript 只可作为对应适配器内部的兼容输入；宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放
 - 命令行 → 智能体身份只走 `src/shared/agent-command-detection.ts` 的 `matchAgentCommand`（OSC 133 C 先验点亮）：词元只来自 catalog 命令字段，产品 id / label 不参与（`cursor .` / `kiro` / `continue` 是启动器或内置命令，不得点亮）；`agent` / `acli` 泛名进 `AGENT_OSC_BIN_DENYLIST`；`qoder` / `qodercn` 合一启动器按 argv 分流 CLI/IDE；安装探测 `expectedBins`（除 denylist）必须能被 OSC 认到。检查点：`tests/unit/agent/command-detection-governance.test.ts`、`tests/unit/agent/command-detection.test.ts` 与 `tests/unit/main/agents/lifecycle/specs.test.ts` 的 expectedBins 词元锁
+
+#### 智能体 CLI 版本检测与更新 — 金标准
+
+权威规格：[`docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md`](docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md)。
+
+- **latest 权威远端**：brew core → `formulae.brew.sh`（miss 不回退本机 `brew info`）；npm → registry；uv/pipx → PyPI；path/script → `latestProbe`（HTTP / GitHub Releases / Cursor 脚本）。禁止把本机过期 `brew info` 索引当最新（第三方 tap 例外）。
+- **同线比较**：已装 brew token（`claude-code@latest` ≠ `claude-code`）；Claude native 读 `CLAUDE_CONFIG_DIR`（缺省 `~/.claude`）的 `autoUpdatesChannel`；已知安装源不跨生态取 latest / 更新计划。
+- **force 穿透**：catalog `ensureFresh({ force })` → `probe({ checkLatest, force })` → `fetchLatestVersion({ force })`；成功缓存 10 min 对齐 catalog remote TTL；失败负缓存 60s；`latestCheckFailed` 在设置详情可见。
+- **执行端新鲜度**：runner 禁注 `HOMEBREW_NO_AUTO_UPDATE=1`；brew 执行走短节流 auto-update（`HOMEBREW_AUTO_UPDATE_SECS=300`），否则检测新、执行旧 → 更新恒报「版本未变化」。
+- 检查点：`tests/unit/main/agents/lifecycle/latest-source.test.ts`、`latest-governance.test.ts`、`latest-probe.test.ts`、`plan.test.ts`（brew 计划无 npm）、`child-env.test.ts`。
+
+#### 宿主发布候选版 — 金标准
+
+权威规格：[`docs/superpowers/specs/2026-08-29-host-release-candidate-gold-standard.md`](docs/superpowers/specs/2026-08-29-host-release-candidate-gold-standard.md)。
+
+- **版本同构**：候选 `package.json` = `X.Y.Z-rc.N`，tag = `vX.Y.Z-rc.N`；正式去掉 `-rc.N`。每轮 rc 一次 bump PR；同 version 不改已发布内容。
+- **三条路径**：默认发候选（GitHub prerelease，不占 Latest、不发博客）→ 观察期后「晋升正式版」；「直接发布」显式触发才走，跳过候选直达正式版（验证不减）。
+- **隔离**：Latest 必须是稳定 `vX.Y.Z`；候选 / 插件均为 prerelease。候选 publish 后 `gh release edit --prerelease --latest=false`；isolation 脚本 `--candidate-tag`。
+- **客户端候选 opt-in**：偏好 `receiveCandidateUpdates`（默认关）；候选目标解析单一实现 `app-updates/candidate-feed.ts`（只认宿主 tag、semver 全序、稳定优先、per_page=100 + 次页兜底 + 10s 超时），**禁止裸用 `allowPrerelease`**（会误选同仓插件 prerelease / 跳过晋升稳定版）；适配器构造后强制置 false（rc 运行版本构造期会被自动开启）。
+- 检查点：`tests/unit/main/app-core/release-workflow.test.ts`、`tests/unit/main/preferences/github-latest-isolation.test.ts`、`mac-release-assets.test.ts`、`tests/unit/main/app-updates/candidate-feed.test.ts`；skill `.agents/skills/publish-project/SKILL.md`。
 
 #### 终端 tab 标题与 Agent 身份（标题 ≠ 身份）— 金标准
 

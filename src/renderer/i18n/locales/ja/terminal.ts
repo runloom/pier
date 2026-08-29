@@ -26,6 +26,9 @@ export const terminal = {
       "前回のセッションを再開できませんでした。新しいエージェントを起動しました。",
     endedBody: "前回のセッションは終了しています。再起動して続けてください。",
     endedTitle: "エージェントセッションが終了しました",
+    resumeFailedBody:
+      "再開は完了しませんでした。再試行するか、新しく開始してください。",
+    resumeFailedTitle: "前回のセッションを再開できませんでした",
     fieldAgent: "エージェント",
     fieldCommand: "コマンド",
     fieldCwd: "作業ディレクトリ",
@@ -38,6 +41,7 @@ export const terminal = {
       "エージェントを再起動できませんでした。もう一度お試しください",
     statusEnded: "正常に終了",
     statusFailed: "失敗",
+    statusResumeFailed: "再開できませんでした",
     summaryTitle: "セッション概要",
     tryResumeLast: "このフォルダの最新を再開",
     tryResumeLastFailed:

@@ -4,6 +4,14 @@ import { cn } from "./utils.ts";
 
 export type StatusIconKind = "success" | "info" | "warning" | "error";
 
+export type StatusIconSize = "sm" | "md";
+
+const STATUS_ICON_BOX: Record<StatusIconSize, string> = {
+  sm: "size-4",
+  // md box equals the first text line
+  md: "size-[1lh] leading-5",
+};
+
 function StatusGlyphShell({
   children,
   className,
@@ -16,7 +24,7 @@ function StatusGlyphShell({
     <span
       aria-hidden="true"
       className={cn(
-        "flex size-4 shrink-0 items-center justify-center rounded-full",
+        "flex shrink-0 items-center justify-center rounded-full",
         className
       )}
       {...props}
@@ -72,7 +80,7 @@ function WarningTriangleGlyph(): ReactElement {
   return (
     <svg
       aria-hidden="true"
-      className="size-4"
+      className="size-full"
       fill="currentColor"
       viewBox="0 0 18 18"
     >
@@ -99,20 +107,25 @@ const STATUS_ICON_SHELL: Record<Exclude<StatusIconKind, "warning">, string> = {
 function StatusIcon({
   kind,
   className,
+  size = "sm",
   ...props
 }: {
   kind: StatusIconKind;
   className?: string;
+  size?: StatusIconSize;
 } & Omit<ComponentProps<"span">, "children">): ReactElement {
+  const box = STATUS_ICON_BOX[size];
   if (kind === "warning") {
     return (
       <span
         aria-hidden="true"
         className={cn(
-          "flex size-4 shrink-0 items-center justify-center text-[color:var(--warning)]",
+          "flex shrink-0 items-center justify-center text-[color:var(--warning)]",
+          box,
           className
         )}
         data-kind={kind}
+        data-size={size}
         data-slot="status-icon"
         {...props}
       >
@@ -129,8 +142,9 @@ function StatusIcon({
 
   return (
     <StatusGlyphShell
-      className={cn(STATUS_ICON_SHELL[kind], className)}
+      className={cn(box, STATUS_ICON_SHELL[kind], className)}
       data-kind={kind}
+      data-size={size}
       data-slot="status-icon"
       {...props}
     >

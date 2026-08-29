@@ -139,15 +139,17 @@ describe("projectComment git-diff", () => {
 });
 
 describe("projectComment markdown", () => {
-  it("locates by headingId", () => {
+  it("does not locate by headingId alone", () => {
     const result = projectComment(markdownThread("h", "api"), {
       blockHashes: new Set(),
       filePresent: true,
       headingIds: new Set(["api"]),
       kind: "markdown",
     });
-    expect(result.status).toBe("located");
-    expect(result.locate?.kind).toBe("markdown-heading");
+    expect(result).toEqual({
+      reason: "content-changed",
+      status: "drifted",
+    });
   });
 
   it("locates by contentHash", () => {

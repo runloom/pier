@@ -178,7 +178,6 @@ function createHtmlImage(
   }
   return (
     <MarkdownResourceImage
-      imagePreviewFailedLabel={env.labels.imagePreviewFailed}
       imagePreviewTitle={env.labels.imagePreviewTitle}
       inline={{
         alt,

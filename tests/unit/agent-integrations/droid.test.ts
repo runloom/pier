@@ -98,13 +98,29 @@ describe("droidIntegration", () => {
       expect(hooks[evt], evt).toHaveLength(1);
       expect(typedHooks[evt]?.[0]?.matcher).toBe(".*");
     }
-    expect(typedHooks.Notification).toBeUndefined();
+    // 取消不发 Stop 只发 Notification（官方文档）；按 notification_type
+    // 在命令内分发：idle_prompt（binary 唯一发射点=用户取消）→
+    // TurnInterrupted，其余请求型通知落 processing。matcher 对
+    // Notification 不过滤（droid 不传匹配值），条目不带 matcher。
+    expect(hooks.Notification, "Notification").toHaveLength(1);
+    expect(typedHooks.Notification?.[0]?.matcher).toBeUndefined();
+    const notificationCommand =
+      typedHooks.Notification?.[0]?.hooks[0]?.command ?? "";
+    expect(notificationCommand).toContain("notification_type");
+    expect(notificationCommand).toContain(
+      'idle_prompt) _pier_event="TurnInterrupted"'
+    );
+    expect(notificationCommand).toContain('*) _pier_event="processing"');
     expect(hooks.StopFailure).toBeUndefined();
     // 官方只有 SubagentStop，没有可建立身份与开始边界的 SubagentStart；
     // 单边停止事件不能形成完整子智能体状态事实，因此不安装。
     expect(hooks.SubagentStop).toBeUndefined();
     // Droid hook 只有请求通知，没有可配对 ID 与结果事件。
     expect(hooks.PermissionRequest).toBeUndefined();
+    // 子会话锚点：SessionStart 提取 calling_session_id 作 parentSessionId。
+    expect(typedHooks.SessionStart?.[0]?.hooks[0]?.command).toContain(
+      "calling_session_id"
+    );
 
     for (const cmd of hookCommands(installed)) {
       expect(cmd).toContain(MARK);

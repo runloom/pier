@@ -291,7 +291,7 @@ export function useDiffViewCodeOptions(options: {
           } else {
             element.removeAttribute(PIER_DIFF_ESTIMATE_ATTR);
           }
-          // 真实 shadow 节点骨架（padding 可靠）；勿用 :host::after 画条。
+          // 真实 shadow 节点骨架（padding 可靠）；勿用 :host::after 画骨架条。
           // 骨架是正文的一部分，用户收起时不得继续闪——它挂在 shadowRoot 上，
           // 是 Pierre 折叠区的兄弟节点，折叠藏不住它。
           const showSkeleton = isEstimate && !isUserCollapsed(itemId);

@@ -37,6 +37,7 @@ export const dialog = {
     controlsLabel: "이미지 조작",
     copyImage: "이미지 복사",
     copyImageFailed: "이미지를 복사하지 못했습니다",
+    copyImageNotReady: "이미지가 나타난 다음 다시 복사하세요.",
     fit: "윈도우에 맞춤",
     loadFailedDescription:
       "이미지를 불러오지 못했거나, 연 뒤에 변경되었습니다.",

@@ -17,20 +17,26 @@ const AGENT_ID: AgentKind = "pi";
 const EXTENSION_FILE_NAME = "pier-agent-status.ts";
 const MARKER = pierManagedPluginMarker();
 
-/** 固定提交 0c32e83 的公开扩展事件。 */
+/**
+ * 公开扩展事件（0.84.4 本机 dist 核对）。
+ *
+ * 2026-08-29 审计修正：
+ * - 移除历史误植的 `tool_execution_start/end.ask` 分支——`ask` 是 omp
+ *   自有工具，pi 无内置同名工具（docs 与 dist 零匹配），该分支永不触发
+ *   却在矩阵里冒充 native waiting 证据。
+ * - 新增 `ui_prompt_start/end`：pi **专为状态集成设计**的阻塞 UI 提示
+ *   事件（docs/extensions.md："so host/status integrations can report
+ *   'waiting for user' instead of just 'running'"）。上游以深度计数保证
+ *   最外层严格 1:1 配对、`finally` 兜底 end（runner.ts withUIPrompt），
+ *   匿名交互计数安全。载荷 `{kind, title?}`，kind 落 nativeState。
+ */
 const PI_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
   { nativeEvent: "session_start", pierEvent: "SessionStart" },
   { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
   { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
-  {
-    nativeEvent: "tool_execution_start.ask",
-    pierEvent: "InteractionRequested",
-  },
   { nativeEvent: "tool_execution_end", pierEvent: "ToolComplete" },
-  {
-    nativeEvent: "tool_execution_end.ask",
-    pierEvent: "InteractionResolved",
-  },
+  { nativeEvent: "ui_prompt_start", pierEvent: "InteractionRequested" },
+  { nativeEvent: "ui_prompt_end", pierEvent: "InteractionResolved" },
   { nativeEvent: "agent_settled", pierEvent: "Stop" },
   { nativeEvent: "session_shutdown", pierEvent: "SessionEnd" },
 ];
@@ -39,18 +45,23 @@ const PI_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
  * `$PI_CODING_AGENT_DIR` 默认 `~/.pi/agent`（loomdesk piHome 同款：`~` 展开、
  * `~/` 前缀展开、其余原样使用）。
  */
-export function piHome(): string {
-  const raw = (process.env.PI_CODING_AGENT_DIR ?? "").trim();
+export function resolvePiHome(env: NodeJS.ProcessEnv = process.env): string {
+  const home = env.HOME ?? homedir();
+  const raw = (env.PI_CODING_AGENT_DIR ?? "").trim();
   if (!raw) {
-    return join(homedir(), ".pi", "agent");
+    return join(home, ".pi", "agent");
   }
   if (raw === "~") {
-    return homedir();
+    return home;
   }
   if (raw.startsWith("~/")) {
-    return join(homedir(), raw.slice(2));
+    return join(home, raw.slice(2));
   }
   return raw;
+}
+
+export function piHome(): string {
+  return resolvePiHome();
 }
 
 export function piExtensionPath(): string {
@@ -181,29 +192,27 @@ export default function PierAgentStatus(pi) {
 		pierEmit("SessionStart", "session_start", event, ctx));
 	pi.on("before_agent_start", (event, ctx) =>
 		pierEmit("PromptSubmit", "before_agent_start", event, ctx));
-	pi.on("tool_execution_start", (event, ctx) => {
-		if (event && event.toolName === "ask") {
-			pierEmit("InteractionRequested", "tool_execution_start.ask", event, ctx, {
-				interactionId: event.toolCallId,
-				interactionKind: "question",
-			});
-			return;
-		}
-		pierEmit("ToolStart", "tool_execution_start", event, ctx);
-	});
-	pi.on("tool_execution_end", (event, ctx) => {
-		if (event && event.toolName === "ask") {
-			pierEmit("InteractionResolved", "tool_execution_end.ask", event, ctx, {
-				interactionId: event.toolCallId,
-				interactionKind: "question",
-				interactionOutcome: event.isError === true ? "failed" : "completed",
-			});
-			return;
-		}
+	pi.on("tool_execution_start", (event, ctx) =>
+		pierEmit("ToolStart", "tool_execution_start", event, ctx));
+	pi.on("tool_execution_end", (event, ctx) =>
 		pierEmit("ToolComplete", "tool_execution_end", event, ctx, {
 			nativeState: event && event.isError === true ? "error" : "completed",
-		});
-	});
+		}));
+	// 扩展弹出 ctx.ui.select/confirm/input/editor 的阻塞提示：上游深度计数
+	// 保证最外层 start/end 严格配对且 finally 兜底 end，匿名交互计数安全。
+	pi.on("ui_prompt_start", (event, ctx) =>
+		pierEmit("InteractionRequested", "ui_prompt_start", event, ctx, {
+			interactionKind: "question",
+			nativeState:
+				event && typeof event.kind === "string" ? event.kind : undefined,
+		}));
+	pi.on("ui_prompt_end", (event, ctx) =>
+		pierEmit("InteractionResolved", "ui_prompt_end", event, ctx, {
+			interactionKind: "question",
+			interactionOutcome: "completed",
+			nativeState:
+				event && typeof event.kind === "string" ? event.kind : undefined,
+		}));
 	pi.on("agent_settled", (event, ctx) =>
 		pierEmit("Stop", "agent_settled", event, ctx));
 	pi.on("session_shutdown", (event, ctx) =>
@@ -228,6 +237,18 @@ export async function installPiExtension(
   path: string = piExtensionPath()
 ): Promise<void> {
   if (!piDetect()) {
+    return;
+  }
+  const existing = await readExtensionRaw(path);
+  if (
+    existing !== null &&
+    isPierManagedPluginContent(existing) &&
+    existing.includes('agent: "omp"')
+  ) {
+    console.warn(
+      "[agent-hooks:pi] omp plugin already owns this path, skip install:",
+      path
+    );
     return;
   }
   await writeManagedPluginFile({

@@ -98,11 +98,17 @@ function SummaryRow({
   );
 }
 
-function agentSessionStatusPresentation(exitCode: number | undefined): {
+function agentSessionStatusPresentation(agent: TerminalAgentPanelMetadata): {
   badgeVariant: "danger" | "success";
   label: string;
 } {
-  if (exitCode !== undefined && exitCode !== 0) {
+  if (agent.restore?.cause === "resume-failed") {
+    return {
+      badgeVariant: "danger",
+      label: i18next.t("terminal.agentSession.statusResumeFailed"),
+    };
+  }
+  if (agent.exitCode !== undefined && agent.exitCode !== 0) {
     return {
       badgeVariant: "danger",
       label: i18next.t("terminal.agentSession.statusFailed"),
@@ -131,7 +137,7 @@ export function RestoredAgentResultView({
   const agentLabel = entry?.label ?? agent.agentId;
   const command = agent.launch.command ?? agent.launch.agentId ?? agent.agentId;
   const [restarting, setRestarting] = useState(false);
-  const status = agentSessionStatusPresentation(agent.exitCode);
+  const status = agentSessionStatusPresentation(agent);
   const locale = i18next.language || "en";
   const durationMs =
     agent.finishedAt === undefined
@@ -156,15 +162,23 @@ export function RestoredAgentResultView({
             <AgentIcon agentId={agent.agentId} size={24} />
           </EmptyMedia>
           <EmptyTitle>
-            {i18next.t("terminal.agentSession.endedTitle")}
+            {i18next.t(
+              agent.restore?.cause === "resume-failed"
+                ? "terminal.agentSession.resumeFailedTitle"
+                : "terminal.agentSession.endedTitle"
+            )}
           </EmptyTitle>
           <EmptyDescription>
-            {i18next.t("terminal.agentSession.endedBody")}
+            {i18next.t(
+              agent.restore?.cause === "resume-failed"
+                ? "terminal.agentSession.resumeFailedBody"
+                : "terminal.agentSession.endedBody"
+            )}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="gap-5">
           {onRestart || onNewSession ? (
-            <div className="flex w-full max-w-sm justify-end gap-2">
+            <div className="flex items-center justify-center gap-2">
               {onNewSession ? (
                 <Button
                   data-testid="terminal-agent-new-session"

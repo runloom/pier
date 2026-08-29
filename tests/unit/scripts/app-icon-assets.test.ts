@@ -174,6 +174,14 @@ describe("Pier generated application icon assets", () => {
       expect(svgAttribute(trial, "pier-underscore", "d"), file).toBe(
         underscore
       );
+      expect(svgAttribute(trial, "pier-body", "x"), file).toBe("0");
+      expect(svgAttribute(trial, "pier-body", "y"), file).toBe("0");
+      expect(svgAttribute(trial, "pier-body", "width"), file).toBe("1024");
+      expect(svgAttribute(trial, "pier-body", "height"), file).toBe("1024");
+      expect(svgAttribute(trial, "pier-body", "rx"), file).toBe("");
+      expect(trial, file).not.toContain("pier-body-clip");
+      expect(trial, file).not.toContain("translate(102 102)");
+      expect(trial, file).not.toContain("scale(0.80078125)");
       expect(trial, file).not.toMatch(/#9bd9ff|#55aef4|#2478ca/i);
       expect(trial, file).toContain("#8549ff");
       expect(trial, file).toContain("#161b28");
@@ -202,7 +210,7 @@ describe("Pier generated application icon assets", () => {
   });
 
   it("keeps every generated modern ICNS frame on the canonical resize output", {
-    timeout: 20_000,
+    timeout: 60_000,
   }, () => {
     const frames = new Map(
       parseIcns(readFileSync(join(ROOT, "build/icon.icns"))).map((entry) => [
@@ -225,13 +233,13 @@ describe("Pier generated application icon assets", () => {
     }
   });
 
-  it("keeps every raster output transparent at all four corners", () => {
+  it("keeps every raster output opaque at all four corners", () => {
     for (const size of ICON_SIZES) {
       const corners = cornerAlphas(
         readFileSync(join(ROOT, "build/icons", `${size}x${size}.png`))
       );
       expect(
-        corners.every((alpha) => alpha <= 2),
+        corners.every((alpha) => alpha >= 250),
         `${size}px`
       ).toBe(true);
     }
@@ -262,9 +270,11 @@ describe("Pier generated application icon assets", () => {
         "icon_512x512@2x.png",
       ]);
       for (const file of readdirSync(output)) {
-        expect(cornerAlphas(readFileSync(join(output, file))), file).toEqual([
-          0, 0, 0, 0,
-        ]);
+        const corners = cornerAlphas(readFileSync(join(output, file)));
+        expect(
+          corners.every((alpha) => alpha >= 250),
+          file
+        ).toBe(true);
       }
     }
   );

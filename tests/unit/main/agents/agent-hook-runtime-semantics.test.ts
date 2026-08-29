@@ -186,6 +186,9 @@ describe("agent hook runtime semantics", () => {
         "gemini",
         "goose",
         "grok",
+        // kilo 2026-08-29 降级对齐同源 opencode：session.idle 非回合完成
+        // 证据，authoritative 会在中途 idle 封账后冻结面板（cursor 事故同构）。
+        "kilo",
         "kimi",
         "mistral-vibe",
         "opencode",
@@ -193,7 +196,7 @@ describe("agent hook runtime semantics", () => {
         "qodercli",
         "qwen-code",
       ],
-      authoritative: ["autohand", "kilo", "mimo-code", "omp", "pi"],
+      authoritative: ["autohand", "mimo-code", "omp", "pi"],
       none: ["aider", "amp", "cline", "crush", "hermes", "kiro"],
     } as const;
 

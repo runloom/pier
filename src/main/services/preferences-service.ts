@@ -60,6 +60,7 @@ const PATCHABLE_KEYS = [
   "worktreeRootPath",
   "panelCloseFocusPolicy",
   "lsp",
+  "receiveCandidateUpdates",
   "shellEnvironment",
 ] as const satisfies readonly (keyof ProjectPreferencesPatch)[];
 

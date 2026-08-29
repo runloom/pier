@@ -312,7 +312,10 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       waiting: "unsupported",
       error: "unsupported",
       completed: "unsupported",
-      interrupted: "unsupported",
+      // 取消不发 Stop 只发 Notification（官方文档）；binary 0.202.0 实测
+      // notification_type=idle_prompt 唯一发射点在 requestCancelledByUser
+      // 路径 → TurnInterrupted 可信中断。
+      interrupted: "native",
       subagent: "unsupported",
     },
     eventMappings: facts(
@@ -322,6 +325,8 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       nativeFact("processing", "UserPromptSubmit", "PromptSubmit"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
       nativeFact("processing", "PreCompact", "processing"),
+      nativeFact("processing", "Notification", "processing"),
+      nativeFact("interrupted", "Notification", "TurnInterrupted"),
       nativeFact("tool", "PreToolUse", "ToolStart")
     ),
     upstream: upstream(
@@ -340,7 +345,10 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       waiting: "unsupported",
       error: "native",
       completed: "reconciled",
-      interrupted: "reconciled",
+      // TurnEnd payload 为空、无法区分取消（取消也报 TurnCompleted）；
+      // Kimi Code 的 Interrupt 事件带子智能体 turn_id 泄漏面，未安装
+      // （见 kimi.ts「刻意不装的新事件」）。
+      interrupted: "unsupported",
       subagent: "native",
     },
     eventMappings: facts(
@@ -385,8 +393,11 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       nativeFact("processing", "before_agent_start", "PromptSubmit"),
       nativeFact("processing", "tool_execution_end", "ToolComplete"),
       nativeFact("tool", "tool_execution_start", "ToolStart"),
-      nativeFact("waiting", "tool_execution_start.ask", "InteractionRequested"),
-      nativeFact("waiting", "tool_execution_end.ask", "InteractionResolved")
+      // 2026-08-29 修正：waiting 真实来源是 pi 专为状态集成设计的
+      // ui_prompt_start/end（docs/extensions.md）；历史误植的
+      // tool_execution_*.ask 是 omp 自有工具，pi 无此工具，已移除。
+      nativeFact("waiting", "ui_prompt_start", "InteractionRequested"),
+      nativeFact("waiting", "ui_prompt_end", "InteractionResolved")
     ),
     upstream: sourceCommit(
       "https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/extensions.md",

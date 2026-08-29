@@ -39,6 +39,7 @@ interface ProtocolRegistration {
   registerSchemesAsPrivileged(
     schemes: {
       privileges: {
+        corsEnabled?: boolean;
         secure: boolean;
         standard: boolean;
         supportFetchAPI: boolean;
@@ -76,6 +77,7 @@ function imageResponse(
 ): Response {
   return new Response(Uint8Array.from(bytes), {
     headers: {
+      "access-control-allow-origin": "*",
       "cache-control": "private, immutable",
       "content-length": String(bytes.length),
       "content-type": mime,
@@ -190,7 +192,12 @@ export function registerFilePreviewScheme(
 ): void {
   protocol.registerSchemesAsPrivileged([
     {
-      privileges: { secure: true, standard: true, supportFetchAPI: true },
+      privileges: {
+        corsEnabled: true,
+        secure: true,
+        standard: true,
+        supportFetchAPI: true,
+      },
       scheme: FILE_PREVIEW_SCHEME,
     },
   ]);

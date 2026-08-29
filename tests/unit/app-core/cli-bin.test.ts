@@ -14,6 +14,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const execFileAsync = promisify(execFile);
 const tempDirs: string[] = [];
 
+function cliTestEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
+  const {
+    PIER_CONTROL_SOCKET: _socket,
+    PIER_PANEL_ID: _panel,
+    PIER_WINDOW_ID: _window,
+    ...rest
+  } = process.env;
+  return { ...rest, ...extra };
+}
+
 function fallbackSocketPathForUserData(userDataDir: string): string {
   const suffix = createHash("sha256")
     .update(userDataDir)
@@ -438,7 +448,7 @@ describe("bin/pier.mjs", () => {
     await server.start();
 
     const { stdout } = await execFileAsync("node", ["bin/pier.mjs", "status"], {
-      env: { ...process.env, PIER_CONTROL_SOCKET_PATH: socketPath },
+      env: cliTestEnv({ PIER_CONTROL_SOCKET_PATH: socketPath }),
     });
 
     expect(stdout).toBe("");
@@ -466,7 +476,7 @@ describe("bin/pier.mjs", () => {
         "node",
         ["bin/pier.mjs", "status", "--json"],
         {
-          env: { ...process.env, PIER_USER_DATA_DIR: userDataDir },
+          env: cliTestEnv({ PIER_USER_DATA_DIR: userDataDir }),
         }
       );
 
@@ -499,12 +509,11 @@ describe("bin/pier.mjs", () => {
     await server.start();
 
     await execFileAsync("node", ["bin/pier.mjs", "status", "--json"], {
-      env: {
-        ...process.env,
+      env: cliTestEnv({
         PATH: `/cli/bin:${process.env.PATH ?? ""}`,
         PIER_CONTROL_SOCKET_PATH: socketPath,
         PIER_TEST_CLIENT_ENV: "from-cli",
-      },
+      }),
     });
 
     expect(seenClientEnv).toMatchObject({
@@ -516,11 +525,10 @@ describe("bin/pier.mjs", () => {
       "node",
       ["bin/pier.mjs", "status", "--json", "--print-envelope"],
       {
-        env: {
-          ...process.env,
+        env: cliTestEnv({
           PATH: `/cli/bin:${process.env.PATH ?? ""}`,
           PIER_TEST_CLIENT_ENV: "from-cli",
-        },
+        }),
       }
     );
     expect(JSON.parse(stdout).envelope).not.toHaveProperty("clientEnv");
@@ -594,7 +602,7 @@ describe("bin/pier.mjs", () => {
       "node",
       ["bin/pier.mjs", "panels", "list"],
       {
-        env: { ...process.env, PIER_CONTROL_SOCKET_PATH: socketPath },
+        env: cliTestEnv({ PIER_CONTROL_SOCKET_PATH: socketPath }),
       }
     );
 
@@ -638,7 +646,7 @@ describe("bin/pier.mjs", () => {
       "node",
       ["bin/pier.mjs", "terminal", "profiles", "list"],
       {
-        env: { ...process.env, PIER_CONTROL_SOCKET_PATH: socketPath },
+        env: cliTestEnv({ PIER_CONTROL_SOCKET_PATH: socketPath }),
       }
     );
 
@@ -671,7 +679,7 @@ describe("bin/pier.mjs", () => {
 
     await expect(
       execFileAsync("node", ["bin/pier.mjs", "panels", "focus", "missing"], {
-        env: { ...process.env, PIER_CONTROL_SOCKET_PATH: socketPath },
+        env: cliTestEnv({ PIER_CONTROL_SOCKET_PATH: socketPath }),
       })
     ).rejects.toMatchObject({
       stderr: "not_found: panel not found: missing\n",

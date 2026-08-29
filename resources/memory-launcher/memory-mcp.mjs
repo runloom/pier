@@ -9,11 +9,10 @@
  *   3. 项目被用户关闭(账本 desiredState=disabled)或无法解析 → 空工具应答
  *
  * 启用时透传官方引擎:`npx -y @modelcontextprotocol/server-memory@2026.7.4`,
- * `MEMORY_FILE_PATH` 指向该项目 store,stdio 直连、退出码跟随。
+ * `MEMORY_FILE_PATH` 指向该项目 store;stdout 握手期注入 instructions,随后 splice。
  *
- * 零 npm 依赖(Node ≥18 标准库)。空工具应答是「引擎零自研」原则的唯一
- * 显式豁免(见 v3 spec 风险表):newline-delimited JSON-RPC,只应答
- * initialize / tools/list / ping,其余方法返回 -32601。
+ * 零 npm 依赖(Node ≥18 标准库)。「引擎零自研」的显式豁免:空工具应答,以及
+ * stdout 握手期注入 instructions(见 2026-08-28 spec)。
  *
  * 测试钩子:`PIER_MEMORY_ENGINE`(JSON 数组命令行)覆盖引擎命令。
  */
@@ -31,6 +30,269 @@ export const ENGINE_COMMAND = [
   "-y",
   "@modelcontextprotocol/server-memory@2026.7.4",
 ];
+
+/**
+ * 面向智能体的用法引导。真源在本文件;宿主 AGENTS.md 托管段必须字节相等
+ * (launcher-contract 锁)。经 initialize.result.instructions 注入,默认启用
+ * 不写仓库。
+ */
+export const MEMORY_INSTRUCTIONS = [
+  "# Project memory (managed by Pier)",
+  "",
+  'You have persistent project memory tools from the "pier-memory" MCP server.',
+  "Use them to make future sessions in this repository more effective:",
+  "",
+  "- Before starting a non-trivial task, call search_nodes with keywords of the task domain.",
+  "- When you learn a durable fact, record it as an observation on the matching entity",
+  "  (create the entity when absent). entityType MUST be one of:",
+  "  convention | pitfall | decision | environment.",
+  "- Do NOT record anything derivable from the codebase (file layout, dependency lists,",
+  "  command --help output), transient task state, or secrets/tokens.",
+  "- When you notice an observation is outdated, delete it (delete_observations).",
+  "  This store has no automatic decay; pruning is your responsibility.",
+  "- Keep observations atomic: one fact per observation, self-contained wording.",
+].join("\n");
+
+const MAX_STDOUT_BUFFER = 1024 * 1024;
+const CONTENT_LENGTH_PREFIX = "content-length:";
+const CONTENT_LENGTH_HEADER = /^Content-Length:\s*(\d+)\s*$/im;
+const TRAILING_CR = /\r$/;
+
+function ignorePipeError(stream) {
+  stream.on("error", () => {
+    // 对端关掉管道时的 EPIPE 不是启动失败,跟随子进程退出。
+  });
+}
+
+export function applyMemoryInstructions(result) {
+  if (result === null || typeof result !== "object" || Array.isArray(result)) {
+    return result;
+  }
+  const existing = result.instructions;
+  if (typeof existing === "string" && existing.includes(MEMORY_INSTRUCTIONS)) {
+    return result;
+  }
+  const prefix =
+    typeof existing === "string" && existing.trim().length > 0
+      ? `${existing}\n\n`
+      : "";
+  return { ...result, instructions: `${prefix}${MEMORY_INSTRUCTIONS}` };
+}
+
+export function isInitializeSuccess(message) {
+  if (!message || typeof message !== "object" || Array.isArray(message)) {
+    return false;
+  }
+  if (message.jsonrpc !== "2.0" || message.error) {
+    return false;
+  }
+  const result = message.result;
+  if (result === null || typeof result !== "object" || Array.isArray(result)) {
+    return false;
+  }
+  return (
+    typeof result.protocolVersion === "string" &&
+    result.serverInfo !== null &&
+    typeof result.serverInfo === "object" &&
+    result.capabilities !== null &&
+    typeof result.capabilities === "object"
+  );
+}
+
+function encodeContentLengthFrame(message) {
+  const payload = Buffer.from(JSON.stringify(message), "utf8");
+  const header = Buffer.from(
+    `Content-Length: ${payload.length}\r\n\r\n`,
+    "utf8"
+  );
+  return Buffer.concat([header, payload]);
+}
+
+function leadingWsLength(buffer) {
+  let index = 0;
+  while (index < buffer.length) {
+    const byte = buffer[index];
+    if (byte !== 0x09 && byte !== 0x0a && byte !== 0x0d && byte !== 0x20) {
+      break;
+    }
+    index += 1;
+  }
+  return index;
+}
+
+function contentLengthPrefixState(buffer) {
+  const take = Math.min(buffer.length, CONTENT_LENGTH_PREFIX.length);
+  const available = buffer.toString("utf8", 0, take).toLowerCase();
+  if (CONTENT_LENGTH_PREFIX.startsWith(available)) {
+    return available.length < CONTENT_LENGTH_PREFIX.length ? "maybe" : "yes";
+  }
+  return "no";
+}
+
+function consumeContentLength(buffer) {
+  const sep = buffer.indexOf("\r\n\r\n");
+  if (sep < 0) {
+    return buffer.length > MAX_STDOUT_BUFFER
+      ? { action: "raw" }
+      : { action: "need-more" };
+  }
+  const header = buffer.subarray(0, sep).toString("utf8");
+  const match = CONTENT_LENGTH_HEADER.exec(header);
+  if (!match) {
+    return { action: "raw" };
+  }
+  const size = Number(match[1]);
+  if (!Number.isFinite(size) || size < 0 || size > MAX_STDOUT_BUFFER) {
+    return { action: "raw" };
+  }
+  const bodyStart = sep + 4;
+  if (buffer.length < bodyStart + size) {
+    return { action: "need-more" };
+  }
+  const original = buffer.subarray(0, bodyStart + size);
+  const rest = buffer.subarray(bodyStart + size);
+  let message;
+  try {
+    message = JSON.parse(
+      buffer.subarray(bodyStart, bodyStart + size).toString("utf8")
+    );
+  } catch {
+    return { action: "pass", frame: original, rest };
+  }
+  if (!isInitializeSuccess(message)) {
+    return { action: "pass", frame: original, rest };
+  }
+  return {
+    action: "rewrite",
+    frame: encodeContentLengthFrame({
+      ...message,
+      result: applyMemoryInstructions(message.result),
+    }),
+    rest,
+  };
+}
+
+function consumeNdjson(buffer) {
+  const nl = buffer.indexOf(0x0a);
+  if (nl < 0) {
+    return buffer.length > MAX_STDOUT_BUFFER
+      ? { action: "raw" }
+      : { action: "need-more" };
+  }
+  const original = buffer.subarray(0, nl + 1);
+  const rest = buffer.subarray(nl + 1);
+  const line = buffer.subarray(0, nl).toString("utf8").replace(TRAILING_CR, "");
+  let message;
+  try {
+    message = JSON.parse(line);
+  } catch {
+    return { action: "pass", frame: original, rest };
+  }
+  if (!isInitializeSuccess(message)) {
+    return { action: "pass", frame: original, rest };
+  }
+  return {
+    action: "rewrite",
+    frame: Buffer.from(
+      `${JSON.stringify({
+        ...message,
+        result: applyMemoryInstructions(message.result),
+      })}\n`,
+      "utf8"
+    ),
+    rest,
+  };
+}
+
+function consumeStdout(buffer) {
+  if (buffer.length === 0) {
+    return { action: "need-more" };
+  }
+  if (leadingWsLength(buffer) > 0) {
+    return leadingWsLength(buffer) === buffer.length &&
+      buffer.length <= MAX_STDOUT_BUFFER
+      ? { action: "need-more" }
+      : { action: "raw" };
+  }
+  if (buffer[0] === 0x7b) {
+    return consumeNdjson(buffer);
+  }
+  const prefix = contentLengthPrefixState(buffer);
+  if (prefix === "maybe") {
+    return buffer.length > MAX_STDOUT_BUFFER
+      ? { action: "raw" }
+      : { action: "need-more" };
+  }
+  if (prefix === "yes") {
+    return consumeContentLength(buffer);
+  }
+  return { action: "raw" };
+}
+
+/** 握手期拦引擎 stdout:改写 initialize 成功应答后 splice 回原始管道。 */
+export function attachEngineStdoutIntercept(src, dest) {
+  let buffer = Buffer.alloc(0);
+  let done = false;
+
+  function splice(rest) {
+    if (done) {
+      return;
+    }
+    done = true;
+    src.pause();
+    src.off("data", onData);
+    src.off("end", onEnd);
+    if (rest.length > 0) {
+      dest.write(rest);
+    }
+    src.pipe(dest, { end: false });
+    src.resume();
+  }
+
+  function onEnd() {
+    if (done) {
+      return;
+    }
+    done = true;
+    if (buffer.length > 0) {
+      dest.write(buffer);
+    }
+  }
+
+  function onData(chunk) {
+    if (done) {
+      return;
+    }
+    buffer = Buffer.concat([buffer, chunk]);
+    while (!done && buffer.length > 0) {
+      const outcome = consumeStdout(buffer);
+      if (outcome.action === "need-more") {
+        if (buffer.length > MAX_STDOUT_BUFFER) {
+          splice(buffer);
+          buffer = Buffer.alloc(0);
+        }
+        return;
+      }
+      if (outcome.action === "raw") {
+        splice(buffer);
+        buffer = Buffer.alloc(0);
+        return;
+      }
+      dest.write(outcome.frame);
+      buffer = Buffer.from(outcome.rest);
+      if (outcome.action === "rewrite") {
+        splice(buffer);
+        buffer = Buffer.alloc(0);
+        return;
+      }
+    }
+  }
+
+  ignorePipeError(src);
+  ignorePipeError(dest);
+  src.on("data", onData);
+  src.on("end", onEnd);
+}
 
 /** 与宿主 resolveProjectIdentity 一致:sha256(realpath(commonDir)) 前 16 位。 */
 export function projectKeyForCommonDir(commonDirRealPath) {
@@ -127,12 +389,16 @@ function runEngine(storePath) {
   const [bin, ...args] = engineCommand(process.env);
   const child = spawn(bin, args, {
     env: { ...process.env, MEMORY_FILE_PATH: storePath },
-    stdio: "inherit",
+    stdio: ["pipe", "pipe", "inherit"],
   });
   child.on("error", (err) => {
     process.stderr.write(`[pier-memory] engine spawn failed: ${String(err)}\n`);
     process.exit(1);
   });
+  ignorePipeError(child.stdin);
+  ignorePipeError(process.stdin);
+  process.stdin.pipe(child.stdin);
+  attachEngineStdoutIntercept(child.stdout, process.stdout);
   const forward = (signal) => {
     child.kill(signal);
   };

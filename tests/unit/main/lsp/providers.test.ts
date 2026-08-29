@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createBootstrappedLspRegistry } from "../../../../src/main/services/lsp/bootstrap-providers.ts";
 import {
@@ -8,8 +11,10 @@ import {
 import { createVueLspProvider } from "../../../../src/main/services/lsp/providers/config-language-providers.ts";
 import { createPathLspProvider } from "../../../../src/main/services/lsp/providers/create-path-provider.ts";
 import { createTypescriptLspProvider } from "../../../../src/main/services/lsp/providers/typescript-provider.ts";
+import { resolveWorkspaceRelativeBinary } from "../../../../src/main/services/lsp/resolve-command.ts";
 import { LspServerRegistry } from "../../../../src/main/services/lsp/server-registry.ts";
 import {
+  asLspProviderDescriptor,
   PATH_LANGUAGE_MATRIX,
   pathLspDescriptorsFromMatrix,
 } from "../../../../src/shared/language-matrix/index.ts";
@@ -339,5 +344,89 @@ describe("Multi-language LSP providers", () => {
     });
     expect(provider.languageIdForPath("/bin/setup.sh")).toBe("shellscript");
     expect(provider.languageIdForPath("/bin/rc.zsh")).toBe("shellscript");
+  });
+
+  it("rejects workspace-relative binaries that escape the root", () => {
+    expect(
+      resolveWorkspaceRelativeBinary("/tmp/project", "../outside/dart")
+    ).toBeNull();
+    expect(
+      resolveWorkspaceRelativeBinary("/tmp/project", "/usr/bin/dart")
+    ).toBeNull();
+  });
+
+  it("prefers project FVM dart over PATH for the dart matrix row", async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), "pier-dart-fvm-"));
+    try {
+      const dartBin = join(rootPath, ".fvm", "flutter_sdk", "bin");
+      await mkdir(dartBin, { recursive: true });
+      const dartPath = join(dartBin, "dart");
+      await writeFile(dartPath, "#!/bin/sh\n");
+      const dart = pathLspDescriptorsFromMatrix().find(
+        (entry) => entry.id === "dart"
+      );
+      expect(dart).toBeDefined();
+      expect(dart?.workspaceRelativeCommands?.[0]?.command).toBe(
+        ".fvm/flutter_sdk/bin/dart"
+      );
+      if (!dart) {
+        return;
+      }
+      const provider = createPathLspProvider(asLspProviderDescriptor(dart));
+      const launch = provider.resolveLaunch({
+        rootPath,
+        workspaceKey: "test",
+      });
+      const resolved = launch && !(launch instanceof Promise) ? launch : null;
+      expect(resolved?.command).toBe(dartPath);
+      expect(resolved?.args).toEqual(["language-server", "--protocol=lsp"]);
+    } finally {
+      await rm(rootPath, { force: true, recursive: true });
+    }
+  });
+
+  it("prefers marker-listed PATH commands over earlier candidates", async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), "pier-fvm-marker-"));
+    try {
+      await writeFile(join(rootPath, ".fvmrc"), "{}\n");
+      const provider = createPathLspProvider({
+        args: [],
+        command: "false",
+        displayName: "Dart",
+        extensions: [".dart"],
+        id: "dart-fvm-order",
+        languageIds: ["dart"],
+        launchCandidates: [
+          { args: ["--as-dart"], command: "false" },
+          { args: ["--as-fvm"], command: "true" },
+        ],
+        preferLaunchCommandsWhenMarkers: {
+          commands: ["true"],
+          markers: [".fvmrc", ".fvm"],
+        },
+        priority: 70,
+        rootMarkers: [],
+        source: "core",
+      });
+      const withMarker = provider.resolveLaunch({
+        rootPath,
+        workspaceKey: "test",
+      });
+      const marked =
+        withMarker && !(withMarker instanceof Promise) ? withMarker : null;
+      expect(marked?.args).toEqual(["--as-fvm"]);
+
+      const withoutMarker = provider.resolveLaunch({
+        rootPath: join(rootPath, "empty"),
+        workspaceKey: "test",
+      });
+      const unmarked =
+        withoutMarker && !(withoutMarker instanceof Promise)
+          ? withoutMarker
+          : null;
+      expect(unmarked?.args).toEqual(["--as-dart"]);
+    } finally {
+      await rm(rootPath, { force: true, recursive: true });
+    }
   });
 });

@@ -406,6 +406,7 @@ export const settings = {
         close: "关闭当前终端面板。",
         composerAttach:
           "在增强输入中添加文件。增强输入未聚焦时，同一快捷键启动默认智能体。",
+        openAgentComposer: "打开或关闭当前终端的增强输入。",
         openDebugWindow: "打开终端调试窗口。",
       },
       view: {

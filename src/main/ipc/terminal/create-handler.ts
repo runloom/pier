@@ -41,7 +41,10 @@ import {
   handleInitialInputInjectFailed,
   sendInitialTerminalInput,
 } from "./create-post-actions.ts";
-import { resolveRestoredAgentNativeLaunch } from "./create-restore.ts";
+import {
+  resolveRestoredAgentNativeLaunch,
+  shouldLatchResumePending,
+} from "./create-restore.ts";
 import { resolveTerminalTransferCreateAction } from "./create-transfer-guard.ts";
 import { recordRendererTerminalRoute } from "./debug.ts";
 import { terminalFocusCoordinator } from "./focus-coordinator.ts";
@@ -377,7 +380,13 @@ export async function handleTerminalCreate(args: {
       await recordTerminalPanelAgentSpawnGeneration(
         sessionScope,
         createArgs.panelId,
-        nextSpawnGeneration
+        nextSpawnGeneration,
+        {
+          resumePending: shouldLatchResumePending({
+            agentRestore,
+            restoredAgent: launch.restoredAgent,
+          }),
+        }
       );
     }
     // exitPresentation lives on panel params; renderer resolves final copy on

@@ -126,6 +126,12 @@
       "description": "進行中のリバートを続けます。",
       "title": "git: リバートを続ける"
     },
+    "pier.git.commit": {
+      "aliases": ["git commit", "コミット", "変更をコミット"],
+      "category": "git",
+      "description": "現在の変更をコミットします。ステージしていない変更の取り込みとプッシュも選べます。",
+      "title": "git: コミット"
+    },
     "pier.git.undoLastCommit": {
       "aliases": [
         "コミットを取り消す",
@@ -718,6 +724,27 @@
     "ui.gitRevertConflictTitle": "リバートの競合",
     "ui.gitRevertConflict": "競合のためリバートを一時停止しました。解決してから続けてください。",
     "ui.gitRevertContinueConflict": "リバートにはまだ競合があります。解決してから続けてください。",
+    "ui.gitCommit": "コミット",
+    "ui.gitCommitTitle": "コミット",
+    "ui.gitCommitDescription": "現在の変更をコミットします。",
+    "ui.gitCommitMessage": "コミットメッセージ",
+    "ui.gitCommitMessagePlaceholder": "何を変えたか書いてください",
+    "ui.gitCommitMessageRequired": "コミットメッセージを入力してください。",
+    "ui.gitCommitCounts": "ステージ済み {{staged}} · 未ステージ {{unstaged}}",
+    "ui.gitCommitIncludeUnstaged": "ステージしていない変更も含める",
+    "ui.gitCommitPushAfter": "コミット後にプッシュ",
+    "ui.gitCommitSuccess": "コミットしました",
+    "ui.gitCommitNoStaged": "ステージ済みの変更がありません。変更でステージするか、ステージしていない変更も含めてください。",
+    "ui.gitCommitNothing": "コミットする変更がありません。先にファイルを変更してください。",
+    "ui.gitCommitPaused": "先にステータスバーで git 操作を続けるか中止してください。",
+    "ui.gitCommitFailed": "コミットできませんでした",
+    "ui.gitCommitPushFailed": "コミットはできましたが、プッシュに失敗しました",
+    "ui.gitCommitPushFailedBody": "{{message}}\n\nステータスバーからプッシュをやり直してください。",
+    "ui.gitCommitDiscardTitle": "このメッセージを破棄しますか？",
+    "ui.gitCommitDiscardBody": "入力した内容は失われます。",
+    "ui.gitCommitDiscardConfirm": "破棄",
+    "ui.gitCommitPushUnavailable": "いまはリモートにプッシュできません。",
+    "ui.gitCommitPushAuth": "先にリモートへサインインしてから、もう一度試してください。",
     "ui.gitUndoCommitConfirm": "直前のコミットを取り消しますか？変更はステージ済みのまま残ります。",
     "ui.gitUndoCommitConfirmButton": "取り消す",
     "ui.gitUndoCommitSuccess": "コミットを取り消しました",
@@ -852,6 +879,10 @@
     "pier.git.statusItem.confirmSync": {
       "label": "同期の前に確認",
       "description": "状態バーの同期項目から同期（先にプルしてからプッシュ）する前に確認します。"
+    },
+    "pier.git.commit.pushAfter": {
+      "label": "コミット後にプッシュ（既定）",
+      "description": "コミット確認を開いたとき、コミット後のプッシュをオンにします。この回だけオフにできます。"
     },
     "pier.git.worktree.branchNamePrompt": {
       "label": "作業ツリーのブランチプロンプト",

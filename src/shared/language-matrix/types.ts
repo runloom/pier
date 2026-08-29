@@ -22,8 +22,26 @@ export interface LanguageMatrixLspSpec {
     readonly args?: readonly string[];
     readonly command: string;
   }>;
+  /**
+   * When any `markers` file/dir exists at the language-server root, PATH
+   * launchCandidates whose `command` is listed here are tried first.
+   * Dart/FVM: prefer `fvm` over a global `dart` when `.fvmrc` is present.
+   */
+  readonly preferLaunchCommandsWhenMarkers?: {
+    readonly commands: readonly string[];
+    readonly markers: readonly string[];
+  };
   readonly priority: number;
   readonly rootMarkers: readonly string[];
+  /**
+   * Binaries resolved against the language-server root (not PATH). Tried
+   * before PATH launchCandidates so a project-local SDK (e.g. FVM) wins.
+   * `command` is a relative path; `..` segments are rejected.
+   */
+  readonly workspaceRelativeCommands?: ReadonlyArray<{
+    readonly args?: readonly string[];
+    readonly command: string;
+  }>;
 }
 
 /**

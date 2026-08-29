@@ -51,28 +51,48 @@ function localizedTooltipValue(
   switch (value) {
     case "Cargo":
       return t("commandPalette.run.taskTab.source.cargo");
+    case "CMake":
+      return t("commandPalette.run.taskTab.source.cmake");
     case "Composer":
       return t("commandPalette.run.taskTab.source.composer");
     case "Deno":
       return t("commandPalette.run.taskTab.source.deno");
+    case ".NET":
+      return t("commandPalette.run.taskTab.source.dotnet");
+    case "Go":
+      return t("commandPalette.run.taskTab.source.go");
+    case "Gradle":
+      return t("commandPalette.run.taskTab.source.gradle");
     case "Recently Run":
       return t("commandPalette.run.taskTab.source.history");
     case "Justfile":
       return t("commandPalette.run.taskTab.source.just");
     case "Makefile":
       return t("commandPalette.run.taskTab.source.make");
+    case "Maven":
+      return t("commandPalette.run.taskTab.source.maven");
     case "mise":
       return t("commandPalette.run.taskTab.source.mise");
+    case "Mix":
+      return t("commandPalette.run.taskTab.source.mix");
     case "package.json":
       return t("commandPalette.run.taskTab.source.packageScript");
+    case "pubspec":
+      return t("commandPalette.run.taskTab.source.pubspec");
     case "pyproject.toml":
       return t("commandPalette.run.taskTab.source.pyproject");
+    case "sbt":
+      return t("commandPalette.run.taskTab.source.sbt");
+    case "Swift Package":
+      return t("commandPalette.run.taskTab.source.swiftpm");
     case "Taskfile":
       return t("commandPalette.run.taskTab.source.taskfile");
     case "VS Code":
       return t("commandPalette.run.taskTab.source.vscode");
     case "Zed":
       return t("commandPalette.run.taskTab.source.zed");
+    case "Zig":
+      return t("commandPalette.run.taskTab.source.zig");
     default:
       return value;
   }
@@ -167,14 +187,14 @@ export function tabAriaLabel(
 
 /**
  * Running 态指示 — soft shimmer 顶轨（与状态栏 agent 扫光同语汇）。
- * 仅 dockview tab：视觉在外层 `.dv-tab::before`；本节点仅 a11y 锚点。
+ * 仅 dockview tab：视觉在 `.pier-tab-running-bar`（不占竖分割线 ::before）。
  * overflow 列表不得复用顶轨 loading（见 `surface: "menu"`）。
  */
 function tabRunningTopBar(displayLabel: string): ReactNode {
   return (
     <span
       aria-label={displayLabel}
-      className="pier-tab-running-bar pointer-events-none absolute overflow-hidden"
+      className="pier-tab-running-bar pointer-events-none absolute"
       data-panel-tab-state-indicator="running"
       data-tab-status="running"
       role="img"
@@ -217,7 +237,7 @@ function tabStatusIcon(
 }
 
 /**
- * @param surface `"tab"` (default) uses strip top-shimmer for running.
+ * @param surface `"tab"` (default) uses the strip top-shimmer bar for running.
  *   `"menu"` uses a compact spinner/icon — never the tab-strip loading chrome.
  */
 export function tabStatusIndicator(

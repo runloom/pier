@@ -18,6 +18,7 @@ const PRODUCTION_SOURCE_ROOTS = [
 /** Content-dialog commit forms that must use setFooter (not body fake-footer). */
 const COMMIT_FORM_DIALOG_FILES = [
   "src/plugins/builtin/git/renderer/worktree/create-overlay.tsx",
+  "src/plugins/builtin/git/renderer/commit/overlay.tsx",
   "src/renderer/pages/settings/components/skills/create-dialog.tsx",
   "src/renderer/pages/settings/components/pier-home-create-skill-dialog.tsx",
   "packages/plugin-ssh/src/renderer/host-form-dialog.tsx",
@@ -65,6 +66,10 @@ describe("dialog form governance", () => {
     expect(agents).toContain("即时偏好（live preference）");
     expect(agents).toContain("dialog-form-layout.ts");
     expect(agents).toContain("禁止 body 内仿 footer");
+    expect(agents).toContain("提交型 dialog 的可选勾选");
+    expect(agents).toContain("禁止第三套「记住上次」");
+    expect(agents).toContain("情境决策");
+    expect(agents).toContain("稳定工作流习惯");
     expect(agents).toContain(
       "tests/unit/renderer/app/dialog-form-governance.test.ts"
     );
@@ -167,6 +172,77 @@ describe("dialog form governance", () => {
     expect(worktree).toContain("DIALOG_FOOTER_ACTIONS_CLASS");
     expect(worktree).toContain('data-slot="dialog-commit-form"');
     expect(worktree).toContain("setFooter");
+  });
+
+  it("keeps git commit confirm overlay on the commit-form path", () => {
+    const overlay = source(
+      "src/plugins/builtin/git/renderer/commit/overlay.tsx"
+    );
+    expect(overlay).toContain("DIALOG_COMMIT_FORM_CLASS");
+    expect(overlay).toContain("DIALOG_COMMIT_FIELD_GROUP_CLASS");
+    expect(overlay).toContain("DIALOG_FOOTER_ACTIONS_CLASS");
+    expect(overlay).toContain('data-slot="dialog-commit-form"');
+    expect(overlay).toContain("setFooter");
+  });
+
+  it("derives git commit checkboxes from the current snapshot and does not remember last choice", () => {
+    const overlay = source(
+      "src/plugins/builtin/git/renderer/commit/overlay.tsx"
+    );
+    const spec = source(
+      "docs/superpowers/specs/2026-08-29-git-commit-confirm-design.md"
+    );
+    expect(overlay).toContain("GIT_COMMIT_PUSH_AFTER_SETTING_KEY");
+    expect(overlay).toContain("useGitStatus");
+    expect(overlay).toContain("isModEnterSubmit");
+    expect(overlay).not.toMatch(/configuration\.set\(/);
+    expect(overlay).not.toMatch(/localStorage/);
+    expect(overlay).not.toMatch(/sessionStorage/);
+    const defaults = source(
+      "src/plugins/builtin/git/renderer/commit/defaults.ts"
+    );
+    expect(defaults).toContain("metaKey");
+    expect(defaults).toContain("ctrlKey");
+    expect(
+      source("src/plugins/builtin/git/renderer/commit/submit.ts")
+    ).toContain("getStatus");
+    expect(
+      source("src/plugins/builtin/git/renderer/commit/submit.ts")
+    ).toContain("includeIntent");
+    expect(
+      source("src/plugins/builtin/git/renderer/commit/submit.ts")
+    ).not.toMatch(/runRemoteSyncAction/);
+    expect(
+      source("src/plugins/builtin/git/renderer/commit/submit.ts")
+    ).toContain("getInFlightSync");
+    expect(
+      source("src/plugins/builtin/git/renderer/commit/submit.ts")
+    ).toContain("trackSync");
+    expect(overlay).toContain("includeIntent");
+    expect(overlay).toContain("lastLoadedRef");
+    expect(
+      source("src/plugins/builtin/git/renderer/commit/button.tsx")
+    ).toContain("showError");
+    expect(
+      source("src/plugins/builtin/git/renderer/commit/button.tsx")
+    ).not.toMatch(/runGitCommitCommand\(context\)\.catch\(\(\) => undefined\)/);
+    expect(spec).toContain("金标准");
+    expect(spec).toContain("不记忆");
+    expect(spec).toContain("不回写");
+    expect(spec).toContain("pier.git.commit.pushAfter");
+    expect(spec).not.toContain("SHIP-FLOW v1");
+    const en = source("src/plugins/builtin/git/locales/en.json");
+    expect(en).toContain("Commit the current changes.");
+    expect(en).not.toMatch(/Commit staged changes/);
+    expect(source("src/plugins/builtin/git/locales/zh-CN.json")).toContain(
+      "提交当前更改。"
+    );
+    expect(source("src/plugins/builtin/git/locales/zh-CN.json")).toContain(
+      "确认提交"
+    );
+    expect(source("src/plugins/builtin/git/locales/zh-CN.json")).not.toContain(
+      "提交已暂存的更改，可选"
+    );
   });
 
   it("does not allow plugins to mount product Dialog shells for forms", () => {

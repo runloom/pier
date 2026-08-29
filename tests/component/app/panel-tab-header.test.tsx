@@ -285,6 +285,9 @@ describe("PanelTabHeader", () => {
     expect(
       container.querySelector('[data-panel-tab-icon="welcome"]')
     ).not.toBeNull();
+    expect(
+      container.querySelector('[data-slot="panel-tab-separator"]')
+    ).toHaveAttribute("aria-hidden", "true");
   });
 
   it("uses generic tab chrome for title and icon while showing metadata in a shadcn tooltip", async () => {
@@ -338,7 +341,7 @@ describe("PanelTabHeader", () => {
     expect(
       container.querySelector("[data-panel-tab-state-indicator]")
     ).not.toHaveClass("pier-panel-tab-state-indicator");
-    // running：视觉在 .dv-tab::before；DOM 仅 a11y 锚点（无行内 spinner / 内层可见轨）
+    // running：视觉在 .pier-tab-running-bar（无行内 spinner）
     expect(container.querySelector("[data-panel-tab-state-icon]")).toBeNull();
     expect(
       container.querySelector("[data-panel-tab-state-indicator]")
@@ -401,7 +404,7 @@ describe("PanelTabHeader", () => {
     expect(tooltip).not.toHaveClass("pier-panel-tab-tooltip");
   });
 
-  it("renders running tab state as a soft-shimmer top-edge a11y anchor", () => {
+  it("renders running tab state as a soft-shimmer top-edge bar", () => {
     usePanelDescriptorStore.setState({
       activeId: null,
       descriptors: {
@@ -428,12 +431,8 @@ describe("PanelTabHeader", () => {
     );
     expect(indicator).toHaveAttribute("data-tab-status", "running");
     expect(indicator).toHaveAttribute("aria-label", "Running");
-    // dockview 视觉在外层 ::before；内层只留 a11y 锚点
-    expect(indicator).toHaveClass(
-      "pier-tab-running-bar",
-      "absolute",
-      "overflow-hidden"
-    );
+    expect(indicator).toHaveClass("pier-tab-running-bar", "absolute");
+    expect(indicator).not.toHaveClass("overflow-hidden");
     expect(indicator).not.toHaveClass("pier-tab-running-bar--menu");
     expect(indicator?.querySelector("[data-panel-tab-state-icon]")).toBeNull();
     expect(

@@ -33,7 +33,10 @@ export const settingsAppUpdate = {
     download: "下载",
     restart: "重启并安装",
   },
+  receiveCandidates: "接收候选版本",
+  receiveCandidatesDesc: "提前接收候选版本；可能不稳定，正式版发布后自动升级。",
   toast: {
+    prefFailed: "无法保存更新偏好，请重试",
     statusFailed: "无法读取更新状态，请重试",
     checkFailed: "无法检查更新，请重试",
     downloadFailed: "无法下载更新，请重试",

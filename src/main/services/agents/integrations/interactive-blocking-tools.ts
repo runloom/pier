@@ -66,3 +66,19 @@ export const CURSOR_INTERACTIVE_BLOCKING_TOOLS = [
     toolNames: ["CreatePlan", "SwitchMode"],
   },
 ] as const satisfies readonly InteractiveBlockingToolCase[];
+
+/**
+ * Cursor 子智能体派发工具（一手证据：cursor-agent 2026.08.25 bundle +
+ * 2026-08-29 events.jsonl 实测）：
+ *
+ * - `Task` 的 preToolUse 带**主 conversation_id + 子智能体自己的
+ *   generation_id**（外来 turnId），且上游**从不发 postToolUse**——按普通
+ *   ToolStart 记账会以外来 turnId 抢占主回合（resetTurn 把真回合提前打入
+ *   settled），随后真正的 `stop` 终态被 settled-turn 拒收，面板钉死在
+ *   「执行工具中」。
+ * - 语义上 Task 就是子智能体派发（bundle 内 claude 兼容映射 `Task:"Task"`；
+ *   原生 subagentStart/subagentStop hook 在当前版本实测不触发），因此按
+ *   SubagentStart/SubagentStop 记账：只计数、不改父状态、不携带 turnId，
+ *   未闭合计数由回合可信终态统一退休。
+ */
+export const CURSOR_SUBAGENT_DISPATCH_TOOLS = ["Task"] as const;

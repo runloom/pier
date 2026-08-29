@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const offer = vi.fn();
 const relocate = vi.fn();
 const showAppAlert = vi.fn();
+const listOtherWindowInfos = vi.fn();
 const isPanelTransferMovable = vi.fn((_componentId?: string) => true);
 const isPanelTransferCopyableComponent = vi.fn(
   (componentId: string) => componentId === "pier.files.filePanel"
@@ -44,6 +45,10 @@ vi.mock("@/stores/app-dialog.store.ts", () => ({
   showAppAlert: (input: unknown) => showAppAlert(input),
 }));
 
+vi.mock("@/components/workspace/transfer/pick-window.ts", () => ({
+  listOtherWindowInfos,
+}));
+
 vi.mock("@/stores/workspace.store.ts", () => ({
   useWorkspaceStore: {
     getState: () => ({
@@ -71,6 +76,8 @@ describe("panel relocate commands", () => {
     isPanelTransferCopyableComponent.mockImplementation(
       (componentId: string) => componentId === "pier.files.filePanel"
     );
+    listOtherWindowInfos.mockReset();
+    listOtherWindowInfos.mockResolvedValue([]);
     offer.mockResolvedValue({ accepted: true });
     relocate.mockResolvedValue({ ok: true, targetPanelId: "panel-welcome" });
     (globalThis as { window?: { pier?: { panelTransfer?: unknown } } }).window =
@@ -144,5 +151,92 @@ describe("panel relocate commands", () => {
     );
     await movePanelToNewWindow("panel-welcome");
     expect(showAppAlert).toHaveBeenCalled();
+  });
+
+  it("moves into an explicit other window", async () => {
+    const { movePanelToWindow } = await import(
+      "@/components/workspace/transfer/relocate.ts"
+    );
+    await movePanelToWindow("panel-welcome", "w-2");
+    expect(relocate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "window", windowId: "w-2" },
+        transferId: expect.any(String),
+      })
+    );
+  });
+
+  it("copies into an explicit other window", async () => {
+    const { copyPanelToWindow } = await import(
+      "@/components/workspace/transfer/relocate.ts"
+    );
+    await copyPanelToWindow("panel-files", "w-2");
+    expect(offer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability: "movable",
+        mode: "copy",
+      })
+    );
+    expect(relocate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "window", windowId: "w-2" },
+      })
+    );
+  });
+
+  it("move to other window alerts when no other window exists", async () => {
+    const { movePanelToOtherWindow } = await import(
+      "@/components/workspace/transfer/relocate.ts"
+    );
+    await movePanelToOtherWindow("panel-welcome");
+    expect(relocate).not.toHaveBeenCalled();
+    expect(showAppAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "workspace.panelTransfer.noOtherWindowsTitle",
+        body: "workspace.panelTransfer.noOtherWindows",
+      })
+    );
+  });
+
+  it("move to other window alerts when listing windows fails", async () => {
+    listOtherWindowInfos.mockRejectedValueOnce(new Error("ipc down"));
+    const { movePanelToOtherWindow } = await import(
+      "@/components/workspace/transfer/relocate.ts"
+    );
+    await movePanelToOtherWindow("panel-welcome");
+    expect(relocate).not.toHaveBeenCalled();
+    expect(showAppAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "workspace.panelTransfer.pickWindowFailed",
+        body: "ipc down",
+      })
+    );
+  });
+
+  it("move to other window uses the most recently focused other window", async () => {
+    const { movePanelToOtherWindow } = await import(
+      "@/components/workspace/transfer/relocate.ts"
+    );
+    listOtherWindowInfos.mockResolvedValueOnce([
+      { focused: false, id: "w-2", recordId: "r-2" },
+    ]);
+    await movePanelToOtherWindow("panel-welcome");
+    expect(relocate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "window", windowId: "w-2" },
+      })
+    );
+
+    relocate.mockClear();
+    listOtherWindowInfos.mockResolvedValueOnce([
+      { focused: false, id: "w-2", recordId: "r-2" },
+      { focused: false, id: "w-3", recordId: "r-3" },
+    ]);
+    await movePanelToOtherWindow("panel-welcome");
+    expect(relocate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "window", windowId: "w-2" },
+      })
+    );
   });
 });

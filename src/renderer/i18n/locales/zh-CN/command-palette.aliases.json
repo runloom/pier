@@ -85,6 +85,7 @@
       "removeCli": ["卸载 pier", "移除 pier 命令"]
     },
     "terminal": {
+      "openAgentComposer": ["打开增强输入", "关闭增强输入", "增强输入"],
       "openDebugWindow": [
         "终端调试",
         "原生终端调试",

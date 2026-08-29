@@ -83,6 +83,24 @@ export const lspProviderDescriptorSchema = z
      * Ordered launch attempts with distinct args (Swift: sourcekit-lsp, xcrun …).
      */
     launchCandidates: z.array(lspLaunchCandidateSchema).min(1).optional(),
+    /**
+     * Root-relative binaries tried before PATH candidates (FVM SDK, etc.).
+     */
+    workspaceRelativeCommands: z
+      .array(lspLaunchCandidateSchema)
+      .min(1)
+      .optional(),
+    /**
+     * When any marker exists at the server root, listed PATH commands are
+     * tried before the remaining launchCandidates.
+     */
+    preferLaunchCommandsWhenMarkers: z
+      .object({
+        commands: z.array(z.string().min(1)).min(1),
+        markers: z.array(z.string().min(1)).min(1),
+      })
+      .strict()
+      .optional(),
     displayName: z.string().min(1),
     extensions: z.array(extensionSchema).min(1),
     id: z.string().min(1),

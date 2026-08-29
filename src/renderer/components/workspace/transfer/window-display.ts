@@ -1,16 +1,30 @@
 /**
- * Human-readable labels for multi-window pickers (move/copy panel).
- * Prefer workspace basename + active tab title over bare "Window N".
+ * Human-readable rows for multi-window pickers and single-line menus.
+ *
+ * Picker columns (label + description):
+ * - label: workspace folder leaf (the scan key), disambiguated on collision
+ * - description: short qualifier — distinct branch, else distinct tab title,
+ *   else empty-window copy. Never echo the leaf. Never a path.
+ * - detail: identity path
+ *
+ * Single-line menu (menuLabel): leaf only. A qualifier is appended only when
+ * that leaf collides among the listed windows, cheapest first: branch, parent
+ * folder, tab title, then " · N".
  */
 
 import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { PanelSnapshot } from "@shared/contracts/panel.ts";
 
+export type WindowDisplayIconKind = "folder" | "git";
+
 export interface WindowDisplay {
   description?: string;
   detail?: string;
+  iconKind?: WindowDisplayIconKind;
   id: string;
   label: string;
+  /** Single-line label for native menus; qualifier only on identity collision. */
+  menuLabel: string;
   recordId: string;
   searchTerms: readonly string[];
 }
@@ -18,12 +32,10 @@ export interface WindowDisplay {
 export interface WindowDisplayCopy {
   /** Fallback when nothing better is known (numbered). */
   emptyWindow: (index: number) => string;
-  /** Secondary line when the window has no panels / no titles. */
+  /** Right-side qualifier when the window has no panels. */
   emptyWindowDescription: string;
   /** Disambiguate same labels: "pier" → "pier · 2". */
   sameNameIndex: (index: number) => string;
-  /** e.g. "3 tabs" when no active title. */
-  tabCount: (count: number) => string;
 }
 
 export function pathBasename(path: string): string {
@@ -50,6 +62,38 @@ function pathParentBasename(path: string): string | null {
   return pathBasename(trimmed.slice(0, idx)) || null;
 }
 
+function nonEmpty(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeIdentity(value: string): string {
+  return value
+    .trim()
+    .replaceAll("\\", "/")
+    .replaceAll("/", "-")
+    .replaceAll(/-+/g, "-")
+    .toLowerCase();
+}
+
+/**
+ * True when `candidate` can sit in the right column without echoing `identity`.
+ * Slash vs dash (`feat/foo` vs `feat-foo`) counts as the same visual identity.
+ * Last-segment path echoes are handled by `shortTitleQualifier`, not here —
+ * a branch `feat/foo` must stay distinct from folder leaf `foo`.
+ */
+export function isDistinctQualifier(
+  candidate: string,
+  identity: string
+): boolean {
+  const trimmed = candidate.trim();
+  const leaf = identity.trim();
+  if (trimmed.length === 0 || leaf.length === 0) {
+    return trimmed.length > 0;
+  }
+  return normalizeIdentity(trimmed) !== normalizeIdentity(leaf);
+}
+
 function panelsForWindow(
   panels: readonly PanelSnapshot[],
   windowId: string
@@ -70,18 +114,35 @@ function pickActivePanel(
   );
 }
 
-function projectPathOf(panel: PanelSnapshot | null): string | undefined {
-  const root = panel?.context?.projectRootPath?.trim();
-  return root && root.length > 0 ? root : undefined;
+function identityPathOf(panel: PanelSnapshot | null): string | undefined {
+  if (!panel?.context) {
+    return;
+  }
+  return (
+    nonEmpty(panel.context.worktreeRoot) ??
+    nonEmpty(panel.context.projectRootPath) ??
+    nonEmpty(panel.context.cwd)
+  );
 }
 
-function firstProjectPath(
-  windowPanels: readonly PanelSnapshot[]
+function branchOf(panel: PanelSnapshot | null): string | undefined {
+  return nonEmpty(panel?.context?.branch);
+}
+
+function hasGitAnchor(panel: PanelSnapshot): boolean {
+  return Boolean(
+    nonEmpty(panel.context?.gitRoot) || nonEmpty(panel.context?.worktreeRoot)
+  );
+}
+
+function firstFromPanels(
+  windowPanels: readonly PanelSnapshot[],
+  pick: (panel: PanelSnapshot) => string | undefined
 ): string | undefined {
   for (const panel of windowPanels) {
-    const root = projectPathOf(panel);
-    if (root) {
-      return root;
+    const value = pick(panel);
+    if (value) {
+      return value;
     }
   }
   return;
@@ -103,14 +164,32 @@ function activeTitleOf(panel: PanelSnapshot | null): string | undefined {
   return long || undefined;
 }
 
+/** Right-column tab title: basename if the title looks like a path. */
+function shortTitleQualifier(
+  title: string,
+  identity: string
+): string | undefined {
+  const candidate =
+    title.includes("/") || title.includes("\\")
+      ? pathBasename(title)
+      : title.trim();
+  if (candidate.length === 0 || !isDistinctQualifier(candidate, identity)) {
+    return;
+  }
+  return candidate;
+}
+
 interface Draft {
   baseLabel: string;
+  branch?: string;
   description?: string;
   detail?: string;
+  iconKind?: WindowDisplayIconKind;
   id: string;
   projectPath?: string;
   recordId: string;
   searchTerms: string[];
+  tabQualifier?: string;
 }
 
 function buildDraft(
@@ -120,36 +199,48 @@ function buildDraft(
   copy: WindowDisplayCopy
 ): Draft {
   const active = pickActivePanel(windowPanels);
-  const projectPath = projectPathOf(active) ?? firstProjectPath(windowPanels);
-  const projectName = projectPath ? pathBasename(projectPath) : "";
+  const identityPath =
+    identityPathOf(active) ?? firstFromPanels(windowPanels, identityPathOf);
+  const folderName = identityPath ? pathBasename(identityPath) : "";
   const title = activeTitleOf(active);
-  const tabCount = windowPanels.length;
+  const branchName =
+    branchOf(active) ?? firstFromPanels(windowPanels, branchOf);
 
   let baseLabel: string;
-  if (projectName.length > 0) {
-    baseLabel = projectName;
+  if (folderName.length > 0) {
+    baseLabel = folderName;
   } else if (title) {
     baseLabel = title;
   } else {
     baseLabel = copy.emptyWindow(index + 1);
   }
 
-  let description: string | undefined;
-  if (projectName.length > 0 && title) {
-    description = title;
-  } else if (projectName.length > 0 && tabCount > 0) {
-    description = copy.tabCount(tabCount);
-  } else if (tabCount === 0) {
+  const branch =
+    branchName && isDistinctQualifier(branchName, baseLabel)
+      ? branchName
+      : undefined;
+  const tabQualifier = title
+    ? shortTitleQualifier(title, baseLabel)
+    : undefined;
+
+  let description: string | undefined = branch ?? tabQualifier;
+  if (!description && windowPanels.length === 0) {
     description = copy.emptyWindowDescription;
-  } else if (!title && tabCount > 1) {
-    description = copy.tabCount(tabCount);
+  }
+
+  let iconKind: WindowDisplayIconKind | undefined;
+  if (windowPanels.some((panel) => hasGitAnchor(panel))) {
+    iconKind = "git";
+  } else if (identityPath) {
+    iconKind = "folder";
   }
 
   const searchTerms = [
     baseLabel,
     window.id,
     window.recordId,
-    ...(projectPath ? [projectPath] : []),
+    ...(identityPath ? [identityPath] : []),
+    ...(branchName ? [branchName] : []),
     ...(title ? [title] : []),
     ...windowPanels
       .map((panel) => panel.display?.short)
@@ -161,9 +252,113 @@ function buildDraft(
     id: window.id,
     recordId: window.recordId,
     searchTerms,
+    ...(branch ? { branch } : {}),
+    ...(tabQualifier ? { tabQualifier } : {}),
     ...(description ? { description } : {}),
-    ...(projectPath ? { projectPath, detail: projectPath } : {}),
+    ...(iconKind ? { iconKind } : {}),
+    ...(identityPath
+      ? { projectPath: identityPath, detail: identityPath }
+      : {}),
   };
+}
+
+function uniqueQualifiers(
+  drafts: readonly Draft[],
+  indices: readonly number[],
+  pick: (draft: Draft) => string | undefined
+): string[] | null {
+  const values: string[] = [];
+  for (const index of indices) {
+    const draft = drafts[index];
+    if (!draft) {
+      return null;
+    }
+    const value = pick(draft)?.trim();
+    if (!(value && isDistinctQualifier(value, draft.baseLabel))) {
+      return null;
+    }
+    values.push(value);
+  }
+  if (new Set(values).size !== values.length) {
+    return null;
+  }
+  return values;
+}
+
+function withQualifier(identity: string, qualifier: string): string {
+  return `${identity} · ${qualifier}`;
+}
+
+/**
+ * Single-line menu names: identity only, then the cheapest unique qualifier
+ * among windows that share that identity.
+ */
+function computeMenuLabels(
+  drafts: readonly Draft[],
+  disambiguatedLabels: readonly string[]
+): string[] {
+  const groups = new Map<string, number[]>();
+  drafts.forEach((draft, index) => {
+    const list = groups.get(draft.baseLabel);
+    if (list) {
+      list.push(index);
+    } else {
+      groups.set(draft.baseLabel, [index]);
+    }
+  });
+
+  const menuLabels = drafts.map((draft) => draft.baseLabel);
+  for (const indices of groups.values()) {
+    if (indices.length === 1) {
+      continue;
+    }
+    const branches = uniqueQualifiers(drafts, indices, (draft) => draft.branch);
+    if (branches) {
+      indices.forEach((index, offset) => {
+        const draft = drafts[index];
+        const qualifier = branches[offset];
+        if (draft && qualifier) {
+          menuLabels[index] = withQualifier(draft.baseLabel, qualifier);
+        }
+      });
+      continue;
+    }
+    const parents = uniqueQualifiers(drafts, indices, (draft) =>
+      draft.projectPath
+        ? (pathParentBasename(draft.projectPath) ?? undefined)
+        : undefined
+    );
+    if (parents) {
+      indices.forEach((index, offset) => {
+        const draft = drafts[index];
+        const qualifier = parents[offset];
+        if (draft && qualifier) {
+          menuLabels[index] = withQualifier(draft.baseLabel, qualifier);
+        }
+      });
+      continue;
+    }
+    const tabs = uniqueQualifiers(
+      drafts,
+      indices,
+      (draft) => draft.tabQualifier
+    );
+    if (tabs) {
+      indices.forEach((index, offset) => {
+        const draft = drafts[index];
+        const qualifier = tabs[offset];
+        if (draft && qualifier) {
+          menuLabels[index] = withQualifier(draft.baseLabel, qualifier);
+        }
+      });
+      continue;
+    }
+    for (const index of indices) {
+      menuLabels[index] =
+        disambiguatedLabels[index] ?? drafts[index]?.baseLabel ?? "";
+    }
+  }
+  return menuLabels;
 }
 
 /**
@@ -227,23 +422,35 @@ export function disambiguateWindowLabels(
     }
   }
 
-  return drafts.map((draft, index) => ({
-    id: draft.id,
-    label: labels[index] ?? draft.baseLabel,
-    recordId: draft.recordId,
-    searchTerms: [
-      ...draft.searchTerms,
-      ...(labels[index] && labels[index] !== draft.baseLabel
-        ? [labels[index] as string]
-        : []),
-    ],
-    ...(draft.description ? { description: draft.description } : {}),
-    ...(draft.detail ? { detail: draft.detail } : {}),
-  }));
+  const menuLabels = computeMenuLabels(drafts, labels);
+
+  return drafts.map((draft, index) => {
+    const label = labels[index] ?? draft.baseLabel;
+    const menuLabel = menuLabels[index] ?? label;
+    const description =
+      draft.description && isDistinctQualifier(draft.description, label)
+        ? draft.description
+        : undefined;
+    const disambiguated = label === draft.baseLabel ? undefined : label;
+    return {
+      id: draft.id,
+      label,
+      menuLabel,
+      recordId: draft.recordId,
+      searchTerms: [
+        ...draft.searchTerms,
+        ...(disambiguated ? [disambiguated] : []),
+        ...(menuLabel === label ? [] : [menuLabel]),
+      ],
+      ...(description ? { description } : {}),
+      ...(draft.detail ? { detail: draft.detail } : {}),
+      ...(draft.iconKind ? { iconKind: draft.iconKind } : {}),
+    };
+  });
 }
 
 /**
- * Build picker rows for windows, using panel snapshots for workspace + tab titles.
+ * Build picker rows for windows, using panel snapshots for workspace identity.
  * Caller should filter out the current window and sort as desired.
  */
 export function buildWindowDisplays(
@@ -266,6 +473,5 @@ export function windowDisplayCopyFromI18n(
     emptyWindowDescription: t("workspace.panelTransfer.emptyWindowDescription"),
     sameNameIndex: (index) =>
       t("workspace.panelTransfer.sameNameIndex", { n: index }),
-    tabCount: (count) => t("workspace.panelTransfer.tabCount", { count }),
   };
 }

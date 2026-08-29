@@ -42,7 +42,7 @@ import {
   WorkspaceHeaderActions,
   WorkspaceHeaderRightActions,
 } from "./header-actions.tsx";
-import { syncTerminalPresentation } from "./host-terminal-presentation.ts";
+import { createTerminalLayoutHydrationGate } from "./host-terminal-presentation.ts";
 import {
   createWorkspaceLayoutSaveScheduler,
   subscribeWorkspacePanelParameterChanges,
@@ -207,6 +207,7 @@ export function WorkspaceHost() {
       // / 拖 panel 等), userTouched=true. loadLayout 完成时如果 user 已操作, fromJSON
       // 跳过 (不覆盖 user 操作) — user 显式新建的 panel 优先于磁盘旧 layout.
       let userTouched = false;
+      const terminalLayout = createTerminalLayoutHydrationGate();
       const windowContextPromise = window.pier.window.getContext();
       let flushRecordId: string | null = null;
       windowContextPromise
@@ -277,8 +278,13 @@ export function WorkspaceHost() {
         if (isApplyingPersistedLayout) {
           return; // program-driven, 不算 user touched
         }
+        if (!terminalLayout.isHydrated()) {
+          // 空初始 layout-change 不是用户操作；有面板才视为 Cmd+T 抢跑。
+          userTouched = event.api.totalPanels > 0;
+          return;
+        }
         userTouched = true;
-        syncTerminalPresentation(event.api, "dockview-layout");
+        terminalLayout.present(event.api, "dockview-layout");
         layoutSave.schedule();
       });
       const parameterChangesDispose = subscribeWorkspacePanelParameterChanges(
@@ -314,7 +320,7 @@ export function WorkspaceHost() {
       const maximizedSubscription = event.api.onDidMaximizedGroupChange(() => {
         syncDockviewMaximizedState();
         syncActivePanelScope(event.api.activePanel);
-        syncTerminalPresentation(event.api, "dockview-maximize");
+        terminalLayout.present(event.api, "dockview-maximize");
       });
 
       // Active panel 变化 (含同 group 切 tab, panel 创建/删除导致 active 切换) →
@@ -346,7 +352,7 @@ export function WorkspaceHost() {
         dismissAllTooltips();
 
         syncActivePanelScope(panel);
-        syncTerminalPresentation(event.api, "dockview-active-panel");
+        terminalLayout.present(event.api, "dockview-active-panel");
       };
       const activePanelSubscription = event.api.onDidActivePanelChange(
         handleActivePanelChange
@@ -366,13 +372,13 @@ export function WorkspaceHost() {
             // 键盘（键仍在增强输入）；鼠标点到 TUI 输入区可复原聚焦并重探门禁。
             // composer 未打开时走下方原生归还。
             if (terminalComposerTakeoverFocus(req.panelId, "surface")) {
-              syncTerminalPresentation(event.api, "dockview-active-panel");
+              terminalLayout.present(event.api, "dockview-active-panel");
               return;
             }
             useTerminalStore.getState().yieldToTerminal();
             requestTerminalFocusIntent(req.panelId);
             ensureTuiInputFocus(req.panelId).catch(() => undefined);
-            syncTerminalPresentation(event.api, "dockview-active-panel");
+            terminalLayout.present(event.api, "dockview-active-panel");
           }
         }) ?? (() => undefined);
 
@@ -397,7 +403,7 @@ export function WorkspaceHost() {
           return;
         }
         if (userTouched) {
-          // user 已经在 layout 里加了 panel, 不覆盖
+          terminalLayout.hydrate(event.api);
           notifyWorkspaceReady();
           return;
         }
@@ -424,7 +430,7 @@ export function WorkspaceHost() {
           }
           syncDockviewMaximizedState();
           syncActivePanelScope(event.api.activePanel);
-          syncTerminalPresentation(event.api, "restore");
+          terminalLayout.hydrate(event.api);
         } catch (err) {
           console.error("[workspace] fromJSON failed, fallback default:", err);
           if (!(isTransferStartup || hasPendingTransfers)) {
@@ -432,7 +438,7 @@ export function WorkspaceHost() {
           }
           syncDockviewMaximizedState();
           syncActivePanelScope(event.api.activePanel);
-          syncTerminalPresentation(event.api, "restore");
+          terminalLayout.hydrate(event.api);
         }
 
         // syncTerminalPresentation already reconciles terminal panels (C 方案

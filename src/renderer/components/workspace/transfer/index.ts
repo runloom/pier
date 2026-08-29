@@ -69,8 +69,10 @@ export {
   canMovePanelToWindow,
   copyPanelToNewWindow,
   copyPanelToOtherWindow,
+  copyPanelToWindow,
   movePanelToNewWindow,
   movePanelToOtherWindow,
+  movePanelToWindow,
   relocatePanel,
   resolveRelocatePanelId,
 } from "./relocate.ts";

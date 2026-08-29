@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FILES_FILE_PANEL_COMPONENT_ID,
   openFilesDiskPath,
+  openFilesDiskPathForCommand,
 } from "@/lib/files/open-disk-file-panel.ts";
 import { openPluginPanelInstance } from "@/lib/plugins/host/panel-instance-open.ts";
 import { getPluginPanelRegistrations } from "@/lib/plugins/panel-registry.ts";
@@ -182,5 +183,53 @@ describe("openFilesDiskPath", () => {
       false
     );
     expect(openInstance).not.toHaveBeenCalled();
+  });
+
+  it("CLI wrapper and boolean wrapper share reuse identity", () => {
+    useWorkspaceStore.getState().setApi({
+      panels: [
+        {
+          id: "existing-file",
+          params: {
+            pinned: true,
+            source: { kind: "disk", path: "src/a.ts", root: "/repo" },
+          },
+          view: { contentComponent: FILES_FILE_PANEL_COMPONENT_ID },
+        },
+      ],
+    } as never);
+    expect(
+      openFilesDiskPathForCommand({
+        path: "src/a.ts",
+        placement: "split-right",
+        root: "/repo",
+      })
+    ).toEqual({ ok: true, panelId: "existing-file", reused: true });
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instanceId: "existing-file",
+      })
+    );
+    expect(openInstance.mock.calls[0]?.[0]).not.toHaveProperty("placement");
+  });
+
+  it("CLI wrapper returns panelId and can suppress tree reveal", () => {
+    resetFilesDiskPathOpenedForTests();
+    const events: Array<{ revealTree?: boolean }> = [];
+    const dispose = onFilesDiskPathOpened((event) => {
+      events.push(
+        event.revealTree === undefined ? {} : { revealTree: event.revealTree }
+      );
+    });
+    expect(
+      openFilesDiskPathForCommand({
+        line: 4,
+        path: "src/a.ts",
+        revealTree: false,
+        root: "/repo",
+      })
+    ).toEqual({ ok: true, panelId: expect.any(String), reused: false });
+    expect(events).toEqual([{ revealTree: false }]);
+    dispose();
   });
 });

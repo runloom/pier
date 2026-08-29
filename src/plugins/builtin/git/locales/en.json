@@ -121,6 +121,12 @@
       "description": "Continue the current revert operation.",
       "title": "git: Continue Revert"
     },
+    "pier.git.commit": {
+      "aliases": ["git commit", "commit changes"],
+      "category": "git",
+      "description": "Commit the current changes. You can include unstaged files and push afterwards.",
+      "title": "git: Commit"
+    },
     "pier.git.undoLastCommit": {
       "aliases": [
         "undo commit",
@@ -723,6 +729,27 @@
     "ui.gitRevertConflictTitle": "Revert Conflicts",
     "ui.gitRevertConflict": "Revert paused due to conflicts. Resolve them, then continue.",
     "ui.gitRevertContinueConflict": "Revert still has conflicts. Resolve them, then continue.",
+    "ui.gitCommit": "Commit",
+    "ui.gitCommitTitle": "Commit",
+    "ui.gitCommitDescription": "Commit the current changes.",
+    "ui.gitCommitMessage": "Commit message",
+    "ui.gitCommitMessagePlaceholder": "What did you change?",
+    "ui.gitCommitMessageRequired": "Enter a commit message.",
+    "ui.gitCommitCounts": "{{staged}} staged · {{unstaged}} unstaged",
+    "ui.gitCommitIncludeUnstaged": "Include unstaged changes",
+    "ui.gitCommitPushAfter": "Push after commit",
+    "ui.gitCommitSuccess": "Committed",
+    "ui.gitCommitNoStaged": "Nothing is staged. Stage files in Changes, or include unstaged changes.",
+    "ui.gitCommitNothing": "Nothing to commit. Change a file first.",
+    "ui.gitCommitPaused": "Continue or abort the current git operation from the status bar first.",
+    "ui.gitCommitFailed": "Couldn't commit",
+    "ui.gitCommitPushFailed": "Committed, but couldn't push",
+    "ui.gitCommitPushFailedBody": "{{message}}\n\nRetry push from the status bar.",
+    "ui.gitCommitDiscardTitle": "Discard this message?",
+    "ui.gitCommitDiscardBody": "You will lose what you typed.",
+    "ui.gitCommitDiscardConfirm": "Discard",
+    "ui.gitCommitPushUnavailable": "Can't push to a remote right now.",
+    "ui.gitCommitPushAuth": "Sign in to the remote, then try again.",
     "ui.gitUndoCommitConfirm": "Undo the last commit? Changes stay staged.",
     "ui.gitUndoCommitConfirmButton": "Undo",
     "ui.gitUndoCommitSuccess": "Commit undone",
@@ -857,6 +884,10 @@
     "pier.git.statusItem.confirmSync": {
       "label": "Confirm before syncing",
       "description": "Ask for confirmation before syncing (pull then push) from the status bar sync item."
+    },
+    "pier.git.commit.pushAfter": {
+      "label": "Push after commit by default",
+      "description": "Open the commit dialog with push after commit turned on. You can still turn it off this time."
     },
     "pier.git.worktree.branchNamePrompt": {
       "label": "Worktree branch prompt",

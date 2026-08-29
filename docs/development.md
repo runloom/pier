@@ -100,8 +100,7 @@ pnpm build:icons         # 从唯一 SVG 母版重建全部平台图标
 `build/Assets.car.inputs`。唯一可编辑源是 `build/app-icon-source.svg`；完整 ICNS 生成需 macOS
 系统 `sips`，macOS 26 原生图标还需要 Xcode 26+ 的 `actool`。脚本会先在暂存目录完成全部生成和
 `assetutil` 结构校验，
-再原子替换正式资产。macOS CI 还会用系统 `iconutil` 解包 ICNS，核对全部官方尺寸、小图标透明
-边缘与泊位连续性。
+再原子替换正式资产。macOS CI 还会用系统 `iconutil` 解包 ICNS，核对全部官方尺寸、铺满画布的不透明四角与泊位连续性。
 
 ## Quality Gate：正确性优先，CI 做确认与加速
 

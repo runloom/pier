@@ -148,6 +148,8 @@ export const settingsAgents = {
       "Leave empty for Pier’s default uninstall steps",
     env: "Extra environment variables",
     envDesc: "Variables added when launching this agent",
+    latestCheckFailed:
+      "Couldn’t check for a newer version. Refresh the list and try again.",
   },
   sessionTitleRefine: {
     label: "Name sessions automatically",

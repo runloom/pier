@@ -1,5 +1,6 @@
 import i18next from "i18next";
 import { AppWindow, Plus, RotateCcw, SquarePlus } from "lucide-react";
+import { dispatchWindowRelocateMenuAction } from "@/components/workspace/transfer/window-menu.ts";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import {
@@ -7,6 +8,7 @@ import {
   projectPathActionEnabled,
 } from "@/lib/actions/project-path-action-gate.ts";
 import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
+import { registerMenuActionInterceptor } from "@/lib/context-menu/use-menu.ts";
 import { createWindow } from "@/lib/ipc/window-ipc.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useCreateMenuRequestStore } from "@/stores/create-menu-request.store.ts";
@@ -203,8 +205,12 @@ export function registerPanelActions(): () => void {
     PANEL_ACTION_CONTRIBUTIONS,
     rendererActionContributionRuntime
   );
+  const unregisterRelocate = registerMenuActionInterceptor(
+    dispatchWindowRelocateMenuAction
+  );
 
   return () => {
+    unregisterRelocate();
     for (const dispose of disposers) {
       dispose();
     }

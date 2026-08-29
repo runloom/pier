@@ -1,6 +1,7 @@
 import type { PierCommandErrorCode } from "@shared/contracts/commands.ts";
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
 import i18next from "i18next";
+import { openFilesDiskPathForCommand } from "@/lib/files/open-disk-file-panel.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import {
   rejectTerminalLaunch,
@@ -90,22 +91,6 @@ async function closePanelForCommand(panelId: string): Promise<void> {
       `panel close cancelled: ${panelId}`
     );
   }
-}
-
-function addPanelForCommand(
-  command: Extract<RendererCommandEnvelope["command"], { type: "panel.open" }>
-): string {
-  assertUserMutationAllowed();
-  const panelId = useWorkspaceStore.getState().addTerminal({
-    context: command.context,
-    ...(command.placement && {
-      placement: command.placement,
-    }),
-  });
-  if (!panelId) {
-    throw new Error("workspace api not ready");
-  }
-  return panelId;
 }
 
 async function addTerminalForCommand(
@@ -348,12 +333,44 @@ async function runWorkspaceRendererCommandAsync(
         });
         return;
       }
-      case "panel.open": {
-        const panelId = addPanelForCommand(envelope.command);
+      case "files.openDisk": {
+        assertUserMutationAllowed();
+        const opened = openFilesDiskPathForCommand({
+          path: envelope.command.path,
+          root: envelope.command.root,
+          ...(envelope.command.revealTree === undefined
+            ? {}
+            : { revealTree: envelope.command.revealTree }),
+          ...(envelope.command.column === undefined
+            ? {}
+            : { column: envelope.command.column }),
+          ...(envelope.command.context
+            ? { context: envelope.command.context }
+            : {}),
+          ...(envelope.command.line === undefined
+            ? {}
+            : { line: envelope.command.line }),
+          ...(envelope.command.placement
+            ? { placement: envelope.command.placement }
+            : {}),
+          ...(envelope.command.referencePanelId
+            ? { referencePanelId: envelope.command.referencePanelId }
+            : {}),
+        });
+        if (!opened.ok) {
+          throw new RendererCommandExecutionError(
+            opened.reason === "invalid-path"
+              ? "invalid_command"
+              : "platform_unavailable",
+            i18next.t("terminal.openPathFailed", {
+              defaultValue: "Couldn't open path — try again",
+            })
+          );
+        }
         window.pier.rendererCommand.resolve({
           data: {
-            context: envelope.command.context,
-            panelId,
+            panelId: opened.panelId,
+            reused: opened.reused,
           },
           ok: true,
           requestId: envelope.requestId,

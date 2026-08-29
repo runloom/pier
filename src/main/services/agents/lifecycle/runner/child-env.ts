@@ -13,7 +13,8 @@ export function mergeLifecycleChildEnv(
     npm_config_fund: env.npm_config_fund ?? "false",
     npm_config_audit: env.npm_config_audit ?? "false",
     npm_config_progress: env.npm_config_progress ?? "false",
-    HOMEBREW_NO_AUTO_UPDATE: env.HOMEBREW_NO_AUTO_UPDATE ?? "1",
+    // Allow brew auto-update (300s); do not inject HOMEBREW_NO_AUTO_UPDATE.
+    HOMEBREW_AUTO_UPDATE_SECS: env.HOMEBREW_AUTO_UPDATE_SECS ?? "300",
     HOMEBREW_NO_ENV_HINTS: env.HOMEBREW_NO_ENV_HINTS ?? "1",
     HOMEBREW_NO_INSTALL_CLEANUP: env.HOMEBREW_NO_INSTALL_CLEANUP ?? "1",
     PIP_DISABLE_PIP_VERSION_CHECK: env.PIP_DISABLE_PIP_VERSION_CHECK ?? "1",

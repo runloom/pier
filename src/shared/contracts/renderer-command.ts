@@ -65,10 +65,16 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     windowId: z.string().min(1).optional(),
   }),
   z.object({
-    type: z.literal("panel.open"),
-    context: panelContextSchema,
+    type: z.literal("files.openDisk"),
+    column: z.number().int().positive().optional(),
+    context: panelContextSchema.optional(),
     focus: z.boolean().optional(),
+    line: z.number().int().positive().optional(),
+    path: z.string().min(1),
     placement: pierCommandPlacementSchema.optional(),
+    referencePanelId: z.string().min(1).optional(),
+    revealTree: z.boolean().optional(),
+    root: z.string().min(1),
     windowId: z.string().min(1).optional(),
   }),
   z

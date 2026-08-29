@@ -135,6 +135,7 @@ describe("withPierClaudeHooks", () => {
 
     const nativeEnv: NodeJS.ProcessEnv = {
       ...baseEnv,
+      CURSOR_VERSION: undefined,
       GROK_HOOK_EVENT: undefined,
     };
     const nativeResult = spawnSync(
@@ -161,6 +162,35 @@ describe("withPierClaudeHooks", () => {
         v: 3,
       },
     ]);
+  }, 15_000);
+
+  it("cursor-agent 兼容加载 Pier Claude hooks 时静默跳过（CURSOR_VERSION 守卫）", async () => {
+    // cursor-agent 会加载 ~/.claude/settings.json（claudeUserConfigPath +
+    // Claude 事件名映射表），其 hook 子进程恒注入 CURSOR_VERSION——
+    // 命中即跳过，避免 cursor 会话内每个工具调用双写 agent=claude 行。
+    const root = await mkdtemp(join(tmpdir(), "pier-claude-cursor-guard-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const settings = withPierClaudeHooks({});
+    for (const command of hookCommands(settings)) {
+      expect(command).toContain("CURSOR_VERSION");
+      const result = spawnSync("/bin/sh", ["-c", command], {
+        env: {
+          ...process.env,
+          CURSOR_VERSION: "2026.08.25-3e8eec8",
+          GROK_HOOK_EVENT: undefined,
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+        },
+        input: "{}",
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    expect(await readFile(logPath, "utf8").catch(() => "")).toBe("");
   }, 15_000);
 
   it("真实 PreToolUse 只开始工具，不伪造 waiting 解除", async () => {

@@ -8,6 +8,10 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { resolvePanelPathAnchor } from "@/stores/workspace-panel-helpers.ts";
 import { activateWorkspacePanel } from "../../workspace/panel-activation.ts";
+import {
+  withinGroupPosition,
+  withinPanelPosition,
+} from "../../workspace/panel-insert.ts";
 import { scheduleRevealDockviewTabByPanelId } from "../../workspace/tab-visibility.ts";
 import { getPluginPanelRegistrations } from "../panel-registry.ts";
 import {
@@ -195,6 +199,55 @@ function previewPanelsToCloseForInstance(
   );
 }
 
+function splitDirectionFromPlacement(
+  placement: PluginPanelInstanceOptions["placement"]
+): "above" | "below" | "left" | "right" | null {
+  switch (placement) {
+    case "split-right":
+      return "right";
+    case "split-below":
+      return "below";
+    case "split-left":
+      return "left";
+    case "split-above":
+      return "above";
+    default:
+      return null;
+  }
+}
+
+function addPanelPosition(
+  api: WorkspaceDockviewApi,
+  options: PluginPanelInstanceOptions,
+  fallbackGroup: DockviewGroupRef | null
+):
+  | {
+      direction: "above" | "below" | "left" | "right" | "within";
+      index?: number;
+      referenceGroup?: DockviewGroupRef;
+      referencePanel?: string;
+    }
+  | undefined {
+  const split = splitDirectionFromPlacement(options.placement);
+  const explicitReference = options.referencePanelId
+    ? api.panels.find((panel) => panel.id === options.referencePanelId)
+    : undefined;
+  const splitAnchor = explicitReference ?? api.activePanel;
+  if (split && splitAnchor) {
+    return { direction: split, referencePanel: splitAnchor.id };
+  }
+  if (options.referencePanelId && explicitReference) {
+    return withinPanelPosition(
+      explicitReference.id,
+      groupForPanel(api, explicitReference.id)
+    );
+  }
+  if (fallbackGroup) {
+    return withinGroupPosition(fallbackGroup);
+  }
+  return;
+}
+
 function addNewPanelInstance(input: {
   addPanelTargetGroup: DockviewGroupRef | null;
   api: WorkspaceDockviewApi;
@@ -206,19 +259,17 @@ function addNewPanelInstance(input: {
   registration: PluginPanelRegistration;
   title: string;
 }): void {
+  const position = addPanelPosition(
+    input.api,
+    input.options,
+    input.addPanelTargetGroup ?? input.api.activeGroup ?? null
+  );
   input.api.addPanel({
     id: input.options.instanceId,
     component: input.options.componentId,
     title: input.title,
     params: input.panelParams,
-    ...(input.addPanelTargetGroup
-      ? {
-          position: {
-            referenceGroup: input.addPanelTargetGroup,
-            direction: "within",
-          },
-        }
-      : {}),
+    ...(position ? { position } : {}),
   });
   upsertPanelInstanceDescriptor(
     input.descriptorStore,

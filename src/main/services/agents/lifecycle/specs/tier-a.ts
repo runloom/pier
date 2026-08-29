@@ -6,10 +6,12 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
     agentId: "claude",
     expectedBins: ["claude"],
     npmPackageForLatest: "@anthropic-ai/claude-code",
-    // Native/script installs: official latest file, not the deprecated npm line.
+    // Native/script installs: official release files (not the deprecated npm line).
+    // `stableUrl` when autoUpdatesChannel is stable.
     latestProbe: {
       kind: "http-text",
       url: "https://downloads.claude.ai/claude-code-releases/latest",
+      stableUrl: "https://downloads.claude.ai/claude-code-releases/stable",
     },
     support: "full",
     // Official recommended: native installer first, then Homebrew cask, npm last.
@@ -181,26 +183,17 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
   },
   {
     agentId: "kimi",
-    expectedBins: ["kimi", "kimi-cli"],
-    // Official install is uv (Python): `uv tool install --python 3.13 kimi-cli`.
-    // https://moonshotai.github.io/kimi-cli/en/guides/getting-started.html
-    // Legacy npm package @moonshot-ai/kimi-code is a different version line; keep
-    // as fallback only for users who still have the npm global.
+    expectedBins: ["kimi"],
     npmPackageForLatest: "@moonshot-ai/kimi-code",
+    // Native installer (`~/.kimi-code/bin/kimi`) vs legacy uv kimi-cli are
+    // different products. Path/script latest must not use PyPI.
+    // https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started
+    latestProbe: {
+      kind: "http-text",
+      url: "https://code.kimi.com/kimi-code/latest",
+    },
     support: "full",
     install: [
-      {
-        kind: "official-script",
-        platform: "posix",
-        // Script installs uv then `uv tool install kimi-cli`.
-        url: "https://code.kimi.com/install.sh",
-      },
-      {
-        kind: "official-script",
-        platform: "win",
-        url: "https://code.kimi.com/install.ps1",
-      },
-      // Alternate docs URL (same product family).
       {
         kind: "official-script",
         platform: "posix",
@@ -211,19 +204,19 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
         platform: "win",
         url: "https://code.kimi.com/kimi-code/install.ps1",
       },
-      { kind: "uv", package: "kimi-cli" },
       {
         kind: "npm",
         package: "@moonshot-ai/kimi-code",
         bin: "kimi",
       },
     ],
-    // Prefer uv for uv-sourced installs; npm only when detected as npm family.
-    // Self `kimi upgrade` can be interactive — avoid as primary automation path.
+    // `kimi upgrade` in CI/non-TTY only prints the curl hint and exits 0.
+    // Native path installs: reinstall (script) first, like cursor.
+    // No uv channel: leftover Python kimi-cli is not a managed install.
     update: [
-      { kind: "uv-upgrade" },
-      { kind: "npm-latest" },
       { kind: "reinstall" },
+      { kind: "self", argv: ["upgrade"] },
+      { kind: "npm-latest" },
     ],
   },
   {

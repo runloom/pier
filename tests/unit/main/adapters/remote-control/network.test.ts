@@ -68,6 +68,23 @@ describe("pickPortInRange", () => {
     expectInPortRange(await pickPortInRange());
   });
 
+  it("preferred 仅 127.0.0.1 占用时也回退", async () => {
+    const preferred = await pickPortInRange();
+    const blocker = createServer();
+    await new Promise<void>((resolve) => {
+      blocker.listen(preferred, "127.0.0.1", resolve);
+    });
+    try {
+      const port = await pickPortInRange(preferred);
+      expect(port).not.toBe(preferred);
+      expectInPortRange(port);
+    } finally {
+      await new Promise<void>((resolve) => {
+        blocker.close(() => resolve());
+      });
+    }
+  });
+
   it("preferred 被占用时回退到区间内其他端口", async () => {
     const preferred = await pickPortInRange();
     const blocker = createServer();

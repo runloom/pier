@@ -7,6 +7,7 @@ import {
   type CommandStartHookEvent,
 } from "@shared/contracts/agent/session.ts";
 import { createLogger } from "@shared/logger.ts";
+import { enrichAgentEventFromRawPayload } from "./jsonl-enrichment.ts";
 import {
   acquireRotationLock,
   LOCK_SUFFIX,
@@ -17,6 +18,7 @@ import {
   ROTATING_SUFFIX,
   type RotationRecovery,
   reapStaleRotationLock,
+  sweepStaleLockCandidates,
 } from "./jsonl-rotation.ts";
 
 const log = createLogger("foreground-activity.jsonl-observer");
@@ -26,6 +28,8 @@ const ROTATE_SIZE = 10 * 1024 * 1024;
 
 /** watchFile 轮询间隔（ms）。 */
 const POLL_INTERVAL_MS = 250;
+/** 锁候选残留清扫周期（启动即扫一次）。 */
+const LOCK_CANDIDATE_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 const MAX_READ_BYTES = 1024 * 1024;
 type ObserverCallback<T> =
   | ((value: T) => void)
@@ -94,6 +98,16 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
     if (!(disposed || processing)) startDrain();
   }, 1000);
   reapTimer.unref();
+  const sweepLockCandidates = (): void => {
+    sweepStaleLockCandidates(filePath + LOCK_SUFFIX).catch(() => undefined);
+  };
+  const lockCandidateSweepTimer = setInterval(() => {
+    if (!disposed) {
+      sweepLockCandidates();
+    }
+  }, LOCK_CANDIDATE_SWEEP_INTERVAL_MS);
+  lockCandidateSweepTimer.unref();
+  sweepLockCandidates();
 
   watchFile(filePath, { interval: POLL_INTERVAL_MS }, onFileChange);
 
@@ -404,6 +418,7 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
     dispose() {
       disposed = true;
       clearInterval(reapTimer);
+      clearInterval(lockCandidateSweepTimer);
       unwatchFile(filePath, onFileChange);
     },
     async pollNow() {
@@ -423,75 +438,4 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
       }
     },
   };
-}
-
-function enrichAgentEventFromRawPayload(
-  event:
-    | AgentHookEventPayload
-    | CommandFinishedHookEvent
-    | CommandStartHookEvent
-): AgentHookEventPayload | CommandFinishedHookEvent | CommandStartHookEvent {
-  if (event.kind !== "agentEvent" || !event.metadataBase64) {
-    return event;
-  }
-  try {
-    const parsed: unknown = JSON.parse(
-      Buffer.from(event.metadataBase64, "base64").toString("utf8")
-    );
-    if (!(parsed && typeof parsed === "object" && !Array.isArray(parsed))) {
-      return event;
-    }
-    const payload = parsed as Record<string, unknown>;
-    const readString = (...keys: string[]): string | undefined => {
-      for (const key of keys) {
-        const value = payload[key];
-        if (typeof value === "string") {
-          return value;
-        }
-      }
-      return;
-    };
-    const promptSnippet =
-      event.v === 1
-        ? undefined
-        : (readString("promptSnippet", "prompt_snippet") ??
-          event.promptSnippet);
-    // v1 agentEvent is `.strict()` and has no promptSnippet — omit the key
-    // entirely so enrichment cannot fail validation and fall back to the
-    // un-enriched line (which would keep nested/tool_input session ids).
-    const candidate = {
-      ...event,
-      agentInstanceId:
-        readString("agent_id", "agentId") ?? event.agentInstanceId,
-      agentType: readString("agent_type", "agentType") ?? event.agentType,
-      sessionId:
-        readString(
-          "session_id",
-          "sessionId",
-          "conversation_id",
-          "conversationId",
-          "task_id",
-          "taskId"
-        ) ?? event.sessionId,
-      toolName: readString("tool_name", "toolName") ?? event.toolName,
-      toolUseId:
-        readString("tool_use_id", "toolUseId", "tool_call_id", "toolCallId") ??
-        event.toolUseId,
-      transcriptPath:
-        readString("transcript_path", "transcriptPath") ?? event.transcriptPath,
-      turnId: readString("turn_id", "turnId") ?? event.turnId,
-      ...(event.v === 1
-        ? {}
-        : {
-            parentSessionId:
-              readString("parent_session_id", "parentSessionId") ??
-              event.parentSessionId,
-          }),
-      ...(promptSnippet === undefined ? {} : { promptSnippet }),
-    };
-    const validated = agentHookEventSchema.safeParse(candidate);
-    return validated.success ? validated.data : event;
-  } catch {
-    return event;
-  }
 }

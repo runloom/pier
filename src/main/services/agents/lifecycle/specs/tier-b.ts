@@ -117,6 +117,11 @@ export const TIER_B_SPECS: readonly AgentLifecycleSpec[] = [
     expectedBins: ["goose"],
     support: "full",
     // https://goose-docs.ai — install script + brew formula + `goose update`
+    // Path/script installs: GitHub Releases (not brew local index).
+    latestProbe: {
+      kind: "github-latest-release",
+      url: "https://api.github.com/repos/aaif-goose/goose/releases/latest",
+    },
     install: [
       {
         kind: "official-script",

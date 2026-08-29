@@ -48,3 +48,30 @@ export function syncTerminalPresentation(
   flushTerminalLayoutFramesTrailing(flushReason);
   reconcileTerminalPanels(api);
 }
+
+/** Empty reconcile destroys live PTYs; wait until fromJSON is the layout. */
+export function createTerminalLayoutHydrationGate(): {
+  hydrate(api: DockviewReadyEvent["api"]): void;
+  isHydrated(): boolean;
+  present(
+    api: DockviewReadyEvent["api"],
+    reason: TerminalLayoutFlushReason
+  ): void;
+} {
+  let hydrated = false;
+  return {
+    hydrate(api) {
+      hydrated = true;
+      syncTerminalPresentation(api, "restore");
+    },
+    isHydrated() {
+      return hydrated;
+    },
+    present(api, reason) {
+      if (!hydrated) {
+        return;
+      }
+      syncTerminalPresentation(api, reason);
+    },
+  };
+}

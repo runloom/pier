@@ -90,15 +90,12 @@ describe("uninstall plan matrix", () => {
     expect(plan?.preview).toContain("@google/gemini-cli");
   });
 
-  it("kimi @ uv → uv tool uninstall kimi-cli", () => {
+  it("kimi @ uv → no managed uninstall (Python CLI is not a channel)", () => {
     const plan = buildUninstallPlan(getAgentLifecycleSpec("kimi"), {
       host: "posix",
       installSource: "uv",
     });
-    expect(plan?.steps[0]).toMatchObject({ kind: "argv", file: "uv" });
-    expect(plan?.preview).toContain("tool");
-    expect(plan?.preview).toContain("uninstall");
-    expect(plan?.preview).toContain("kimi-cli");
+    expect(plan).toBeNull();
   });
 
   it("claude @ path → null managed plan", () => {

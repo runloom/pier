@@ -100,7 +100,6 @@ describe("resolveMarkdownCommentBlockKey", () => {
     kind: "paragraph",
     range: paraRange,
   };
-  const blocks = [heading, paragraph];
   const paraHash = markdownBlockContentHash("Body text");
   const headingHash = markdownBlockContentHash("Title");
   const blockKeyByHash = new Map([
@@ -108,25 +107,21 @@ describe("resolveMarkdownCommentBlockKey", () => {
     [paraHash, blockCommentKey(paragraph)],
   ]);
 
-  it("prefers contentHash over headingId so paragraph comments stay on the paragraph", () => {
+  it("resolves by contentHash only", () => {
     const key = resolveMarkdownCommentBlockKey({
       blockKeyByHash,
-      blocks,
       contentHash: paraHash,
-      headingId: "title",
     });
     expect(key).toBe(blockCommentKey(paragraph));
     expect(key).not.toBe(blockCommentKey(heading));
   });
 
-  it("falls back to heading when hash misses", () => {
+  it("does not fall back to heading when hash misses", () => {
     const key = resolveMarkdownCommentBlockKey({
       blockKeyByHash,
-      blocks,
       contentHash: "deadbeef",
-      headingId: "title",
     });
-    expect(key).toBe(blockCommentKey(heading));
+    expect(key).toBeUndefined();
   });
 });
 
