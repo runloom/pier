@@ -912,8 +912,8 @@ describe("Files file-panel", () => {
     expect(image.getAttribute("src")).toMatch(
       /^pier-file-preview:\/\/file\/[A-Za-z0-9_-]{22,}$/u
     );
-    expect(document.querySelector('[data-slot="skeleton"]')).not.toBeNull();
-    expect(screen.getByRole("status")).toHaveTextContent("Loading image");
+    expect(document.querySelector('[data-slot="skeleton"]')).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
     expect(
       screen.getByRole("region", { name: "Image preview" })
     ).toHaveAttribute("aria-busy", "true");
@@ -1015,20 +1015,25 @@ describe("Files file-panel", () => {
 
     await waitFor(() => {
       expect(
+        document.querySelector('[data-slot="image-preview-pending"]')
+      ).not.toBeNull();
+    });
+    fireEvent.load(
+      document.querySelector('[data-slot="image-preview-pending"]')!
+    );
+    await waitFor(() => {
+      expect(
         screen.getByRole("img", { name: "photo.png" }).getAttribute("src")
       ).not.toBe(failedUrl);
     });
     const retriedImage = screen.getByRole("img", { name: "photo.png" });
     fireEvent.load(retriedImage);
     expect(issuePreview).toHaveBeenLastCalledWith(
-      expect.objectContaining({ revision: "file-v1:next" }),
-      "first-ticket-0000000000"
+      expect.objectContaining({ revision: "file-v1:next" })
     );
+    expect(releasePreview).toHaveBeenCalledWith("first-ticket-0000000000");
     expect(screen.queryByText("Unable to display image")).toBeNull();
 
-    fireEvent.error(failedImage);
-    expect(screen.getByRole("img", { name: "photo.png" })).toBeVisible();
-    expect(screen.queryByText("Unable to display image")).toBeNull();
     fireEvent.error(retriedImage);
     expect(screen.getByText("Unable to display image")).toBeVisible();
     expect(releasePreview).toHaveBeenCalledWith("second-ticket-000000000");
@@ -1086,11 +1091,18 @@ describe("Files file-panel", () => {
         t={(_key, fallback) => fallback ?? _key}
       />
     );
-    expect(screen.getByRole("status")).toHaveTextContent("Loading image");
+    expect(screen.getByRole("img", { name: "photo.png" })).toHaveAttribute(
+      "src",
+      "pier-file-preview://file/stale-ticket-0000000000"
+    );
+    expect(screen.queryByRole("status")).toBeNull();
 
     fireEvent.error(staleImage);
 
-    expect(screen.getByRole("status")).toHaveTextContent("Loading image");
+    expect(screen.getByRole("img", { name: "photo.png" })).toHaveAttribute(
+      "src",
+      "pier-file-preview://file/stale-ticket-0000000000"
+    );
     expect(releasePreview).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -1102,10 +1114,21 @@ describe("Files file-panel", () => {
       });
       await replacement;
     });
+    await waitFor(() => {
+      expect(
+        document.querySelector('[data-slot="image-preview-pending"]')
+      ).not.toBeNull();
+    });
+    fireEvent.load(
+      document.querySelector('[data-slot="image-preview-pending"]')!
+    );
     const replacementImage = await screen.findByRole("img", {
       name: "photo.png",
     });
-    expect(replacementImage).not.toBe(staleImage);
+    expect(replacementImage).toHaveAttribute(
+      "src",
+      "pier-file-preview://file/replacement-ticket-00000"
+    );
     fireEvent.load(replacementImage);
     expect(screen.queryByRole("status")).toBeNull();
   });
@@ -1214,7 +1237,7 @@ describe("Files file-panel", () => {
     expect(issuePreview).toHaveBeenCalledOnce();
   });
 
-  it("shows an error and releases the active ticket when replacement issuance rejects", async () => {
+  it("keeps the live image when replacement issuance rejects", async () => {
     const initial = createDiskDocumentRecord({
       draft: null,
       id: "disk:image-preview-rejection",
@@ -1261,8 +1284,14 @@ describe("Files file-panel", () => {
       />
     );
 
-    expect(await screen.findByText("Unable to display image")).toBeVisible();
-    expect(releasePreview).toHaveBeenCalledWith("active-ticket-000000000");
+    expect(
+      await screen.findByRole("img", { name: "photo.png" })
+    ).toHaveAttribute(
+      "src",
+      "pier-file-preview://file/active-ticket-000000000"
+    );
+    expect(screen.queryByText("Unable to display image")).toBeNull();
+    expect(releasePreview).not.toHaveBeenCalled();
   });
 
   it("clamps image zoom controls between 10% and 800%", async () => {

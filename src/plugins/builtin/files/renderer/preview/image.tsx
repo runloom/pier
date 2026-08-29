@@ -14,6 +14,12 @@ import {
 import type { FilesDocument } from "../document/types.ts";
 import type { FilesTranslate } from "../i18n.ts";
 
+interface PreviewLease {
+  generation: number;
+  src: string;
+  ticket: string;
+}
+
 export function FileImagePreview({
   context,
   document,
@@ -23,11 +29,8 @@ export function FileImagePreview({
   document: FilesDocument;
   t: FilesTranslate;
 }) {
-  const activePreviewRef = useRef<{
-    generation: number;
-    src: string;
-    ticket: string;
-  } | null>(null);
+  const livePreviewRef = useRef<PreviewLease | null>(null);
+  const pendingPreviewRef = useRef<PreviewLease | null>(null);
   const requestGenerationRef = useRef(0);
   const [src, setSrc] = useState("");
   const [loadState, setLoadState] = useState<"error" | "loading" | "ready">(
@@ -39,32 +42,46 @@ export function FileImagePreview({
   const previewRevision = preview?.revision;
   const diskPath = source.kind === "disk" ? source.path : null;
   const diskRoot = source.kind === "disk" ? source.root : null;
+
+  const releaseLease = useCallback(
+    (lease: PreviewLease | null) => {
+      if (!lease) {
+        return;
+      }
+      context.filePreviews.release(lease.ticket).catch(() => undefined);
+    },
+    [context]
+  );
+
   useEffect(() => {
     requestGenerationRef.current += 1;
     const requestGeneration = requestGenerationRef.current;
     if (!(previewMime && previewRevision && diskPath && diskRoot)) {
-      const abandonedTicket = activePreviewRef.current?.ticket;
-      activePreviewRef.current = null;
+      const live = livePreviewRef.current;
+      const pending = pendingPreviewRef.current;
+      livePreviewRef.current = null;
+      pendingPreviewRef.current = null;
       setSrc("");
       setLoadState("error");
-      if (abandonedTicket) {
-        context.filePreviews.release(abandonedTicket).catch(() => undefined);
-      }
+      releaseLease(live);
+      releaseLease(pending);
       return;
     }
-    setLoadState("loading");
+    if (pendingPreviewRef.current && !livePreviewRef.current) {
+      livePreviewRef.current = pendingPreviewRef.current;
+      pendingPreviewRef.current = null;
+    }
+    if (!livePreviewRef.current?.src) {
+      setLoadState("loading");
+    }
     let cancelled = false;
-    const previousTicket = activePreviewRef.current?.ticket;
     context.filePreviews
-      .issue(
-        {
-          mime: previewMime,
-          path: diskPath,
-          revision: previewRevision,
-          root: diskRoot,
-        },
-        previousTicket
-      )
+      .issue({
+        mime: previewMime,
+        path: diskPath,
+        revision: previewRevision,
+        root: diskRoot,
+      })
       .then((result) => {
         if (requestGenerationRef.current !== requestGeneration) {
           if (result.issued) {
@@ -73,24 +90,24 @@ export function FileImagePreview({
           return;
         }
         if (!result.issued) {
-          if (!cancelled) {
-            const abandonedTicket = activePreviewRef.current?.ticket;
-            activePreviewRef.current = null;
-            setSrc("");
-            setLoadState("error");
-            if (abandonedTicket) {
-              context.filePreviews
-                .release(abandonedTicket)
-                .catch(() => undefined);
-            }
+          if (cancelled) {
+            return;
           }
+          if (livePreviewRef.current) {
+            pendingPreviewRef.current = null;
+            return;
+          }
+          pendingPreviewRef.current = null;
+          livePreviewRef.current = null;
+          setSrc("");
+          setLoadState("error");
           return;
         }
         if (cancelled) {
           context.filePreviews.release(result.ticket).catch(() => undefined);
           return;
         }
-        activePreviewRef.current = {
+        pendingPreviewRef.current = {
           generation: requestGeneration,
           src: result.url,
           ticket: result.ticket,
@@ -101,65 +118,85 @@ export function FileImagePreview({
         if (cancelled || requestGenerationRef.current !== requestGeneration) {
           return;
         }
-        const abandonedTicket = activePreviewRef.current?.ticket;
-        activePreviewRef.current = null;
+        if (livePreviewRef.current) {
+          pendingPreviewRef.current = null;
+          return;
+        }
+        pendingPreviewRef.current = null;
+        livePreviewRef.current = null;
         setSrc("");
         setLoadState("error");
-        if (abandonedTicket) {
-          context.filePreviews.release(abandonedTicket).catch(() => undefined);
-        }
       });
     return () => {
       cancelled = true;
     };
-  }, [context, diskPath, diskRoot, previewMime, previewRevision]);
+  }, [context, diskPath, diskRoot, previewMime, previewRevision, releaseLease]);
 
   useEffect(
     () => () => {
-      const ticket = activePreviewRef.current?.ticket;
-      if (ticket) {
-        context.filePreviews.release(ticket).catch(() => undefined);
-        activePreviewRef.current = null;
-      }
+      releaseLease(livePreviewRef.current);
+      releaseLease(pendingPreviewRef.current);
+      livePreviewRef.current = null;
+      pendingPreviewRef.current = null;
     },
-    [context]
-  );
-
-  const previewForImageEvent = useCallback((element: HTMLImageElement) => {
-    const eventUrl = element.getAttribute("src");
-    const activePreview = activePreviewRef.current;
-    if (
-      !eventUrl ||
-      activePreview?.src !== eventUrl ||
-      requestGenerationRef.current !== activePreview.generation
-    ) {
-      return null;
-    }
-    return activePreview;
-  }, []);
-
-  const handleImageError = useCallback(
-    (event: SyntheticEvent<HTMLImageElement>) => {
-      const activePreview = previewForImageEvent(event.currentTarget);
-      if (!activePreview) {
-        return;
-      }
-      activePreviewRef.current = null;
-      setLoadState("error");
-      setSrc("");
-      context.filePreviews.release(activePreview.ticket).catch(() => undefined);
-    },
-    [context, previewForImageEvent]
+    [releaseLease]
   );
 
   const handleImageLoad = useCallback(
     (event: SyntheticEvent<HTMLImageElement>) => {
-      if (!previewForImageEvent(event.currentTarget)) {
+      const eventUrl = event.currentTarget.getAttribute("src");
+      const pending = pendingPreviewRef.current;
+      const live = livePreviewRef.current;
+      if (pending && pending.src === eventUrl) {
+        if (live && live.ticket !== pending.ticket) {
+          releaseLease(live);
+        }
+        livePreviewRef.current = pending;
+        pendingPreviewRef.current = null;
+        setLoadState("ready");
         return;
       }
-      setLoadState("ready");
+      if (live && live.src === eventUrl) {
+        setLoadState("ready");
+      }
     },
-    [previewForImageEvent]
+    [releaseLease]
+  );
+
+  const handlePendingError = useCallback(
+    (event: SyntheticEvent<HTMLImageElement>) => {
+      const eventUrl = event.currentTarget.getAttribute("src");
+      const pending = pendingPreviewRef.current;
+      if (!(pending && pending.src === eventUrl)) {
+        return;
+      }
+      pendingPreviewRef.current = null;
+      releaseLease(pending);
+      const live = livePreviewRef.current;
+      setSrc(live?.src ?? "");
+    },
+    [releaseLease]
+  );
+
+  const handleImageError = useCallback(
+    (event: SyntheticEvent<HTMLImageElement>) => {
+      const eventUrl = event.currentTarget.getAttribute("src");
+      const live = livePreviewRef.current;
+      if (pendingPreviewRef.current) {
+        return;
+      }
+      if (!(live && live.src === eventUrl)) {
+        return;
+      }
+      if (live.generation !== requestGenerationRef.current) {
+        return;
+      }
+      livePreviewRef.current = null;
+      setLoadState("error");
+      setSrc("");
+      releaseLease(live);
+    },
+    [releaseLease]
   );
 
   const labels = useMemo<ImagePreviewCanvasLabels>(
@@ -192,6 +229,7 @@ export function FileImagePreview({
       loading={loadState === "loading"}
       onError={handleImageError}
       onLoad={handleImageLoad}
+      onPendingError={handlePendingError}
       src={src || null}
       status={loadState}
     />

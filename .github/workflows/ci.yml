@@ -62,6 +62,8 @@ jobs:
               - '.pier/**'
               - '.github/workflows/ci.yml'
               - '.github/workflows/release-app.yml'
+              - '.github/workflows/release-to-blog.yml'
+              - '.github/scripts/**'
               - 'playwright.config.ts'
               - 'electron-builder.yml'
             native:

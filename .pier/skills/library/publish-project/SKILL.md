@@ -20,7 +20,7 @@ description: >
 - 插件 `package.json` 与 `plugin.json` 的 version 必须一致；有实质变更必须 bump。
 - 默认 **patch** bump；用户在触发时若写明 minor/major 或指定版本则从其约定。
 - 中间改动（version / CHANGELOG / 索引）必须落在 `main`，不能只在旁支。
-- 收尾再一次性向用户汇报：PR、插件 tag、宿主 `v*`、失败需人工项。
+- 收尾再一次性向用户汇报：PR、插件 tag、宿主 `v*`、官网博客、失败需人工项。
 
 ---
 
@@ -72,12 +72,13 @@ CI 若仍红：日志定位失败文件 → 本地修到 `preflight:ci` 绿 → 
 1. 若 `package.json` version 已等于最新 `v*` tag 且 main 有新提交 → patch bump；已高于 tag 则沿用当前 version
 2. PR：根 `package.json` version + `CHANGELOG`（Unreleased → 正式条目）→ CI 绿 → 合 main
 3. 在 main 上：`git tag v$VERSION && git push origin v$VERSION`（触发 `Release App`）
-4. 等到绿；验收 Latest 含 `latest-mac.yml` + arm64/x64 的 zip/dmg
+4. 等到绿；验收 Latest 含 `latest-mac.yml` + arm64/x64 的 zip/dmg，且 `Publish Release to Blog` 已把该版本文章推到 `runloom/pier-website` 的 `main`（CHANGELOG 无条目或文章已存在则跳过）
 
 ### B4 收尾
 
 - pull 最新 main，确认 bump / CHANGELOG / 索引都在
-- 向用户报告：PR、插件 tag、宿主 `v*`、失败需人工项
+- 确认 `https://pier.codes/blog/` 出现该版本（或 Actions 里博客 job 已跳过/成功）
+- 向用户报告：PR、插件 tag、宿主 `v*`、官网博客、失败需人工项
 
 ---
 
@@ -99,3 +100,4 @@ CI 若仍红：日志定位失败文件 → 本地修到 `preflight:ci` 绿 → 
 - 同 version 改已发布包内容
 - 修只在 tag/旁支、不回 main
 - 中途停下来问「要不要合并 / 发哪些插件 / 版本多少」（用户触发 `/publish-project` 即授权全自动）
+- 只靠 GitHub `release` 事件写官网博客（Release App 用 `GITHUB_TOKEN` 建 Release，不会触发其它 workflow）

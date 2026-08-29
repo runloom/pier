@@ -28,8 +28,17 @@ from pathlib import Path
 ENTRY_RE = re.compile(r"^## \[([^\]]+)\] - (\d{4}-\d{2}-\d{2})$")
 BULLET_RE = re.compile(r"^\s*-\s+(.+)$")
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+HEADING_RE = re.compile(r"^### (.+)$", re.M)
 
 LANG_NAMES = {"en": "English", "ja": "Japanese", "ko": "Korean"}
+SECTION_HEADINGS = {
+    "Added": "新增",
+    "Changed": "变更",
+    "Deprecated": "弃用",
+    "Removed": "移除",
+    "Fixed": "修复",
+    "Security": "安全",
+}
 
 
 def parse_changelog(text: str):
@@ -53,8 +62,12 @@ def extract_entry(text: str, version: str, entries: dict) -> str | None:
     start = entries[clean]["start"] + 1
     end = entries[names[idx + 1]]["start"] if idx + 1 < len(names) else len(lines)
     body = "\n".join(lines[start:end]).strip()
-    # 小节标题降一级（### Changed → ## Changed），对齐首篇手工文章的排版
-    return re.sub(r"^### ", "## ", body, flags=re.M)
+    # 小节标题降一级，Keep a Changelog 英文小节改成中文（### Changed → ## 变更）
+    def replace_heading(match: re.Match[str]) -> str:
+        name = match.group(1).strip()
+        return "## " + SECTION_HEADINGS.get(name, name)
+
+    return HEADING_RE.sub(replace_heading, body)
 
 
 def first_bullet(body: str) -> str:
@@ -66,12 +79,14 @@ def first_bullet(body: str) -> str:
 
 
 def make_title(version: str, bullet: str) -> str:
+    ver = version.lstrip("vV")
     m = BOLD_RE.search(bullet)
     if m:
         title = m.group(1).strip().rstrip("。.，,")
         if title:
-            return title[:40] + "…" if len(title) > 40 else title
-    return f"Pier {version.lstrip('vV')} 发布"
+            short = title[:40] + "…" if len(title) > 40 else title
+            return f"Pier {ver}：{short}"
+    return f"Pier {ver} 发布"
 
 
 def make_description(bullet: str) -> str:

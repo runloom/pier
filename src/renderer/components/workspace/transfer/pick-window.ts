@@ -3,13 +3,14 @@
  * Selection always goes through the command-palette quick pick (same shell
  * as agents / SSH host list) — no content-dialog picker.
  *
- * Labels prefer workspace basename + active tab title (VS Code-style), not
- * bare "Window 1 / Window 2".
+ * Rows use workspace folder leaf as the scan key, a short right-side
+ * qualifier, and the identity path as the second line.
  */
 
 import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { PanelSnapshot } from "@shared/contracts/panel.ts";
 import i18next from "i18next";
+import { Folder, FolderGit2 } from "lucide-react";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import type { QuickPickItem } from "@/lib/command-palette/types.ts";
 import { getWindowContext, listWindows } from "@/lib/ipc/window-ipc.ts";
@@ -17,16 +18,30 @@ import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
   buildWindowDisplays,
   type WindowDisplay,
+  type WindowDisplayIconKind,
   windowDisplayCopyFromI18n,
 } from "./window-display.ts";
 
 export interface OtherWindowOption {
   description?: string;
   detail?: string;
+  icon?: QuickPickItem["icon"];
   id: string;
   label: string;
   recordId: string;
   searchTerms?: readonly string[];
+}
+
+function iconForKind(
+  kind: WindowDisplayIconKind | undefined
+): QuickPickItem["icon"] | undefined {
+  if (kind === "git") {
+    return FolderGit2;
+  }
+  if (kind === "folder") {
+    return Folder;
+  }
+  return;
 }
 
 function asGlobalPanelList(
@@ -64,6 +79,7 @@ export async function listOtherWindows(): Promise<OtherWindowOption[]> {
     if (!display) {
       return [];
     }
+    const icon = iconForKind(display.iconKind);
     return [
       {
         id: display.id,
@@ -71,6 +87,7 @@ export async function listOtherWindows(): Promise<OtherWindowOption[]> {
         recordId: display.recordId,
         ...(display.description ? { description: display.description } : {}),
         ...(display.detail ? { detail: display.detail } : {}),
+        ...(icon ? { icon } : {}),
         searchTerms: display.searchTerms,
       },
     ];
@@ -117,6 +134,7 @@ export async function pickOtherWindowId(): Promise<string | null> {
       label: option.label,
       ...(option.description ? { description: option.description } : {}),
       ...(option.detail ? { detail: option.detail } : {}),
+      ...(option.icon ? { icon: option.icon } : {}),
       searchTerms: [
         option.id,
         option.recordId,

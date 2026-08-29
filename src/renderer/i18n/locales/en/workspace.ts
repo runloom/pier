@@ -60,7 +60,6 @@ export const workspace = {
     pickWindowPlaceholder: "Search windows…",
     pickWindowTitle: "Choose a Window",
     sameNameIndex: " · {{n}}",
-    tabCount: "{{count}} tabs",
     windowLabel: "Window {{n}}",
     unsupportedTitle: "This tab can’t be moved to another window",
     unsupportedBody:

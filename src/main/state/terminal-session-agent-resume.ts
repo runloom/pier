@@ -9,6 +9,7 @@
 
 import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
 import { createLogger } from "@shared/logger.ts";
+import { omitResumePending } from "./terminal-session-heal.ts";
 import { terminalAgentPanelMetadataSchema } from "./terminal-session-state-schemas.ts";
 import { ensureTerminalSessionStore } from "./terminal-session-store.ts";
 
@@ -24,8 +25,14 @@ export type AgentResumeWriteResult =
   | "applied"
   | "unchanged"
   | "pending"
+  | "pinned"
   | "rejected"
   | "invalid";
+
+export interface AgentResumeWriteOptions {
+  /** PromptSubmit: allow rotation and clear resumePending. */
+  unlockRotation?: boolean | undefined;
+}
 
 type PendingResume = AgentResumeWriteInput;
 
@@ -50,6 +57,19 @@ function canApplyToAgent(
   resume: AgentResumeWriteInput
 ): boolean {
   return agent.status === "running" && agent.agentId === resume.agentId;
+}
+
+function isResumePinActive(
+  agent: TerminalAgentPanelMetadata,
+  unlockRotation: boolean
+): boolean {
+  if (unlockRotation || !agent.resume?.sessionId.trim()) {
+    return false;
+  }
+  return (
+    agent.restore?.resumePending === true ||
+    agent.restore?.cause === "host-teardown"
+  );
 }
 
 /** Drop pending for one panel (panel remove / agent clear). */
@@ -163,6 +183,14 @@ export function mergePendingResumeIntoAgent(
     pendingByPanel.delete(key);
     return agent;
   }
+  if (
+    isResumePinActive(agent, false) &&
+    agent.resume?.sessionId &&
+    agent.resume.sessionId !== pending.sessionId
+  ) {
+    pendingByPanel.delete(key);
+    return agent;
+  }
   if (agent.resume?.sessionId === pending.sessionId) {
     pendingByPanel.delete(key);
     return agent;
@@ -197,7 +225,8 @@ export function mergePendingResumeIntoAgent(
 export async function updateTerminalPanelAgentResume(
   windowId: string,
   panelId: string,
-  resume: AgentResumeWriteInput
+  resume: AgentResumeWriteInput,
+  options: AgentResumeWriteOptions = {}
 ): Promise<AgentResumeWriteResult> {
   if (windowId.trim().length === 0 || panelId.trim().length === 0) {
     return "invalid";
@@ -242,9 +271,35 @@ export async function updateTerminalPanelAgentResume(
       return state;
     }
 
+    const unlockRotation = options.unlockRotation === true;
+    const pinActive = isResumePinActive(agent, unlockRotation);
+
     if (agent.resume?.sessionId === resume.sessionId) {
       pendingByPanel.delete(key);
-      result = "unchanged";
+      if (!agent.restore?.resumePending) {
+        result = "unchanged";
+        return state;
+      }
+      const nextAgent = {
+        ...agent,
+        restore: omitResumePending(agent.restore),
+      };
+      const parsed = terminalAgentPanelMetadataSchema.safeParse(nextAgent);
+      if (!parsed.success) {
+        result = "invalid";
+        return state;
+      }
+      const { pendingResume: _pending, ...rest } = current;
+      windowState.panels[panelId] = {
+        ...rest,
+        agent: parsed.data,
+        updatedAt: new Date().toISOString(),
+      };
+      result = "applied";
+      return state;
+    }
+    if (pinActive) {
+      result = "pinned";
       return state;
     }
     if (agent.resume && agent.resume.capturedAt >= resume.capturedAt) {
@@ -259,6 +314,9 @@ export async function updateTerminalPanelAgentResume(
     const nextAgent = {
       ...agent,
       resume: resumeFields(resume),
+      ...(unlockRotation && agent.restore?.resumePending
+        ? { restore: omitResumePending(agent.restore) }
+        : {}),
     };
     const parsed = terminalAgentPanelMetadataSchema.safeParse(nextAgent);
     if (!parsed.success) {

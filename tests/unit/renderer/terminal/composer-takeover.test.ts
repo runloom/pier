@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  isTerminalComposerOpen,
   registerTerminalComposerTakeover,
   resetTerminalComposerTakeoverForTests,
   terminalComposerTakeoverFocus,
@@ -74,5 +75,14 @@ describe("terminal composer takeover registry", () => {
 
     expect(terminalComposerTakeoverFocus("t-1", "activate")).toBe(false);
     expect(terminalComposerTakeoverFocus("t-2", "activate")).toBe(false);
+  });
+
+  it("isTerminalComposerOpen follows takeover registration", () => {
+    expect(isTerminalComposerOpen("t-1")).toBe(false);
+    const dispose = registerTerminalComposerTakeover("t-1", vi.fn());
+    expect(isTerminalComposerOpen("t-1")).toBe(true);
+    expect(isTerminalComposerOpen("t-2")).toBe(false);
+    dispose();
+    expect(isTerminalComposerOpen("t-1")).toBe(false);
   });
 });

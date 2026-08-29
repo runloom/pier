@@ -25,6 +25,11 @@ describe("app release workflow", () => {
       /ref:\s*\$\{\{\s*steps\.version\.outputs\.tag\s*\}\}/
     );
     expect(source).toContain("verify-github-latest-isolation.mjs");
+    expect(source).toContain("uses: ./.github/workflows/release-to-blog.yml");
+    expect(source).toContain("secrets: inherit");
+    expect(source).toMatch(
+      /outputs:\s*\n\s+tag:\s*\$\{\{\s*steps\.version\.outputs\.tag\s*\}\}/
+    );
   });
 
   it("keeps plugin releases off GitHub Latest", async () => {

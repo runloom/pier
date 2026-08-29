@@ -99,7 +99,7 @@
 | 引擎 saveGraph 不建父目录 | 启动器 spawn 前 `mkdirSync(dirname(store), {recursive, 0o700})` 兜底;默认启用(从未进设置页)的项目首写不再 ENOENT |
 | 客户端信号终止会话 | 启动器转发信号 → 引擎退出后**摘掉自身监听器**再 re-raise,退出码跟随;契约测试锁「SIGTERM 后不留僵尸」 |
 | 项目账本损坏(JSON 不可解析) | 双端一致 fail-open:启动器视为启用,宿主视同「从未决策」(默认启用)且 status 绝不落盘固化损坏态 |
-| opencode 用户用 `opencode.jsonc` | JSONC 优先级高于 JSON;serializer 不支持注释保留,诚实记 failed(设置页可见降级),不做假 written 也不破坏注释 |
+| opencode 用户用 `opencode.jsonc` | JSONC 优先于 JSON;目标改到 jsonc,用 jsonc-parser 局部编辑写入 `mcp.pier-memory` 并保留注释;禁止改写会被忽略的 `.json` |
 | 单个全局配置不可读写(EACCES 等) | 逐目标错误隔离:失败记 failed 行,其余智能体照常收敛 |
 | `~/.pier` 跨 build 共享,旧版 App 回退启动器 | GENERATION 防降级:磁盘世代更新时跳过安装;current 被外力换成真实目录时清理后原子重建 |
 

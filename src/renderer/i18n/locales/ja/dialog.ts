@@ -37,6 +37,8 @@ export const dialog = {
     controlsLabel: "画像操作",
     copyImage: "画像をコピー",
     copyImageFailed: "画像をコピーできませんでした",
+    copyImageNotReady:
+      "画像の読み込みが終わるまで待ってから、もう一度コピーしてください。",
     fit: "ウインドウに合わせる",
     loadFailedDescription:
       "画像を読み込めなかったか、開いたあとに変更されました。",

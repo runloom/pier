@@ -420,6 +420,7 @@ export const settings = {
         close: "현재 터미널 패널을 닫습니다.",
         composerAttach:
           "리치 입력에 파일을 추가합니다. 리치 입력이 포커스가 아니면 같은 단축키가 기본 에이전트를 시작합니다.",
+        openAgentComposer: "현재 터미널의 리치 입력을 열거나 닫습니다.",
         openDebugWindow: "터미널 디버그 윈도우를 엽니다.",
       },
       view: {

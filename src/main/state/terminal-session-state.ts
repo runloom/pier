@@ -22,7 +22,10 @@ import {
   mergePendingResumeIntoAgent,
   seedDiskPendingResume,
 } from "./terminal-session-agent-resume.ts";
-import { withHealedHostTeardownSession } from "./terminal-session-heal.ts";
+import {
+  restoreAfterAgentExit,
+  withHealedHostTeardownSession,
+} from "./terminal-session-heal.ts";
 import {
   type TerminalPanelSession,
   terminalAgentPanelMetadataSchema,
@@ -276,6 +279,10 @@ export async function patchTerminalPanelAgentStatus(
       return state;
     }
     const exitCode = patch.exitCode ?? current.agent.exitCode;
+    const nextRestore =
+      patch.status === "exited"
+        ? restoreAfterAgentExit(current.agent.restore)
+        : current.agent.restore;
     const nextAgent = {
       ...current.agent,
       status: patch.status,
@@ -283,6 +290,9 @@ export async function patchTerminalPanelAgentStatus(
       ...(patch.finishedAt === undefined
         ? {}
         : { finishedAt: patch.finishedAt }),
+      ...(nextRestore === current.agent.restore
+        ? {}
+        : { restore: nextRestore }),
     };
     const parsed = terminalAgentPanelMetadataSchema.safeParse(nextAgent);
     if (!parsed.success) {

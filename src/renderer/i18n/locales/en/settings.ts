@@ -423,6 +423,7 @@ export const settings = {
         close: "Close the current terminal panel.",
         composerAttach:
           "Attach a file in Rich Input. The same shortcut starts the default agent when Rich Input is not focused.",
+        openAgentComposer: "Open or close Rich Input for the current terminal.",
         openDebugWindow: "Open the terminal debug window.",
       },
       view: {

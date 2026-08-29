@@ -301,29 +301,64 @@ describe("memory global registry", () => {
     expect(existsSync(mcpPath)).toBe(false);
   });
 
-  it("reports opencode as failed instead of fake-writing when opencode.jsonc exists", async () => {
+  it("writes opencode.jsonc in place and does not create an ignored json sibling", async () => {
     const h = home();
     const opencodeDir = join(h, ".config", "opencode");
     mkdirSync(opencodeDir, { recursive: true });
-    writeFileSync(
-      join(opencodeDir, "opencode.jsonc"),
-      "{\n  // user config\n}\n"
-    );
+    const jsoncPath = join(opencodeDir, "opencode.jsonc");
+    writeFileSync(jsoncPath, "{\n  // user config\n}\n");
     const rows = await convergeMemoryRegistry({
       env: {},
       home: h,
       installedAgents: ["opencode"],
       launcherPath: LAUNCHER,
     });
-    expect(rows[0]?.outcome).toBe("failed");
-    expect(rows[0]?.detail).toContain("opencode.jsonc");
+    expect(rows[0]?.outcome).toBe("written");
+    expect(rows[0]?.configPath).toBe(jsoncPath);
     expect(existsSync(join(opencodeDir, "opencode.json"))).toBe(false);
+    const written = readFileSync(jsoncPath, "utf8");
+    expect(written).toContain("// user config");
+    expect(written).toContain("pier-memory");
+    expect(written).toContain(LAUNCHER);
     const status = await memoryRegistryStatusRows({
       env: {},
       home: h,
       installedAgents: ["opencode"],
     });
-    expect(status[0]?.outcome).toBe("failed");
+    expect(status[0]?.outcome).toBe("written");
+    expect(status[0]?.configPath).toBe(jsoncPath);
+  });
+
+  it("moves the json registry record onto jsonc so owned rewrites still work", async () => {
+    const h = home();
+    await convergeMemoryRegistry({
+      env: {},
+      home: h,
+      installedAgents: ["opencode"],
+      launcherPath: LAUNCHER,
+    });
+    const opencodeDir = join(h, ".config", "opencode");
+    const jsonPath = join(opencodeDir, "opencode.json");
+    const jsoncPath = join(opencodeDir, "opencode.jsonc");
+    writeFileSync(jsoncPath, `// copied\n${readFileSync(jsonPath, "utf8")}`);
+    const nextLauncher = "/abs/.pier/memory/launcher/v2/memory-mcp.mjs";
+    const rows = await convergeMemoryRegistry({
+      env: {},
+      home: h,
+      installedAgents: ["opencode"],
+      launcherPath: nextLauncher,
+    });
+    expect(rows[0]?.outcome).toBe("written");
+    expect(rows[0]?.configPath).toBe(jsoncPath);
+    const jsonc = readFileSync(jsoncPath, "utf8");
+    expect(jsonc).toContain("// copied");
+    expect(jsonc).toContain(nextLauncher);
+    expect(readFileSync(jsonPath, "utf8")).not.toContain(nextLauncher);
+    const registry = JSON.parse(
+      readFileSync(join(h, ".pier", "memory", "registry.json"), "utf8")
+    ) as { targets: Record<string, { lastOutcome: string }> };
+    expect(registry.targets[jsonPath]).toBeUndefined();
+    expect(registry.targets[jsoncPath]?.lastOutcome).toBe("written");
   });
 
   it("isolates per-target failures so one broken config does not abort the rest", async () => {

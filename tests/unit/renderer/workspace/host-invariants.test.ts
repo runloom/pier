@@ -36,7 +36,7 @@ const TRANSFER_HOST_SOURCE = readFileSync(
 const USER_TOUCHED_FLAG_RE = /let userTouched = false/;
 const USER_TOUCHED_SET_TRUE_RE = /userTouched = true/;
 const USER_TOUCHED_GUARDS_FROMJSON_RE =
-  /if \(userTouched\) \{[\s\S]{0,200}?\/\/[\s\S]{0,100}?\n\s*return;\s*\}/;
+  /if \(userTouched\) \{[\s\S]{0,200}?notifyWorkspaceReady\(\);[\s\S]{0,40}?return;\s*\}/;
 
 const IS_APPLYING_PERSISTED_DECL_RE = /let isApplyingPersistedLayout = false/;
 const IS_APPLYING_GUARDS_SAVE_RE = /if \(isApplyingPersistedLayout\) \{/;
@@ -46,7 +46,7 @@ const ACTIVE_PANEL_CHANGE_HANDLES_NULL_RE =
 const ACTIVE_PANEL_CHANGE_USES_SCOPE_HELPER_RE =
   /const handleActivePanelChange:[\s\S]{0,200}?= \(change\) => \{[\s\S]{0,1200}?const panel = change\.panel;[\s\S]{0,1200}?syncActivePanelScope\(panel\)/;
 const ACTIVE_PANEL_CHANGE_REQUESTS_PRESENTATION_RE =
-  /const handleActivePanelChange:[\s\S]{0,200}?= \(change\) => \{[\s\S]{0,1400}?syncTerminalPresentation\(event\.api, "dockview-active-panel"\)/;
+  /const handleActivePanelChange:[\s\S]{0,200}?= \(change\) => \{[\s\S]{0,1400}?terminalLayout\.present\(event\.api, "dockview-active-panel"\)/;
 const ACTIVE_PANEL_CHANGE_SETS_INPUT_ROUTING_RE =
   /function syncActivePanelScope\(panel: WorkspacePanel \| null \| undefined\): void \{[\s\S]{0,900}?setTerminalBasePanel/;
 const OLD_ACTIVE_PANEL_PRIMITIVE_RE = new RegExp(
@@ -56,7 +56,7 @@ const OLD_ACTIVE_PANEL_PRIMITIVE_RE = new RegExp(
 const RECONCILE_CALL_RE =
   /window\.pier\?\.terminal\?\.reconcile\?\.\(terminalPanelIds\)/;
 const RECONCILE_VIA_PRESENTATION_HELPER_RE =
-  /syncTerminalPresentation\(event\.api,\s*"(?:restore|dockview-layout|dockview-maximize|dockview-active-panel)"\)/;
+  /terminalLayout\.(?:hydrate|present)\(event\.api/;
 const PRESENTATION_HELPER_PATH = join(
   process.cwd(),
   "src/renderer/components/workspace/host-terminal-presentation.ts"
@@ -89,9 +89,18 @@ const AWAITS_WINDOW_CONTEXT_FOR_SAVE_RE =
 const FLUSH_EMPTY_LAYOUT_CLEARS_RECORD_RE =
   /if \(event\.api\.totalPanels === 0\)[\s\S]{0,160}?\.clearLayout\(windowContext\.recordId\)/;
 const WORKSPACE_READY_AFTER_LAYOUT_RE =
-  /syncTerminalPresentation\(event\.api,\s*"restore"\);\s*[\s\S]{0,200}?notifyWorkspaceReady\(\);/;
+  /terminalLayout\.hydrate\(event\.api\);[\s\S]{0,280}?notifyWorkspaceReady\(\);/;
 const WORKSPACE_READY_WHEN_USER_TOUCHED_RE =
-  /if \(userTouched\) \{[\s\S]{0,120}?notifyWorkspaceReady\(\);[\s\S]{0,80}?return;/;
+  /if \(userTouched\) \{[\s\S]{0,280}?notifyWorkspaceReady\(\);[\s\S]{0,80}?return;/;
+const TERMINAL_LAYOUT_HYDRATED_RE = /createTerminalLayoutHydrationGate\(\)/;
+const SKIP_RECONCILE_BEFORE_HYDRATE_RE =
+  /if \(!terminalLayout\.isHydrated\(\)\) \{[\s\S]{0,220}?return;/;
+const HYDRATE_BEFORE_RESTORE_RECONCILE_RE =
+  /terminalLayout\.hydrate\(event\.api\)/;
+const PRESENTATION_GATE_HYDRATE_RE =
+  /hydrate\(api\) \{[\s\S]{0,80}?syncTerminalPresentation\(api, "restore"\)/;
+const PRESENTATION_GATE_PRESENT_RE =
+  /present\(api, reason\) \{[\s\S]{0,80}?if \(!hydrated\) \{[\s\S]{0,40}?return;/;
 const BOOT_SIGNAL_AFTER_COMPONENT_MOUNT_RE =
   /function RendererBootSignal\(\)[\s\S]{0,180}?useEffect\(\(\) => \{\s*window\.pier\?\.window\?\.readyToShow\?\.\(\)/;
 const FINAL_APP_RETAINS_BOOT_SIGNAL_RE =
@@ -133,6 +142,16 @@ describe("workspace-host invariants (#17 #19)", () => {
     // reconcile 落在 presentation helper（syncTerminalPresentation → reconcile）。
     expect(PRESENTATION_HELPER_SOURCE).toMatch(RECONCILE_CALL_RE);
     expect(SOURCE).toMatch(RECONCILE_VIA_PRESENTATION_HELPER_RE);
+  });
+
+  it("does not reconcile or treat empty dockview init as userTouched before layout hydrate", () => {
+    // 水合前 reconcile([]) 会杀掉仍活着的 PTY；空 layout-change 不能标 userTouched，
+    // 否则异步 fromJSON 被跳过。hydrate 后第一次 restore 才 reconcile。
+    expect(SOURCE).toMatch(TERMINAL_LAYOUT_HYDRATED_RE);
+    expect(SOURCE).toMatch(SKIP_RECONCILE_BEFORE_HYDRATE_RE);
+    expect(SOURCE).toMatch(HYDRATE_BEFORE_RESTORE_RECONCILE_RE);
+    expect(PRESENTATION_HELPER_SOURCE).toMatch(PRESENTATION_GATE_HYDRATE_RE);
+    expect(PRESENTATION_HELPER_SOURCE).toMatch(PRESENTATION_GATE_PRESENT_RE);
   });
 
   it("loads persisted layout from the current durable window record", () => {

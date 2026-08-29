@@ -68,7 +68,6 @@ export const workspace = {
     pickWindowPlaceholder: "ウインドウを検索…",
     pickWindowTitle: "ウインドウを選ぶ",
     sameNameIndex: " · {{n}}",
-    tabCount: "{{count}} 個のタブ",
     windowLabel: "ウインドウ {{n}}",
     unsupportedTitle: "このタブは別のウインドウへ移せません",
     unsupportedBody:

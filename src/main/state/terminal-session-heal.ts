@@ -1,4 +1,7 @@
-import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
+import type {
+  TerminalAgentPanelMetadata,
+  TerminalAgentRestoreMetadata,
+} from "@shared/contracts/terminal.ts";
 import {
   type TerminalPanelSession,
   terminalAgentPanelMetadataSchema,
@@ -9,11 +12,48 @@ function isCleanExitCode(exitCode: number | undefined): boolean {
   return exitCode === undefined || exitCode === 0;
 }
 
+export function spawnRestoreFields(args: {
+  resumePending?: boolean | undefined;
+  spawnGeneration: number;
+}): TerminalAgentRestoreMetadata {
+  return {
+    spawnGeneration: args.spawnGeneration,
+    ...(args.resumePending ? { resumePending: true } : {}),
+  };
+}
+
+export function omitResumePending(
+  restore: TerminalAgentRestoreMetadata | undefined
+): TerminalAgentRestoreMetadata | undefined {
+  if (!restore?.resumePending) {
+    return restore;
+  }
+  const { resumePending: _pending, ...rest } = restore;
+  return Object.keys(rest).length > 0 ? rest : undefined;
+}
+
+export function restoreAfterAgentExit(
+  restore: TerminalAgentRestoreMetadata | undefined
+): TerminalAgentRestoreMetadata | undefined {
+  if (!restore?.resumePending) {
+    return restore;
+  }
+  return {
+    cause: "resume-failed",
+    ...(restore.spawnGeneration === undefined
+      ? {}
+      : { spawnGeneration: restore.spawnGeneration }),
+  };
+}
+
 /** In-memory view: host-killed exited rows look running so skipNativeCreate misses. */
 export function healHostTeardownAgentOnRead(
   agent: TerminalAgentPanelMetadata | undefined
 ): TerminalAgentPanelMetadata | undefined {
   if (agent?.status !== "exited") {
+    return agent;
+  }
+  if (agent.restore?.cause === "resume-failed") {
     return agent;
   }
   const detachedAt = agent.restore?.detachedAt;
@@ -95,7 +135,8 @@ export function withHealedHostTeardownSession(
 export async function recordTerminalPanelAgentSpawnGeneration(
   windowId: string,
   panelId: string,
-  spawnGeneration: number
+  spawnGeneration: number,
+  options: { resumePending?: boolean | undefined } = {}
 ): Promise<void> {
   if (windowId.trim().length === 0 || panelId.trim().length === 0) {
     return;
@@ -112,7 +153,10 @@ export async function recordTerminalPanelAgentSpawnGeneration(
     }
     const nextAgent = {
       ...current.agent,
-      restore: { spawnGeneration },
+      restore: spawnRestoreFields({
+        spawnGeneration,
+        ...(options.resumePending ? { resumePending: true } : {}),
+      }),
     };
     const parsed = terminalAgentPanelMetadataSchema.safeParse(nextAgent);
     if (!parsed.success) {

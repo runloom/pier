@@ -18,6 +18,9 @@ flowchart LR
     A["tag vX.Y.Z"] --> B["Release App"]
     B --> C["GitHub Latest\nlatest-mac.yml + arm64/x64 zip+dmg"]
     C --> D["electron-updater"]
+    B --> K["Publish Release to Blog"]
+    K --> L["pier-website main"]
+    L --> M["pier.codes/blog"]
   end
   subgraph plugin [官方插件]
     E["bump plugin package.json"] --> F["Release Plugin"]
@@ -59,7 +62,7 @@ curl -fsSL https://github.com/runloom/pier/releases/latest/download/latest-mac.y
 ```
 
 用户侧（production）：约 30s 后检查 → 后台下载 → 右上角 / Settings → Updates → 手动重启安装（或退出时安装）。  
-secrets、本地 `build:dist`、CSC_LINK 开关 → [`app-release.md`](./app-release.md)。
+官网博客：Release App 成功后自动从 CHANGELOG 生成文章并推到 `pier-website`；不要用 `on: release`（`GITHUB_TOKEN` 创建的 Release 不会触发其它 workflow）。细节与 secrets → [`app-release.md`](./app-release.md)。
 
 ---
 

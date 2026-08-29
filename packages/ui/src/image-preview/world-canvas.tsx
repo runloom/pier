@@ -92,6 +92,7 @@ export function WorldViewportFrame({
         active
           ? "absolute inset-0 overflow-hidden bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset"
           : "contents",
+        active && !camera.camera && "invisible",
         active && resolveViewportCursor(camera),
         active && camera.panning && "select-none"
       )}

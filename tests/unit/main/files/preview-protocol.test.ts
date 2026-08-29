@@ -78,6 +78,7 @@ describe("file preview protocol", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
     expect(response.headers.get("content-length")).toBe(String(bytes.length));
     expect(response.headers.get("etag")).toMatch(/^"file-v1:[a-f0-9]+"$/);
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
@@ -275,6 +276,7 @@ describe("file preview protocol", () => {
     expect(registerSchemesAsPrivileged).toHaveBeenCalledWith([
       {
         privileges: {
+          corsEnabled: true,
           secure: true,
           standard: true,
           supportFetchAPI: true,

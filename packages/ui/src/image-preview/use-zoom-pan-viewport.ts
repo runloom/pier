@@ -89,19 +89,20 @@ export function useZoomPanViewport({
   }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey is the world identity trigger
-  useEffect(() => {
+  useLayoutEffect(() => {
     prevEffectiveZoomRef.current = null;
     setLayoutReady(false);
     setFitScale(1);
     setZoom("fit");
   }, [resetKey]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey retriggers measure after identity swap
   useLayoutEffect(() => {
     if (!enabled) {
       return;
     }
     measureFit();
-  }, [enabled, measureFit]);
+  }, [enabled, measureFit, resetKey]);
 
   useEffect(() => {
     const viewport = viewportRef.current;

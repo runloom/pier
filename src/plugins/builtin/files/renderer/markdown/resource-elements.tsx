@@ -187,14 +187,12 @@ export function MarkdownResourceLink({
 }
 
 export function MarkdownResourceImage({
-  imagePreviewFailedLabel,
   imagePreviewTitle,
   inline,
   openFullscreenLabel,
   resources,
   source,
 }: {
-  imagePreviewFailedLabel: string;
   imagePreviewTitle: string;
   inline: Extract<MarkdownInline, { kind: "image" }>;
   openFullscreenLabel: string;
@@ -267,43 +265,14 @@ export function MarkdownResourceImage({
   const contentPreview = resources?.contentPreview;
   const canPreview = Boolean(contentPreview);
   const openPreview = () => {
-    if (!(resources && source && targetPath && contentPreview)) {
+    if (!contentPreview) {
       return;
     }
-    const open = async () => {
-      try {
-        const document = await resources.files.readDocument({
-          path: targetPath,
-          root: source.root,
-        });
-        if (document.kind !== "image") {
-          throw new Error("not an image resource");
-        }
-        const issued = await resources.filePreviews.issue({
-          mime: document.mime,
-          path: targetPath,
-          revision: document.revision,
-          root: source.root,
-        });
-        if (!issued.issued) {
-          throw new Error("image preview unavailable");
-        }
-        contentPreview.openImage({
-          alt: inline.alt,
-          onClose: () => {
-            // Lifecycle cleanup is not a user-triggered action; there is no UI feedback to emit.
-            resources.filePreviews
-              .release(issued.ticket)
-              .catch(() => undefined);
-          },
-          source: { kind: "url", src: issued.url },
-          title: inline.title?.trim() || inline.alt || imagePreviewTitle,
-        });
-      } catch {
-        resources.notifications?.error(imagePreviewFailedLabel);
-      }
-    };
-    open().catch(() => undefined);
+    contentPreview.openImage({
+      alt: inline.alt,
+      source: { kind: "url", src: state.url },
+      title: inline.title?.trim() || inline.alt || imagePreviewTitle,
+    });
   };
   return (
     <figure className="md-img-figure">
@@ -311,6 +280,7 @@ export function MarkdownResourceImage({
         <img
           alt={inline.alt}
           className="md-img"
+          crossOrigin="anonymous"
           height={360}
           src={state.url}
           title={inline.title ?? undefined}

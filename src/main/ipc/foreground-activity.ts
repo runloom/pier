@@ -410,6 +410,7 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
           panelId: routed.panelId,
           sessionId: routed.sessionId,
           windowId: routed.windowId,
+          ...(routed.event === "PromptSubmit" ? { unlockRotation: true } : {}),
         });
       }
       if (effects.observeTranscript) {
