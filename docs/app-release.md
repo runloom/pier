@@ -20,10 +20,13 @@
   - 本地：`verify-mac-release-artifacts.mjs --dir dist-builder --version <ver>`
   - 上传后远端：publish wrapper 内嵌 dual-arch 校验
   - GitHub Latest：`verify-github-latest-isolation.mjs --expect-version <ver>`
+- 官网博客：Latest 校验通过后，同一 workflow 调用 `Publish Release to Blog`。从该 tag 的 `CHANGELOG.md` 生成中英日韩文章，直接推到 `runloom/pier-website` 的 `main`，Pages 自动部署。无对应 CHANGELOG 条目或文章已存在则跳过。补发用 Actions 手动 `workflow_dispatch`，填 `vX.Y.Z`。正式版本的 CHANGELOG 条目会原样变成官网文章，面向用户写。
+
+  **不要**指望 `on: release`。本 workflow 用 `GITHUB_TOKEN` 创建 GitHub Release，GitHub 不会再用这个 token 去触发其它 workflow。
 
 ## Secrets
 
-与 `electron-builder.env.example` 对齐：
+签名 / 公证 / 上传与 `electron-builder.env.example` 对齐：
 
 | Secret | 用途 |
 |---|---|
@@ -33,6 +36,13 @@
 | 或 `APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD` + `APPLE_TEAM_ID` | 公证 |
 | 或 `APPLE_KEYCHAIN_PROFILE` + `APPLE_TEAM_ID` | 本机 keychain profile |
 | `GITHUB_TOKEN` | workflow 自带，用于 publish |
+
+官网博客（CI 仓库 Secrets，不进 `electron-builder.env`）：
+
+| Secret | 用途 |
+|---|---|
+| `BLOG_PAT` | 写 `runloom/pier-website`（`contents:write`）；直推 `main` |
+| `LLM_API_KEY` / `LLM_MODEL` | en/ja/ko 翻译（缺则只发中文）；`LLM_BASE_URL` 可选 |
 
 ## 本地
 

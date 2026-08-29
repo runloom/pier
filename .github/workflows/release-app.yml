@@ -2,6 +2,9 @@ name: Release App
 
 # Publishes the macOS Pier host app to GitHub Releases Latest for electron-updater.
 # Plugin releases must stay prerelease (--latest=false) so they never own /releases/latest.
+# After Latest is verified, calls Publish Release to Blog. Do not rely on on.release:
+# this workflow creates the GitHub Release with GITHUB_TOKEN, which does not start
+# other workflows (GitHub recursive-run guard).
 
 on:
   push:
@@ -19,6 +22,9 @@ permissions:
 jobs:
   release:
     runs-on: macos-26
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Resolve release version
         id: version
@@ -139,3 +145,10 @@ jobs:
           # Plugin prereleases must never own Latest (electron-updater reads only Latest).
           node ./scripts/verify-github-latest-isolation.mjs \
             --expect-version "${{ steps.version.outputs.version }}"
+
+  publish-blog:
+    needs: release
+    uses: ./.github/workflows/release-to-blog.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit
