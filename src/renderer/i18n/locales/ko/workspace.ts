@@ -60,7 +60,6 @@ export const workspace = {
     pickWindowPlaceholder: "윈도우 검색…",
     pickWindowTitle: "윈도우 선택",
     sameNameIndex: " · {{n}}",
-    tabCount: "탭 {{count}}개",
     windowLabel: "윈도우 {{n}}",
     unsupportedTitle: "이 탭은 다른 윈도우로 옮길 수 없습니다",
     unsupportedBody:

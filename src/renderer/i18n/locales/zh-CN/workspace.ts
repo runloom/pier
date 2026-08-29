@@ -56,7 +56,6 @@ export const workspace = {
     pickWindowPlaceholder: "搜索窗口…",
     pickWindowTitle: "选择窗口",
     sameNameIndex: " · {{n}}",
-    tabCount: "{{count}} 个标签",
     windowLabel: "窗口 {{n}}",
     unsupportedTitle: "该标签不能移动到其他窗口",
     unsupportedBody: "这类标签暂不支持跨窗口移动，它仍保留在原窗口中。",
