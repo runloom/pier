@@ -103,16 +103,39 @@ export function memoryGlobalTargets(options?: {
 
 /**
  * OpenCode 的 JSONC 优先级高于 JSON(与 agents/integrations/opencode.ts 一致):
- * `opencode.jsonc` 存在时写 `.json` 会被静默忽略——那是「假 written」。
- * 当前 serializer 不支持 JSONC 注释保留,诚实降级为 failed(设置页可见),
- * 不做会丢注释的破坏性写入。
+ * `opencode.jsonc` 存在时写 `.json` 会被静默忽略。此时把目标改到 jsonc,
+ * 由 serializer 用 jsonc-parser 局部编辑保留注释。
  */
-async function opencodeJsoncBlocker(
-  jsonTargetAbs: string
-): Promise<string | null> {
-  const jsoncPath = jsonTargetAbs.replace(/\.json$/u, ".jsonc");
-  const exists = await stat(jsoncPath).catch(() => null);
-  return exists ? jsoncPath : null;
+async function withLiveTargetAbs(
+  target: MemoryGlobalTarget
+): Promise<MemoryGlobalTarget> {
+  if (target.agent !== "opencode") {
+    return target;
+  }
+  const jsoncPath = target.abs.replace(/\.json$/u, ".jsonc");
+  const jsonc = await stat(jsoncPath).catch(() => null);
+  return jsonc ? { ...target, abs: jsoncPath } : target;
+}
+
+/** jsonc 优先时不要再写会被忽略的 .json;账本记录迁到 live 路径以保留指纹。 */
+function retargetOpenCodeSibling(
+  registry: MemoryRegistry,
+  jsonAbs: string,
+  liveAbs: string
+): void {
+  if (liveAbs === jsonAbs) {
+    return;
+  }
+  if (registry.targets[liveAbs] === undefined) {
+    const prior = registry.targets[jsonAbs];
+    if (prior) {
+      registry.targets[liveAbs] = prior;
+    }
+  }
+  delete registry.targets[jsonAbs];
+  registry.pending = registry.pending.filter(
+    (item) => item.targetPath !== jsonAbs
+  );
 }
 
 async function loadRegistry(path: string): Promise<MemoryRegistry> {
@@ -306,7 +329,9 @@ async function runConverge(
     if (!installed.has(target.agent)) {
       continue;
     }
-    rows.push(await convergeOneTarget(target, args, registry, path, lockFor));
+    const live = await withLiveTargetAbs(target);
+    retargetOpenCodeSibling(registry, target.abs, live.abs);
+    rows.push(await convergeOneTarget(live, args, registry, path, lockFor));
   }
   await saveRegistry(path, registry);
   return rows;
@@ -321,24 +346,6 @@ async function convergeOneTarget(
   lockFor: <T>(key: string, fn: () => Promise<T>) => Promise<T>
 ): Promise<TargetRow> {
   try {
-    if (target.agent === "opencode") {
-      const blocker = await opencodeJsoncBlocker(target.abs);
-      if (blocker) {
-        const detail = `opencode.jsonc takes precedence; not writing ${target.abs}`;
-        registry.targets[target.abs] = {
-          detail,
-          existedBefore: true,
-          fingerprint: registry.targets[target.abs]?.fingerprint ?? "",
-          lastOutcome: "failed",
-        };
-        return {
-          configPath: blocker,
-          consumers: [target.agent],
-          detail,
-          outcome: "failed",
-        };
-      }
-    }
     return await lockFor(target.abs, () =>
       applyMemoryTarget({
         abs: target.abs,
@@ -381,10 +388,11 @@ export async function memoryRegistryStatusRows(options: {
   });
   const installed = new Set(options.installedAgents);
   const rows: TargetRow[] = [];
-  for (const target of targets) {
-    if (!installed.has(target.agent)) {
+  for (const listed of targets) {
+    if (!installed.has(listed.agent)) {
       continue;
     }
+    const target = await withLiveTargetAbs(listed);
     const record = registry.targets[target.abs];
     if (record?.lastOutcome !== "written") {
       rows.push({

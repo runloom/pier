@@ -1,7 +1,9 @@
 import {
   buildOpenCodeEntry,
+  buildOpenCodeLauncherEntry,
   buildServerEntry,
   fingerprintManagedSlice,
+  inferMemoryFormat,
   planJsonUpsert,
   planOpenCodeUpsert,
   planRemove,
@@ -159,6 +161,108 @@ describe("opencode-json upsert", () => {
         },
       },
     });
+  });
+
+  it("edits JSONC in place and keeps comments", () => {
+    const raw = `{
+  // keep this
+  "$schema": "https://opencode.ai/config.json",
+}
+`;
+    const plan = planOpenCodeUpsert(
+      raw,
+      buildOpenCodeLauncherEntry("/abs/launcher.js")
+    );
+    expect(plan.ok).toBe(true);
+    if (!plan.ok || typeof plan.next !== "string") {
+      return;
+    }
+    expect(plan.next).toContain("// keep this");
+    expect(plan.next).toContain("$schema");
+    expect(plan.next).toContain("pier-memory");
+    expect(fingerprintManagedSlice(plan.next, "opencode-json")).toBe(
+      plan.fingerprint
+    );
+    const removed = planRemove(plan.next, "opencode-json");
+    expect(removed.ok).toBe(true);
+    if (!removed.ok || typeof removed.next !== "string") {
+      return;
+    }
+    expect(removed.next).toContain("// keep this");
+    expect(removed.next).not.toContain("pier-memory");
+  });
+
+  it("keeps comment-only leftovers instead of deleting the file", () => {
+    const raw = `{
+  // user config
+}
+`;
+    const plan = planOpenCodeUpsert(
+      raw,
+      buildOpenCodeLauncherEntry("/abs/launcher.js")
+    );
+    expect(plan.ok).toBe(true);
+    if (!plan.ok || typeof plan.next !== "string") {
+      return;
+    }
+    const removed = planRemove(plan.next, "opencode-json");
+    expect(removed.ok).toBe(true);
+    if (!removed.ok) {
+      return;
+    }
+    expect(removed.next).toEqual(expect.stringContaining("// user config"));
+    expect(removed.next).not.toContain("pier-memory");
+  });
+
+  it("still collapses a Pier-created skeleton to null", () => {
+    const plan = planOpenCodeUpsert(
+      null,
+      buildOpenCodeLauncherEntry("/abs/launcher.js")
+    );
+    expect(plan.ok).toBe(true);
+    if (!plan.ok || typeof plan.next !== "string") {
+      return;
+    }
+    const removed = planRemove(plan.next, "opencode-json");
+    expect(removed.ok).toBe(true);
+    if (!removed.ok) {
+      return;
+    }
+    expect(removed.next).toBeNull();
+  });
+
+  it("fails closed when mcp is not an object", () => {
+    const plan = planOpenCodeUpsert(
+      `{ "mcp": [] }`,
+      buildOpenCodeLauncherEntry("/abs/launcher.js")
+    );
+    expect(plan.ok).toBe(false);
+    if (plan.ok) {
+      return;
+    }
+    expect(plan.reason).toContain("mcp is not an object");
+  });
+
+  it("rejects a foreign pier-memory key in JSONC", () => {
+    const raw = `{
+  // keep
+  "mcp": { "pier-memory": { "command": ["x"], "type": "local" } }
+}
+`;
+    const plan = planOpenCodeUpsert(
+      raw,
+      buildOpenCodeLauncherEntry("/abs/launcher.js")
+    );
+    expect(plan.ok).toBe(false);
+  });
+
+  it("treats opencode.jsonc as the opencode format", () => {
+    expect(inferMemoryFormat("/xdg/opencode/opencode.jsonc")).toBe(
+      "opencode-json"
+    );
+    expect(inferMemoryFormat("/xdg/opencode/opencode.json")).toBe(
+      "opencode-json"
+    );
   });
 });
 

@@ -7,14 +7,13 @@ import { cn } from "./utils.ts";
 /**
  * Soft alert surfaces follow Ant Design Alert:
  * - background + border carry status color
- * - icon uses the shared StatusIcon set (same as toast)
+ * - icon uses the shared StatusIcon set on the first content line
  * - title/description stay on neutral text tokens (not tinted)
  */
 const alertVariants = cva(
-  // Grid is [icon | content] when a status icon is present. Title/description
-  // must use AlertTitle / AlertDescription (col-start-2). Free children in the
-  // icon track collapse to ~1ch and CJK wraps one glyph per line.
-  "group/alert relative grid w-full gap-0.5 rounded-2xl border px-4 py-3 text-left text-foreground text-sm has-data-[slot=alert-action]:relative has-[[data-slot=status-icon]]:grid-cols-[auto_1fr] has-[[data-slot=status-icon]]:gap-x-2.5 has-data-[slot=alert-action]:pr-18 *:[data-slot=status-icon]:row-span-2 *:[data-slot=status-icon]:translate-y-0.5",
+  // Grid is [icon | body] when a status icon is present. Free children must
+  // not land in the icon track (CJK titles otherwise wrap one glyph per line).
+  "group/alert relative grid w-full gap-0.5 rounded-2xl border px-4 py-3 text-left text-foreground text-sm leading-5 has-data-[slot=alert-action]:relative has-[[data-slot=status-icon]]:grid-cols-[auto_1fr] has-[[data-slot=status-icon]]:gap-x-2.5 has-data-[slot=alert-action]:pr-18 *:[data-slot=status-icon]:self-start",
   {
     variants: {
       variant: {
@@ -58,7 +57,7 @@ function Alert({
       role="alert"
       {...props}
     >
-      {iconKind ? <StatusIcon kind={iconKind} /> : null}
+      {iconKind ? <StatusIcon kind={iconKind} size="md" /> : null}
       {/*
         Body wrapper owns the content column so free children (not only
         AlertTitle/Description) never land in the ~1ch icon track — that was

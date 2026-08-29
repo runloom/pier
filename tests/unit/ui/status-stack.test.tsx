@@ -118,4 +118,28 @@ describe("StatusStack", () => {
     fireEvent.click(action);
     expect(onClick).toHaveBeenCalledTimes(1);
   });
+
+  it("sizes the status icon to the first line and does not span later rows", () => {
+    const { container } = render(
+      <StatusStack
+        items={[
+          {
+            action: { label: "Retry", onClick: vi.fn() },
+            id: "w",
+            title: "Some agents are not connected.",
+            tone: "warning",
+          },
+        ]}
+      />
+    );
+    const icon = container.querySelector("[data-slot='status-icon']");
+    expect(icon).toHaveAttribute("data-size", "md");
+    expect(icon?.className).toContain("size-[1lh]");
+    expect(icon?.className).toContain("leading-5");
+    const item = container.querySelector("[data-slot='status-stack-item']");
+    expect(item?.className).toContain("self-start");
+    expect(item?.className).toContain("leading-5");
+    expect(item?.className).not.toContain("row-span-2");
+    expect(item?.className).not.toContain("translate-y-0.5");
+  });
 });
