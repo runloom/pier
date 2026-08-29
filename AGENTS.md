@@ -367,7 +367,7 @@ section 根节点下的裸子节点。
 - **三条路径**：默认发候选（GitHub prerelease，不占 Latest、不发博客）→ 观察期后「晋升正式版」；「直接发布」显式触发才走，跳过候选直达正式版（验证不减）。
 - **隔离**：Latest 必须是稳定 `vX.Y.Z`；候选 / 插件均为 prerelease。候选 publish 后 `gh release edit --prerelease --latest=false`；isolation 脚本 `--candidate-tag`。
 - **客户端候选 opt-in**：偏好 `receiveCandidateUpdates`（默认关）；候选目标解析单一实现 `app-updates/candidate-feed.ts`（只认宿主 tag、semver 全序、稳定优先、per_page=100 + 次页兜底 + 10s 超时），**禁止裸用 `allowPrerelease`**（会误选同仓插件 prerelease / 跳过晋升稳定版）；适配器构造后强制置 false（rc 运行版本构造期会被自动开启）。
-- 检查点：`tests/unit/main/app-core/release-workflow.test.ts`、`tests/unit/main/preferences/github-latest-isolation.test.ts`、`mac-release-assets.test.ts`、`update-candidate-feed.test.ts`；skill `.agents/skills/publish-project/SKILL.md`。
+- 检查点：`tests/unit/main/app-core/release-workflow.test.ts`、`tests/unit/main/preferences/github-latest-isolation.test.ts`、`mac-release-assets.test.ts`、`tests/unit/main/app-updates/candidate-feed.test.ts`；skill `.agents/skills/publish-project/SKILL.md`。
 
 #### 终端 tab 标题与 Agent 身份（标题 ≠ 身份）— 金标准
 

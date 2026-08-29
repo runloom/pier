@@ -65,5 +65,5 @@
 
 - Workflow：`tests/unit/main/app-core/release-workflow.test.ts`
 - 隔离：`tests/unit/main/preferences/github-latest-isolation.test.ts`、`mac-release-assets.test.ts`
-- 客户端候选更新：`tests/unit/main/app-core/update-candidate-feed.test.ts`、`tests/unit/renderer/app/update-section.test.tsx`、`tests/unit/app/preferences-schema.test.ts`
+- 客户端候选更新：`tests/unit/main/app-updates/candidate-feed.test.ts`、`tests/unit/renderer/app/update-section.test.tsx`、`tests/unit/app/preferences-schema.test.ts`
 - 文档：本文件；[`docs/release.md`](../../release.md)；[`docs/app-release.md`](../../app-release.md)；AGENTS.md「宿主发布候选版 — 金标准」；`.agents/skills/publish-project/SKILL.md`
