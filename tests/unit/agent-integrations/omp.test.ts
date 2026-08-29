@@ -839,13 +839,13 @@ describe("install/uninstallOmpExtension (文件 IO)", () => {
   let extPath: string;
 
   afterEach(() => {
-    delete process.env.OMP_HOME;
+    delete process.env.PI_CODING_AGENT_DIR;
     vi.resetModules();
   });
 
   async function setup() {
     dir = await mkdtemp(join(tmpdir(), "pier-omp-io-test-"));
-    process.env.OMP_HOME = dir;
+    process.env.PI_CODING_AGENT_DIR = dir;
     extPath = join(dir, "extensions", "pier-agent-status.ts");
   }
 
@@ -941,7 +941,7 @@ describe("install/uninstallOmpExtension (文件 IO)", () => {
 
   it("detect 为假时（无 home 目录、无 omp 命令）install 不写入任何文件", async () => {
     const emptyDir = await mkdtemp(join(tmpdir(), "pier-omp-nodetect-"));
-    delete process.env.OMP_HOME;
+    delete process.env.PI_CODING_AGENT_DIR;
     const originalPath = process.env.PATH;
     const originalHome = process.env.HOME;
     process.env.PATH = emptyDir;

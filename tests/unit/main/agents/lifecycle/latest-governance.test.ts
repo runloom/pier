@@ -17,6 +17,10 @@ const SOURCE_POLICY = join(
   process.cwd(),
   "src/main/services/agents/lifecycle/plan/source-policy.ts"
 );
+const PLAN_BUILD = join(
+  process.cwd(),
+  "src/main/services/agents/lifecycle/plan/build.ts"
+);
 const LATEST_TS = join(
   process.cwd(),
   "src/main/services/agents/lifecycle/latest.ts"
@@ -70,6 +74,14 @@ describe("agent latest-version gold-standard governance", () => {
       /brew:\s*\[["']brew-upgrade["'],\s*["']self["'],\s*["']reinstall["']\]/
     );
     expect(src).not.toMatch(/brew:\s*\[[^\]]*npm-latest/);
+  });
+
+  it("brew reinstall expansion does not dump all channels when filter is empty", () => {
+    const src = readFileSync(PLAN_BUILD, "utf8");
+    expect(src).toContain("sourceHasMatchingInstallChannel");
+    expect(src).not.toMatch(
+      /filtered\.length\s*>\s*0\s*\?\s*filtered\s*:\s*all/
+    );
   });
 
   it("core brew tokens do not fall back to local brew info", () => {

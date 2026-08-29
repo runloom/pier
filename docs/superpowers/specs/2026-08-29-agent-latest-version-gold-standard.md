@@ -40,7 +40,7 @@
 ## 更新计划（brew）
 
 `UPDATE_PRIORITY.brew` = `brew-upgrade` → `self` → `reinstall`（**无** `npm-latest`）。  
-`reinstall` 展开仍按安装源过滤为 brew / 脚本步骤。
+`reinstall` 展开仍按安装源过滤为 brew / 脚本步骤。过滤结果为空时：spec 里有对应 install 渠道（Linux 上 brew cask 被丢掉）则跳过，禁止回退全部渠道把 npm 双装进来；spec 没有该安装源渠道（如 kimi 遗留的 uv `kimi-cli`）才回退其余 install 步骤以迁移。
 
 **执行端新鲜度**：检测端用远端索引，执行端 brew 必须允许 auto-update（短节流
 `HOMEBREW_AUTO_UPDATE_SECS=300`，`runner/child-env.ts`），禁止注入

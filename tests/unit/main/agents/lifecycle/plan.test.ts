@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assertAllowedScriptUrl } from "../../../../../src/main/services/agents/lifecycle/official-script.ts";
+import { sourceHasMatchingInstallChannel } from "../../../../../src/main/services/agents/lifecycle/plan/source-policy.ts";
 import {
   brewPackageTokenFromBinPath,
   buildGuideCommands,
@@ -272,6 +273,20 @@ describe("agent lifecycle plan", () => {
           s.kind === "argv" &&
           s.file === "npm" &&
           s.args.some((a) => a.includes("@anthropic-ai/claude-code"))
+      )
+    ).toBe(false);
+    // Brew spec has a brew channel, so empty reinstall filter must skip
+    // rather than dump npm. kimi has no uv channel (leftover migrate).
+    expect(
+      sourceHasMatchingInstallChannel(
+        getAgentLifecycleSpec("claude").install,
+        "brew"
+      )
+    ).toBe(true);
+    expect(
+      sourceHasMatchingInstallChannel(
+        getAgentLifecycleSpec("kimi").install,
+        "uv"
       )
     ).toBe(false);
   });

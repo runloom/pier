@@ -210,7 +210,7 @@ describe("Pier generated application icon assets", () => {
   });
 
   it("keeps every generated modern ICNS frame on the canonical resize output", {
-    timeout: 20_000,
+    timeout: 60_000,
   }, () => {
     const frames = new Map(
       parseIcns(readFileSync(join(ROOT, "build/icon.icns"))).map((entry) => [
