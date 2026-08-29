@@ -32,7 +32,8 @@ export const contextMenu = {
     renameAgentSessionFailed:
       "セッション名を変更できませんでした。もう一度お試しください",
     newTerminal: "新規ターミナル",
-    openRichInput: "リッチ入力を切り替え",
+    openRichInput: "リッチ入力を開く",
+    closeRichInput: "リッチ入力を閉じる",
     attachRichInputFile: "リッチ入力にファイルを追加",
     paste: "ペースト",
     rerunTask: "タスクを再実行",

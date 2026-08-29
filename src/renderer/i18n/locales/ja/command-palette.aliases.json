@@ -45,6 +45,11 @@
       "removeCli": ["pier を削除", "pier コマンドを削除"]
     },
     "terminal": {
+      "openAgentComposer": [
+        "リッチ入力",
+        "リッチ入力を開く",
+        "リッチ入力を閉じる"
+      ],
       "openDebugWindow": ["ターミナルデバッグ", "デバッグ経路"]
     },
     "view": {

@@ -34,6 +34,7 @@
       "removeCli": ["pier 제거", "pier 명령 제거"]
     },
     "terminal": {
+      "openAgentComposer": ["리치 입력", "리치 입력 열기", "리치 입력 닫기"],
       "openDebugWindow": ["터미널 디버그", "디버그 경로"]
     },
     "view": {

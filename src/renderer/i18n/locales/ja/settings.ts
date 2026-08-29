@@ -424,6 +424,7 @@ export const settings = {
         close: "現在のターミナルパネルを閉じます。",
         composerAttach:
           "リッチ入力にファイルを追加します。リッチ入力にフォーカスがないときは、同じショートカットでデフォルトのエージェントを起動します。",
+        openAgentComposer: "現在のターミナルのリッチ入力を開くか閉じます。",
         openDebugWindow: "ターミナルのデバッグウインドウを開きます。",
       },
       view: {
