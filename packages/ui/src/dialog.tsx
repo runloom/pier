@@ -52,22 +52,59 @@ function DialogClose({
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
+/**
+ * 蒙层视觉铺满窗口，命中拆开：
+ * - 蒙层本身 `pointer-events-none`，避免盖住 macOS 红绿灯
+ * - 工作区 catcher 接收点击
+ * - 标题栏 catcher 避开红绿灯；可点关的弹窗是 `no-drag`（否则 Electron
+ *   `app-drag` 会在原生层吞掉 click），其余弹窗保留 `app-drag` 拖窗口
+ */
+function OverlayScrimCatchers({
+  allowTitlebarDismiss = false,
+}: {
+  allowTitlebarDismiss?: boolean;
+}) {
+  return (
+    <>
+      <div
+        className="pointer-events-auto absolute inset-x-0 top-[var(--app-titlebar-height)] bottom-0"
+        data-slot="overlay-scrim-catcher"
+      />
+      <div
+        className={cn(
+          "pointer-events-auto absolute top-0 right-0 left-[max(5.5rem,env(safe-area-inset-left,0px))] h-[var(--app-titlebar-height)]",
+          allowTitlebarDismiss ? "app-no-drag" : "app-drag"
+        )}
+        data-slot="overlay-scrim-catcher"
+        data-titlebar=""
+      />
+    </>
+  );
+}
+
 function DialogOverlay({
+  allowTitlebarDismiss = false,
   className,
+  children,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+}: React.ComponentProps<typeof DialogPrimitive.Overlay> & {
+  allowTitlebarDismiss?: boolean;
+}) {
   const overlayRef = useTerminalOverlay();
   const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <DialogPrimitive.Overlay
       className={cn(
-        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 fixed top-[var(--app-titlebar-height)] right-0 bottom-0 left-0 isolate z-50 bg-overlay-scrim duration-100 data-closed:animate-out data-open:animate-in",
+        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 pointer-events-none fixed inset-0 isolate z-50 bg-overlay-scrim duration-100 data-closed:animate-out data-open:animate-in",
         className
       )}
       data-slot="dialog-overlay"
       {...props}
       ref={composedRef}
-    />
+    >
+      <OverlayScrimCatchers allowTitlebarDismiss={allowTitlebarDismiss} />
+      {children}
+    </DialogPrimitive.Overlay>
   );
 }
 
@@ -108,10 +145,11 @@ if (typeof document !== "undefined") {
 }
 
 function isDialogOverlayClick(target: EventTarget | null): boolean {
-  return (
-    target instanceof Element &&
-    target.getAttribute("data-slot") === "dialog-overlay"
-  );
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  const slot = target.getAttribute("data-slot");
+  return slot === "dialog-overlay" || slot === "overlay-scrim-catcher";
 }
 
 function wasInnerPortalOpenRecently(): boolean {
@@ -145,7 +183,12 @@ function DialogContent({
   tabIndex = -1,
   ...props
 }: DialogContentProps) {
-  const overlay = <DialogOverlay className={overlayClassName} />;
+  const overlay = (
+    <DialogOverlay
+      allowTitlebarDismiss={closeOnOverlayClick}
+      className={overlayClassName}
+    />
+  );
 
   return (
     <DialogPortal>
@@ -300,4 +343,5 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
+  OverlayScrimCatchers,
 };

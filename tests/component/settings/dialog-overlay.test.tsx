@@ -80,10 +80,19 @@ describe("SettingsDialog input routing", () => {
 
     expect(overlay).toBeInstanceOf(HTMLElement);
     expect(overlay?.className).toContain("bg-overlay-scrim");
-    expect(overlay?.className).toContain("top-[var(--app-titlebar-height)]");
-    expect(overlay?.className).not.toContain("inset-0");
+    expect(overlay?.className).toContain("inset-0");
+    expect(overlay?.className).not.toContain(
+      "top-[var(--app-titlebar-height)]"
+    );
     expect(overlay?.className).not.toContain("bg-black/30");
     expect(overlay?.className).not.toMatch(BACKDROP_FILTER_CLASS);
+    expect(overlay?.className).toContain("pointer-events-none");
+    const dragRegion = overlay?.querySelector(
+      '[data-slot="overlay-scrim-catcher"][data-titlebar]'
+    );
+    expect(dragRegion).toBeInstanceOf(HTMLElement);
+    expect(dragRegion?.className).toContain("app-drag");
+    expect(dragRegion?.className).toContain("h-[var(--app-titlebar-height)]");
     expect(getLastTerminalHostSnapshot()).toEqual(
       expect.objectContaining({
         basePanel: { kind: "web" },
