@@ -161,6 +161,12 @@
       "description": "继续当前还原操作。",
       "title": "git: 继续还原"
     },
+    "pier.git.commit": {
+      "aliases": ["git commit", "commit changes", "提交", "提交更改"],
+      "category": "git",
+      "description": "提交当前更改。可包含未暂存的文件，也可在提交后推送。",
+      "title": "git: 提交"
+    },
     "pier.git.undoLastCommit": {
       "aliases": [
         "撤销上次提交",
@@ -790,6 +796,27 @@
     "ui.gitRevertConflictTitle": "还原冲突",
     "ui.gitRevertConflict": "还原因冲突暂停，请解决冲突后继续。",
     "ui.gitRevertContinueConflict": "还原仍有冲突，请解决后继续。",
+    "ui.gitCommit": "提交",
+    "ui.gitCommitTitle": "确认提交",
+    "ui.gitCommitDescription": "提交当前更改。",
+    "ui.gitCommitMessage": "提交说明",
+    "ui.gitCommitMessagePlaceholder": "简述这次改了什么",
+    "ui.gitCommitMessageRequired": "请填写提交说明。",
+    "ui.gitCommitCounts": "已暂存 {{staged}} · 未暂存 {{unstaged}}",
+    "ui.gitCommitIncludeUnstaged": "包含未暂存的更改",
+    "ui.gitCommitPushAfter": "提交后推送",
+    "ui.gitCommitSuccess": "已提交",
+    "ui.gitCommitNoStaged": "没有已暂存的更改。请先在更改里暂存，或勾选包含未暂存的更改。",
+    "ui.gitCommitNothing": "没有可提交的更改。请先修改文件。",
+    "ui.gitCommitPaused": "请先在状态栏继续或中止当前 git 操作。",
+    "ui.gitCommitFailed": "无法提交",
+    "ui.gitCommitPushFailed": "已提交，但推送失败",
+    "ui.gitCommitPushFailedBody": "{{message}}\n\n请到状态栏重试推送。",
+    "ui.gitCommitDiscardTitle": "放弃提交说明？",
+    "ui.gitCommitDiscardBody": "已填写的说明会丢失。",
+    "ui.gitCommitDiscardConfirm": "放弃",
+    "ui.gitCommitPushUnavailable": "当前无法推送到远程。",
+    "ui.gitCommitPushAuth": "请先登录远程，然后再试。",
     "ui.gitUndoCommitConfirm": "确定撤销上次提交？更改会保留为已暂存状态。",
     "ui.gitUndoCommitConfirmButton": "撤销",
     "ui.gitUndoCommitSuccess": "已撤销提交",
@@ -924,6 +951,10 @@
     "pier.git.statusItem.confirmSync": {
       "label": "同步前确认",
       "description": "从状态栏同步项执行同步（先拉取后推送）前先弹出确认。"
+    },
+    "pier.git.commit.pushAfter": {
+      "label": "默认提交后推送",
+      "description": "打开确认提交时默认勾选提交后推送。这一次仍可关掉。"
     },
     "pier.git.worktree.branchNamePrompt": {
       "label": "工作树分支提示词",

@@ -109,7 +109,12 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 3. **控件密度**：弹窗表单主路径 Select / Input / Button 用默认 28px 密度；**禁止**为「显得紧凑」给主表单 `SelectTrigger size="sm"` / footer `Button size="sm"`。列表内图标排序等次要 hit 可用 `icon-xs`。
 4. **设置页即时偏好**：设置页内水平 `*Row`；若在 content dialog 里做即时偏好，字段布局必须与提交型 dialog 一致（垂直堆叠、全宽 Select/Input，参考 worktree）。不得自挂 Dialog，不得用设置页水平 `SelectRow` 样式塞进 content dialog。多实例列表用 `Item outline` 表达块边界。**添加/创建类草稿** 走 **二级 content dialog**（`openAppContentDialog` + sticky `取消|确认`）。
 5. **校验**：提交型在 submit 时校验并用 `FieldError`；`prompt` 走 `validate`。即时偏好以合法枚举/开关为主，避免半填草稿。
-6. **检查点**：`tests/unit/renderer/app/dialog-form-governance.test.ts`（与本节标题绑定）。
+6. **提交型 dialog 的可选勾选 / 开关默认值（禁止第三套「记住上次」）**：先判定字段性质；禁止 dialog host 或通用 `rememberDialogField`。
+   - **情境决策**（跟这次 status / 候选 / 远程资格绑定）：每次从当前快照推导；取消与 Esc 丢弃；禁止 `localStorage` / 上次勾选。例：git 确认提交的「包含未暂存」；SSH 导入勾选主机；账号切换同步到其他工具。dialog 里对设置初值的**这一次改动**（如关掉「提交后推送」）同样不回写。
+   - **稳定工作流习惯**（同一人反复同一套，且与这次快照无关）：仅允许该表面旁的小模块，**显式切换即写**（取消窗不清缓存；也不靠提交才写）。例：新建工作树的命名方式 / 立即开始任务。不得把草稿（说明、名称、路径）一并记住。
+   - **能在设置里叫出名字的**（提交后推送默认值、退出确认）：走设置页（宿主 `ProjectPreferences` 或插件 `configuration`）；dialog **只读初值**，勾选不回写。未做设置前用安全默认，禁止用粘滞勾选冒充。
+   - 即时视图偏好仍走该表面已有 store（审查 diff、Markdown 阅读、侧栏收起），不经提交型 dialog 记忆层。
+7. **检查点**：`tests/unit/renderer/app/dialog-form-governance.test.ts`（与本节标题绑定）。
 
 ### 浮层后打开 Dialog / 设置
 

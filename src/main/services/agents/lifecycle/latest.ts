@@ -106,8 +106,8 @@ function resolvePypiPackage(spec: AgentLifecycleSpec): string | null {
 }
 
 /**
- * PyPI JSON for uv-tool packages (e.g. kimi-cli). Not interchangeable with
- * npmPackageForLatest when the npm name is a different product line.
+ * PyPI JSON for uv-tool packages (e.g. mistral-vibe). Not interchangeable
+ * with npmPackageForLatest when the npm name is a different product line.
  */
 async function fetchPypiLatest(
   packageName: string,
@@ -258,8 +258,8 @@ function resolveBrewChannel(spec: AgentLifecycleSpec): {
  * (`claude-code@latest` ≠ stable `claude-code`). Fall through only within
  * the same install ecosystem (brew↔npm for JS tools; uv/pipx PyPI for
  * Python tools). Path/script uses `latestProbe` when declared (Claude native,
- * Cursor script); else PyPI for uv/pipx agents. Never compare Claude path
- * installs to the deprecated npm package.
+ * Cursor script, Kimi Code); else PyPI for uv/pipx agents. Never compare
+ * Claude / Kimi Code path installs to a different package line.
  */
 export async function fetchLatestVersion(
   spec: AgentLifecycleSpec,
@@ -329,7 +329,7 @@ export async function fetchLatestVersion(
   }
   if (preferPypi) {
     // Never fall back to npm when uv/pipx is the install source — different
-    // package names (kimi-cli vs @moonshot-ai/kimi-code) are not comparable.
+    // package names are not comparable.
     return tryPypi();
   }
 
@@ -337,8 +337,8 @@ export async function fetchLatestVersion(
     return tryHttp();
   }
 
-  // Path / script / unknown: prefer uv/pipx PyPI when the agent declares a
-  // Python channel (official kimi / mistral-vibe scripts); otherwise npm then brew.
+  // Path / script / unknown without latestProbe: PyPI for uv/pipx-only
+  // agents (mistral-vibe); otherwise npm then brew.
   if (pypiPkg) {
     const fromPypi = await tryPypi();
     if (fromPypi) {

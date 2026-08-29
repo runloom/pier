@@ -4,6 +4,7 @@ import { platform } from "node:os";
 import { promisify } from "node:util";
 import type { AgentInstallInfo } from "@shared/contracts/agent/lifecycle.ts";
 import { readCurrentVersionFromPath } from "./current-version.ts";
+import { isLegacyKimiCliInstall } from "./kimi-legacy.ts";
 import { readVersionAtPath } from "./version-probe.ts";
 
 const execFileAsync = promisify(execFile);
@@ -128,6 +129,33 @@ function resolvePathKey(binPath: string): string {
   }
 }
 
+/**
+ * Drop PATH hits that share a short name with a different product.
+ * `agent` is Cursor's extra link (skip Grok). `kimi-cli` / uv `kimi` shims
+ * are the retired Python CLI (OSC alias only).
+ */
+export function shouldSkipEnumeratedBin(
+  bin: string,
+  reportedPath: string,
+  resolvedPath: string
+): boolean {
+  if (
+    bin === "agent" &&
+    !/cursor-agent/i.test(resolvedPath) &&
+    !/cursor-agent/i.test(reportedPath)
+  ) {
+    return true;
+  }
+  if (bin === "kimi-cli") {
+    return true;
+  }
+  return (
+    bin === "kimi" &&
+    (isLegacyKimiCliInstall(reportedPath) ||
+      isLegacyKimiCliInstall(resolvedPath))
+  );
+}
+
 export async function enumerateInstalls(options: {
   bins: readonly string[];
   env?: NodeJS.ProcessEnv;
@@ -149,11 +177,7 @@ export async function enumerateInstalls(options: {
       if (seenResolved.has(resolved)) {
         continue;
       }
-      if (
-        bin === "agent" &&
-        !/cursor-agent/i.test(resolved) &&
-        !/cursor-agent/i.test(p)
-      ) {
+      if (shouldSkipEnumeratedBin(bin, p, resolved)) {
         continue;
       }
       seenPaths.add(p);

@@ -9,6 +9,7 @@ const ALLOWED_LATEST_HOSTS = new Set([
   "cursor.com",
   "www.cursor.com",
   "downloads.claude.ai",
+  "code.kimi.com",
 ]);
 
 const CURSOR_LAB_VERSION_RE =

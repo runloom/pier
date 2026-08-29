@@ -1,8 +1,18 @@
 import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
   createAgentDetectionService,
   mergeLoginShellPath,
 } from "@main/services/agents/detection-service.ts";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 describe("mergeLoginShellPath", () => {
   it("保留 login shell 顺序并把 Electron 独有目录追加到末尾", () => {
@@ -118,8 +128,103 @@ describe("agent detection", () => {
       probe: (cmd) => Promise.resolve(installed.has(cmd)),
     });
     const result = await service.detect();
-    expect(result.detectedIds).toContain("kimi");
+    // kimi-cli is OSC-only; PATH presence of the Python CLI is not Kimi Code.
+    expect(result.detectedIds).not.toContain("kimi");
     expect(result.detectedIds).toContain("mistral-vibe");
     expect(result.detectedIds).toContain("qodercli");
+  });
+
+  it("detects kimi from the Kimi Code binary name, not kimi-cli alone", async () => {
+    const installed = new Set(["kimi"]);
+    const service = createAgentDetectionService({
+      hydratePath: () => Promise.resolve([]),
+      probe: (cmd) => Promise.resolve(installed.has(cmd)),
+    });
+    expect((await service.detect()).detectedIds).toContain("kimi");
+  });
+});
+
+describe("agent detection kimi leftover PATH", () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    while (dirs.length > 0) {
+      const dir = dirs.pop();
+      if (dir) {
+        rmSync(dir, { force: true, recursive: true });
+      }
+    }
+  });
+
+  function tempBin(prefix: string): string {
+    const dir = mkdtempSync(join(tmpdir(), prefix));
+    dirs.push(dir);
+    mkdirSync(join(dir, "bin"));
+    return join(dir, "bin");
+  }
+
+  it("does not treat leftover PATH kimi as Kimi Code", async () => {
+    const bin = tempBin("pier-detect-kimi-legacy-");
+    const kimi = join(bin, "kimi");
+    writeFileSync(
+      kimi,
+      "#!/usr/bin/env python3\nfrom kimi_cli.__main__ import main\n"
+    );
+    chmodSync(kimi, 0o755);
+    const service = createAgentDetectionService({
+      getEnv: () => ({ PATH: bin }),
+      hydratePath: () => Promise.resolve([]),
+      probe: (cmd) => Promise.resolve(cmd === "kimi"),
+    });
+    expect((await service.detect()).detectedIds).not.toContain("kimi");
+  });
+
+  it("does not treat a PATH kimi symlink into uv kimi-cli as Kimi Code", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-detect-kimi-link-"));
+    dirs.push(root);
+    const uvBin = join(root, "share", "uv", "tools", "kimi-cli", "bin");
+    mkdirSync(uvBin, { recursive: true });
+    const target = join(uvBin, "kimi");
+    writeFileSync(
+      target,
+      "#!/usr/bin/env python3\nfrom kimi_cli.__main__ import main\n"
+    );
+    chmodSync(target, 0o755);
+    const bin = join(root, "bin");
+    mkdirSync(bin);
+    symlinkSync(target, join(bin, "kimi"));
+    const service = createAgentDetectionService({
+      getEnv: () => ({ PATH: bin }),
+      hydratePath: () => Promise.resolve([]),
+      probe: (cmd) => Promise.resolve(cmd === "kimi"),
+    });
+    expect((await service.detect()).detectedIds).not.toContain("kimi");
+  });
+
+  it("detects Kimi Code on PATH even when leftover kimi-cli is beside it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-detect-kimi-code-"));
+    dirs.push(root);
+    const bin = join(root, ".kimi-code", "bin");
+    mkdirSync(bin, { recursive: true });
+    const kimi = join(bin, "kimi");
+    writeFileSync(kimi, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0, 0, 0, 0]));
+    chmodSync(kimi, 0o755);
+    writeFileSync(join(bin, "kimi-cli"), "#!/usr/bin/env python3\n");
+    const service = createAgentDetectionService({
+      getEnv: () => ({ PATH: bin }),
+      hydratePath: () => Promise.resolve([]),
+      probe: (cmd) => Promise.resolve(cmd === "kimi"),
+    });
+    expect((await service.detect()).detectedIds).toContain("kimi");
+  });
+
+  it("does not treat an unresolved kimi PATH hit as Kimi Code", async () => {
+    const bin = tempBin("pier-detect-kimi-miss-");
+    const service = createAgentDetectionService({
+      getEnv: () => ({ PATH: bin }),
+      hydratePath: () => Promise.resolve([]),
+      probe: (cmd) => Promise.resolve(cmd === "kimi"),
+    });
+    expect((await service.detect()).detectedIds).not.toContain("kimi");
   });
 });

@@ -14,7 +14,7 @@ import {
 } from "@plugins/builtin/git/manifest.ts";
 import { gitRendererPlugin } from "@plugins/builtin/git/renderer/index.ts";
 import { resetGitStatusSessionsForTests } from "@plugins/builtin/git/renderer/status-state.ts";
-import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
+import type { GitDiffBranchOption, GitStatus } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
@@ -35,6 +35,7 @@ function renderWithTooltip(ui: ReactElement) {
   return render(<TooltipProvider>{ui}</TooltipProvider>);
 }
 
+import { AppContentDialogHost } from "@/components/common/dialogs/content-host.tsx";
 import { AppDialogHost } from "@/components/common/dialogs/host.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
@@ -118,6 +119,33 @@ const context: PanelContext = {
   worktreeRoot: "/Users/dev/ABC/pier",
 };
 
+function gitStatusFixture(overrides: Partial<GitStatus> = {}): GitStatus {
+  return {
+    branch: {
+      ahead: 0,
+      behind: 0,
+      branch: "main",
+      mergedIntoDefault: null,
+      oid: "abc123",
+      upstream: null,
+      upstreamGone: false,
+    },
+    changeSummary: {
+      changedFiles: 0,
+      deletions: 0,
+      excludedFiles: 0,
+      insertions: 0,
+      kind: "lineDelta",
+    },
+    counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+    files: [],
+    remoteSync: null,
+    repoState: { kind: "clean" },
+    stashCount: 0,
+    ...overrides,
+  };
+}
+
 function branchOption(
   overrides: Pick<GitDiffBranchOption, "kind" | "name" | "refName"> &
     Partial<GitDiffBranchOption>
@@ -175,6 +203,10 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             default: true,
             type: "boolean",
           },
+          "pier.git.commit.pushAfter": {
+            default: false,
+            type: "boolean",
+          },
         },
       },
       canvasActions: [],
@@ -225,6 +257,10 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             "pier.git.undoLastCommit": {
               aliases: ["locale git undo commit"],
               title: "git: Undo Last Commit",
+            },
+            "pier.git.commit": {
+              aliases: ["locale git commit"],
+              title: "git: Commit",
             },
             "pier.worktree.create": {
               aliases: ["locale worktree create"],
@@ -316,6 +352,10 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             "pier.git.undoLastCommit": {
               aliases: ["本地化撤销提交"],
               title: "git: 撤销上次提交",
+            },
+            "pier.git.commit": {
+              aliases: ["本地化提交"],
+              title: "git: 提交",
             },
             "pier.worktree.create": {
               aliases: ["本地化创建工作树"],
@@ -497,6 +537,7 @@ describe("git builtin plugin", () => {
     render(
       <TerminalOverlayContext.Provider value={terminalOverlayRegistry}>
         <AppDialogHost />
+        <AppContentDialogHost />
       </TerminalOverlayContext.Provider>
     );
     return gitRendererPlugin.activate(
@@ -563,6 +604,26 @@ describe("git builtin plugin", () => {
           writeText: vi.fn(async () => ({ mtimeMs: 1, written: true })),
         },
         onWindowLayoutPulse: vi.fn(() => vi.fn()),
+        ai: {
+          generateText: vi.fn(async () => ({
+            message: "not configured",
+            reason: "not_configured" as const,
+            status: "unavailable" as const,
+          })),
+          status: vi.fn(async () => ({
+            agent: null,
+            configured: false,
+            label: "",
+          })),
+        },
+        agents: {
+          selection: vi.fn(async () => ({
+            detectedIds: [],
+            enabledIds: [],
+            rankedIds: [],
+            selectedId: null,
+          })),
+        },
         plugins: {
           inspect: vi.fn(async () => pluginEntry(true)),
           list: vi.fn(async () => ({
@@ -810,6 +871,7 @@ describe("git builtin plugin", () => {
     expect(actionRegistry.get("pier.git.stash")).toBeDefined();
     expect(actionRegistry.get("pier.git.rebaseContinue")).toBeDefined();
     expect(actionRegistry.get("pier.git.undoLastCommit")).toBeDefined();
+    expect(actionRegistry.get("pier.git.commit")).toBeDefined();
     expect(actionRegistry.get("pier.git.pull")).toBeDefined();
     expect(actionRegistry.get("pier.git.push")).toBeDefined();
     expect(actionRegistry.get("pier.git.sync")).toBeDefined();
@@ -1979,6 +2041,246 @@ describe("git builtin plugin", () => {
       "Last commit undone (changes preserved as staged)",
       { id: "git-loading-toast" }
     );
+  });
+
+  it("git 提交在工作区干净时提示没有可提交的更改", async () => {
+    dispose = activateWorktreePlugin();
+
+    const handlerPromise = actionRegistry.get("pier.git.commit")?.handler();
+    expect(
+      await screen.findByText("Nothing to commit. Change a file first.")
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    await handlerPromise;
+
+    expect(window.pier.git.commit).not.toHaveBeenCalled();
+  });
+
+  it("git 提交在暂停操作时提示先继续或中止", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue(
+      gitStatusFixture({
+        repoState: { conflictCount: 1, kind: "merging" },
+      })
+    );
+    dispose = activateWorktreePlugin();
+
+    const handlerPromise = actionRegistry.get("pier.git.commit")?.handler();
+    expect(
+      await screen.findByText(
+        "Continue or abort the current git operation from the status bar first."
+      )
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    await handlerPromise;
+
+    expect(window.pier.git.commit).not.toHaveBeenCalled();
+  });
+
+  it("git 提交打开确认卡且空说明不调用 commit", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue(
+      gitStatusFixture({
+        counts: { conflict: 0, modified: 0, staged: 1, untracked: 0 },
+        files: [
+          { index: "M", origPath: null, path: "src/a.ts", worktree: "." },
+        ],
+      })
+    );
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.commit")?.handler();
+    expect(await screen.findByRole("dialog")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Commit" })).toBeVisible();
+    expect(screen.getByText("Commit the current changes.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Commit" })).toBeDisabled();
+    expect(window.pier.git.commit).not.toHaveBeenCalled();
+  });
+
+  it("git 提交只提交已暂存且不 stage", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue(
+      gitStatusFixture({
+        counts: { conflict: 0, modified: 0, staged: 1, untracked: 0 },
+        files: [
+          { index: "M", origPath: null, path: "src/a.ts", worktree: "." },
+        ],
+      })
+    );
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.commit")?.handler();
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Commit message" }),
+      {
+        target: { value: "fix typo" },
+      }
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+    await waitFor(() => {
+      expect(window.pier.git.commit).toHaveBeenCalledWith(
+        "/Users/dev/ABC/pier",
+        { message: "fix typo" }
+      );
+    });
+    expect(window.pier.git.stage).not.toHaveBeenCalled();
+    expect(toastMocks.success).toHaveBeenCalledWith("Committed", undefined);
+  });
+
+  it("git 提交默认包含未暂存时先 stage 再 commit", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue(
+      gitStatusFixture({
+        counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
+        files: [
+          { index: ".", origPath: null, path: "src/b.ts", worktree: "M" },
+        ],
+      })
+    );
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.commit")?.handler();
+    expect(
+      await screen.findByRole("checkbox", { name: "Include unstaged changes" })
+    ).toBeChecked();
+    fireEvent.change(screen.getByRole("textbox", { name: "Commit message" }), {
+      target: { value: "wip" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+    await waitFor(() => {
+      expect(window.pier.git.stage).toHaveBeenCalledWith(
+        "/Users/dev/ABC/pier",
+        ["src/b.ts"]
+      );
+    });
+    expect(window.pier.git.commit).toHaveBeenCalledWith("/Users/dev/ABC/pier", {
+      message: "wip",
+    });
+  });
+
+  it("git 提交以提交前 getStatus 的路径做 stage", async () => {
+    const opened = gitStatusFixture({
+      counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
+      files: [{ index: ".", origPath: null, path: "src/b.ts", worktree: "M" }],
+    });
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue(opened);
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.commit")?.handler();
+    expect(
+      await screen.findByRole("checkbox", { name: "Include unstaged changes" })
+    ).toBeChecked();
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue(
+      gitStatusFixture({
+        counts: { conflict: 0, modified: 2, staged: 0, untracked: 0 },
+        files: [
+          { index: ".", origPath: null, path: "src/b.ts", worktree: "M" },
+          { index: ".", origPath: null, path: "src/c.ts", worktree: "M" },
+        ],
+      })
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Commit message" }), {
+      target: { value: "wip" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+    await waitFor(() => {
+      expect(window.pier.git.stage).toHaveBeenCalledWith(
+        "/Users/dev/ABC/pier",
+        ["src/b.ts", "src/c.ts"]
+      );
+    });
+    expect(window.pier.git.commit).toHaveBeenCalledWith("/Users/dev/ABC/pier", {
+      message: "wip",
+    });
+  });
+
+  it("git 提交勾选推送时有上游走 push、无上游走 publish", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue(
+      gitStatusFixture({
+        branch: {
+          ahead: 0,
+          behind: 0,
+          branch: "main",
+          mergedIntoDefault: null,
+          oid: "abc123",
+          upstream: "origin/main",
+          upstreamGone: false,
+        },
+        counts: { conflict: 0, modified: 0, staged: 1, untracked: 0 },
+        files: [
+          { index: "M", origPath: null, path: "src/a.ts", worktree: "." },
+        ],
+      })
+    );
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.commit")?.handler();
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: "Push after commit" })
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Commit message" }), {
+      target: { value: "ship" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+    await waitFor(() => {
+      expect(window.pier.git.push).toHaveBeenCalledWith("/Users/dev/ABC/pier");
+    });
+    expect(window.pier.git.publish).not.toHaveBeenCalled();
+  });
+
+  it("git 提交无上游时提交后推走 publish", async () => {
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue(
+      gitStatusFixture({
+        counts: { conflict: 0, modified: 0, staged: 1, untracked: 0 },
+        files: [
+          { index: "M", origPath: null, path: "src/a.ts", worktree: "." },
+        ],
+      })
+    );
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.commit")?.handler();
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: "Push after commit" })
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Commit message" }), {
+      target: { value: "ship" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+    await waitFor(() => {
+      expect(window.pier.git.publish).toHaveBeenCalledWith(
+        "/Users/dev/ABC/pier"
+      );
+    });
+    expect(window.pier.git.push).not.toHaveBeenCalled();
+  });
+
+  it("git 提交设置默认推送时打开即勾选且提交后 publish", async () => {
+    usePluginSettingsStore.setState({
+      error: null,
+      initialized: true,
+      values: { "pier.git.commit.pushAfter": true },
+    });
+    vi.mocked(window.pier.git.getStatus).mockResolvedValue(
+      gitStatusFixture({
+        counts: { conflict: 0, modified: 0, staged: 1, untracked: 0 },
+        files: [
+          { index: "M", origPath: null, path: "src/a.ts", worktree: "." },
+        ],
+      })
+    );
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.commit")?.handler();
+    expect(
+      await screen.findByRole("checkbox", { name: "Push after commit" })
+    ).toBeChecked();
+    fireEvent.change(screen.getByRole("textbox", { name: "Commit message" }), {
+      target: { value: "ship" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+    await waitFor(() => {
+      expect(window.pier.git.publish).toHaveBeenCalledWith(
+        "/Users/dev/ABC/pier"
+      );
+    });
+    expect(window.pier.git.push).not.toHaveBeenCalled();
   });
 
   it("git 继续变基仍有冲突时显示详情且不打开已禁用的 Review 面板", async () => {

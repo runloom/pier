@@ -39,3 +39,9 @@ export function trackSync(
   emit();
   return promise;
 }
+
+/** 单测用：清空 in-flight 表。 */
+export function resetSyncBusyForTests(): void {
+  inFlightSyncs.clear();
+  emit();
+}

@@ -2,6 +2,7 @@
 
 > 日期：2026-07-22（原文）  
 > **状态：已取消（2026-07-25）**  
+> **继任设计见 [2026-08-29 Git 确认提交](./2026-08-29-git-commit-confirm-design.md)**（命令 + 提交型 content dialog；**不是**本文件的侧栏 footer）。  
 > 原范围：分组变更树 + Stage/Unstage All 工具条 + AI 提交说明 + 侧栏提交表单 + 提交后 Push/Publish
 
 ## 决策（现行）
@@ -17,6 +18,7 @@ Changes 面板 **不提供** 下列产品能力（有意不做，勿按本文件
 - 变更审查：分组树、section 锚定 diff、单文件 Stage / Unstage / Discard（树右键、diff header 等）。
 - 宿主 `git.commit` / `git.stage` 等 **main IPC 与 CLI** 能力（给集成测试、其它入口用），**不**等于 Changes 面板要有提交 UI。
 - 按 commit / branch 选 scope 的 review（`git-commit-pick` 等），与「对工作区做 commit」无关。
+- 人手确认提交走 08-29 命令 / content dialog（`renderer/commit/`），不得把该确认卡做成 Changes `sidebarFooter`。
 
 ## 为何取消
 
@@ -30,7 +32,7 @@ Changes 面板 **不提供** 下列产品能力（有意不做，勿按本文件
   - `git-review-tree-toolbar.tsx` / `git-stage-all.ts`
   - Changes 侧栏 `sidebarFooter` 提交表单、`sidebarHeader` Stage All 双按钮
   - 相关 locale：`ui.commitMessage*`、`ui.commitButton`、`ui.commitSuccess`、`ui.commitFailed`、`ui.stageAll*`、`ui.unstageAll*`
-- 若未来要做「在 Pier 内 commit」，须 **新开** 设计与明确产品决策，不得复活本文件旧任务清单。
+- 人手 commit 的现行规格是 08-29 确认卡；**禁止**以本文件为理由复活 footer / Stage All / `ui.commitButton`。
 
 ## 实现对照（取消后现状）
 

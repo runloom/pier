@@ -8,6 +8,7 @@ import {
   resolveAbsoluteOnPath,
   resolveUserCommand,
 } from "../process-environment/resolve-user-command.ts";
+import { isLegacyKimiCliInstall } from "./lifecycle/sources/kimi-legacy.ts";
 
 const PROBE_TIMEOUT_MS = 5000;
 /** Cap interactive escalate concurrency (PATH miss only). */
@@ -238,7 +239,22 @@ export function createAgentDetectionService({
     const present = (name: string) =>
       pathHits.has(name) || interactiveHits.has(name);
 
+    const pathEnv = typeof env?.PATH === "string" ? env.PATH : undefined;
+    const kimiAbs = pathEnv ? resolveAbsoluteOnPath("kimi", pathEnv) : null;
+
     const detectedIds = AGENT_CATALOG.filter((entry) => {
+      // Kimi Code only: leftover Python `kimi-cli` is an OSC alias, not install.
+      if (entry.id === "kimi") {
+        if (!present("kimi")) {
+          return false;
+        }
+        if (kimiAbs) {
+          return !isLegacyKimiCliInstall(kimiAbs);
+        }
+        // Injected probe with no PATH: unit tests treat `kimi` as Kimi Code.
+        // A PATH miss (alias / unresolved file) is not Kimi Code.
+        return Boolean(probe) && !pathEnv;
+      }
       const cmds = [entry.detectCmd, ...(entry.detectCmdAliases ?? [])];
       return cmds.some((c) => present(c));
     }).map((entry) => entry.id);
