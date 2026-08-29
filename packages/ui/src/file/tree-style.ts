@@ -1,6 +1,7 @@
 import type * as React from "react";
 import { scrollFadeUnsafeCss } from "../scroll-area.tsx";
 import { SCROLLBAR_SYSTEM_CSS } from "../scrollbar-system.ts";
+import { PIER_CUSTOM_FILE_ICON_COLOR_CSS } from "./icon-config.ts";
 import { PIER_FILE_TREE_ICON_COLOR_OVERRIDES } from "./icon-theme.ts";
 
 export type PierFileTreeStyle = React.CSSProperties & {
@@ -74,10 +75,8 @@ export const TREE_SHADOW_CSS = `
   display: none;
 }
 
-/* Pier canvas token is not in @pierre/trees built-in colored-icon CSS. */
-[data-file-tree-colored-icons="true"] [data-icon-token="canvas"] {
-  color: var(--trees-file-icon-color-canvas);
-}
+/* Pier overlay tokens are not in @pierre/trees built-in colored-icon CSS. */
+${PIER_CUSTOM_FILE_ICON_COLOR_CSS}
 
 ${SCROLLBAR_SYSTEM_CSS}
 

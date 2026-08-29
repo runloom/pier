@@ -1,10 +1,14 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type {
   LspProviderDescriptor,
+  LspServerLaunchSpec,
   LspServerProvider,
 } from "@shared/contracts/lsp-provider.ts";
 import {
   launchSpecForResolvedBinary,
   resolveCommandOnPath,
+  resolveWorkspaceRelativeBinary,
 } from "../resolve-command.ts";
 import {
   basenameOfPath,
@@ -63,6 +67,70 @@ function launchAttemptsForDescriptor(
   return candidates.map((command) => ({ args, command }));
 }
 
+function rootHasAnyMarker(
+  rootPath: string,
+  markers: readonly string[]
+): boolean {
+  return markers.some((marker) => existsSync(join(rootPath, marker)));
+}
+
+function prioritizeLaunchAttempts(
+  attempts: readonly LaunchAttempt[],
+  preferredCommands: readonly string[]
+): LaunchAttempt[] {
+  const preferred = new Set(preferredCommands);
+  return [
+    ...attempts.filter((attempt) => preferred.has(attempt.command)),
+    ...attempts.filter((attempt) => !preferred.has(attempt.command)),
+  ];
+}
+
+function pathLaunchAttempts(
+  descriptor: LspProviderDescriptor,
+  rootPath: string
+): LaunchAttempt[] {
+  const attempts = launchAttemptsForDescriptor(descriptor);
+  const preference = descriptor.preferLaunchCommandsWhenMarkers;
+  if (!(preference && rootHasAnyMarker(rootPath, preference.markers))) {
+    return attempts;
+  }
+  return prioritizeLaunchAttempts(attempts, preference.commands);
+}
+
+function launchFromBinary(
+  binary: string,
+  args: readonly string[],
+  cwd: string
+): LspServerLaunchSpec | null {
+  const launch = launchSpecForResolvedBinary(binary, args);
+  if (!launch) {
+    return null;
+  }
+  return {
+    args: launch.args,
+    command: launch.command,
+    cwd,
+  };
+}
+
+function withTypescriptSdk(
+  descriptor: LspProviderDescriptor,
+  rootPath: string,
+  spec: LspServerLaunchSpec
+): LspServerLaunchSpec {
+  if (!descriptor.injectTypescriptSdk) {
+    return spec;
+  }
+  const tsdk = resolveTypescriptSdkLibForVue(rootPath);
+  if (!tsdk) {
+    return spec;
+  }
+  return {
+    ...spec,
+    initializationOptions: { typescript: { tsdk } },
+  };
+}
+
 /**
  * Build a PATH-discovered (or absolute-command) LspServerProvider from a
  * serializable descriptor. Shared by L0 config languages, L1 custom, L2 plugins.
@@ -74,7 +142,6 @@ export function createPathLspProvider(
   const idByExt = languageIdMap(descriptor);
   const basenameMatchers = descriptor.basenameMatchers ?? [];
   const primaryLanguageId = descriptor.languageIds[0] ?? null;
-  const attempts = launchAttemptsForDescriptor(descriptor);
 
   return {
     displayName: descriptor.displayName,
@@ -112,31 +179,30 @@ export function createPathLspProvider(
       return matchBasenameMatchers(basenameOfPath(path), basenameMatchers);
     },
     resolveLaunch({ rootPath }) {
-      for (const attempt of attempts) {
+      const cwd = normalizeFsRoot(rootPath);
+      const relativeAttempts = descriptor.workspaceRelativeCommands ?? [];
+      for (const attempt of relativeAttempts) {
+        const binary = resolveWorkspaceRelativeBinary(
+          rootPath,
+          attempt.command
+        );
+        if (!binary) {
+          continue;
+        }
+        const spec = launchFromBinary(binary, attempt.args ?? [], cwd);
+        if (spec) {
+          return withTypescriptSdk(descriptor, rootPath, spec);
+        }
+      }
+      for (const attempt of pathLaunchAttempts(descriptor, rootPath)) {
         const binary = resolveCommandOnPath(attempt.command);
         if (!binary) {
           continue;
         }
-        const launch = launchSpecForResolvedBinary(binary, attempt.args);
-        if (!launch) {
-          continue;
+        const spec = launchFromBinary(binary, attempt.args, cwd);
+        if (spec) {
+          return withTypescriptSdk(descriptor, rootPath, spec);
         }
-        const spec = {
-          args: launch.args,
-          command: launch.command,
-          cwd: normalizeFsRoot(rootPath),
-        };
-        if (!descriptor.injectTypescriptSdk) {
-          return spec;
-        }
-        const tsdk = resolveTypescriptSdkLibForVue(rootPath);
-        if (!tsdk) {
-          return spec;
-        }
-        return {
-          ...spec,
-          initializationOptions: { typescript: { tsdk } },
-        };
       }
       return null;
     },

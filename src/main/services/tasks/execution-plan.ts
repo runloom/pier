@@ -36,17 +36,27 @@ function workspaceRootForToken(
 
 const TASK_SOURCE_LABELS: Record<TaskSource, string> = {
   cargo: "Cargo",
+  cmake: "CMake",
   composer: "Composer",
   deno: "Deno",
+  dotnet: ".NET",
+  go: "Go",
+  gradle: "Gradle",
   history: "Recently Run",
   just: "Justfile",
   make: "Makefile",
+  maven: "Maven",
   mise: "mise",
+  mix: "Mix",
   "package-script": "package.json",
+  pubspec: "pubspec",
   pyproject: "pyproject.toml",
+  sbt: "sbt",
+  swiftpm: "Swift Package",
   taskfile: "Taskfile",
   vscode: "VS Code",
   zed: "Zed",
+  zig: "Zig",
 };
 
 function taskLabelKey(source: TaskSource, label: string): string {

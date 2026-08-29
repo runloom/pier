@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { isAbsolute } from "node:path";
+import { existsSync } from "node:fs";
+import { extname, isAbsolute, join, relative } from "node:path";
 
 /**
  * Resolve a bare CLI name or absolute path for language-server launch.
@@ -26,6 +27,50 @@ export function resolveCommandOnPath(command: string): string | null {
   }
   const path = result.stdout.split(/\r?\n/, 1)[0]?.trim();
   return path && path.length > 0 ? path : null;
+}
+
+/**
+ * Resolve a root-relative binary that stays inside `rootPath`. Missing files
+ * and `..` escapes return null so PATH candidates can run instead.
+ */
+export function resolveWorkspaceRelativeBinary(
+  rootPath: string,
+  relativeCommand: string
+): string | null {
+  const trimmed = relativeCommand.trim();
+  if (
+    trimmed.length === 0 ||
+    isAbsolute(trimmed) ||
+    /[\r\n"]/.test(trimmed) ||
+    trimmed.includes("\0")
+  ) {
+    return null;
+  }
+  const candidate = join(rootPath, trimmed);
+  const rel = relative(rootPath, candidate);
+  if (rel.length === 0 || rel.startsWith("..") || isAbsolute(rel)) {
+    return null;
+  }
+  return firstExistingBinary(candidate);
+}
+
+const WIN_BINARY_SUFFIXES = [".bat", ".cmd", ".exe"] as const;
+
+function firstExistingBinary(candidate: string): string | null {
+  // Flutter/FVM on Windows ships a bash `dart` next to `dart.bat`. spawn()
+  // cannot run the script; prefer the wrapper when both exist.
+  if (process.platform === "win32" && extname(candidate) === "") {
+    for (const suffix of WIN_BINARY_SUFFIXES) {
+      const withSuffix = `${candidate}${suffix}`;
+      if (existsSync(withSuffix)) {
+        return withSuffix;
+      }
+    }
+  }
+  if (existsSync(candidate)) {
+    return candidate;
+  }
+  return null;
 }
 
 /**

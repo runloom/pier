@@ -5,14 +5,14 @@ import {
 import { type CSSProperties, type SVGProps, useLayoutEffect } from "react";
 import { cn } from "../utils.ts";
 import {
-  mergeCanvasFileIconIntoBuiltInSpriteSheet,
+  mergeCustomFileIconsIntoBuiltInSpriteSheet,
   PIER_FILE_TREE_ICONS,
 } from "./icon-config.ts";
 import { PIER_FILE_ICON_COLOR_BY_TOKEN } from "./icon-theme.ts";
 
 const FILE_ICON_PREFIX = "pier.file:";
 const fileIconResolver = createFileTreeIconResolver(PIER_FILE_TREE_ICONS);
-const fileIconSpriteSheet = mergeCanvasFileIconIntoBuiltInSpriteSheet(
+const fileIconSpriteSheet = mergeCustomFileIconsIntoBuiltInSpriteSheet(
   getBuiltInSpriteSheet(PIER_FILE_TREE_ICONS.set)
 );
 

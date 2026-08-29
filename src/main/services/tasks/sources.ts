@@ -14,6 +14,9 @@ import {
 } from "./candidate.ts";
 import { composerSource } from "./composer-source.ts";
 import { denoSource } from "./deno-source.ts";
+import { pubspecSource } from "./pubspec-source.ts";
+import { pyprojectSource } from "./pyproject-source.ts";
+import { TOOLCHAIN_TASK_SOURCE_PROVIDERS } from "./toolchain-source.ts";
 import {
   asRecord,
   asString,
@@ -251,31 +254,6 @@ function tomlSectionEntries(
   return entries;
 }
 
-async function pyprojectSource({
-  projectRootPath,
-}: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
-  const text = await readTextIfExists(join(projectRootPath, "pyproject.toml"));
-  if (!text) {
-    return [];
-  }
-  const scripts = {
-    ...tomlSectionEntries(text, "project.scripts"),
-    ...tomlSectionEntries(text, "tool.poetry.scripts"),
-    ...tomlSectionEntries(text, "tool.pdm.scripts"),
-  };
-  return Object.entries(scripts).map(([name, target]) =>
-    candidate({
-      commandSpec: { command: name, kind: "shell" },
-      cwd: projectRootPath,
-      description: target,
-      idParts: ["pyproject", name],
-      label: name,
-      source: "pyproject",
-      tags: ["python"],
-    })
-  );
-}
-
 async function miseSource({
   projectRootPath,
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
@@ -453,6 +431,8 @@ export const taskSourceProviders: readonly TaskSourceProvider[] = [
   { id: "just", list: justSource },
   { id: "taskfile", list: taskfileSource },
   { id: "history", list: historySource },
+  { id: "pubspec", list: pubspecSource },
+  ...TOOLCHAIN_TASK_SOURCE_PROVIDERS,
 ];
 
 export async function collectTaskCandidates(

@@ -105,35 +105,33 @@ function activeProjectContext(
   };
 }
 
+const TASK_SOURCE_I18N_KEYS = {
+  cargo: "commandPalette.run.taskTab.source.cargo",
+  cmake: "commandPalette.run.taskTab.source.cmake",
+  composer: "commandPalette.run.taskTab.source.composer",
+  deno: "commandPalette.run.taskTab.source.deno",
+  dotnet: "commandPalette.run.taskTab.source.dotnet",
+  go: "commandPalette.run.taskTab.source.go",
+  gradle: "commandPalette.run.taskTab.source.gradle",
+  history: "commandPalette.run.taskTab.source.history",
+  just: "commandPalette.run.taskTab.source.just",
+  make: "commandPalette.run.taskTab.source.make",
+  maven: "commandPalette.run.taskTab.source.maven",
+  mise: "commandPalette.run.taskTab.source.mise",
+  mix: "commandPalette.run.taskTab.source.mix",
+  "package-script": "commandPalette.run.taskTab.source.packageScript",
+  pubspec: "commandPalette.run.taskTab.source.pubspec",
+  pyproject: "commandPalette.run.taskTab.source.pyproject",
+  sbt: "commandPalette.run.taskTab.source.sbt",
+  swiftpm: "commandPalette.run.taskTab.source.swiftpm",
+  taskfile: "commandPalette.run.taskTab.source.taskfile",
+  vscode: "commandPalette.run.taskTab.source.vscode",
+  zed: "commandPalette.run.taskTab.source.zed",
+  zig: "commandPalette.run.taskTab.source.zig",
+} as const satisfies Record<TaskSource, string>;
+
 function taskSourceLabel(source: TaskSource): string {
-  switch (source) {
-    case "cargo":
-      return i18next.t("commandPalette.run.taskTab.source.cargo");
-    case "composer":
-      return i18next.t("commandPalette.run.taskTab.source.composer");
-    case "deno":
-      return i18next.t("commandPalette.run.taskTab.source.deno");
-    case "history":
-      return i18next.t("commandPalette.run.taskTab.source.history");
-    case "just":
-      return i18next.t("commandPalette.run.taskTab.source.just");
-    case "make":
-      return i18next.t("commandPalette.run.taskTab.source.make");
-    case "mise":
-      return i18next.t("commandPalette.run.taskTab.source.mise");
-    case "package-script":
-      return i18next.t("commandPalette.run.taskTab.source.packageScript");
-    case "pyproject":
-      return i18next.t("commandPalette.run.taskTab.source.pyproject");
-    case "taskfile":
-      return i18next.t("commandPalette.run.taskTab.source.taskfile");
-    case "vscode":
-      return i18next.t("commandPalette.run.taskTab.source.vscode");
-    case "zed":
-      return i18next.t("commandPalette.run.taskTab.source.zed");
-    default:
-      return source;
-  }
+  return i18next.t(TASK_SOURCE_I18N_KEYS[source]);
 }
 
 function commandDetail(task: TaskCandidate): string {

@@ -17,6 +17,16 @@ export const taskSourceSchema = z.enum([
   "just",
   "taskfile",
   "history",
+  "pubspec",
+  "go",
+  "maven",
+  "gradle",
+  "mix",
+  "swiftpm",
+  "zig",
+  "dotnet",
+  "sbt",
+  "cmake",
 ]);
 export type TaskSource = z.infer<typeof taskSourceSchema>;
 
