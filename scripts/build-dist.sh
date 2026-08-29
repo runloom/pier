@@ -19,6 +19,7 @@
 #   pnpm build:dist --no-notarize      # 只签名不 notarize（本机测/内部装）
 #   pnpm build:dist --allow-dev-sign   # 允许用 Apple Development 签名（不可分发）
 #   pnpm build:dist --publish=always   # 发布到 electron-builder.yml 配置的 provider
+#   pnpm build:dist --publish=always --prerelease  # 宿主候选版：GitHub prerelease
 #   PIER_DIST_PUBLISH=always pnpm build:dist
 
 set -euo pipefail
@@ -32,6 +33,7 @@ EB_EXTRA_ARGS=()
 PUBLISH_POLICY="${PIER_DIST_PUBLISH:-never}"
 ALLOW_DEV_SIGN=0
 NO_NOTARIZE=0
+RELEASE_TYPE=release
 while [ "$#" -gt 0 ]; do
     arg="$1"
     case "$arg" in
@@ -44,6 +46,10 @@ while [ "$#" -gt 0 ]; do
             # 本机调试逃生舱：允许 Apple Development / 无 Developer ID。
             # 产物不可对外分发，也不应 notarize。
             ALLOW_DEV_SIGN=1
+            shift
+            ;;
+        --prerelease)
+            RELEASE_TYPE=prerelease
             shift
             ;;
         --publish=*)
@@ -273,12 +279,13 @@ echo "[build:dist] verify canvas Tailwind native unpack (oxide / lightningcss / 
 node ./scripts/verify-canvas-tailwind-native-unpack.mjs --dir dist-builder
 
 if [ "$PUBLISH_POLICY" != "never" ]; then
-    echo "[build:dist] publish verified artifacts (policy=$PUBLISH_POLICY)"
+    echo "[build:dist] publish verified artifacts (policy=$PUBLISH_POLICY releaseType=$RELEASE_TYPE)"
     # 不用 `electron-builder publish` CLI：它上传失败时常 return null 且 exit 0。
     node ./scripts/publish-mac-release-artifacts.mjs \
         --dir dist-builder \
         --version "$APP_VERSION" \
-        --policy "$PUBLISH_POLICY"
+        --policy "$PUBLISH_POLICY" \
+        --release-type "$RELEASE_TYPE"
 fi
 
 echo "[build:dist] done → dist-builder/"

@@ -359,6 +359,16 @@ section 根节点下的裸子节点。
 - **执行端新鲜度**：runner 禁注 `HOMEBREW_NO_AUTO_UPDATE=1`；brew 执行走短节流 auto-update（`HOMEBREW_AUTO_UPDATE_SECS=300`），否则检测新、执行旧 → 更新恒报「版本未变化」。
 - 检查点：`tests/unit/main/agents/lifecycle/latest-source.test.ts`、`latest-governance.test.ts`、`latest-probe.test.ts`、`plan.test.ts`（brew 计划无 npm）、`child-env.test.ts`。
 
+#### 宿主发布候选版 — 金标准
+
+权威规格：[`docs/superpowers/specs/2026-08-29-host-release-candidate-gold-standard.md`](docs/superpowers/specs/2026-08-29-host-release-candidate-gold-standard.md)。
+
+- **版本同构**：候选 `package.json` = `X.Y.Z-rc.N`，tag = `vX.Y.Z-rc.N`；正式去掉 `-rc.N`。每轮 rc 一次 bump PR；同 version 不改已发布内容。
+- **三条路径**：默认发候选（GitHub prerelease，不占 Latest、不发博客）→ 观察期后「晋升正式版」；「直接发布」显式触发才走，跳过候选直达正式版（验证不减）。
+- **隔离**：Latest 必须是稳定 `vX.Y.Z`；候选 / 插件均为 prerelease。候选 publish 后 `gh release edit --prerelease --latest=false`；isolation 脚本 `--candidate-tag`。
+- **客户端候选 opt-in**：偏好 `receiveCandidateUpdates`（默认关）；候选目标解析单一实现 `app-updates/candidate-feed.ts`（只认宿主 tag、semver 全序、稳定优先、per_page=100 + 次页兜底 + 10s 超时），**禁止裸用 `allowPrerelease`**（会误选同仓插件 prerelease / 跳过晋升稳定版）；适配器构造后强制置 false（rc 运行版本构造期会被自动开启）。
+- 检查点：`tests/unit/main/app-core/release-workflow.test.ts`、`tests/unit/main/preferences/github-latest-isolation.test.ts`、`mac-release-assets.test.ts`、`update-candidate-feed.test.ts`；skill `.agents/skills/publish-project/SKILL.md`。
+
 #### 终端 tab 标题与 Agent 身份（标题 ≠ 身份）— 金标准
 
 **单一真源（对齐 Ghostty）**：终端 tab short = 进程/TUI **OSC 0/2**；无 OSC → **cwd basename**。路径型 OSC（shell 把 cwd 写进标题）short 收成**叶子目录名**（与文件 tab 一致），全文进 long/tooltip。宿主不得用 prompt 截断、catalog 占位抢 tab。入口：`terminalPanelDescriptor`。

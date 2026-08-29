@@ -1,24 +1,28 @@
 # Pier 发布
 
-维护者入口。文档索引：[`README.md`](./README.md)。开发细节见链出文档，本文不重复。
+维护者入口。文档索引：[`README.md`](./README.md)。开发细节见链出文档，本文不重复。  
+宿主候选版金标准：[`superpowers/specs/2026-08-29-host-release-candidate-gold-standard.md`](./superpowers/specs/2026-08-29-host-release-candidate-gold-standard.md)。
 
 ## 双通道
 
 | | 宿主应用 | 官方插件 |
 |---|---|---|
 | 触发 | tag `v*` / Actions **Release App** | `main` 上 `packages/plugin-*/package.json` 变更 / **Release Plugin** 恢复 |
-| 产物 | arm64+x64 dmg/zip、`latest-mac.yml` | `pier.<id>-<ver>.tgz` + 签名 `plugins/index.v1.json` |
-| GitHub Release | **Latest**，正式 release | **prerelease**，tag `plugin-<tail>-v<ver>`，禁止 Latest |
-| 客户端 | `electron-updater` → `/releases/latest` | 官方索引 → 按条目下 tgz |
+| 正式 | `vX.Y.Z` → **Latest**，`latest-mac.yml` + arm64/x64 dmg/zip | — |
+| 候选 | `vX.Y.Z-rc.N` → **prerelease**（不占 Latest、不发博客） | 一律 **prerelease**，tag `plugin-<tail>-v<ver>`，禁止 Latest |
+| 产物 | 正式与候选同构建同签名；version 与 tag 同构 | `pier.<id>-<ver>.tgz` + 签名 `plugins/index.v1.json` |
+| 客户端 | `electron-updater` → `/releases/latest`（仅正式） | 官方索引 → 按条目下 tgz |
 | 专文 | [`app-release.md`](./app-release.md) | [`plugins.md`](./plugins.md)（开发/校验）；发布步骤见下文 |
 
 ```mermaid
 flowchart LR
   subgraph host [宿主]
-    A["tag vX.Y.Z"] --> B["Release App"]
-    B --> C["GitHub Latest\nlatest-mac.yml + arm64/x64 zip+dmg"]
-    C --> D["electron-updater"]
-    B --> K["Publish Release to Blog"]
+    A1["tag vX.Y.Z-rc.N"] --> B1["Release App 候选"]
+    B1 --> C1["GitHub prerelease"]
+    A2["tag vX.Y.Z"] --> B2["Release App 正式"]
+    B2 --> C2["GitHub Latest\nlatest-mac.yml + arm64/x64 zip+dmg"]
+    C2 --> D["electron-updater"]
+    B2 --> K["Publish Release to Blog"]
     K --> L["pier-website main"]
     L --> M["pier.codes/blog"]
   end
@@ -32,7 +36,7 @@ flowchart LR
   end
 ```
 
-**硬边界（强制门禁）：** 插件 release 不得成为 Latest。`Release Plugin` / `Release App` 结束后跑 `scripts/verify-github-latest-isolation.mjs`：Latest 必须是宿主 `v*` + 完整双架构 mac 资产（`latest-mac.yml`、arm64/x64 zip、arm64/x64 dmg）。`build:dist` 在 publish 前还跑 `verify-mac-release-artifacts.mjs`。失败则 workflow 红。
+**硬边界（强制门禁）：** 插件与宿主候选 release 不得成为 Latest。`Release Plugin` / `Release App` 结束后跑 `scripts/verify-github-latest-isolation.mjs`：Latest 必须是稳定宿主 `vX.Y.Z`（无 `-rc.`）+ 完整双架构 mac 资产。候选模式另传 `--candidate-tag` 校验本 tag 为 prerelease。`build:dist` 在 publish 前还跑 `verify-mac-release-artifacts.mjs`。失败则 workflow 红。
 
 ---
 
@@ -40,29 +44,39 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  A["main: package.json version = X.Y.Z"] --> B["git tag vX.Y.Z && push"]
-  B --> C["Release App"]
-  C --> D["校验 tag == version"]
-  D --> E["签名 + 公证 + publish"]
-  E --> F{"Latest 非 draft\n且双架构 yml+zip+dmg?"}
-  F -->|是| G["用户端可检查更新"]
-  F -->|否| H["失败：修 secrets/draft 后重跑"]
+  A["main: package.json = X.Y.Z-rc.N"] --> B["git tag vX.Y.Z-rc.N && push"]
+  B --> C["Release App 候选：签名+公证+prerelease"]
+  C --> D["观察期"]
+  D -->|缺陷| E["修复合 main → rc.N+1"] --> A
+  D -->|稳定| F["main: package.json = X.Y.Z + CHANGELOG"]
+  F --> G["git tag vX.Y.Z && push"]
+  G --> H["Release App 正式"]
+  H --> I{"Latest 非 draft\n且双架构 yml+zip+dmg?"}
+  I -->|是| J["用户端可检查更新 + 博客"]
+  I -->|否| K["失败：修 secrets/draft 后重跑"]
 ```
 
 ```bash
-# main 上 version 已对齐后
-git tag v0.1.2 && git push origin v0.1.2
+# 候选（观察期）
+# package.json version 已为 0.2.0-rc.1
+git tag v0.2.0-rc.1 && git push origin v0.2.0-rc.1
+
+# 晋升正式（version 已去 rc 后缀）
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
-验收：
+验收（正式）：
 
+```bash
 gh api repos/runloom/pier/releases/latest --jq '{tag:.tag_name,assets:[.assets[].name]}'
 # 期望含: latest-mac.yml, Pier-*-arm64-mac.zip, Pier-*-mac.zip, Pier-*-arm64.dmg, Pier-*.dmg
 curl -fsSL https://github.com/runloom/pier/releases/latest/download/latest-mac.yml
 ```
 
-用户侧（production）：约 30s 后检查 → 后台下载 → 右上角 / Settings → Updates → 手动重启安装（或退出时安装）。  
-官网博客：Release App 成功后自动从 CHANGELOG 生成文章并推到 `pier-website`；不要用 `on: release`（`GITHUB_TOKEN` 创建的 Release 不会触发其它 workflow）。细节与 secrets → [`app-release.md`](./app-release.md)。
+用户侧（production）：约 30s 后检查 → 后台下载 → 右上角 / Settings → Updates → 手动重启安装（或退出时安装）。仅吃 Latest，候选 prerelease 对自动更新不可见。  
+官网博客：仅**正式** Release App 成功后从 CHANGELOG 生成并推到 `pier-website`。不要用 `on: release`。细节与 secrets → [`app-release.md`](./app-release.md)。
+
+版本纪律：同 version（含 `X.Y.Z-rc.N`）不改已发布内容；修 bug 必须 bump。Agent skill：`.agents/skills/publish-project/SKILL.md`（候选 / 晋升 / 直接发布三路径）。
 
 ---
 
@@ -98,9 +112,11 @@ pnpm plugin:codex:pack
 
 | 意图 | 动作 |
 |---|---|
-| 发宿主 | `package.json` bump → `git tag vX.Y.Z && git push origin vX.Y.Z` |
+| 发宿主候选版 | `package.json` = `X.Y.Z-rc.N` → `git tag vX.Y.Z-rc.N && push` |
+| 晋升正式版 | 去掉 `-rc.N` + CHANGELOG 定稿 → `git tag vX.Y.Z && push` |
+| 直接发布（跳过候选） | 显式触发；正式 `X.Y.Z` 直发 Latest；报告标注 |
 | 发插件 | bump 插件两处 version → pack → 合入 `main` |
-| 本地应急宿主 | `GH_TOKEN=… pnpm build:dist --publish=always`（见 app-release） |
+| 本地应急宿主 | `GH_TOKEN=… pnpm build:dist --publish=always`（候选加 `--prerelease`；见 app-release） |
 | 本地验插件索引 | `pnpm plugins:pack && pnpm plugins:index && pnpm check:plugin-index` |
 
 同 version 不改已发布二进制语义；修 bug 必须 bump。

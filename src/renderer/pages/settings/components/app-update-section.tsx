@@ -7,9 +7,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@pier/ui/card.tsx";
+import { FieldSeparator } from "@pier/ui/field.tsx";
 import { Download, RefreshCw, RotateCw } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
+import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useAppUpdateStore } from "@/stores/app-update.store.ts";
+import { useAppUpdatePreferencesStore } from "@/stores/app-update-preferences.store.ts";
 
 export function AppUpdateSection() {
   const t = useT();
@@ -18,6 +22,28 @@ export function AppUpdateSection() {
   const check = useAppUpdateStore((s) => s.check);
   const download = useAppUpdateStore((s) => s.download);
   const quitAndInstall = useAppUpdateStore((s) => s.quitAndInstall);
+  const receiveCandidateUpdates = useAppUpdatePreferencesStore(
+    (s) => s.receiveCandidateUpdates
+  );
+  const setReceiveCandidateUpdates = useAppUpdatePreferencesStore(
+    (s) => s.setReceiveCandidateUpdates
+  );
+
+  async function toggleReceiveCandidates(next: boolean): Promise<void> {
+    try {
+      await setReceiveCandidateUpdates(next);
+    } catch (err) {
+      await showAppAlert({
+        body: err instanceof Error ? err.message : String(err),
+        title: t("settings.appUpdate.toast.prefFailed"),
+      });
+      return;
+    }
+    // 开启即按新通道重查一次；开关翻转本身是自然反馈，不另加 toast。
+    if (next) {
+      check().catch(() => undefined);
+    }
+  }
 
   const state = snapshot?.state ?? "idle";
   const availableVersion = snapshot?.availableVersion;
@@ -102,6 +128,16 @@ export function AppUpdateSection() {
               {t("settings.appUpdate.action.restart")}
             </Button>
           </div>
+          <FieldSeparator />
+          <SwitchRow
+            checked={receiveCandidateUpdates}
+            description={t("settings.appUpdate.receiveCandidatesDesc")}
+            id="settings-app-update-receive-candidates"
+            label={t("settings.appUpdate.receiveCandidates")}
+            onCheckedChange={(next) => {
+              toggleReceiveCandidates(next).catch(() => undefined);
+            }}
+          />
         </CardContent>
       </Card>
     </div>

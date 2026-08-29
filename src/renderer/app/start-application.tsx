@@ -36,6 +36,7 @@ import { registerTerminalPanelCloseGuard } from "../panel-kits/terminal/register
 import { initAgentAttentionPreferences } from "../stores/agent-attention-preferences.store.ts";
 import { initAgentPreferences } from "../stores/agent-preferences.store.ts";
 import { initAppQuitPreferences } from "../stores/app-quit-preferences.store.ts";
+import { initAppUpdatePreferences } from "../stores/app-update-preferences.store.ts";
 import { initCommandPaletteMru } from "../stores/command-palette-mru.store.ts";
 import { initFont } from "../stores/font.store.ts";
 import { initHostCatalog } from "../stores/host-catalog/store.ts";
@@ -95,6 +96,7 @@ export async function startApplication(args: {
       initTerminalPreferences(),
       initShellEnvironmentStore(),
       initAppQuitPreferences(),
+      initAppUpdatePreferences(),
       initAgentPreferences(),
       initAgentAttentionPreferences(),
       initTerminalStatusBarPrefs(),

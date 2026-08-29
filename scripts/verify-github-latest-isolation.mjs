@@ -11,6 +11,7 @@
  *   node scripts/verify-github-latest-isolation.mjs --repo owner/name
  *   node scripts/verify-github-latest-isolation.mjs --expect-version 0.1.1
  *   node scripts/verify-github-latest-isolation.mjs --plugin-tags plugin-codex-v1.3.1,plugin-grok-v1.0.1
+ *   node scripts/verify-github-latest-isolation.mjs --candidate-tag v0.2.0-rc.1
  *
  * Requires: gh auth (GH_TOKEN or gh login).
  */
@@ -23,7 +24,10 @@ import {
 } from "./mac-release-assets.mjs";
 
 const PLUGIN_TAG_RE = /^plugin-/i;
-const HOST_TAG_RE = /^v\d+\.\d+\.\d+/;
+/** Stable host Latest only: vX.Y.Z with no prerelease suffix. */
+const STABLE_HOST_TAG_RE = /^v\d+\.\d+\.\d+$/;
+/** Host release candidate: vX.Y.Z-rc.N */
+const CANDIDATE_HOST_TAG_RE = /^v\d+\.\d+\.\d+-rc\.\d+$/;
 
 /**
  * @param {Record<string, unknown>} record
@@ -73,9 +77,13 @@ export function validateLatestRelease(latest, opts = {}) {
       `latest release tag is a plugin tag (${tag}); host updater would miss latest-mac.yml`
     );
   }
-  if (tag && !HOST_TAG_RE.test(tag)) {
+  if (tag && CANDIDATE_HOST_TAG_RE.test(tag)) {
     errors.push(
-      `latest release tag ${tag} is not a host semver tag (expected vX.Y.Z)`
+      `latest release tag ${tag} is a host candidate (rc); Latest must stay a stable vX.Y.Z release`
+    );
+  } else if (tag && !STABLE_HOST_TAG_RE.test(tag) && !PLUGIN_TAG_RE.test(tag)) {
+    errors.push(
+      `latest release tag ${tag} is not a stable host semver tag (expected vX.Y.Z)`
     );
   }
   if (draft) {
@@ -93,11 +101,16 @@ export function validateLatestRelease(latest, opts = {}) {
     const expectedTag = opts.expectVersion.startsWith("v")
       ? opts.expectVersion
       : `v${opts.expectVersion}`;
+    if (!STABLE_HOST_TAG_RE.test(expectedTag)) {
+      errors.push(
+        `--expect-version must be a stable host version (got ${opts.expectVersion})`
+      );
+    }
     if (tag !== expectedTag) {
       errors.push(`latest tag is ${tag || "(none)"}, expected ${expectedTag}`);
     }
     expectedVersion = normalizeReleaseVersion(expectedTag);
-  } else if (tag && HOST_TAG_RE.test(tag) && !PLUGIN_TAG_RE.test(tag)) {
+  } else if (tag && STABLE_HOST_TAG_RE.test(tag)) {
     expectedVersion = normalizeReleaseVersion(tag);
   }
 
@@ -154,10 +167,42 @@ export function validatePluginReleaseIsolation(release, tag) {
 }
 
 /**
+ * Host RC tags must stay GitHub prerelease and never own Latest.
+ * @param {unknown} release
+ * @param {string} tag
+ * @returns {string[]}
+ */
+export function validateCandidateReleaseIsolation(release, tag) {
+  const errors = [];
+  if (!CANDIDATE_HOST_TAG_RE.test(tag)) {
+    errors.push(`not a host candidate tag: ${tag} (expected vX.Y.Z-rc.N)`);
+    return errors;
+  }
+  if (!release || typeof release !== "object") {
+    errors.push(`candidate release ${tag} missing`);
+    return errors;
+  }
+  const record = /** @type {Record<string, unknown>} */ (release);
+  const draft = Boolean(record.draft);
+  const prerelease = Boolean(record.prerelease);
+  if (draft) {
+    errors.push(`candidate release ${tag} is draft`);
+  }
+  if (!prerelease) {
+    errors.push(
+      `candidate release ${tag} must be prerelease so it cannot become Latest`
+    );
+  }
+  return errors;
+}
+
+export { CANDIDATE_HOST_TAG_RE, STABLE_HOST_TAG_RE };
+
+/**
  * @param {string[]} args
  */
 export function parseArgs(args) {
-  /** @type {{ repo?: string, expectVersion?: string, pluginTags: string[], help?: boolean }} */
+  /** @type {{ repo?: string, expectVersion?: string, pluginTags: string[], candidateTag?: string, help?: boolean }} */
   const out = { pluginTags: [] };
   let i = 0;
   while (i < args.length) {
@@ -175,6 +220,9 @@ export function parseArgs(args) {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
+    } else if (a === "--candidate-tag") {
+      i += 1;
+      out.candidateTag = args[i];
     } else if (a === "--help" || a === "-h") {
       out.help = true;
     }
@@ -205,7 +253,7 @@ function main(argv = process.argv.slice(2)) {
   const opts = parseArgs(argv);
   if (opts.help) {
     console.log(
-      "Usage: verify-github-latest-isolation.mjs [--repo o/n] [--expect-version X.Y.Z] [--plugin-tags t1,t2]"
+      "Usage: verify-github-latest-isolation.mjs [--repo o/n] [--expect-version X.Y.Z] [--plugin-tags t1,t2] [--candidate-tag vX.Y.Z-rc.N]"
     );
     process.exit(0);
   }
@@ -235,6 +283,23 @@ function main(argv = process.argv.slice(2)) {
     } catch (err) {
       errors.push(
         err instanceof Error ? err.message : `failed to load plugin tag ${tag}`
+      );
+    }
+  }
+
+  if (opts.candidateTag) {
+    const tag = opts.candidateTag;
+    try {
+      const release = ghJson([
+        "api",
+        `repos/${repo}/releases/tags/${encodeURIComponent(tag)}`,
+      ]);
+      errors.push(...validateCandidateReleaseIsolation(release, tag));
+    } catch (err) {
+      errors.push(
+        err instanceof Error
+          ? err.message
+          : `failed to load candidate tag ${tag}`
       );
     }
   }

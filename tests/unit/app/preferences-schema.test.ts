@@ -229,6 +229,24 @@ describe("projectPreferencesSchema - app quit", () => {
   });
 });
 
+describe("projectPreferencesSchema - candidate updates", () => {
+  it("defaults receiveCandidateUpdates to false", () => {
+    expect(projectPreferencesSchema.parse({}).receiveCandidateUpdates).toBe(
+      false
+    );
+  });
+
+  it("accepts boolean opt-in and rejects non-booleans", () => {
+    expect(
+      projectPreferencesSchema.parse({ receiveCandidateUpdates: true })
+        .receiveCandidateUpdates
+    ).toBe(true);
+    expect(() =>
+      projectPreferencesSchema.parse({ receiveCandidateUpdates: "yes" })
+    ).toThrow();
+  });
+});
+
 describe("projectPreferencesSchema — user keymap", () => {
   it("默认没有用户快捷键覆盖", () => {
     const parsed = projectPreferencesSchema.parse({});

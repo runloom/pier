@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  validateCandidateReleaseIsolation,
   validateLatestRelease,
   validatePluginReleaseIsolation,
 } from "../../../../scripts/verify-github-latest-isolation.mjs";
@@ -56,6 +57,22 @@ describe("GitHub Latest isolation", () => {
     expect(errors.join("\n")).toMatch(/latest-mac\.yml/i);
   });
 
+  it("rejects host candidate tag owning latest", () => {
+    const errors = validateLatestRelease({
+      tag_name: "v0.2.0-rc.1",
+      draft: false,
+      prerelease: true,
+      assets: [
+        { name: "latest-mac.yml" },
+        { name: "Pier-0.2.0-rc.1-arm64-mac.zip" },
+        { name: "Pier-0.2.0-rc.1-mac.zip" },
+        { name: "Pier-0.2.0-rc.1-arm64.dmg" },
+        { name: "Pier-0.2.0-rc.1.dmg" },
+      ],
+    });
+    expect(errors.join("\n")).toMatch(/candidate/i);
+  });
+
   it("rejects draft or prerelease host latest", () => {
     expect(
       validateLatestRelease({
@@ -90,6 +107,27 @@ describe("GitHub Latest isolation", () => {
     ).toMatch(/must be prerelease/i);
   });
 
+  it("requires host candidate releases to stay prerelease", () => {
+    expect(
+      validateCandidateReleaseIsolation(
+        { draft: false, prerelease: true },
+        "v0.2.0-rc.1"
+      )
+    ).toEqual([]);
+    expect(
+      validateCandidateReleaseIsolation(
+        { draft: false, prerelease: false },
+        "v0.2.0-rc.1"
+      ).join("\n")
+    ).toMatch(/must be prerelease/i);
+    expect(
+      validateCandidateReleaseIsolation(
+        { draft: false, prerelease: true },
+        "v0.2.0"
+      ).join("\n")
+    ).toMatch(/not a host candidate tag/i);
+  });
+
   it("wires the isolation gate into both release workflows", async () => {
     const appWf = await readFile(
       join(process.cwd(), ".github/workflows/release-app.yml"),
@@ -101,6 +139,7 @@ describe("GitHub Latest isolation", () => {
     );
     expect(appWf).toContain("verify-github-latest-isolation.mjs");
     expect(appWf).toContain("--expect-version");
+    expect(appWf).toContain("--candidate-tag");
     expect(pluginWf).toContain("verify-github-latest-isolation.mjs");
     expect(pluginWf).toContain("--plugin-tags");
     expect(pluginWf).toContain("--latest=false");

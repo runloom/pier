@@ -18,6 +18,7 @@ import {
 } from "../../../../scripts/mac-release-assets.mjs";
 import {
   collectPublishFiles,
+  normalizeReleaseType,
   parseArgs as parsePublishArgs,
   publishMacReleaseArtifacts,
   validateRemoteMacReleaseAssets,
@@ -306,7 +307,7 @@ files:
 });
 
 describe("publish-mac-release-artifacts helpers", () => {
-  it("parseArgs reads dir/version/policy/repo", () => {
+  it("parseArgs reads dir/version/policy/repo/release-type", () => {
     expect(
       parsePublishArgs([
         "--dir",
@@ -317,13 +318,35 @@ describe("publish-mac-release-artifacts helpers", () => {
         "always",
         "--repo",
         "runloom/pier",
+        "--release-type",
+        "prerelease",
       ])
     ).toEqual({
       dir: "dist-builder",
       version: "0.1.1",
       policy: "always",
       repo: "runloom/pier",
+      releaseType: "prerelease",
     });
+  });
+
+  it("normalizeReleaseType accepts release and prerelease", () => {
+    expect(normalizeReleaseType(undefined)).toBe("release");
+    expect(normalizeReleaseType("release")).toBe("release");
+    expect(normalizeReleaseType("prerelease")).toBe("prerelease");
+    expect(() => normalizeReleaseType("draft")).toThrow(
+      /invalid --release-type/i
+    );
+  });
+
+  it("required assets include rc version in filenames", () => {
+    expect(requiredMacReleaseAssetNames("0.2.0-rc.1")).toEqual([
+      "latest-mac.yml",
+      "Pier-0.2.0-rc.1-arm64-mac.zip",
+      "Pier-0.2.0-rc.1-mac.zip",
+      "Pier-0.2.0-rc.1-arm64.dmg",
+      "Pier-0.2.0-rc.1.dmg",
+    ]);
   });
 
   it("collectPublishFiles uses a temp fixture, not workspace dist-builder", async () => {
@@ -407,6 +430,7 @@ describe("publish-mac-release-artifacts helpers", () => {
         fetchRemoteAssetNames: () => COMPLETE_0_1_1,
       });
       expect(result.files).toEqual(expect.arrayContaining(COMPLETE_0_1_1));
+      expect(result.releaseType).toBe("release");
       expect(process.env.EP_GH_IGNORE_TIME).toBe("true");
     } finally {
       if (previousIgnore === undefined) {
@@ -415,6 +439,25 @@ describe("publish-mac-release-artifacts helpers", () => {
         process.env.EP_GH_IGNORE_TIME = previousIgnore;
       }
     }
+  });
+
+  it("publishMacReleaseArtifacts passes prerelease releaseType to publishImpl", async () => {
+    const dir = await makeArtifactDir("0.2.0-rc.1");
+    const seen: Array<"release" | "prerelease"> = [];
+    const result = await publishMacReleaseArtifacts({
+      dir,
+      version: "0.2.0-rc.1",
+      policy: "always",
+      repo: "runloom/pier",
+      releaseType: "prerelease",
+      publishImpl: async (_tasks, _version, _policy, releaseType) => {
+        seen.push(releaseType);
+        return [{ ok: true }];
+      },
+      fetchRemoteAssetNames: () => requiredMacReleaseAssetNames("0.2.0-rc.1"),
+    });
+    expect(seen).toEqual(["prerelease"]);
+    expect(result.releaseType).toBe("prerelease");
   });
 });
 
@@ -476,6 +519,8 @@ describe("build-dist and release-app dual-arch wiring", () => {
     expect(buildDist).toContain("--publish never");
     expect(buildDist).toContain("verify-mac-release-artifacts.mjs");
     expect(buildDist).toContain("publish-mac-release-artifacts.mjs");
+    expect(buildDist).toContain("--release-type");
+    expect(buildDist).toContain("--prerelease");
     expect(buildDist).toMatch(
       /\[1\/6\] app icons[\s\S]*pnpm build:icons[\s\S]*\[6\/6\] electron-builder/
     );
@@ -496,5 +541,7 @@ describe("build-dist and release-app dual-arch wiring", () => {
     expect(source).toContain("verify-mac-release-artifacts.mjs");
     expect(source).toContain("verify-github-latest-isolation.mjs");
     expect(source).toContain("--expect-version");
+    expect(source).toContain("--candidate-tag");
+    expect(source).toContain("--prerelease");
   });
 });

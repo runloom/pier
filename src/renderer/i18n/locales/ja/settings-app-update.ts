@@ -34,7 +34,11 @@ export const settingsAppUpdate = {
     download: "ダウンロード",
     restart: "再起動してインストール",
   },
+  receiveCandidates: "候補バージョンを受け取る",
+  receiveCandidatesDesc:
+    "正式リリース前に候補バージョンを受け取ります。不安定な場合があり、次の正式バージョンへ自動更新されます。",
   toast: {
+    prefFailed: "更新設定を保存できませんでした。もう一度お試しください",
     statusFailed: "更新状態を読めませんでした。もう一度お試しください",
     checkFailed: "更新を確認できませんでした。もう一度お試しください",
     downloadFailed:

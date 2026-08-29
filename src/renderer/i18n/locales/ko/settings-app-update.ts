@@ -34,7 +34,11 @@ export const settingsAppUpdate = {
     download: "내려받기",
     restart: "다시 시작하고 설치",
   },
+  receiveCandidates: "후보 버전 받기",
+  receiveCandidatesDesc:
+    "정식 출시 전에 후보 버전을 받습니다. 불안정할 수 있으며 다음 정식 버전으로 자동 업데이트됩니다.",
   toast: {
+    prefFailed: "업데이트 기본 설정을 저장하지 못했습니다. 다시 시도하세요",
     statusFailed: "업데이트 상태를 읽지 못했습니다. 다시 시도하세요",
     checkFailed: "업데이트를 확인하지 못했습니다. 다시 시도하세요",
     downloadFailed: "업데이트를 내려받지 못했습니다. 다시 시도하세요",

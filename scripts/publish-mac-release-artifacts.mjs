@@ -12,6 +12,7 @@
  *
  * Usage:
  *   node scripts/publish-mac-release-artifacts.mjs --dir dist-builder --version 0.1.1 --policy always
+ *   node scripts/publish-mac-release-artifacts.mjs --dir dist-builder --version 0.2.0-rc.1 --policy always --release-type prerelease
  */
 import { spawnSync } from "node:child_process";
 import { access } from "node:fs/promises";
@@ -29,7 +30,7 @@ import { validateMacReleaseDir } from "./verify-mac-release-artifacts.mjs";
  * @param {string[]} args
  */
 export function parseArgs(args) {
-  /** @type {{ dir?: string, version?: string, policy?: string, repo?: string, help?: boolean }} */
+  /** @type {{ dir?: string, version?: string, policy?: string, repo?: string, releaseType?: string, help?: boolean }} */
   const out = {};
   let i = 0;
   while (i < args.length) {
@@ -46,12 +47,29 @@ export function parseArgs(args) {
     } else if (a === "--repo") {
       i += 1;
       out.repo = args[i];
+    } else if (a === "--release-type") {
+      i += 1;
+      out.releaseType = args[i];
     } else if (a === "--help" || a === "-h") {
       out.help = true;
     }
     i += 1;
   }
   return out;
+}
+
+/**
+ * @param {string | undefined} releaseType
+ * @returns {"release" | "prerelease"}
+ */
+export function normalizeReleaseType(releaseType) {
+  const value = String(releaseType ?? "release").trim();
+  if (value === "release" || value === "prerelease") {
+    return value;
+  }
+  throw new Error(
+    `invalid --release-type ${releaseType} (expected release | prerelease)`
+  );
 }
 
 /**
@@ -161,13 +179,15 @@ export function validateRemoteMacReleaseAssets(input) {
  *   version: string,
  *   policy: string,
  *   repo?: string,
- *   publishImpl?: (tasks: Array<{ file: string, arch: null }>, version: string, policy: string) => Promise<unknown>,
+ *   releaseType?: string,
+ *   publishImpl?: (tasks: Array<{ file: string, arch: null }>, version: string, policy: string, releaseType: "release" | "prerelease") => Promise<unknown>,
  *   fetchRemoteAssetNames?: (opts: { repo: string, version: string }) => string[],
  * }} opts
  */
 export async function publishMacReleaseArtifacts(opts) {
   const version = normalizeReleaseVersion(opts.version);
   const policy = opts.policy || "always";
+  const releaseType = normalizeReleaseType(opts.releaseType);
   if (policy === "never") {
     throw new Error("publish policy is never; refusing to upload");
   }
@@ -189,7 +209,7 @@ export async function publishMacReleaseArtifacts(opts) {
 
   let result;
   if (opts.publishImpl) {
-    result = await opts.publishImpl(uploadTasks, version, policy);
+    result = await opts.publishImpl(uploadTasks, version, policy, releaseType);
   } else {
     const electronBuilderPublishUrl = pathToFileURL(
       resolve("node_modules/electron-builder/out/publish.js")
@@ -197,11 +217,13 @@ export async function publishMacReleaseArtifacts(opts) {
     const { publishArtifactsWithOptions } = await import(
       electronBuilderPublishUrl
     );
+    // 4th arg overrides electron-builder.yml publish.* (incl. releaseType).
+    // Candidate hosts must stay GitHub prerelease so they never own Latest.
     result = await publishArtifactsWithOptions(
       uploadTasks,
       version,
       null,
-      undefined,
+      { releaseType },
       { publish: policy }
     );
   }
@@ -243,6 +265,7 @@ export async function publishMacReleaseArtifacts(opts) {
   return {
     version,
     repo,
+    releaseType,
     files: files.map((f) => basename(f)),
     remoteAssets: remoteNames,
     uploaded: result,
@@ -256,7 +279,7 @@ async function main(argv = process.argv.slice(2)) {
   const opts = parseArgs(argv);
   if (opts.help) {
     console.log(
-      "Usage: publish-mac-release-artifacts.mjs --dir dist-builder --version X.Y.Z --policy always [--repo owner/name]"
+      "Usage: publish-mac-release-artifacts.mjs --dir dist-builder --version X.Y.Z --policy always [--release-type release|prerelease] [--repo owner/name]"
     );
     process.exit(0);
   }
@@ -271,9 +294,10 @@ async function main(argv = process.argv.slice(2)) {
     version: opts.version,
     policy: opts.policy || "always",
     ...(opts.repo ? { repo: opts.repo } : {}),
+    ...(opts.releaseType ? { releaseType: opts.releaseType } : {}),
   });
   console.log(
-    `[publish-mac-release-artifacts] ok: published ${result.files.join(", ")} → ${result.repo}@v${result.version}`
+    `[publish-mac-release-artifacts] ok: published ${result.files.join(", ")} → ${result.repo}@v${result.version} (${result.releaseType})`
   );
 }
 

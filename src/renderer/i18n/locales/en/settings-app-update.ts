@@ -33,7 +33,11 @@ export const settingsAppUpdate = {
     download: "Download",
     restart: "Restart and Install",
   },
+  receiveCandidates: "Receive release candidates",
+  receiveCandidatesDesc:
+    "Get release candidates before the stable release. They may be unstable and upgrade to the next stable release automatically.",
   toast: {
+    prefFailed: "Couldn't save the update preference — try again",
     statusFailed: "Couldn't read update status — try again",
     checkFailed: "Couldn't check for updates — try again",
     downloadFailed: "Couldn't download update — try again",
