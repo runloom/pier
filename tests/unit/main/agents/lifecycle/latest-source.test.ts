@@ -63,9 +63,9 @@ const execFileMock = vi.hoisted(() =>
       }
       if (
         file === "curl" &&
-        args.some((arg) => arg.includes("pypi.org/pypi/kimi-cli/json"))
+        args.some((arg) => arg.includes("code.kimi.com/kimi-code/latest"))
       ) {
-        respond(null, JSON.stringify({ info: { version: "1.0.0" } }));
+        respond(null, "0.39.1\n");
         return;
       }
       if (
@@ -291,16 +291,16 @@ describe("agent latest probe channels", () => {
     expect(spec.npmPackageForLatest).toBe("@anthropic-ai/claude-code");
   });
 
-  it("kimi is versioned with uv + npm (uv-upgrade preferred for uv source)", () => {
+  it("kimi is versioned with native latestProbe + npm (no uv channel)", () => {
     const spec = getAgentLifecycleSpec("kimi");
     expect(resolveUpdateMode(spec)).toBe("versioned");
-    expect(
-      spec.install.some((c) => c.kind === "uv" && c.package === "kimi-cli")
-    ).toBe(true);
-    expect(spec.update.some((c) => c.kind === "uv-upgrade")).toBe(true);
-    // Different product lines — must not compare uv installs to this npm name.
+    expect(spec.latestProbe).toEqual({
+      kind: "http-text",
+      url: "https://code.kimi.com/kimi-code/latest",
+    });
+    expect(spec.install.some((c) => c.kind === "uv")).toBe(false);
+    expect(spec.update.some((c) => c.kind === "uv-upgrade")).toBe(false);
     expect(spec.npmPackageForLatest).toBe("@moonshot-ai/kimi-code");
-    expect(spec.npmPackageForLatest).not.toBe("kimi-cli");
   });
 
   it("mistral-vibe is versioned via PyPI (uv/pipx, no npm/brew)", () => {
@@ -335,22 +335,6 @@ describe("fetchLatestVersion pypi", () => {
     );
   });
 
-  it("queries PyPI for uv-sourced kimi and never calls npm", async () => {
-    const latest = await fetchLatestVersion(
-      getAgentLifecycleSpec("kimi"),
-      {},
-      { installSource: "uv" }
-    );
-    expect(latest).toBe("1.0.0");
-    expect(execFileMock.mock.calls.map((call) => call[0])).toContain("curl");
-    expect(execFileMock.mock.calls.map((call) => call[0])).not.toContain("npm");
-    expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
-      expect.arrayContaining([
-        expect.stringContaining("pypi.org/pypi/kimi-cli/json"),
-      ])
-    );
-  });
-
   it("queries PyPI for pipx-sourced mistral-vibe (same index as uv)", async () => {
     const latest = await fetchLatestVersion(
       getAgentLifecycleSpec("mistral-vibe"),
@@ -373,6 +357,30 @@ describe("fetchLatestVersion http latestProbe", () => {
     expect(execFileMock.mock.calls.map((call) => call[0])).not.toContain("npm");
     expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
       expect.arrayContaining([expect.stringContaining("cursor.com/install")])
+    );
+  });
+
+  it("reads Kimi Code native latest for path installs, not PyPI kimi-cli", async () => {
+    const latest = await fetchLatestVersion(
+      getAgentLifecycleSpec("kimi"),
+      {},
+      {
+        defaultBinPath: "/Users/x/.kimi-code/bin/kimi",
+        installSource: "path",
+      }
+    );
+    expect(latest).toBe("0.39.1");
+    expect(execFileMock.mock.calls.map((call) => call[0])).toContain("curl");
+    expect(execFileMock.mock.calls.map((call) => call[0])).not.toContain("npm");
+    expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
+      expect.arrayContaining([
+        expect.stringContaining("code.kimi.com/kimi-code/latest"),
+      ])
+    );
+    expect(execFileMock.mock.calls.map((call) => call[1])).not.toContainEqual(
+      expect.arrayContaining([
+        expect.stringContaining("pypi.org/pypi/kimi-cli/json"),
+      ])
     );
   });
 

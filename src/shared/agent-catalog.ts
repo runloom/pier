@@ -95,7 +95,8 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     label: "Kimi",
     launchCmd: "kimi",
     detectCmd: "kimi",
-    // uv `kimi-cli` 与 npm `kimi` 是同一 CLI；连字符词边界下 `kimi` 匹配不到 `kimi-cli`。
+    // OSC only: leftover Python `kimi-cli` still maps to this identity.
+    // PATH / lifecycle presence is Kimi Code (`kimi`), not the uv package.
     detectCmdAliases: ["kimi-cli"],
     expectedProcess: "kimi",
     faviconDomain: "moonshot.cn",

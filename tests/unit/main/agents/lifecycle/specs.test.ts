@@ -76,18 +76,34 @@ describe("agent lifecycle specs", () => {
       "update",
       "--self",
     ]);
-    // kimi: official is uv (kimi-cli); no interactive self-upgrade as primary
+    // kimi: official is native Kimi Code only. `kimi upgrade` in CI prints a
+    // curl hint — reinstall (script) is primary, like cursor. No uv channel.
+    const kimi = getAgentLifecycleSpec("kimi");
+    expect(kimi.expectedBins).toEqual(["kimi"]);
+    expect(kimi.update[0]?.kind).toBe("reinstall");
     expect(
-      getAgentLifecycleSpec("kimi").update.every((c) => c.kind !== "self")
+      kimi.update.some((c) => c.kind === "self" && c.argv[0] === "upgrade")
     ).toBe(true);
     expect(
-      getAgentLifecycleSpec("kimi").install.some(
-        (c) => c.kind === "uv" && c.package === "kimi-cli"
+      kimi.install.some(
+        (c) =>
+          c.kind === "official-script" &&
+          c.url === "https://code.kimi.com/kimi-code/install.sh"
       )
     ).toBe(true);
     expect(
-      getAgentLifecycleSpec("kimi").update.some((c) => c.kind === "uv-upgrade")
-    ).toBe(true);
+      kimi.install.some(
+        (c) =>
+          c.kind === "official-script" &&
+          c.url === "https://code.kimi.com/install.sh"
+      )
+    ).toBe(false);
+    expect(kimi.install.some((c) => c.kind === "uv")).toBe(false);
+    expect(kimi.update.some((c) => c.kind === "uv-upgrade")).toBe(false);
+    expect(kimi.latestProbe).toEqual({
+      kind: "http-text",
+      url: "https://code.kimi.com/kimi-code/latest",
+    });
 
     // Official docs do not support Homebrew for kiro-cli
     expect(
@@ -229,6 +245,11 @@ describe("agent lifecycle specs", () => {
       "mistral-vibe",
     ]);
     expect(matchAgentCommand("vibe-acp")).toBe("mistral-vibe");
+  });
+
+  it("kimi-cli 只做 OSC 别名，不进 expectedBins（Kimi Code 与 Python CLI 不是同一产品）", () => {
+    expect(getAgentLifecycleSpec("kimi").expectedBins).toEqual(["kimi"]);
+    expect(matchAgentCommand("kimi-cli")).toBe("kimi");
   });
 
   it("only leaves true website-only agents without install channels", () => {

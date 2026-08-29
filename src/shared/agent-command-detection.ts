@@ -8,9 +8,9 @@ import type { AgentCatalogEntry, AgentKind } from "./contracts/agent.ts";
  * `echo codex`、`curl https://claude.ai/x`、路径/分支名都不产生身份。
  * catalog `id` / `label` 也不是可执行体：`cursor .` 是编辑器启动器，身份是
  * `cursor-agent`；光杆 `agent` 不得点亮 Cursor（安装探测另做路径落地）。
- * 安装探测 `expectedBins` 里的独特 CLI 必须能被 OSC 认到（`kimi-cli` /
- * `qoderclicn`）；ACP 别名（`vibe-acp`）只进 catalog，避免双 bin 安装冲突。
- * 泛名进 AGENT_OSC_BIN_DENYLIST。`qoder` / `qodercn` 是 CLI+IDE 合一启动器
+ * 安装探测 `expectedBins` 里的独特 CLI 必须能被 OSC 认到（`qoderclicn`）；
+ * ACP / 换代遗留别名（`vibe-acp`、`kimi-cli`）只进 catalog，避免双 bin
+ * 安装冲突。泛名进 AGENT_OSC_BIN_DENYLIST。`qoder` / `qodercn` 是 CLI+IDE
  * （同 `cursor`），按 argv 分流，不能当纯词元。
  * 可执行体由 commandExecutableText 解析：剥 env 前缀与 wrapper（sudo/env/
  * mise 等），解析包运行器（npx/pnpm dlx/pipx run/python -m）的包名。
