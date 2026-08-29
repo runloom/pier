@@ -5,7 +5,7 @@ import type {
 } from "@main/adapters/cli/parser.ts";
 import { parsePierCliArgs } from "@main/adapters/cli/parser.ts";
 import { resolvePierCliBin } from "@main/adapters/cli/pier-path.ts";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function asV1(parsed: ParsedPierCliCommand): ParsedPierCliV1 {
   if (parsed.protocol !== "v1") {
@@ -129,6 +129,15 @@ describe("createPierCliCommandClient", () => {
 });
 
 describe("parsePierCliArgs", () => {
+  beforeEach(() => {
+    vi.stubEnv("PIER_PANEL_ID", "");
+    vi.stubEnv("PIER_WINDOW_ID", "");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("解析 open path 为 panel.open", () => {
     expect(
       asV1(
@@ -143,6 +152,7 @@ describe("parsePierCliArgs", () => {
       ).envelope.command
     ).toEqual({
       path: "/Users/dev/ABC/pier",
+      paths: [{ path: "/Users/dev/ABC/pier" }],
       placement: "split-right",
       type: "panel.open",
       windowId: "main",
@@ -189,6 +199,7 @@ describe("parsePierCliArgs", () => {
     ).toEqual({
       focus: false,
       path: "/Users/dev/ABC/pier",
+      paths: [{ path: "/Users/dev/ABC/pier" }],
       type: "panel.open",
     });
   });

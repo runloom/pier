@@ -90,7 +90,7 @@ function shouldFocusRendererWindow(command: RendererCommand): boolean {
     case "dialog.confirm":
       return true;
     case "panel.focus":
-    case "panel.open":
+    case "files.openDisk":
     case "terminal.open":
       return command.focus ?? true;
     case "panel.close":

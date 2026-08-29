@@ -1,4 +1,5 @@
 import { notifyFilesDiskPathOpened } from "@plugins/api/files-disk-path-opened.ts";
+import type { PierCommandPlacement } from "@shared/contracts/commands.ts";
 import { nonEmptyFileRootRelativePathSchema } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -53,54 +54,43 @@ function cloneParamsRecord(params: unknown): Record<string, unknown> | null {
   return { ...params };
 }
 
+export interface OpenFilesDiskPathInput {
+  canvasRevealAnchor?: string;
+  column?: number;
+  context?: PanelContext;
+  line?: number;
+  markdownAnchor?: string;
+  path: string;
+  placement?: PierCommandPlacement;
+  preferPreview?: boolean;
+  referencePanelId?: string;
+  revealTree?: boolean;
+  root: string;
+  title?: string;
+}
+
+export type OpenFilesDiskPathCommandResult =
+  | { ok: true; panelId: string; reused: boolean }
+  | {
+      ok: false;
+      reason: "files-unregistered" | "invalid-path" | "open-failed";
+    };
+
 /**
  * 宿主跨插件打开 files 磁盘文档面板。
  * files 未注册 / path 非法时返回 false；已打开同 source 时复用实例。
  */
-export function openFilesDiskPath(input: {
-  column?: number;
-  context?: PanelContext;
-  /** 1-based working-tree line; forwarded to files via open event. */
-  line?: number;
-  /** Heading id / fragment for Markdown preview scroll. */
-  markdownAnchor?: string;
-  /** Canvas node comment id (`data-pier-comment-id`) to scroll after open. */
-  canvasRevealAnchor?: string;
-  path: string;
-  /** Prefer Markdown preview mode after open (files plugin consumes via open event). */
-  preferPreview?: boolean;
-  root: string;
-  title?: string;
-}): boolean {
-  const pathParsed = nonEmptyFileRootRelativePathSchema.safeParse(input.path);
-  if (!(pathParsed.success && input.root.length > 0)) {
-    return false;
-  }
+export function openFilesDiskPath(input: OpenFilesDiskPathInput): boolean {
+  return openFilesDiskPathResult(input).ok;
+}
 
-  if (!getPluginPanelRegistrations().has(FILES_FILE_PANEL_COMPONENT_ID)) {
-    return false;
-  }
+export function openFilesDiskPathForCommand(
+  input: OpenFilesDiskPathInput
+): OpenFilesDiskPathCommandResult {
+  return openFilesDiskPathResult(input);
+}
 
-  const source = {
-    kind: "disk" as const,
-    path: pathParsed.data,
-    root: input.root,
-  };
-  const api = useWorkspaceStore.getState().api;
-  const existing = api?.panels.find((panel) => {
-    if (panel.view.contentComponent !== FILES_FILE_PANEL_COMPONENT_ID) {
-      return false;
-    }
-    const existingSource = parseFilesDiskSourceFromParams(panel.params);
-    return (
-      existingSource !== null && sameFilesDiskSource(existingSource, source)
-    );
-  });
-
-  const existingParams = cloneParamsRecord(existing?.params);
-  // Always refresh disk source on open so params match the request path even
-  // when reusing an instance (identity key is path-scoped today).
-  // Preview reveal: heading id and/or line (line used when no heading).
+function previewRevealParams(input: OpenFilesDiskPathInput) {
   const wantsPreviewReveal =
     input.preferPreview === true &&
     (input.markdownAnchor !== undefined ||
@@ -115,10 +105,7 @@ export function openFilesDiskPath(input: {
     input.canvasRevealAnchor === undefined &&
     input.line !== undefined &&
     input.line >= 1;
-  const params = {
-    ...(existingParams ?? { pinned: true }),
-    source,
-    // Clear stale line-only reveal when this open uses a heading anchor.
+  return {
     ...(input.markdownAnchor === undefined
       ? {}
       : {
@@ -143,9 +130,48 @@ export function openFilesDiskPath(input: {
         }
       : {}),
   };
+}
+
+function openFilesDiskPathResult(
+  input: OpenFilesDiskPathInput
+): OpenFilesDiskPathCommandResult {
+  const pathParsed = nonEmptyFileRootRelativePathSchema.safeParse(input.path);
+  if (!(pathParsed.success && input.root.length > 0)) {
+    return { ok: false, reason: "invalid-path" };
+  }
+
+  if (!getPluginPanelRegistrations().has(FILES_FILE_PANEL_COMPONENT_ID)) {
+    return { ok: false, reason: "files-unregistered" };
+  }
+
+  const source = {
+    kind: "disk" as const,
+    path: pathParsed.data,
+    root: input.root,
+  };
+  const api = useWorkspaceStore.getState().api;
+  const existing = api?.panels.find((panel) => {
+    if (panel.view.contentComponent !== FILES_FILE_PANEL_COMPONENT_ID) {
+      return false;
+    }
+    const existingSource = parseFilesDiskSourceFromParams(panel.params);
+    return (
+      existingSource !== null && sameFilesDiskSource(existingSource, source)
+    );
+  });
+
+  const existingParams = cloneParamsRecord(existing?.params);
+  // Always refresh disk source on open so params match the request path even
+  // when reusing an instance (identity key is path-scoped today).
+  const params = {
+    ...(existingParams ?? { pinned: true }),
+    source,
+    ...previewRevealParams(input),
+  };
   const identityKey = `${FILES_FILE_PANEL_COMPONENT_ID}:disk:${stableFileIdentityHash(
     `${source.root}\u0000${source.path}`
   )}`;
+  const reused = existing !== undefined;
   const instanceId = existing?.id ?? `${identityKey}:${createFilePanelNonce()}`;
 
   const result = openPluginPanelInstance({
@@ -157,22 +183,32 @@ export function openFilesDiskPath(input: {
     instanceId,
     params,
     title: input.title ?? basename(source.path),
+    ...(existing
+      ? {}
+      : {
+          ...(input.placement ? { placement: input.placement } : {}),
+          ...(input.referencePanelId
+            ? { referencePanelId: input.referencePanelId }
+            : {}),
+        }),
   });
-  if (result.kind === "opened") {
-    notifyFilesDiskPathOpened({
-      instanceId,
-      path: source.path,
-      root: source.root,
-      ...(input.column === undefined ? {} : { column: input.column }),
-      ...(input.line === undefined ? {} : { line: input.line }),
-      ...(input.preferPreview === true ? { preferPreview: true } : {}),
-      ...(input.markdownAnchor === undefined
-        ? {}
-        : { markdownAnchor: input.markdownAnchor }),
-      ...(input.canvasRevealAnchor === undefined
-        ? {}
-        : { canvasRevealAnchor: input.canvasRevealAnchor }),
-    });
+  if (result.kind !== "opened") {
+    return { ok: false, reason: "open-failed" };
   }
-  return result.kind === "opened";
+  notifyFilesDiskPathOpened({
+    instanceId,
+    path: source.path,
+    root: source.root,
+    ...(input.column === undefined ? {} : { column: input.column }),
+    ...(input.line === undefined ? {} : { line: input.line }),
+    ...(input.preferPreview === true ? { preferPreview: true } : {}),
+    ...(input.markdownAnchor === undefined
+      ? {}
+      : { markdownAnchor: input.markdownAnchor }),
+    ...(input.canvasRevealAnchor === undefined
+      ? {}
+      : { canvasRevealAnchor: input.canvasRevealAnchor }),
+    ...(input.revealTree === false ? { revealTree: false } : {}),
+  });
+  return { ok: true, panelId: instanceId, reused };
 }

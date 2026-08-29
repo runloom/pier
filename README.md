@@ -74,11 +74,11 @@ pnpm dev
 
 ## 本机 CLI
 
-先启动 Pier，再运行 `pier`。CLI 用于控制本机已经打开的 Pier，不是远程 API。
+正式安装包里的 `pier` 在应用未运行时会先启动。CLI 用于控制本机 Pier，不是远程 API。
 
 ```bash
 pier status --json
-pier open . --json
+pier . --json
 pier panels list --json
 ```
 

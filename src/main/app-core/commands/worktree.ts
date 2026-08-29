@@ -24,10 +24,8 @@ import {
   commandSuccess as success,
 } from "../command-results.ts";
 import type { PierCoreServices } from "../command-router.ts";
-import {
-  executePanelOpenCommand,
-  executeTerminalOpenCommand,
-} from "./panel.ts";
+import { executeTerminalOpenCommand } from "./panel.ts";
+import { executePanelOpenCommand } from "./panel-open.ts";
 import { admitWorktreeRemove } from "./worktree-remove-admission.ts";
 
 const worktreeCreateLog = createLogger("worktree.create");

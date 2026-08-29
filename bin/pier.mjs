@@ -4,8 +4,17 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createConnection } from "node:net";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { stdin as stdinStream } from "node:process";
+import {
+  findWorktreeDevProfile,
+  LAUNCH_WAIT_MS,
+  openPierApp,
+  retryUntilRendererWindow,
+  shouldOpenApplication,
+  shouldWaitForControlSocket,
+  waitForSocket,
+} from "./pier-cli-launch.js";
 import {
   hasPierCliOption,
   parsePierCliArgs,
@@ -48,27 +57,16 @@ function socketPathForUserData(userDataDir) {
   return join(tmpdir(), `pier-control-${shortHash(userDataDir)}.sock`);
 }
 
-function readJson(file) {
-  try {
-    return JSON.parse(readFileSync(file, "utf8"));
-  } catch {
-    return null;
-  }
-}
-
 function resolveWorktreeDevUserData() {
-  let dir = process.cwd();
-  while (dir !== dirname(dir)) {
-    const profile = readJson(join(dir, ".pier-dev", "profile.json"));
-    if (typeof profile?.electronUserDataDir === "string") {
-      return profile.electronUserDataDir;
-    }
-    dir = dirname(dir);
-  }
-  return null;
+  const found = findWorktreeDevProfile(process.cwd());
+  const dir = found?.profile?.electronUserDataDir;
+  return typeof dir === "string" && dir.length > 0 ? dir : null;
 }
 
 function resolveSocketPath() {
+  if (process.env.PIER_CONTROL_SOCKET) {
+    return process.env.PIER_CONTROL_SOCKET;
+  }
   if (process.env.PIER_CONTROL_SOCKET_PATH) {
     return process.env.PIER_CONTROL_SOCKET_PATH;
   }
@@ -80,6 +78,42 @@ function resolveSocketPath() {
     return socketPathForUserData(devUserData);
   }
   return socketPathForUserData(defaultUserDataDir());
+}
+
+async function ensureControlSocket(socketPath) {
+  try {
+    await waitForSocket(socketPath, { pollMs: 50, timeoutMs: 150 });
+    return { waited: false };
+  } catch {
+    // Short probe only; launch or wait policy below still applies.
+  }
+  const canLaunch = shouldOpenApplication();
+  if (!shouldWaitForControlSocket({ canLaunch })) {
+    return { waited: false };
+  }
+  if (canLaunch) {
+    openPierApp();
+  }
+  await waitForSocket(socketPath, { timeoutMs: LAUNCH_WAIT_MS });
+  return { waited: true };
+}
+
+function requestUntilWindow(socketPath, envelope, timeoutMs) {
+  return retryUntilRendererWindow({
+    request: () => request(socketPath, envelope, timeoutMs),
+  });
+}
+
+async function invokePierControlUntilWindow(args) {
+  let events = [];
+  const response = await retryUntilRendererWindow({
+    request: async () => {
+      const result = await invokePierControl(args);
+      events = result.events ?? [];
+      return result.response;
+    },
+  });
+  return { events, response };
 }
 
 function request(socketPath, envelope, timeoutMs = 5000) {
@@ -443,6 +477,9 @@ try {
     process.exit(0);
   }
 
+  const socketPath = resolveSocketPath();
+  const { waited } = await ensureControlSocket(socketPath);
+
   if (parsed.protocol === "v2") {
     let params = parsed.params ?? {};
     if (parsed.op === "agents.turn") {
@@ -491,8 +528,8 @@ try {
       parsed.op === "agents.start" ? 60_000 : 0
     );
     // 本机 CLI 一律按本机用户调用，不注入 / 不解析 agent binding 或凭证。
-    const { response, events } = await invokePierControl({
-      socketPath: resolveSocketPath(),
+    const { response, events } = await invokePierControlUntilWindow({
+      socketPath,
       requestId: parsed.requestId,
       op: parsed.op,
       params,
@@ -552,11 +589,22 @@ try {
           (Number(parsed.envelope.command.timeoutMs) || 30_000) + 20_000
         )
       : 5000;
-  const result = await request(
-    resolveSocketPath(),
+  const result = await requestUntilWindow(
+    socketPath,
     parsed.envelope,
-    v1TimeoutMs
+    waited ? Math.max(v1TimeoutMs, LAUNCH_WAIT_MS) : v1TimeoutMs
   );
+  if (
+    !result.ok &&
+    parsed.envelope.command.type === "panel.focus" &&
+    result.error?.code === "not_found" &&
+    !argv.includes("panels") &&
+    !argv.includes("focus")
+  ) {
+    console.error(result.error.message ?? "panel not found");
+    console.error(usage());
+    process.exit(1);
+  }
   if (parsed.json) {
     console.log(JSON.stringify(result, null, 2));
   } else if (

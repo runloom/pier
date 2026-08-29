@@ -345,15 +345,19 @@ function services(
     rendererCommand: {
       execute: (command) => {
         rendererCommands.push(command);
-        if (command.type === "panel.open" || command.type === "terminal.open") {
+        if (command.type === "terminal.open") {
           return Promise.resolve({
             data: {
               context: command.context,
-              panelId:
-                command.type === "terminal.open" && command.panelId
-                  ? command.panelId
-                  : "terminal-from-renderer",
+              panelId: command.panelId ?? "terminal-from-renderer",
             },
+            ok: true,
+            requestId: "renderer-req",
+          });
+        }
+        if (command.type === "files.openDisk") {
+          return Promise.resolve({
+            data: { panelId: "file-from-renderer", reused: false },
             ok: true,
             requestId: "renderer-req",
           });
@@ -833,6 +837,7 @@ describe("createCommandRouter", () => {
   });
 
   it("panel.open 在 main 解析 context 后发给 renderer 并记录 recent", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-panel-open-"));
     const rendererCommands: unknown[] = [];
     const fakeServices = services(rendererCommands);
     const router = createCommandRouter({
@@ -840,41 +845,43 @@ describe("createCommandRouter", () => {
       services: fakeServices,
     });
 
-    await expect(
-      router.execute({
-        clientId: "desktop-1",
-        command: {
-          path: "/Users/dev/ABC/pier",
-          placement: "split-right",
-          type: "panel.open",
-        },
-        protocolVersion: 1,
-        requestId: "req-open",
-      })
-    ).resolves.toEqual({
+    const result = await router.execute({
+      clientId: "desktop-1",
+      command: {
+        path: dir,
+        placement: "split-right",
+        type: "panel.open",
+      },
+      protocolVersion: 1,
+      requestId: "req-open",
+    });
+    expect(result).toMatchObject({
       data: {
-        context: panelContext("/Users/dev/ABC/pier"),
         panelId: "terminal-from-renderer",
+        reused: false,
+        windowId: "main",
       },
       ok: true,
       requestId: "req-open",
     });
 
-    expect(rendererCommands).toEqual([
-      {
-        context: panelContext("/Users/dev/ABC/pier"),
-        placement: "split-right",
-        type: "panel.open",
-        windowId: "main",
-      },
-    ]);
+    expect(rendererCommands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          placement: "split-right",
+          type: "terminal.open",
+          windowId: "main",
+        }),
+      ])
+    );
 
-    await expect(fakeServices.panelContexts.listRecent()).resolves.toEqual([
-      panelContext("/Users/dev/ABC/pier"),
-    ]);
+    const recent = await fakeServices.panelContexts.listRecent();
+    expect(recent[0]?.projectRootPath).toBeTruthy();
+    await rm(dir, { force: true, recursive: true });
   });
 
   it("panel.open 保留 focus:false", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-panel-open-bg-"));
     const rendererCommands: unknown[] = [];
     const router = createCommandRouter({
       clients: registryWith(desktopClient),
@@ -885,18 +892,27 @@ describe("createCommandRouter", () => {
       clientId: "desktop-1",
       command: {
         focus: false,
-        path: "/tmp/pier",
+        path: dir,
         type: "panel.open",
       },
       protocolVersion: 1,
       requestId: "req-open-background",
     });
 
-    expect(rendererCommands[0]).toMatchObject({
+    expect(
+      rendererCommands.find(
+        (command) =>
+          typeof command === "object" &&
+          command !== null &&
+          "type" in command &&
+          command.type === "terminal.open"
+      )
+    ).toMatchObject({
       focus: false,
-      type: "panel.open",
+      type: "terminal.open",
       windowId: "main",
     });
+    await rm(dir, { force: true, recursive: true });
   });
 
   it("terminal.open 注册 launch 后发 renderer terminal.open", async () => {
@@ -3756,39 +3772,61 @@ describe("createCommandRouter", () => {
   });
 
   it("worktree.open 复用 panel.open 的 context 解析和 renderer 命令", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-worktree-open-"));
     const rendererCommands: unknown[] = [];
     const fakeServices = services(rendererCommands);
+    fakeServices.worktrees.list = async () => ({
+      currentPath: dir,
+      mainPath: dir,
+      path: dir,
+      status: "available" as const,
+      worktrees: [
+        {
+          bare: false,
+          branch: "feature/a",
+          detached: false,
+          head: "def456",
+          isCurrent: true,
+          isMain: false,
+          locked: false,
+          lockedReason: null,
+          path: dir,
+          prunable: false,
+          prunableReason: null,
+        },
+      ],
+    });
     const router = createCommandRouter({
       clients: registryWith(desktopClient),
       services: fakeServices,
     });
 
-    await expect(
-      router.execute({
-        clientId: "desktop-1",
-        command: {
-          focus: false,
-          path: "/repo/.worktrees/feature-a",
-          type: "worktree.open",
-        },
-        protocolVersion: 1,
-        requestId: "req-worktree-open",
-      })
-    ).resolves.toEqual({
+    const result = await router.execute({
+      clientId: "desktop-1",
+      command: {
+        focus: false,
+        path: dir,
+        type: "worktree.open",
+      },
+      protocolVersion: 1,
+      requestId: "req-worktree-open",
+    });
+    expect(result).toMatchObject({
       data: {
-        context: panelContext("/repo/.worktrees/feature-a"),
         panelId: "terminal-from-renderer",
+        reused: false,
+        windowId: "main",
       },
       ok: true,
       requestId: "req-worktree-open",
     });
 
-    expect(rendererCommands.at(-1)).toEqual({
-      context: panelContext("/repo/.worktrees/feature-a"),
+    expect(rendererCommands.at(-1)).toMatchObject({
       focus: false,
-      type: "panel.open",
+      type: "terminal.open",
       windowId: "main",
     });
+    await rm(dir, { force: true, recursive: true });
   });
 
   it("worktree.openTerminal 带 agentId 时在目标工作树打开 agent 对话", async () => {
@@ -4028,46 +4066,62 @@ describe("createCommandRouter", () => {
   });
 
   it("worktree.open 在目标仓库之外调用时按目标路径自身校验", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-wt-outside-"));
     const rendererCommands: unknown[] = [];
     const fakeServices = services(rendererCommands);
-    const baseList = fakeServices.worktrees.list;
-    // 模拟真实行为:非 /repo 内的路径(如 CLI 的 cwd)不是 git 仓库
-    fakeServices.worktrees = {
-      ...fakeServices.worktrees,
-      list: async (args) =>
-        args.path.startsWith("/repo")
-          ? await baseList(args)
-          : {
-              path: args.path,
-              reason: "not_git_repo",
-              status: "unavailable",
-              worktrees: [],
-            },
-    };
+    fakeServices.worktrees.list = async (args) =>
+      args.path.startsWith(dir)
+        ? {
+            currentPath: dir,
+            mainPath: dir,
+            path: dir,
+            status: "available" as const,
+            worktrees: [
+              {
+                bare: false,
+                branch: "feature/a",
+                detached: false,
+                head: "def456",
+                isCurrent: true,
+                isMain: false,
+                locked: false,
+                lockedReason: null,
+                path: dir,
+                prunable: false,
+                prunableReason: null,
+              },
+            ],
+          }
+        : {
+            path: args.path,
+            reason: "not_git_repo",
+            status: "unavailable",
+            worktrees: [],
+          };
     const router = createCommandRouter({
       clients: registryWith(desktopClient),
       services: fakeServices,
     });
-
     await expect(
       router.execute({
         clientId: "desktop-1",
         command: {
           focus: false,
-          path: "/repo/.worktrees/feature-a",
+          path: dir,
           type: "worktree.open",
         },
         protocolVersion: 1,
         requestId: "req-worktree-open-outside",
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       data: {
-        context: panelContext("/repo/.worktrees/feature-a"),
         panelId: "terminal-from-renderer",
+        reused: false,
       },
       ok: true,
       requestId: "req-worktree-open-outside",
     });
+    await rm(dir, { force: true, recursive: true });
   });
 
   it("worktree.open 通过符号链接路径能匹配 realpath 后的 worktree", async () => {
@@ -4117,10 +4171,11 @@ describe("createCommandRouter", () => {
           protocolVersion: 1,
           requestId: "req-worktree-open-symlink",
         })
-      ).resolves.toEqual({
+      ).resolves.toMatchObject({
         data: {
-          context: panelContext(canonicalPath),
           panelId: "terminal-from-renderer",
+          reused: false,
+          windowId: "main",
         },
         ok: true,
         requestId: "req-worktree-open-symlink",

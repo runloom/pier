@@ -17,6 +17,8 @@ export interface FilesDiskPathOpenedEvent {
   path: string;
   /** Switch file panel to Markdown preview mode when applicable. */
   preferPreview?: boolean;
+  /** When false, files tree must not expand/reveal. Default true. */
+  revealTree?: boolean;
   root: string;
 }
 

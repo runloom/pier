@@ -1,3 +1,4 @@
+import type { PierCommandPlacement } from "@shared/contracts/commands.ts";
 import type {
   IDockviewPanelProps,
   PierDockviewGroupHandle,
@@ -42,6 +43,8 @@ export interface PluginPanelInstanceOptions {
   dropUnpinnedInstances?: boolean;
   instanceId: string;
   params?: Record<string, unknown>;
+  placement?: PierCommandPlacement;
+  referencePanelId?: string;
   /** 显式 group 不存在时，宿主不得产生任何布局副作用。 */
   targetGroupId?: PluginPanelGroupId;
   title?: string;

@@ -21,6 +21,9 @@ export function registerFilesDiskOpenTreeReveal(
   context: RendererPluginContext
 ): () => void {
   return onFilesDiskPathOpened((event) => {
+    if (event.revealTree === false) {
+      return;
+    }
     ensureProjectFileTreeExpanded(event.root);
     const controller = filesTreeVisibilityForContext(context);
     const reveal = () =>

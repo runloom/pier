@@ -44,6 +44,11 @@ import {
 } from "../window-routing.ts";
 
 export interface PanelCommandServices {
+  agentRuntimeIndex?: {
+    listMachine(): {
+      entries: ReadonlyArray<{ agentId?: string; panelId?: string }>;
+    };
+  };
   localEnvironments: Pick<
     LocalEnvironmentService,
     "resolveForWorktree" | "resolveProject"
@@ -304,41 +309,6 @@ export async function executePanelListCommand(
     );
   }
   return commandSuccess(requestId, await listPanels(command, services));
-}
-
-export async function executePanelOpenCommand(
-  requestId: string,
-  command: Extract<PierCommand, { type: "panel.open" }>,
-  services: PanelCommandServices
-): Promise<PierCommandResult> {
-  const target = resolveCommandWindow(command.windowId, services, {
-    requireStableDefault: !command.windowId,
-  });
-  if (!target.window) {
-    return commandFailure(
-      requestId,
-      target.code ?? (command.windowId ? "not_found" : "platform_unavailable"),
-      target.error ?? "no renderer window available"
-    );
-  }
-
-  const context = await services.panelContexts.resolveForPath(command.path);
-  const result = await services.rendererCommand.execute({
-    focus: command.focus,
-    placement: command.placement,
-    type: "panel.open",
-    context,
-    windowId: target.window.id,
-  });
-  if (!result.ok) {
-    return commandFailure(
-      requestId,
-      result.error.code ?? "platform_unavailable",
-      result.error.message
-    );
-  }
-  await services.panelContexts.recordRecent(context);
-  return commandSuccess(requestId, result.data);
 }
 
 export async function executeTerminalOpenCommand(

@@ -1,12 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { isAbsolute, resolve } from "node:path";
+import {
+  looksLikePathToken,
+  parseNestedBareCommand,
+  parsePathOpenArgs,
+} from "./pier-cli-path.js";
 
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export function usage() {
   return [
     "Usage:",
-    "  pier open <path> [--window <windowId>] [--split <direction>] [--no-focus] --json",
+    "  pier . [--window <windowId>] [--split <direction>] [--no-focus] --json",
+    "  pier open <path> [path...] [--window <windowId>] [--split <direction>] [--no-focus] --json",
     "  pier terminal open [--cwd <path>] [--profile <profileId>] [--env KEY=VALUE] [--command <command> | -- <command...>] [--window <windowId>] [--split <direction>] [--reference-panel <panelId>] [--no-focus] --json",
     "  pier terminal list [--window <windowId>] --json",
     "  pier terminal get <panelId> [--window <windowId>] --json",
@@ -328,15 +334,13 @@ function parseTaskInputs(args) {
   return inputs;
 }
 
-function parseOpen(action, unexpected, cwd, route) {
-  if (unexpected) {
-    throw new Error(`unexpected pier CLI argument: ${unexpected}`);
-  }
-  return {
-    path: absolutePath(requireValue(action), cwd),
-    type: "panel.open",
-    ...route,
-  };
+function parseOpen(tokens, cwd, route, args) {
+  return parsePathOpenArgs({
+    cwd,
+    hasExplicitWindow: hasPierCliOption(args, "--window"),
+    route,
+    tokens,
+  });
 }
 
 function optionalPositiveInt(args, name) {
@@ -1144,14 +1148,23 @@ function parseNotifications(action, value, unexpected, args) {
 }
 
 function parseCommand(args, cwd) {
-  const [domain, action, value, extra, unexpected] = stripOptions(args);
+  const positionals = stripOptions(args);
+  const [domain, action, value, extra, unexpected] = positionals;
   const route = routeOptions(args);
+  const hasExplicitWindow = hasPierCliOption(args, "--window");
+  if (!domain) {
+    const nested = parseNestedBareCommand({ hasExplicitWindow, route });
+    if (nested) {
+      return nested;
+    }
+    throw new Error("unknown pier CLI command");
+  }
   const top = parseControlTopLevel(domain, args);
   if (top) {
     return top;
   }
   if (domain === "open") {
-    return parseOpen(action, value, cwd, route);
+    return parseOpen(positionals.slice(1), cwd, route, args);
   }
   if (domain === "terminal") {
     return parseTerminal(action, value, extra, unexpected, args, cwd, route);
@@ -1179,6 +1192,14 @@ function parseCommand(args, cwd) {
   }
   if (domain === "notifications") {
     return parseNotifications(action, value, extra ?? unexpected, args);
+  }
+  if (looksLikePathToken(domain, cwd)) {
+    return parsePathOpenArgs({
+      cwd,
+      hasExplicitWindow,
+      route,
+      tokens: positionals,
+    });
   }
   throw new Error("unknown pier CLI command");
 }

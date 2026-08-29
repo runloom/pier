@@ -69,6 +69,37 @@ describe("diskTargetPartsForAbsolute", () => {
       root: "/tmp",
     });
   });
+
+  it("does not use the file itself as the disk root", () => {
+    expect(
+      diskTargetPartsForAbsolute(
+        "/repo/src/a.ts",
+        ctx({
+          cwd: "/repo/src",
+          openedPath: "/repo/src/a.ts",
+          projectRootPath: "/repo",
+        })
+      )
+    ).toEqual({
+      absolutePath: "/repo/src/a.ts",
+      relativePath: "",
+      root: "/repo/src/a.ts",
+    });
+    expect(
+      diskTargetPartsForAbsolute(
+        "/repo/src/a.ts",
+        ctx({
+          cwd: "/repo/src",
+          openedPath: "/repo/src",
+          projectRootPath: "/repo",
+        })
+      )
+    ).toEqual({
+      absolutePath: "/repo/src/a.ts",
+      relativePath: "a.ts",
+      root: "/repo/src",
+    });
+  });
 });
 
 describe("withTerminalOpenAnchor", () => {

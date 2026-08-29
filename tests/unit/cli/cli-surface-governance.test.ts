@@ -33,6 +33,7 @@ describe("cli-docs-surface helpers", () => {
     ["pier notifications list --json", null],
     ["pier status --json", null],
     ["pier open . --json", null],
+    ["pier . --json", null],
     ["pier plugins list --json", null],
   ] as const)("detects available-surface line %s", (line, id) => {
     const violations = collectCliDocsAvailableViolations(line);
@@ -82,6 +83,7 @@ describe("cli user manual governance (canvas canonical)", () => {
     expect(available).toMatch(/plugins list/u);
     expect(available).toMatch(/agents catalog/u);
     expect(available).toMatch(/status/u);
+    expect(available).toMatch(/^\s*pier\s+\. --json/mu);
     expect(available).not.toMatch(/^\s*pier\s+access\b/mu);
   });
 

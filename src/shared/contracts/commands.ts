@@ -78,6 +78,13 @@ export const pierCommandPlacementSchema = z.enum([
 ]);
 export type PierCommandPlacement = z.infer<typeof pierCommandPlacementSchema>;
 
+export const panelOpenPathEntrySchema = z.object({
+  column: z.number().int().positive().optional(),
+  line: z.number().int().positive().optional(),
+  path: z.string().min(1),
+});
+export type PanelOpenPathEntry = z.infer<typeof panelOpenPathEntrySchema>;
+
 export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("app.status") }),
   appCliStatusRequestSchema,
@@ -107,13 +114,25 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     recordId: z.string().min(1),
     type: z.literal("workspace.layout.clear"),
   }),
-  z.object({
-    type: z.literal("panel.open"),
-    focus: z.boolean().optional(),
-    path: z.string().min(1),
-    placement: pierCommandPlacementSchema.optional(),
-    windowId: z.string().min(1).optional(),
-  }),
+  z
+    .object({
+      type: z.literal("panel.open"),
+      focus: z.boolean().optional(),
+      path: z.string().min(1),
+      paths: z.array(panelOpenPathEntrySchema).min(1).optional(),
+      placement: pierCommandPlacementSchema.optional(),
+      referencePanelId: z.string().min(1).optional(),
+      windowId: z.string().min(1).optional(),
+    })
+    .superRefine((value, ctx) => {
+      const first = value.paths?.[0];
+      if (first && first.path !== value.path) {
+        ctx.addIssue({
+          code: "custom",
+          message: "panel.open path must equal paths[0].path",
+        });
+      }
+    }),
   z
     .object({
       type: z.literal("terminal.open"),

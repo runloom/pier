@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const closeCurrentWindowMock = vi.hoisted(() => vi.fn(async () => undefined));
 const showAppConfirmMock = vi.hoisted(() => vi.fn(async () => true));
+const openFilesDiskPathForCommandMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/ipc/window-ipc.ts", () => ({
   closeCurrentWindow: closeCurrentWindowMock,
@@ -10,6 +11,10 @@ vi.mock("@/lib/ipc/window-ipc.ts", () => ({
 
 vi.mock("@/stores/app-dialog.store.ts", () => ({
   showAppConfirm: showAppConfirmMock,
+}));
+
+vi.mock("@/lib/files/open-disk-file-panel.ts", () => ({
+  openFilesDiskPathForCommand: openFilesDiskPathForCommandMock,
 }));
 
 import { runWorkspaceRendererCommand } from "@/components/workspace/renderer-commands.ts";
@@ -65,6 +70,7 @@ describe("workspace renderer commands", () => {
     closeCurrentWindowMock.mockClear();
     showAppConfirmMock.mockReset();
     showAppConfirmMock.mockResolvedValue(true);
+    openFilesDiskPathForCommandMock.mockReset();
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -357,7 +363,7 @@ describe("workspace renderer commands", () => {
     });
   });
 
-  it("cancels panel.close / panel.open while bootstrap gate is active", async () => {
+  it("cancels panel.close / files.openDisk while bootstrap gate is active", async () => {
     const terminal = terminalPanel("terminal-1");
     const welcome = webPanel("welcome-1");
     const api = createApi([terminal, welcome]);
@@ -383,13 +389,9 @@ describe("workspace renderer commands", () => {
 
     await runWorkspaceRendererCommand({
       command: {
-        context: {
-          contextId: "ctx-gated",
-          cwd: "/tmp",
-          projectRootPath: "/tmp",
-          updatedAt: 1,
-        },
-        type: "panel.open",
+        path: "src/a.ts",
+        root: "/tmp",
+        type: "files.openDisk",
       },
       requestId: "gated-open",
     });
@@ -404,6 +406,58 @@ describe("workspace renderer commands", () => {
     expect(api.addPanel).not.toHaveBeenCalled();
 
     releaseWorkspaceBootstrapGate();
+  });
+
+  it("maps files.openDisk open-failed to platform_unavailable", async () => {
+    const api = createApi([terminalPanel("terminal-1")]);
+    useWorkspaceStore.getState().setApi(api as never);
+    openFilesDiskPathForCommandMock.mockReturnValue({
+      ok: false,
+      reason: "open-failed",
+    });
+
+    await runWorkspaceRendererCommand({
+      command: {
+        path: "src/a.ts",
+        root: "/repo",
+        type: "files.openDisk",
+      },
+      requestId: "open-disk-failed",
+    });
+
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: "platform_unavailable" }),
+        ok: false,
+        requestId: "open-disk-failed",
+      })
+    );
+  });
+
+  it("maps files.openDisk invalid-path to invalid_command", async () => {
+    const api = createApi([terminalPanel("terminal-1")]);
+    useWorkspaceStore.getState().setApi(api as never);
+    openFilesDiskPathForCommandMock.mockReturnValue({
+      ok: false,
+      reason: "invalid-path",
+    });
+
+    await runWorkspaceRendererCommand({
+      command: {
+        path: "../escape.ts",
+        root: "/repo",
+        type: "files.openDisk",
+      },
+      requestId: "open-disk-invalid",
+    });
+
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: "invalid_command" }),
+        ok: false,
+        requestId: "open-disk-invalid",
+      })
+    );
   });
 
   it("refuses panelTransfer.* commands that bypass the transfer listener", async () => {

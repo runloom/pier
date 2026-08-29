@@ -228,15 +228,18 @@ describe("shared panel contract", () => {
     });
   });
 
-  it("allows renderer panel.open commands to carry only resolved context", () => {
+  it("allows renderer files.openDisk commands to carry resolved context", () => {
     expect(
       rendererCommandSchema.parse({
         context,
-        type: "panel.open",
+        path: "src/a.ts",
+        root: "/repo",
+        type: "files.openDisk",
       })
     ).toMatchObject({
       context: { contextId: "ctx-1" },
-      type: "panel.open",
+      path: "src/a.ts",
+      type: "files.openDisk",
     });
   });
 

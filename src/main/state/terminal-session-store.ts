@@ -112,3 +112,18 @@ export function peekTerminalPanelAgent(
   }
   return s.get().windows[windowId]?.panels[panelId]?.agent ?? null;
 }
+
+/** Sync peek of task metadata on a terminal session. Null if store cold. */
+export function peekTerminalPanelTask(
+  windowId: string,
+  panelId: string
+): TerminalSessionState["windows"][string]["panels"][string]["task"] | null {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return null;
+  }
+  const s = tryGetTerminalSessionStore();
+  if (!s) {
+    return null;
+  }
+  return s.get().windows[windowId]?.panels[panelId]?.task ?? null;
+}

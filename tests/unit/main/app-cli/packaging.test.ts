@@ -14,6 +14,8 @@ describe("packaged pier CLI", () => {
     expect(yml).toMatch(/from:\s*bin\/pier\.mjs/);
     expect(yml).toMatch(/to:\s*bin\/pier\.mjs/);
     expect(yml).toMatch(/from:\s*bin\/pier-cli-parser\.js/);
+    expect(yml).toMatch(/from:\s*bin\/pier-cli-path\.js/);
+    expect(yml).toMatch(/from:\s*bin\/pier-cli-launch\.js/);
     expect(yml).toMatch(/from:\s*bin\/pier-control-client\.js/);
     expect(yml).toMatch(/from:\s*bin\/pier-app\.sh/);
     expect(yml).toMatch(/to:\s*bin\/pier\b/);

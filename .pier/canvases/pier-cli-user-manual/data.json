@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-18T13:20:00Z",
-  "source": "pier-cli-user-manual 终态清稿：cli-human only；无 access/agent principal。位置参数为主对象。",
+  "generatedAt": "2026-08-29T18:00:00Z",
+  "source": "pier-cli-user-manual v2.5：路径简写已 shipped（pier . / 打开文件 / 生产包自动启动）；open 与路径简写共用「确保工作面」。",
   "data": {
     "meta": {
       "title": "Pier 本机 CLI 使用手册",
       "subtitle": "在终端控制已打开的 Pier。人类与协调智能体共用本机 pier（cli-human）。",
       "status": "使用手册",
-      "version": "v2.3"
+      "version": "v2.5"
     },
-    "bluf": "先启动 Pier，再运行 pier。人类与协调智能体同一路径：status → open . → agents catalog → agents start claude（持久）。脚本加 --json。一次性用各 agent 原生 CLI。无应用层鉴权；不提供 access.*。",
+    "bluf": "先启动 Pier（正式安装包里的 pier 在应用未开时会代为启动）。人类与协调智能体同一路径：status → pier . → agents catalog → agents start claude（持久）。脚本加 --json。一次性用各 agent 原生 CLI。无应用层鉴权；不提供 access.*。",
     "context": "面向使用 Pier 的人、脚本与协调智能体作者。CLI 是本机工作台控制入口：一律 cli-human（auth.none + peer）。不是远程 API，不是权限/密钥系统。",
     "goals": [
       "60 秒内完成第一次成功调用",
@@ -50,7 +50,7 @@
       }
     ],
     "quickStart": {
-      "prerequisite": "必须先打开 Pier 应用（开发态：pnpm dev）。CLI 只连接本机已运行实例。",
+      "prerequisite": "正式安装包里的 pier 在应用未运行时会先启动再执行。源码开发请先 pnpm dev，再用 pnpm --silent cli:dev。",
       "firstCommands": [
         {
           "title": "1. 确认连上",
@@ -59,8 +59,8 @@
         },
         {
           "title": "2. 打开当前目录",
-          "cmd": "pier open . --json",
-          "note": "会打开绑定到该项目的终端面板"
+          "cmd": "pier . --json",
+          "note": "已有同一工作目录的普通终端则聚焦，否则新建。也可用 pier open ."
         },
         {
           "title": "3. 看有哪些面板",
@@ -118,7 +118,8 @@
         "title": "打开项目文件夹",
         "when": "想在 Pier 里进入某个仓库",
         "steps": [
-          "pier open /path/to/repo --json",
+          "pier . --json",
+          "或 pier open /path/to/repo --json",
           "或 pier open . --split right --json 在当前窗口旁开"
         ]
       },
@@ -184,7 +185,7 @@
       {
         "id": "app",
         "label": "应用与打开",
-        "blurb": "状态检查与打开文件夹。",
+        "blurb": "状态检查，以及打开目录（确保终端工作面）或文件（编辑器）。",
         "commands": [
           {
             "id": "status",
@@ -197,11 +198,24 @@
             "id": "open",
             "name": "open",
             "status": "shipped",
-            "synopsis": "pier open <路径> [--window <id>] [--split right|left|below|above] [--no-focus] --json",
-            "description": "在 Pier 中打开目录，并带上 Git 与工作树信息。",
+            "synopsis": "pier open <路径> [路径…] [--window <id>] [--split right|left|below|above] [--no-focus] --json",
+            "description": "在 Pier 中打开目录或文件，并带上 git 与工作树信息。目录：当前窗口已有同一工作目录的普通终端则聚焦，否则新建；加 --split 会强制再开一块。文件：在 Pier 编辑器打开（已打开则复用标签，支持路径:行[:列]）。需要再开一块终端时请用 pier terminal open。",
             "examples": [
               "pier open . --json",
-              "pier open ~/proj --split right --json"
+              "pier open ~/proj --split right --json",
+              "pier open src/app.ts:12 --json"
+            ]
+          },
+          {
+            "id": "path-shorthand",
+            "name": "path",
+            "status": "shipped",
+            "synopsis": "pier <路径> [路径…] [--window <id>] [--split right|left|below|above] [--no-focus] --json",
+            "description": "路径简写，与 pier open <路径> 共用同一套规则。目录：当前窗口里若已有同一工作目录的普通终端则聚焦，否则新建一个；显式 --split 或 pier terminal open 仍会新建。文件：在 Pier 编辑器打开（已打开则复用标签，支持 :行[:列]）。可一次写多个路径，例如目录加文件。在 Pier 终端内运行时默认当前窗口；同一工作目录的 pier 或 pier . 只聚焦，不另开窗口。正式安装包在应用未运行时会先启动再重试；源码开发仍须先打开 Pier。status、open、terminal 等保留词仍是命令；文件夹名叫 status 时请写 pier ./status 或 pier open status。路径不存在会报错并提示下一步，不会代为创建文件。",
+            "examples": [
+              "pier . --json",
+              "pier src/app.ts:12 --json",
+              "pier . src/app.ts --json"
             ]
           },
           {
@@ -718,7 +732,7 @@
     "faq": [
       {
         "q": "连不上 Pier？",
-        "a": "先打开 Pier 应用。若提示找不到 pier 命令：设置 → 终端 → 安装 pier 命令，然后开一个新终端。开发态请用同一工作树目录：pnpm dev，另一终端 pnpm --silent cli:dev -- status --json。"
+        "a": "正式安装包里的 pier 会尝试启动应用。若仍连不上：确认 Pier 已出现窗口，或设置 → 终端 → 安装 pier 命令后开一个新终端。源码开发请用同一工作树目录：pnpm dev，另一终端 pnpm --silent cli:dev -- status --json。"
       },
       {
         "q": "脚本如何解析？",
@@ -743,6 +757,26 @@
       {
         "q": "终端里怎么启动 Claude？",
         "a": "pier agents start claude。不要用 pier terminal open -- claude：那只是新开一个普通终端再跑命令，和命令面板里的「启动 Claude」不是同一条路。"
+      },
+      {
+        "q": "能不能像 code . 一样用 pier .？",
+        "a": "可以。pier . 与 pier open <目录> 相同：当前窗口里若已有同一工作目录的普通终端就聚焦，否则新建一块。需要再开一块时用 --split 或 pier terminal open。文件夹若恰好叫 status、open 等保留词，请写 pier ./status。"
+      },
+      {
+        "q": "能用 pier foo.ts 打开文件吗？",
+        "a": "可以。pier foo.ts 会在 Pier 编辑器打开；已经打开的同一文件会复用标签。支持 foo.ts:12 或 foo.ts:12:3 跳到行和列。一次可以写多个路径，例如 pier . src/app.ts。"
+      },
+      {
+        "q": "在 Pier 自己的终端里再跑 pier 会怎样？",
+        "a": "默认留在当前窗口。同一工作目录的 pier 或 pier . 只把窗口和这块终端带到前台，不会再开一个 Pier，也不会再新建终端。来源窗口已经关掉时，会改到最近聚焦的窗口。"
+      },
+      {
+        "q": "应用没开时，pier 会自动启动吗？",
+        "a": "正式安装包里的 pier 在连不上时会启动应用并重试。源码开发请先 pnpm dev，再用 pnpm --silent cli:dev；不要用安装包里的 pier 去拉起开发实例。"
+      },
+      {
+        "q": "文件夹名叫 files 或 git 怎么办？",
+        "a": "files、git 不是保留词：当前目录下确实有这个文件夹时，pier files 会按路径打开它。保留词只有 status、open、terminal 等；不确定时写 pier ./files。"
       }
     ],
     "blocked": {

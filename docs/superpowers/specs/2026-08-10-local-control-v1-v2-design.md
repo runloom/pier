@@ -14,6 +14,8 @@
 **相关代码（现状 v1）：**
 `bin/pier.mjs` · `bin/pier-cli-parser.js` · `src/main/adapters/cli/local-control/server.ts` · `src/shared/contracts/commands.ts` · `src/main/app-core/command-router.ts` · `src/shared/contracts/permissions.ts`
 
+**相关产品规格（不改传输）：** 路径简写 / 目录工作面 / 文件编辑器 / 生产包启动见 [`2026-08-29-cli-path-open-design.md`](./2026-08-29-cli-path-open-design.md)。仍走 v1 `panel.open`。
+
 ---
 
 ## 0. 金标准判定
@@ -463,6 +465,7 @@ T1–T5 ⊆ **产品 W1**；T6⊆W2；T7⊆W3。
 - Canvas `cli.transport`：产品语义与授权叙事
 - **本文：** socket/帧/会话/cursor 的唯一传输权威
 - 实现 PR：改 wire 必须改本文 + T-F* 测试；改产品边界必须改 Canvas
+- 路径简写与打开（`pier .` / 文件 / 生产启动，已 shipped）：产品语义见 [`2026-08-29-cli-path-open-design.md`](./2026-08-29-cli-path-open-design.md) 与手册 Canvas；**不**改 v1/v2 帧
 
 Canvas 侧应增加 transport 条目指向本文（见同提交/后续补丁）：
 

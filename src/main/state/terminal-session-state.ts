@@ -58,6 +58,7 @@ export {
   listRunningAgentPanelIds,
   peekTerminalPanelAgent,
   peekTerminalPanelContext,
+  peekTerminalPanelTask,
 } from "./terminal-session-store.ts";
 
 const ensureStore = ensureTerminalSessionStore;

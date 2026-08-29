@@ -1,12 +1,12 @@
 # Pier 本机 CLI 使用手册
 
-`pier` 用于控制本机已经打开的 Pier：打开项目、定位窗口和面板、操作终端、查看智能体状态，以及管理 Git 工作树。它不是远程 API，也不替代 Claude Code、Codex、OpenCode 等工具自己的命令行。
+`pier` 用于控制本机 Pier：打开项目、定位窗口和面板、操作终端、查看智能体状态，以及管理 Git 工作树。它不是远程 API，也不替代 Claude Code、Codex、OpenCode 等工具自己的命令行。
 
 > 本页是 GitHub 可直接阅读的入口。应用内的交互版手册由 [`pier-cli-user-manual.canvas.tsx`](./pier-cli-user-manual.canvas.tsx) 和 [`data.json`](./data.json) 提供；其中的返回内容是阅读用示意，脚本应检查当前 `--json` 响应中的 `ok`、`data` 或 `error`。
 
 ## 60 秒上手
 
-先启动 Pier，并在应用中打开一个窗口。发布版不会自动修改 Shell 的 `PATH`；如果 Pier 位于默认的 `/Applications`，先在当前终端运行：
+正式安装包里的 `pier` 在应用未运行时会先启动再执行。发布版不会自动修改 Shell 的 `PATH`；如果 Pier 位于默认的 `/Applications`，先在当前终端运行：
 
 ```bash
 export PATH="/Applications/Pier.app/Contents/Resources/bin:$PATH"
@@ -18,8 +18,8 @@ export PATH="/Applications/Pier.app/Contents/Resources/bin:$PATH"
 # 1. 确认已连接到本机 Pier
 pier status --json
 
-# 2. 在 Pier 中打开当前项目
-pier open . --json
+# 2. 在 Pier 中打开当前项目（已有同一工作目录的普通终端则聚焦）
+pier . --json
 
 # 3. 查看当前窗口和面板
 pier windows list --json
@@ -52,15 +52,21 @@ pnpm --silent cli:dev -- status --json
 ## 打开项目与组织面板
 
 ```bash
-# 打开目录；也可在当前布局右侧分屏
+# 打开当前目录；已有同一工作目录的普通终端则聚焦，否则新建
+pier . --json
+
+# 打开指定目录；也可在当前布局右侧再拆一块
 pier open /path/to/repo --json
 pier open . --split right --json
+
+# 打开文件（已打开则复用标签；可带 :行[:列]）
+pier src/app.ts:12 --json
 
 # 找到并聚焦面板
 pier panels list --json
 pier panels focus <panelId> --json
 
-# 新开终端
+# 新开终端（这条永远新建，不复用）
 pier terminal open --cwd . --json
 pier terminal open --cwd . --json -- claude
 ```
