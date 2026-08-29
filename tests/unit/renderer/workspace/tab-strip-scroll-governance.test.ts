@@ -80,6 +80,11 @@ describe("tab strip scroll ownership governance", () => {
       "utf8"
     );
     expect(reveal).toContain("withProgrammaticTabStripScroll");
+    expect(reveal).toContain("ResizeObserver");
+    expect(reveal).toContain("REVEAL_SETTLE_TIMEOUT_MS");
+    expect(reveal).not.toMatch(
+      /requestAnimationFrame\(\(\)\s*=>\s*\{[\s\S]*?requestAnimationFrame\(/
+    );
   });
 
   it("keeps the dockview-core R2 patch (preserve Scrollbar offset)", () => {

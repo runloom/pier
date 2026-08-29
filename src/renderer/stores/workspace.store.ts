@@ -12,6 +12,10 @@ import {
   setDockviewPanelSize,
 } from "@/components/workspace/dockview-panel-size.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import {
+  withinGroupPosition,
+  withinPanelPosition,
+} from "@/lib/workspace/panel-insert.ts";
 import { prepareTabStripScrollsForMaximizeLayoutMutation } from "@/lib/workspace/tab-strip-scroll.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
 import {
@@ -167,12 +171,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const id = uniquePanelId(api, "welcome");
     const group = api.activeGroup;
     if (group) {
-      // 有 active group → 在该 group 内加 tab (direction within)
+      // 空白 Welcome 贴条尾（+ 在 header 右）；相关打开走 after-active。
       api.addPanel({
         id,
         component: "welcome",
         title: "Welcome",
-        position: { referenceGroup: group, direction: "within" },
+        position: withinGroupPosition(group, "end"),
       });
     } else {
       // 无 active group → 新建 group
@@ -221,13 +225,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         return { referencePanel: referencePanel.id, direction: splitDirection };
       }
       if (opts?.referencePanelId && referencePanel) {
-        return {
-          referencePanel: referencePanel.id,
-          direction: "within" as const,
-        };
+        const referenceGroup =
+          api.groups?.find((group) =>
+            group.panels.some((panel) => panel.id === referencePanel.id)
+          ) ?? null;
+        return withinPanelPosition(referencePanel.id, referenceGroup);
       }
       if (activeGroup) {
-        return { referenceGroup: activeGroup, direction: "within" as const };
+        return withinGroupPosition(activeGroup);
       }
       return { direction: "right" as const };
     })();

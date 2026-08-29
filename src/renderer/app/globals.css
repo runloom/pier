@@ -1026,7 +1026,8 @@ body {
    - 与状态栏 agent 扫光同语汇；颜色分轨（--pier-tab-running-accent）
    - 稳底 trough + 扫光 highlight；亮色走经典进度条语汇（极淡轨 + 纯色扫带）
    - running 时顶缘由 shimmer 独占：关闭实心选中 ::after，避免「线下一轨」叠成底部附属感
-   - 几何：外层 .dv-tab::before，top:0 挨紧顶部；S3/S2 高 2px / S1 高 1px
+   - 几何：内层 `.pier-tab-running-bar`（不占 `.dv-tab::before`；短竖线是真实节点）
+   - S3/S2 高 2px / S1 高 1px
    - 上下分屏（对齐 VS Code editorGroup.border + tab.activeBorderTop）：
      必须压过 dockview `.dv-separator-border .dv-view::before`（否则
      z-index 5 盖住扫光）。idle 线画在下层 `.dv-tabs-container::after`
@@ -1034,7 +1035,9 @@ body {
      用 inset 接上。竖向 hover 只绑被悬停的 sash::before（1.5px，
      与横向同粗、同缝 top/left: 2px），禁止容器 :has 误亮其它 pane
    - accent：S3=primary（同选中铬，防变深），S2/S1=muted-foreground
-   - 选择器必须压过 dockview 非首个 tab 的竖分割线 ::before（同伪元素、后加载）
+   - 面板 tab 铬（分割短线 / 悬停）见
+     docs/superpowers/specs/2026-08-29-panel-tab-chrome-gold-standard.md
+     真实节点 `[data-slot="panel-tab-separator"]`；悬停不藏线；选中两侧才藏
 
    窗口聚焦位: html[data-window-focused] (installWindowFocusAttribute) */
 
@@ -1077,6 +1080,7 @@ body {
   );
 
   /* — 分隔 / 边框 — */
+  /* dockview 自带通高 ::before 关掉；短竖线走 panel-tab-separator 真实节点。 */
   --dv-tab-divider-color: transparent;
   --dv-separator-border: var(--border);
   --dv-paneview-header-border-color: var(--border);
@@ -1115,6 +1119,44 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/*
+ * 面板 tab 铬 — 权威：2026-08-29-panel-tab-chrome-gold-standard.md
+ * 外层去掉 dockview 默认 padding；内层 padding-inline 12px 6px；短线贴接缝。
+ */
+.dockview-theme-pier .dv-tab {
+  padding: 0;
+}
+
+.dockview-theme-pier .dv-tabs-container.dv-horizontal .dv-tab::before {
+  content: none;
+  display: none;
+}
+
+.dockview-theme-pier [data-slot="panel-tab-separator"] {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  z-index: 5;
+  width: 1px;
+  height: 0.875rem;
+  pointer-events: none;
+  background-color: color-mix(in oklab, var(--foreground) 14%, transparent);
+  transform: translateY(-50%);
+  transition: opacity 80ms;
+}
+
+/* 第一颗没有左邻；选中底已经切开，只藏选中两侧。悬停不藏。 */
+.dockview-theme-pier
+  .dv-tab:not(.dv-tab ~ .dv-tab)
+  [data-slot="panel-tab-separator"],
+.dockview-theme-pier .dv-tab.dv-active-tab [data-slot="panel-tab-separator"],
+.dockview-theme-pier
+  .dv-tab.dv-active-tab
+  + .dv-tab
+  [data-slot="panel-tab-separator"] {
+  opacity: 0;
+}
+
 /* 统一内容区底色 — transparent 以便 Ghostty NSView 透过 */
 .dockview-theme-pier .dv-dockview,
 .dockview-theme-pier .dv-groupview {
@@ -1146,9 +1188,25 @@ body {
   border-radius: var(--shell-scrollbar-radius);
 }
 
-/* — hover: 非选中 tab 微亮 — */
-.dockview-theme-pier .dv-tab.dv-inactive-tab:hover {
-  background-color: color-mix(in oklab, var(--foreground) 9%, var(--sidebar));
+/* 悬停：底是主信号；标题跟到 foreground。
+ * dockview 在 `.dv-groupview… > .dv-tab.dv-inactive-tab`（0,6,0）写死
+ * transparent 底和 muted 字色，短选择器盖不住。
+ * 不许做成选中（禁止换 --background / 圆角页签）。 */
+.dockview-theme-pier
+  .dv-groupview
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-inactive-tab:hover {
+  background-color: var(--list-hover-bg);
+  color: var(--foreground);
+}
+
+.dockview-theme-pier
+  .dv-groupview
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-inactive-tab:hover
+  .dv-default-tab-content {
   color: var(--foreground);
 }
 
@@ -1178,10 +1236,11 @@ body {
   max-width: none;
   min-width: 0;
   width: 100%;
-  padding-inline: 6px 3px;
-  /* 活跃任务圆点占左缘槽位：4px left + 6px 点 + 4px gap = 14 */
+  /* 左 12px 对齐图标；右 6px：× 是 18px 热区里的 12px 字形，已自带 ~3px 内缩。 */
+  padding-inline: 12px 6px;
+  /* 活跃任务圆点占左缘槽位：在 12px gutter 上再让出 6px 点 */
   &[data-pier-tab-has-active-task="true"] {
-    padding-left: 14px;
+    padding-left: 18px;
   }
 }
 
@@ -1387,7 +1446,7 @@ body {
  *   改用纯色块 (Solid Background) 配合 background-position/size 实现真正的滑动与拉伸。
  *   因为是纯色块渲染，边缘在任何主题下都绝对锐利，彻底解决“发脏”问题。
  *
- * 几何：外层 .dv-tab::before，top:0 挨紧顶部，满宽 absolute，不占布局。
+ * 几何：`.pier-tab-running-bar` 贴 tab 顶缘，不占 `.dv-tab::before`（竖分割线）。
  * 运动：background-position 与 background-size 协同动画，形成拉伸滑动。
  * 材质：稳底 trough（background-color）+ 纯色块 highlight（background-image）。
  * 颜色：S3=primary（与 idle 选中同色，勿用 status-info 压暗）；S1/S2=muted。
@@ -1494,31 +1553,19 @@ body {
 }
 
 /*
- * 全宽轨道 ::before，内部跑纯色滑块。
+ * 全宽轨道在 `.pier-tab-running-bar`，内部跑纯色滑块。
  * 默认 S1：细 1px + muted；稳底用 background-color；滑块用 background-image。
- * 必须压过 dockview `.dv-tab:not(:first-child)::before` 竖分割线（同伪元素、后加载）：
- * 复位 left/width/height，避免变成 1px×100% 透明竖缝。
+ * overflow 菜单 running 态用紧凑 spinner 图标，不再复用顶轨 shimmer。
  */
-.dockview-theme-pier
-  .dv-tabs-container
-  > .dv-tab:has([data-tab-status="running"])::before,
-.dockview-theme-pier
-  .dv-tabs-container.dv-horizontal
-  .dv-tab:not(:first-child):has([data-tab-status="running"])::before,
-.dockview-theme-pier
-  .dv-tabs-container.dv-vertical
-  .dv-tab:not(:first-child):has([data-tab-status="running"])::before {
-  content: "";
+.dockview-theme-pier .dv-tab .pier-tab-running-bar {
   position: absolute;
   top: 0;
-  left: auto;
-  inset-inline: 0;
+  left: 0;
   z-index: 2;
-  width: auto;
+  width: 100%;
   height: 1px;
   pointer-events: none;
   background-color: var(--pier-tab-shimmer-trough);
-  /* 纯色块，完全摒弃渐变 */
   background-image: linear-gradient(
     var(--pier-tab-shimmer-highlight),
     var(--pier-tab-shimmer-highlight)
@@ -1552,13 +1599,15 @@ body {
   .dv-groupview.dv-inactive-group
   > .dv-tabs-and-actions-container
   .dv-tabs-container
-  > .dv-tab.dv-active-tab:has([data-tab-status="running"])::before,
+  > .dv-tab.dv-active-tab
+  .pier-tab-running-bar,
 :root[data-window-focused="false"]
   .dockview-theme-pier
   .dv-groupview.dv-active-group
   > .dv-tabs-and-actions-container
   .dv-tabs-container
-  > .dv-tab.dv-active-tab:has([data-tab-status="running"])::before {
+  > .dv-tab.dv-active-tab
+  .pier-tab-running-bar {
   height: 2px;
 }
 
@@ -1582,7 +1631,8 @@ body {
   .dv-groupview.dv-active-group
   > .dv-tabs-and-actions-container
   .dv-tabs-container
-  > .dv-tab.dv-active-tab:has([data-tab-status="running"])::before {
+  > .dv-tab.dv-active-tab
+  .pier-tab-running-bar {
   height: 2px;
   box-shadow: 0 0 4px
     color-mix(in oklab, var(--pier-tab-shimmer-highlight) 32%, transparent);
@@ -1594,37 +1644,13 @@ body {
   .dv-groupview.dv-active-group
   > .dv-tabs-and-actions-container
   .dv-tabs-container
-  > .dv-tab.dv-active-tab:has([data-tab-status="running"])::before {
+  > .dv-tab.dv-active-tab
+  .pier-tab-running-bar {
   box-shadow: none;
 }
 
-/*
- * dockview tab 内层 DOM 条只做 a11y 锚点，视觉已迁到 .dv-tab::before。
- * overflow 菜单 running 态用紧凑 spinner 图标，不再复用顶轨 shimmer。
- */
-.dockview-theme-pier .dv-tab .pier-tab-running-bar {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  white-space: nowrap;
-  border: 0;
-  clip: rect(0, 0, 0, 0);
-  clip-path: inset(50%);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .dockview-theme-pier
-    .dv-tabs-container
-    > .dv-tab:has([data-tab-status="running"])::before,
-  .dockview-theme-pier
-    .dv-tabs-container.dv-horizontal
-    .dv-tab:not(:first-child):has([data-tab-status="running"])::before,
-  .dockview-theme-pier
-    .dv-tabs-container.dv-vertical
-    .dv-tab:not(:first-child):has([data-tab-status="running"])::before {
+  .dockview-theme-pier .dv-tab .pier-tab-running-bar {
     animation: none;
     background-image: none;
     box-shadow: none;

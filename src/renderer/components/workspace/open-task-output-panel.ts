@@ -9,6 +9,7 @@ import {
   type ActivateWorkspacePanelResult,
   activateWorkspacePanel,
 } from "@/lib/workspace/panel-activation.ts";
+import { withinGroupPosition } from "@/lib/workspace/panel-insert.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
 import {
   findMergeableTaskOutputPanel,
@@ -129,14 +130,7 @@ export async function openTaskOutputPanel(
       taskOutput: resolvedParams,
     },
     title: resolvedParams.label,
-    ...(activeGroup
-      ? {
-          position: {
-            direction: "within" as const,
-            referenceGroup: activeGroup,
-          },
-        }
-      : {}),
+    ...(activeGroup ? { position: withinGroupPosition(activeGroup) } : {}),
   });
   scheduleRevealDockviewTabByPanelId(id);
   return activateWorkspacePanel(api, id, { reveal: "always" });

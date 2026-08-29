@@ -8,6 +8,10 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { resolvePanelPathAnchor } from "@/stores/workspace-panel-helpers.ts";
 import { activateWorkspacePanel } from "../../workspace/panel-activation.ts";
+import {
+  withinGroupPosition,
+  withinPanelPosition,
+} from "../../workspace/panel-insert.ts";
 import { scheduleRevealDockviewTabByPanelId } from "../../workspace/tab-visibility.ts";
 import { getPluginPanelRegistrations } from "../panel-registry.ts";
 import {
@@ -219,6 +223,7 @@ function addPanelPosition(
 ):
   | {
       direction: "above" | "below" | "left" | "right" | "within";
+      index?: number;
       referenceGroup?: DockviewGroupRef;
       referencePanel?: string;
     }
@@ -232,10 +237,13 @@ function addPanelPosition(
     return { direction: split, referencePanel: splitAnchor.id };
   }
   if (options.referencePanelId && explicitReference) {
-    return { direction: "within", referencePanel: explicitReference.id };
+    return withinPanelPosition(
+      explicitReference.id,
+      groupForPanel(api, explicitReference.id)
+    );
   }
   if (fallbackGroup) {
-    return { direction: "within", referenceGroup: fallbackGroup };
+    return withinGroupPosition(fallbackGroup);
   }
   return;
 }
@@ -254,7 +262,7 @@ function addNewPanelInstance(input: {
   const position = addPanelPosition(
     input.api,
     input.options,
-    input.addPanelTargetGroup
+    input.addPanelTargetGroup ?? input.api.activeGroup ?? null
   );
   input.api.addPanel({
     id: input.options.instanceId,

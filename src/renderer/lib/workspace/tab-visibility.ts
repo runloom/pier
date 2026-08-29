@@ -1,6 +1,8 @@
 import { withProgrammaticTabStripScroll } from "./tab-strip-scroll.ts";
 
 const REVEAL_PADDING_PX = 8;
+/** Wait for React header commit + first layout; no nested rAF. */
+const REVEAL_SETTLE_TIMEOUT_MS = 120;
 let dockviewTabRevealRoot: ParentNode | null = null;
 let cancelScheduledReveal: (() => void) | null = null;
 
@@ -8,7 +10,7 @@ export function setDockviewTabRevealRoot(root: ParentNode | null): void {
   dockviewTabRevealRoot = root;
 }
 
-/** Abort a pending rAF reveal (user scroll wins; K3). */
+/** Abort a pending settle (user scroll wins; K3). */
 export function abortScheduledDockviewTabReveal(): void {
   cancelScheduledReveal?.();
   cancelScheduledReveal = null;
@@ -49,6 +51,10 @@ export function revealElementWithinScrollContainer(
   });
 }
 
+function tabElementIsLaidOut(tabElement: HTMLElement): boolean {
+  return tabElement.getBoundingClientRect().width > 0;
+}
+
 export function revealDockviewTabElement(tabContentElement: HTMLElement): void {
   const tabElement = tabContentElement.closest<HTMLElement>(".dv-tab");
   if (!tabElement) {
@@ -70,12 +76,42 @@ export function revealDockviewTabByPanelId(
   for (const contentElement of root.querySelectorAll<HTMLElement>(
     "[data-panel-tab-id]"
   )) {
-    if (contentElement.dataset.panelTabId === panelId) {
-      revealDockviewTabElement(contentElement);
-      return true;
+    if (contentElement.dataset.panelTabId !== panelId) {
+      continue;
     }
+    const tabElement = contentElement.closest<HTMLElement>(".dv-tab");
+    if (!(tabElement && tabElementIsLaidOut(tabElement))) {
+      return false;
+    }
+    revealDockviewTabElement(contentElement);
+    return true;
   }
   return false;
+}
+
+function tabElementForPanelId(
+  panelId: string,
+  root: ParentNode
+): HTMLElement | null {
+  for (const contentElement of root.querySelectorAll<HTMLElement>(
+    "[data-panel-tab-id]"
+  )) {
+    if (contentElement.dataset.panelTabId !== panelId) {
+      continue;
+    }
+    return contentElement.closest<HTMLElement>(".dv-tab");
+  }
+  return null;
+}
+
+/** Host/document size does not change when a tab goes 0→N; watch the tab. */
+function observeTargetsForReveal(panelId: string, root: ParentNode): Element[] {
+  const tab = tabElementForPanelId(panelId, root);
+  if (tab) {
+    const container = tab.closest(".dv-tabs-container");
+    return container ? [tab, container] : [tab];
+  }
+  return [...root.querySelectorAll(".dv-tabs-container")];
 }
 
 export function scheduleRevealDockviewTabByPanelId(
@@ -87,22 +123,83 @@ export function scheduleRevealDockviewTabByPanelId(
     return;
   }
   abortScheduledDockviewTabReveal();
-  if (typeof requestAnimationFrame === "function") {
-    let cancelled = false;
-    const frame = requestAnimationFrame(() => {
+
+  let cancelled = false;
+  let frame = 0;
+  let timeoutId: ReturnType<typeof setTimeout> | 0 = 0;
+  let observer: ResizeObserver | null = null;
+
+  const dispose = (): void => {
+    if (frame !== 0 && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(frame);
+      frame = 0;
+    }
+    if (timeoutId !== 0) {
+      clearTimeout(timeoutId);
+      timeoutId = 0;
+    }
+    observer?.disconnect();
+    observer = null;
+    if (cancelScheduledReveal === abort) {
+      cancelScheduledReveal = null;
+    }
+  };
+
+  const abort = (): void => {
+    cancelled = true;
+    dispose();
+  };
+
+  const revealed = (): boolean => {
+    if (cancelled) {
+      return true;
+    }
+    if (revealDockviewTabByPanelId(panelId, targetRoot)) {
+      abort();
+      return true;
+    }
+    return false;
+  };
+
+  cancelScheduledReveal = abort;
+
+  if (revealed()) {
+    return;
+  }
+
+  const watchUntilTimeout = (): void => {
+    if (cancelled) {
+      return;
+    }
+    if (typeof ResizeObserver !== "undefined") {
+      const targets = observeTargetsForReveal(panelId, targetRoot);
+      if (targets.length > 0) {
+        observer = new ResizeObserver(() => {
+          revealed();
+        });
+        for (const target of targets) {
+          observer.observe(target);
+        }
+      }
+    }
+    timeoutId = setTimeout(() => {
       if (cancelled) {
         return;
       }
-      cancelScheduledReveal = null;
       revealDockviewTabByPanelId(panelId, targetRoot);
-    });
-    cancelScheduledReveal = () => {
-      cancelled = true;
-      if (typeof cancelAnimationFrame === "function") {
-        cancelAnimationFrame(frame);
+      abort();
+    }, REVEAL_SETTLE_TIMEOUT_MS);
+  };
+
+  if (typeof requestAnimationFrame === "function") {
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      if (revealed()) {
+        return;
       }
-    };
+      watchUntilTimeout();
+    });
     return;
   }
-  revealDockviewTabByPanelId(panelId, targetRoot);
+  watchUntilTimeout();
 }

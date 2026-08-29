@@ -418,6 +418,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       >
         <X className="size-3" />
       </button>
+      <span aria-hidden="true" data-slot="panel-tab-separator" />
     </div>
   );
 }

@@ -481,7 +481,13 @@ describe("plugin panel instances", () => {
 
     expect(result).toEqual({ kind: "opened" });
     expect(api.addPanel).toHaveBeenCalledWith(
-      expect.not.objectContaining({ position: expect.anything() })
+      expect.objectContaining({
+        position: {
+          direction: "within",
+          index: 0,
+          referenceGroup: api.activeGroup,
+        },
+      })
     );
   });
 
@@ -695,6 +701,7 @@ describe("plugin panel instances", () => {
       expect.objectContaining({
         position: {
           direction: "within",
+          index: 2,
           referenceGroup: groups[1],
         },
       })

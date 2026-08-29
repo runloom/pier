@@ -3,6 +3,7 @@
 import type * as React from "react";
 import { Drawer as DrawerPrimitive } from "vaul";
 
+import { OverlayScrimCatchers } from "./dialog.tsx";
 import { cn } from "./utils.ts";
 
 function Drawer({
@@ -31,17 +32,21 @@ function DrawerClose({
 
 function DrawerOverlay({
   className,
+  children,
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Overlay>) {
   return (
     <DrawerPrimitive.Overlay
       className={cn(
-        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 fixed top-[var(--app-titlebar-height)] right-0 bottom-0 left-0 z-50 bg-overlay-scrim data-closed:animate-out data-open:animate-in",
+        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 pointer-events-none fixed inset-0 z-50 bg-overlay-scrim data-closed:animate-out data-open:animate-in",
         className
       )}
       data-slot="drawer-overlay"
       {...props}
-    />
+    >
+      <OverlayScrimCatchers allowTitlebarDismiss />
+      {children}
+    </DrawerPrimitive.Overlay>
   );
 }
 

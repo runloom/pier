@@ -4,6 +4,7 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 import { Button } from "./button.tsx";
+import { OverlayScrimCatchers } from "./dialog.tsx";
 import { isTopmostModalContent } from "./modal-layer.ts";
 import { useDeferredDialogOpen } from "./use-deferred-dialog-open.ts";
 import { useTerminalOverlayRegistration } from "./use-terminal-overlay.tsx";
@@ -51,6 +52,7 @@ function AlertDialogPortal({
 
 function AlertDialogOverlay({
   className,
+  children,
   terminalOverlayId,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Overlay> & {
@@ -61,13 +63,16 @@ function AlertDialogOverlay({
   return (
     <AlertDialogPrimitive.Overlay
       className={cn(
-        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 fixed top-[var(--app-titlebar-height)] right-0 bottom-0 left-0 z-50 bg-overlay-scrim duration-100 data-closed:animate-out data-open:animate-in",
+        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 pointer-events-none fixed inset-0 z-50 bg-overlay-scrim duration-100 data-closed:animate-out data-open:animate-in",
         className
       )}
       data-slot="alert-dialog-overlay"
       {...props}
       ref={composedRef}
-    />
+    >
+      <OverlayScrimCatchers />
+      {children}
+    </AlertDialogPrimitive.Overlay>
   );
 }
 
