@@ -73,7 +73,7 @@ describe("app release workflow", () => {
     );
     const agents = await readFile(join(process.cwd(), "AGENTS.md"), "utf8");
     const skill = await readFile(
-      join(process.cwd(), ".agents/skills/publish-project/SKILL.md"),
+      join(process.cwd(), ".pier/skills/library/publish-project/SKILL.md"),
       "utf8"
     );
     expect(gold).toContain("宿主发布候选版金标准");
