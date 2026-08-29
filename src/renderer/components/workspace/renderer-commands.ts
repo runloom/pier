@@ -338,7 +338,9 @@ async function runWorkspaceRendererCommandAsync(
         const opened = openFilesDiskPathForCommand({
           path: envelope.command.path,
           root: envelope.command.root,
-          revealTree: envelope.command.revealTree,
+          ...(envelope.command.revealTree === undefined
+            ? {}
+            : { revealTree: envelope.command.revealTree }),
           ...(envelope.command.column === undefined
             ? {}
             : { column: envelope.command.column }),

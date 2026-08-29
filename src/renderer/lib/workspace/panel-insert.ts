@@ -13,8 +13,8 @@ export interface PanelInsertPanelLike {
 }
 
 export interface PanelInsertGroupLike {
-  activePanel?: PanelInsertPanelLike | null;
-  panels?: readonly PanelInsertPanelLike[];
+  activePanel?: PanelInsertPanelLike | null | undefined;
+  panels?: readonly PanelInsertPanelLike[] | undefined;
 }
 
 export function resolvePanelInsertIndex(

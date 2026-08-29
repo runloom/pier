@@ -119,7 +119,10 @@ async function findMatchingShellTerminal(
       continue;
     }
     if (await sameResolvedPath(cwd, dir)) {
-      matches.push({ id: panel.id, active: panel.active });
+      matches.push({
+        id: panel.id,
+        ...(typeof panel.active === "boolean" ? { active: panel.active } : {}),
+      });
     }
   }
   const active = matches.find((item) => item.active);

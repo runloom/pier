@@ -110,7 +110,7 @@ describe("scheduleRevealDockviewTabByPanelId settle", () => {
   });
 
   it("waits one frame when the tab is not in the tree yet", () => {
-    let frame: FrameRequestCallback | null = null;
+    let frame: FrameRequestCallback | undefined;
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
       frame = cb;
       return 1;
@@ -130,7 +130,7 @@ describe("scheduleRevealDockviewTabByPanelId settle", () => {
   });
 
   it("aborts an in-flight settle when the user scroll wins", () => {
-    let frame: FrameRequestCallback | null = null;
+    let frame: FrameRequestCallback | undefined;
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
       frame = cb;
       return 1;
@@ -149,7 +149,7 @@ describe("scheduleRevealDockviewTabByPanelId settle", () => {
   });
 
   it("retries after layout when the first measure has no width", () => {
-    let notify: (() => void) | null = null;
+    let notify: (() => void) | undefined;
     const observed: Element[] = [];
     vi.stubGlobal(
       "ResizeObserver",

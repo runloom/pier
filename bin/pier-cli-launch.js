@@ -7,6 +7,14 @@ export const LAUNCH_WAIT_MS = 15_000;
 export const LAUNCH_POLL_MS = 200;
 export const NO_RENDERER_WINDOW_MESSAGE = "no renderer window available";
 
+/**
+ * @param {{
+ *   argv1?: string,
+ *   env?: NodeJS.ProcessEnv,
+ *   execPath?: string,
+ *   platform?: NodeJS.Platform,
+ * }} [opts]
+ */
 export function isPackagedPierCli({
   argv1 = process.argv[1],
   env = process.env,
@@ -54,6 +62,14 @@ export function findWorktreeDevProfile(
   return null;
 }
 
+/**
+ * @param {{
+ *   cwd?: string,
+ *   env?: NodeJS.ProcessEnv,
+ *   hasDevProfile?: boolean,
+ *   packaged?: boolean,
+ * }} [opts]
+ */
 export function shouldOpenApplication({
   cwd = process.cwd(),
   env = process.env,
@@ -77,6 +93,12 @@ export function shouldOpenApplication({
   return true;
 }
 
+/**
+ * @param {{
+ *   canLaunch?: boolean,
+ *   env?: NodeJS.ProcessEnv,
+ * }} [opts]
+ */
 export function shouldWaitForControlSocket({
   canLaunch,
   env = process.env,
@@ -103,6 +125,15 @@ export function openPierApp({ spawnFn = spawn } = {}) {
   spawnFn("open", ["-a", "Pier"], { detached: true, stdio: "ignore" }).unref();
 }
 
+/**
+ * @param {{
+ *   now?: () => number,
+ *   pollMs?: number,
+ *   request?: () => unknown,
+ *   sleep?: (ms: number) => Promise<unknown>,
+ *   timeoutMs?: number,
+ * }} opts
+ */
 export async function retryUntilRendererWindow({
   now = Date.now,
   pollMs = LAUNCH_POLL_MS,
@@ -119,6 +150,18 @@ export async function retryUntilRendererWindow({
   return result;
 }
 
+/**
+ * @param {string} socketPath
+ * @param {{
+ *   connectFn?: (path: string) => {
+ *     destroy: () => void,
+ *     once: (event: string, listener: (...args: unknown[]) => void) => unknown,
+ *   },
+ *   now?: () => number,
+ *   pollMs?: number,
+ *   timeoutMs?: number,
+ * }} [opts]
+ */
 export function waitForSocket(
   socketPath,
   {
