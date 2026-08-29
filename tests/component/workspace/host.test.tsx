@@ -1,5 +1,5 @@
 import type { TerminalFocusRequest } from "@shared/contracts/terminal.ts";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { DockviewReact, type DockviewReadyEvent } from "dockview-react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -272,6 +272,18 @@ function waitMs(ms: number): Promise<void> {
   const { promise, resolve } = Promise.withResolvers<void>();
   setTimeout(resolve, ms);
   return promise;
+}
+
+/** fromJSON 完成前 present() 是空操作，避免空 reconcile 杀掉活 PTY。 */
+async function completeHostReady(
+  api: DockviewReadyEvent["api"]
+): Promise<void> {
+  await act(async () => {
+    vi.mocked(DockviewReact).mock.lastCall?.[0]?.onReady?.({ api });
+  });
+  await waitFor(() => {
+    expect(window.pier.terminal.reconcile).toHaveBeenCalled();
+  });
 }
 
 describe("WorkspaceHost", () => {
@@ -643,7 +655,7 @@ describe("WorkspaceHost", () => {
     );
   });
 
-  it("publishes Web ownership when Dockview selects a Web successor", () => {
+  it("publishes Web ownership when Dockview selects a Web successor", async () => {
     const closing = createPanel({
       component: "terminal",
       id: "terminal-1",
@@ -657,9 +669,7 @@ describe("WorkspaceHost", () => {
     });
     const dockview = createDockviewApi([closing, successor], closing);
     render(<WorkspaceHost />);
-    vi.mocked(DockviewReact).mock.lastCall?.[0]?.onReady?.({
-      api: dockview.api,
-    });
+    await completeHostReady(dockview.api);
     vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
 
     closing.api.isActive = false;
@@ -675,7 +685,7 @@ describe("WorkspaceHost", () => {
     );
   });
 
-  it("hides inactive terminals when a web panel is maximized", () => {
+  it("hides inactive terminals when a web panel is maximized", async () => {
     const activeWeb = createPanel({
       component: "welcome",
       id: "welcome-1",
@@ -696,10 +706,12 @@ describe("WorkspaceHost", () => {
       [activeWeb, hiddenTerminal, visibleTerminal],
       activeWeb
     );
+    vi.mocked(dockview.api.hasMaximizedGroup).mockReturnValue(false);
 
     render(<WorkspaceHost />);
-    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
-    props?.onReady?.({ api: dockview.api });
+    await completeHostReady(dockview.api);
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+    vi.mocked(dockview.api.hasMaximizedGroup).mockReturnValue(true);
 
     dockview.emitMaximizedGroupChange();
 
@@ -725,7 +737,7 @@ describe("WorkspaceHost", () => {
     );
   });
 
-  it("resyncs terminal visibility when tabs change while maximized", () => {
+  it("resyncs terminal visibility when tabs change while maximized", async () => {
     const terminal = createPanel({
       component: "terminal",
       id: "terminal-1",
@@ -741,8 +753,7 @@ describe("WorkspaceHost", () => {
     const dockview = createDockviewApi([terminal, web], terminal);
 
     render(<WorkspaceHost />);
-    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
-    props?.onReady?.({ api: dockview.api });
+    await completeHostReady(dockview.api);
     dockview.emitMaximizedGroupChange();
     vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
 
@@ -765,7 +776,7 @@ describe("WorkspaceHost", () => {
     );
   });
 
-  it("does not show a maximized active terminal until its renderer anchor is visible", () => {
+  it("does not show a maximized active terminal until its renderer anchor is visible", async () => {
     const terminal = createPanel({
       component: "terminal",
       id: "terminal-1",
@@ -776,8 +787,7 @@ describe("WorkspaceHost", () => {
     vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue(null);
 
     render(<WorkspaceHost />);
-    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
-    props?.onReady?.({ api: dockview.api });
+    await completeHostReady(dockview.api);
     dockview.emitMaximizedGroupChange();
 
     expect(flushTerminalLayoutFramesTrailing).toHaveBeenCalledWith(
@@ -807,7 +817,7 @@ describe("WorkspaceHost", () => {
     );
   });
 
-  it("keeps visible split terminals shown outside maximized mode", () => {
+  it("keeps visible split terminals shown outside maximized mode", async () => {
     const activeWeb = createPanel({
       component: "welcome",
       id: "welcome-1",
@@ -837,8 +847,7 @@ describe("WorkspaceHost", () => {
     );
 
     render(<WorkspaceHost />);
-    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
-    props?.onReady?.({ api: dockview.api });
+    await completeHostReady(dockview.api);
     dockview.emitActivePanelChange(activeWeb);
 
     expect(window.pier.terminal.applyHostSnapshot).toHaveBeenCalledWith(
@@ -858,7 +867,7 @@ describe("WorkspaceHost", () => {
     );
   });
 
-  it("resyncs terminal visibility on layout changes after leaving maximized mode", () => {
+  it("resyncs terminal visibility on layout changes after leaving maximized mode", async () => {
     const activeWeb = createPanel({
       component: "welcome",
       id: "welcome-1",
@@ -880,9 +889,7 @@ describe("WorkspaceHost", () => {
     );
 
     render(<WorkspaceHost />);
-    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
-    props?.onReady?.({ api: dockview.api });
-    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+    await completeHostReady(dockview.api);
 
     dockview.emitLayoutChange();
 
@@ -898,7 +905,7 @@ describe("WorkspaceHost", () => {
     );
   });
 
-  it("does not show hidden inactive terminal panels only because their anchors are visible", () => {
+  it("does not show hidden inactive terminal panels only because their anchors are visible", async () => {
     const activeWeb = createPanel({
       component: "welcome",
       id: "welcome-1",
@@ -920,8 +927,7 @@ describe("WorkspaceHost", () => {
     );
 
     render(<WorkspaceHost />);
-    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
-    props?.onReady?.({ api: dockview.api });
+    await completeHostReady(dockview.api);
     dockview.emitLayoutChange();
 
     expect(window.pier.terminal.applyHostSnapshot).toHaveBeenCalledWith(
@@ -936,7 +942,7 @@ describe("WorkspaceHost", () => {
     );
   });
 
-  it("keeps the active terminal visible when dockview visibility lags behind its anchor", () => {
+  it("keeps the active terminal visible when dockview visibility lags behind its anchor", async () => {
     const staleActiveTerminal = createPanel({
       component: "terminal",
       id: "terminal-stale-active",
@@ -956,8 +962,7 @@ describe("WorkspaceHost", () => {
     });
 
     render(<WorkspaceHost />);
-    const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
-    props?.onReady?.({ api: dockview.api });
+    await completeHostReady(dockview.api);
     dockview.emitLayoutChange();
 
     expect(window.pier.terminal.applyHostSnapshot).toHaveBeenCalledWith(
@@ -1268,7 +1273,7 @@ describe("WorkspaceHost", () => {
     expect(window.pier.workspace.saveLayout).toHaveBeenCalledTimes(1);
   });
 
-  it("redirects a terminal focus request to an agent composer takeover instead of yielding to the native terminal", () => {
+  it("redirects a terminal focus request to an agent composer takeover instead of yielding to the native terminal", async () => {
     resetTerminalInputRoutingForTests();
     let focusRequestListener: ((req: TerminalFocusRequest) => void) | undefined;
     vi.mocked(window.pier.terminal.onFocusRequest).mockImplementation((cb) => {
@@ -1289,14 +1294,11 @@ describe("WorkspaceHost", () => {
       y: 0,
     });
     render(<WorkspaceHost />);
-    vi.mocked(DockviewReact).mock.lastCall?.[0]?.onReady?.({
-      api: dockview.api,
-    });
+    await completeHostReady(dockview.api);
     // 建立已知基线（basePanel=web），理由同上。
     requestTerminalFocusIntent("seed-panel");
     setTerminalBasePanel({ kind: "web" });
     useTerminalStore.getState().activateOverlay("test-overlay");
-    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
     const takeoverFocus = vi.fn((_reason?: string) => true);
     registerTerminalComposerTakeover("terminal-3", takeoverFocus);
 
