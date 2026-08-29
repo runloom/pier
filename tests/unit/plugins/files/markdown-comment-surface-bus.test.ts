@@ -4,7 +4,7 @@
 /**
  * Markdown 评论投影表面总线：发布/清除契约 + 预览 hook 生命周期接线。
  * 保证终端评论对话框拿到 open preview 的 surface（否则 markdown 评论
- * 插入智能体输入框时全部降级为 [unknown]）。
+ * 无法按当前预览投影，只能标 unknown）。
  */
 
 import {

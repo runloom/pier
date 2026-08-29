@@ -6,6 +6,7 @@ import {
   mergeComposerText,
   pathInLiveSet,
   processableCommentCount,
+  processableItemLocationText,
 } from "@/lib/comments/processable.ts";
 
 function thread(input: {
@@ -16,6 +17,7 @@ function thread(input: {
   oldPath?: string | null;
   path: string;
   scopeKind?: "uncommitted" | "commit";
+  side?: "new" | "old";
 }): CommentThread {
   return {
     comments: [
@@ -44,7 +46,7 @@ function thread(input: {
             ? { kind: "commit", oid: "b".repeat(40) }
             : { kind: "uncommitted" },
       },
-      side: "new",
+      side: input.side ?? "new",
     },
     updatedAt: 2,
   };
@@ -499,7 +501,7 @@ describe("listProcessableComments markdown/canvas", () => {
 });
 
 describe("formatCommentsForComposer", () => {
-  it("builds a readable bullet block with groups and status", () => {
+  it("builds a readable bullet block with groups and locators", () => {
     const text = formatCommentsForComposer(
       listProcessableComments(
         [
@@ -515,13 +517,48 @@ describe("formatCommentsForComposer", () => {
     );
     expect(text).toContain("Please address these comments:");
     expect(text).toContain("## Review");
-    expect(text).toContain("[unknown]");
     expect(text).toContain("`src/a.ts:4`");
     expect(text).toContain("rename helper");
+    expect(text).not.toMatch(/\[located\]|\[stale\]|\[soft\]|\[unknown\]/u);
     expect(text).not.toMatch(/staged|unstaged/i);
   });
 
-  it("tags canvas design-mode picks as soft when surface is open", () => {
+  it("formats markdown as path plus line range, not heading or excerpt", () => {
+    const md: CommentThread = {
+      comments: [
+        {
+          author: { kind: "user" },
+          body: "clarify this step",
+          createdAt: 1,
+          id: "md-c",
+        },
+      ],
+      createdAt: 1,
+      id: "md-t",
+      state: "open",
+      target: {
+        contentHash: "h",
+        excerpt: "reconstructed ir text",
+        headingId: "api-surface",
+        kind: "markdown",
+        path: "docs/plan.md",
+        startLine: 42,
+        endLine: 58,
+      },
+      updatedAt: 2,
+    };
+    const items = listProcessableComments([md]);
+    const text = formatCommentsForComposer(items);
+    expect(text).toContain("## Document");
+    expect(text).toContain("`docs/plan.md:42-58`");
+    expect(text).toContain("clarify this step");
+    expect(text).not.toContain("api-surface");
+    expect(text).not.toContain("reconstructed ir text");
+    expect(text).not.toMatch(/\[located\]|\[stale\]|\[soft\]|\[unknown\]/u);
+    expect(processableItemLocationText(items[0]!)).toBe("docs/plan.md:42-58");
+  });
+
+  it("formats canvas as path plus body, without projection tags", () => {
     const canvas: CommentThread = {
       comments: [
         {
@@ -557,11 +594,61 @@ describe("formatCommentsForComposer", () => {
       })
     );
     expect(text).toContain("## Canvas");
-    expect(text).toContain("[soft]");
-    expect(text).toContain("(协调智能体)");
+    expect(text).toContain("`.pier/canvases/a.canvas.tsx`");
     expect(text).toContain("你好");
-    expect(text).not.toContain("[unverified]");
-    expect(text).not.toContain("[unknown]");
+    expect(text).not.toContain("(协调智能体)");
+    expect(text).not.toMatch(/\[located\]|\[stale\]|\[soft\]|\[unknown\]/u);
+  });
+
+  it("marks git old-side locators without group names", () => {
+    const text = formatCommentsForComposer(
+      listProcessableComments(
+        [
+          thread({
+            body: "keep this guard",
+            id: "t-old",
+            line: 18,
+            path: "src/b.ts",
+            side: "old",
+          }),
+        ],
+        { livePaths: new Set(["src/b.ts"]) }
+      )
+    );
+    expect(text).toContain("`src/b.ts:18` (old)");
+    expect(text).toContain("keep this guard");
+    expect(text).not.toMatch(/staged|unstaged/i);
+    expect(text).not.toMatch(/\[located\]|\[stale\]|\[soft\]|\[unknown\]/u);
+  });
+
+  it("formats canvas declared anchors as path#id", () => {
+    const canvas: CommentThread = {
+      comments: [
+        {
+          author: { kind: "user" },
+          body: "主按钮改成提交",
+          createdAt: 1,
+          id: "cv-a",
+        },
+      ],
+      createdAt: 1,
+      id: "cv-at",
+      state: "open",
+      target: {
+        anchorId: "login-submit",
+        excerpt: "登录",
+        kind: "canvas",
+        label: "登录",
+        path: ".pier/canvases/login.canvas.tsx",
+      },
+      updatedAt: 2,
+    };
+    const text = formatCommentsForComposer(listProcessableComments([canvas]));
+    expect(text).toContain("`.pier/canvases/login.canvas.tsx#login-submit`");
+    expect(text).toContain("主按钮改成提交");
+    expect(text).not.toContain("(登录)");
+    expect(text).not.toContain("excerpt");
+    expect(text).not.toMatch(/\[located\]|\[stale\]|\[soft\]|\[unknown\]/u);
   });
 });
 

@@ -96,7 +96,7 @@ describe("buildMarkdownCommentSurfaceFromIr + projectComment", () => {
     expect(result.locate?.kind).toBe("markdown-block");
   });
 
-  it("locates by heading id", () => {
+  it("does not locate by heading id when hash misses", () => {
     const surface = buildMarkdownCommentSurfaceFromIr(doc());
     const result = projectComment(
       mdThread({
@@ -105,8 +105,8 @@ describe("buildMarkdownCommentSurfaceFromIr + projectComment", () => {
       }),
       surface
     );
-    expect(result.status).toBe("located");
-    expect(result.locate?.kind).toBe("markdown-heading");
+    expect(result.status).toBe("drifted");
+    expect(result.reason).toBe("content-changed");
   });
 
   it("drifts when content and heading miss", () => {

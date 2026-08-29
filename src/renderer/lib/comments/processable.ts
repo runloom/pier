@@ -41,6 +41,7 @@ export type ProcessableCommentItem =
       readonly headingId?: string;
       readonly path: string;
       readonly startLine: number;
+      readonly endLine?: number;
     })
   | (ProcessableBase & {
       readonly kind: "canvas";
@@ -313,6 +314,7 @@ export function listProcessableComments(
           status,
           threadId: thread.id,
           updatedAt: thread.updatedAt,
+          ...(target.endLine === undefined ? {} : { endLine: target.endLine }),
           ...(target.headingId === undefined
             ? {}
             : { headingId: target.headingId }),
