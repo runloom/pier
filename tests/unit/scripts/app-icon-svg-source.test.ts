@@ -32,23 +32,23 @@ describe("Pier minimal vector app-icon source", () => {
     );
   });
 
-  it("keeps the canonical 820px legacy container and prompt plus berth geometry", () => {
+  it("keeps the full-bleed canvas and prompt plus berth geometry", () => {
     if (!existsSync(SOURCE)) {
       return;
     }
 
     const document = parseSource();
     const body = document.querySelector("#pier-body");
-    expect(body?.getAttribute("x")).toBe("102");
-    expect(body?.getAttribute("y")).toBe("102");
-    expect(body?.getAttribute("width")).toBe("820");
-    expect(body?.getAttribute("height")).toBe("820");
-    expect(body?.getAttribute("rx")).toBe("164");
+    expect(body?.getAttribute("x")).toBe("0");
+    expect(body?.getAttribute("y")).toBe("0");
+    expect(body?.getAttribute("width")).toBe("1024");
+    expect(body?.getAttribute("height")).toBe("1024");
+    expect(body?.getAttribute("rx")).toBe(null);
+    expect(document.querySelector("#pier-body-clip")).toBeNull();
+    expect(document.querySelector("#pier-edge-rim")).toBeNull();
     expect(
-      document
-        .querySelector('g[clip-path="url(#pier-body-clip)"] > g')
-        ?.getAttribute("transform")
-    ).toBe("translate(102 102) scale(0.80078125)");
+      document.querySelector("#pier-artwork")?.getAttribute("transform")
+    ).toBe(null);
     expect(document.querySelector("#pier-chevron")?.getAttribute("d")).toBe(
       "M337 223 L522 405 L337 599"
     );
@@ -93,21 +93,19 @@ describe("Pier minimal vector app-icon source", () => {
     );
   });
 
-  it("clips the transformed artwork to the rounded legacy container", () => {
+  it("does not bake a rounded container, inset transform, or inner edge rim", () => {
     if (!existsSync(SOURCE)) {
       return;
     }
 
+    const source = readFileSync(SOURCE, "utf8");
     const document = parseSource();
-    const clip = document.querySelector("#pier-body-clip rect");
-    expect(clip?.getAttribute("x")).toBe("102");
-    expect(clip?.getAttribute("y")).toBe("102");
-    expect(clip?.getAttribute("width")).toBe("820");
-    expect(clip?.getAttribute("height")).toBe("820");
-    expect(clip?.getAttribute("rx")).toBe("164");
-    expect(
-      document.querySelector('g[clip-path="url(#pier-body-clip)"]')
-    ).not.toBeNull();
+    expect(document.querySelector("#pier-body-clip")).toBeNull();
+    expect(document.querySelector("#pier-edge")).toBeNull();
+    expect(document.querySelector("#pier-edge-rim")).toBeNull();
+    expect(source).not.toContain("translate(102 102)");
+    expect(source).not.toContain("scale(0.80078125)");
+    expect(document.querySelector("#pier-body")?.getAttribute("rx")).toBe(null);
   });
 
   it("uses one self-contained shared micro-relief material for prompt and berth", () => {
@@ -188,18 +186,7 @@ describe("Pier minimal vector app-icon source", () => {
     expect(document.querySelector("#pier-berth")?.getAttribute("fill")).toBe(
       "url(#pier-violet)"
     );
-    expect(
-      document.querySelector("#pier-edge-rim")?.getAttribute("stroke")
-    ).toBe("url(#pier-edge)");
-    expect(
-      document.querySelector("#pier-edge-rim")?.getAttribute("stroke-width")
-    ).toBe("14");
-    expect(
-      document.querySelector("#pier-edge-rim")?.getAttribute("clip-path")
-    ).toBe("url(#pier-body-clip)");
-    expect(document.querySelector("#pier-edge-rim")?.getAttribute("fill")).toBe(
-      "none"
-    );
+    expect(document.querySelector("#pier-edge-rim")).toBeNull();
   });
 
   it("keeps berth metal shine low-frequency so small sizes do not form two hotspots", () => {

@@ -36,19 +36,14 @@
         <feMergeNode in="bottom-shadow"/>
       </feMerge>
     </filter>
-    <clipPath id="pier-body-clip">
-      <rect x="102" y="102" width="820" height="820" rx="164"/>
-    </clipPath>
   </defs>
-  <rect id="pier-body" x="102" y="102" width="820" height="820" rx="164" fill="url(#pier-body-fill)"/>
-  <g clip-path="url(#pier-body-clip)">
-    <g transform="translate(102 102) scale(0.80078125)">
-      <g id="pier-berth-relief" filter="url(#pier-relief)">
-        <path id="pier-berth" d="M0 664 H64 C176 664 180 850 320 850 H704 C844 850 848 664 960 664 H1024 V1024 H0 Z" fill="url(#pier-blue)"/>
-        <rect id="pier-berth-seam-guard" x="0" y="1008" width="1024" height="64" fill="url(#pier-blue)"/>
-      </g>
-      <path id="pier-chevron" d="M337 223 L522 405 L337 599" fill="none" stroke="url(#pier-violet)" stroke-width="104" stroke-linecap="round" stroke-linejoin="round" filter="url(#pier-relief)"/>
-      <path id="pier-underscore" d="M547 612 H770" fill="none" stroke="url(#pier-violet)" stroke-width="80" stroke-linecap="round" filter="url(#pier-relief)"/>
+  <rect id="pier-body" x="0" y="0" width="1024" height="1024" fill="url(#pier-body-fill)"/>
+  <g id="pier-artwork">
+    <g id="pier-berth-relief" filter="url(#pier-relief)">
+      <path id="pier-berth" d="M0 664 H64 C176 664 180 850 320 850 H704 C844 850 848 664 960 664 H1024 V1024 H0 Z" fill="url(#pier-blue)"/>
+      <rect id="pier-berth-seam-guard" x="0" y="1008" width="1024" height="64" fill="url(#pier-blue)"/>
     </g>
+    <path id="pier-chevron" d="M337 223 L522 405 L337 599" fill="none" stroke="url(#pier-violet)" stroke-width="104" stroke-linecap="round" stroke-linejoin="round" filter="url(#pier-relief)"/>
+    <path id="pier-underscore" d="M547 612 H770" fill="none" stroke="url(#pier-violet)" stroke-width="80" stroke-linecap="round" filter="url(#pier-relief)"/>
   </g>
 </svg>

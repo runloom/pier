@@ -203,13 +203,13 @@ describe("Pier generated small app icons", () => {
     );
   });
 
-  it.each(ICON_SIZES)("ships a valid transparent %ipx PNG", (size) => {
+  it.each(ICON_SIZES)("ships a valid full-bleed %ipx PNG", (size) => {
     const image = decodeRgbaPng(
       readFileSync(join(ROOT, "build/icons", `${size}x${size}.png`))
     );
     expect([image.width, image.height]).toEqual([size, size]);
-    expect(rgbaAt(image, 0, 0)[3]).toBeLessThanOrEqual(2);
-    expect(rgbaAt(image, size - 1, size - 1)[3]).toBeLessThanOrEqual(2);
+    expect(rgbaAt(image, 0, 0)[3]).toBeGreaterThanOrEqual(250);
+    expect(rgbaAt(image, size - 1, size - 1)[3]).toBeGreaterThanOrEqual(250);
   });
 
   it("keeps the 16px terminal prompt as two readable bright components", () => {
