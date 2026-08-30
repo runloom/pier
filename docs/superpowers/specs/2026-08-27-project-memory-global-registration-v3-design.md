@@ -54,24 +54,19 @@
 
 ### 全局注册面(替代 v2 的项目级五格式矩阵)
 
-| 智能体 | 用户级全局配置 | 格式 |
-|---|---|---|
-| claude | `~/.claude.json` 顶层 `mcpServers`(user scope) | json |
-| cursor | `~/.cursor/mcp.json` | mcp-servers-json |
-| codex | `~/.codex/config.toml` `[mcp_servers.pier-memory]` | codex-toml |
-| gemini | `~/.gemini/settings.json` | gemini-settings-json |
-| opencode | `~/.config/opencode/opencode.json` | opencode-json |
-| omp | 实现期核实(若读 `~/.claude.json` 则随 claude;否则本期不覆盖,设置页如实显示) | — |
+**真源是 `MCP_DISCOVERY_ADAPTERS`(与 skills 适配器同一纪律),不是平行的智能体白名单。** 每个 `AgentKind` 必须登记为 consuming 或显式不支持;治理测试锁完整性。记忆写入目标 = consuming 适配器的 **第一条 userConfig** 去重并集(原生路径;交叉复用路径只做发现、不重复写)。新增智能体只需在 adapter-facts 补一行,不必再改 registry 名单——否则会再漏 Grok 这类「目录有、记忆没接上」的缺口。
+
+可写格式:`mcp-servers-json` / `opencode-json` / `codex-toml` / `amp-settings-json` / `goose-yaml` / `hermes-yaml` / `vibe-toml`。**consumesMcp 只表示产品官方吃 MCP**,禁止用 false 顶替「serializer 还没写」。none 表只留没有官方用户级 MCP 的产品。
 
 - 写入规则沿用 v2 serializer 全套纪律:merge-don't-clobber、账本指纹识别本体(引擎/路径升级可重写)、冲突拒写、TOML marker 块。
-- 目标账本从 per-project 收敛为**单机一份** `~/.pier/memory/registry.json`(六个固定目标的指纹 + WAL pending,结构同 v2 ledger.targets/pending)。
+- 目标账本从 per-project 收敛为**单机一份** `~/.pier/memory/registry.json`(由适配器推导的目标指纹 + WAL pending,结构同 v2 ledger.targets/pending)。
 - 注册时机:启动幂等收敛(已注册且指纹匹配 → 零写入)+ 智能体新装检测后。这些文件在用户家目录,**不存在 git 跟踪问题,确认门与 tracked 通知整类删除**。
 
 ### 项目级状态(大幅简化)
 
 - `~/.pier/memory/<key>/ledger.json` 只承担 `desiredState`(+ 诊断字段);**缺失即默认启用**——「默认启用」变成纯声明语义,启动扫描/收敛/needs-confirmation 全部删除。
 - 设置页开关 = 写 desiredState;关闭即时生效于**新**会话(运行中的引擎进程不猎杀,下轮会话生效,文案注明)。
-- `snapshotStatus`:全局注册健康(六目标指纹核对)+ 项目 desiredState + 条目计数。「部分接入」只在全局注册失败/漂移时出现。
+- `snapshotStatus`:全局注册健康(已装 consuming 智能体的目标指纹核对)+ 项目 desiredState + 条目计数。「部分接入」只在全局注册失败/漂移时出现。
 
 ### 保留与删除
 
@@ -106,7 +101,7 @@
 ## 测试与治理
 
 - 启动器契约:env 优先/cwd 兜底/禁用 stub/引擎透传退出码;projectKey 算法与宿主一致性(共享 fixture)。
-- 注册器:六格式 fixture(复用 v2 serializer 测试资产)、幂等、owned 重写、冲突拒写、WAL 三分支。
+- 注册器:由 `MCP_DISCOVERY_ADAPTERS` 推导目标(含 Grok / OMP 原生路径)、幂等、owned 重写、冲突拒写、WAL 三分支;AgentKind 完整性与「consumesMcp 必有可写第一条 userConfig」由治理测试锁定。
 - 迁移:v2 存量项目条目移除 + 漂移保留;标记幂等。
 - 治理检查点沿用 `tests/unit/plugins/pier-memory-governance.test.ts`,锁定本 spec 标题与「仓库内文件零写入」红线(禁止 reconcile 代码 import 项目路径写入)。
 

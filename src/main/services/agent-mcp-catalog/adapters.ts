@@ -1,19 +1,31 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
-  MCP_DISCOVERY_ADAPTERS,
   type McpConfigLocation,
   type McpDiscoveryAdapter,
+  resolveMcpUserConfigPath,
 } from "./adapter-facts.ts";
+import { MCP_CORE_ADAPTERS } from "./adapter-facts-core.ts";
+import { MCP_EXTENDED_ADAPTERS } from "./adapter-facts-extended.ts";
+import { MCP_NONE_ADAPTERS } from "./adapter-facts-none.ts";
 import type { McpConfigFormat } from "./parse-server-names.ts";
 
 export type {
   McpConfigLocation,
   McpDiscoveryAdapter,
 } from "./adapter-facts.ts";
-export { MCP_DISCOVERY_ADAPTERS } from "./adapter-facts.ts";
+export { resolveMcpUserConfigPath } from "./adapter-facts.ts";
+
+/**
+ * MCP discovery adapter fact table (skills `adapter-facts.ts` parallel).
+ * Every AgentKind is consuming or explicit non-support.
+ */
+export const MCP_DISCOVERY_ADAPTERS: readonly McpDiscoveryAdapter[] = [
+  ...MCP_CORE_ADAPTERS,
+  ...MCP_EXTENDED_ADAPTERS,
+  ...MCP_NONE_ADAPTERS,
+];
 
 /**
  * Derived unique on-disk probe (one entry per absolute location). Consumers
@@ -26,7 +38,7 @@ export interface McpPathCandidate {
   officialDocsUrl?: string;
   projectRelativePath?: string;
   scopeLabel: "project" | "user";
-  userAbsolutePath?: () => string;
+  userAbsolutePath?: (home?: string, env?: NodeJS.ProcessEnv) => string;
 }
 
 function normalizeHomeRelative(path: string): string {
@@ -38,10 +50,6 @@ function pathKey(loc: McpConfigLocation): string {
     return `project:${loc.path}`;
   }
   return `user:${normalizeHomeRelative(loc.path)}`;
-}
-
-function resolveUserAbsolute(homeRelative: string): string {
-  return join(homedir(), ...normalizeHomeRelative(homeRelative).split("/"));
 }
 
 function agentLabel(agentId: string): string {
@@ -62,7 +70,7 @@ export function deriveMcpPathCandidates(
     officialDocsUrl?: string;
     projectRelativePath?: string;
     scopeLabel: "project" | "user";
-    userHomeRelative?: string;
+    userLoc?: McpConfigLocation;
   }
   const byKey = new Map<string, Acc>();
 
@@ -86,7 +94,7 @@ export function deriveMcpPathCandidates(
         officialDocsUrl: adapter.officialDocsUrl,
         ...(loc.scope === "project"
           ? { projectRelativePath: loc.path }
-          : { userHomeRelative: normalizeHomeRelative(loc.path) }),
+          : { userLoc: loc }),
       });
     }
   }
@@ -107,10 +115,17 @@ export function deriveMcpPathCandidates(
         ...(row.projectRelativePath
           ? { projectRelativePath: row.projectRelativePath }
           : {}),
-        ...(row.userHomeRelative
+        ...(row.userLoc
           ? {
-              userAbsolutePath: () =>
-                resolveUserAbsolute(row.userHomeRelative as string),
+              userAbsolutePath: (
+                home: string = homedir(),
+                env: NodeJS.ProcessEnv = process.env
+              ) =>
+                resolveMcpUserConfigPath(
+                  row.userLoc as McpConfigLocation,
+                  home,
+                  env
+                ),
             }
           : {}),
       } satisfies McpPathCandidate;

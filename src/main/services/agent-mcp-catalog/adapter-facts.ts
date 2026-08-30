@@ -1,13 +1,26 @@
+import { isAbsolute, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { McpConfigFormat } from "./parse-server-names.ts";
 
 /**
  * One MCP config location an agent recognizes (skills `discoveryRoots` /
  * `userDiscoveryRoots` parallel). Project paths are repo-relative; user
- * paths are `~`-relative (resolved under `homedir()`).
+ * paths are `~`-relative (resolved under `homedir()` unless `homeEnv`).
  */
 export interface McpConfigLocation {
+  /**
+   * When `homeEnv` is set and present, join that root with this relative
+   * path instead of `path` under homedir (CODEX_HOME / GROK_HOME / XDG).
+   */
+  envRelative?: string;
   format: McpConfigFormat;
+  /** Product home override (`CODEX_HOME`, `GROK_HOME`, `XDG_CONFIG_HOME`, …). */
+  homeEnv?: string;
+  /**
+   * Prefer a `.jsonc` sibling when it exists (OpenCode / Kilo / Crush):
+   * writing `.json` would be ignored.
+   */
+  jsoncSibling?: boolean;
   /** Project-relative (`scope=project`) or `~`-relative (`scope=user`). */
   path: string;
   scope: "project" | "user";
@@ -15,15 +28,16 @@ export interface McpConfigLocation {
 
 /**
  * MCP discovery adapter — **one row per AgentKind**, same shape as skills
- * `SkillDiscoveryAdapter`. Adding a new agent = append a row here with the
- * paths that agent officially scans; availability is derived from these
- * locations (server name present + agent installed).
+ * `SkillDiscoveryAdapter`. Adding a new agent = append a row (consuming or
+ * explicit non-support). Memory global registration is derived from
+ * consuming adapters' first `userConfigs` entry — not a parallel allowlist.
  */
 export interface McpDiscoveryAdapter {
   agentKind: AgentKind;
   /**
-   * When false, audit-only (no catalog participation). v1 adapters are all
-   * `true` once registered.
+   * When false, no catalog participation and no pier-memory write.
+   * Must still be listed so adding an AgentKind without an MCP decision
+   * fails the completeness governance test.
    */
   consumesMcp: boolean;
   officialDocsUrl: string;
@@ -31,93 +45,65 @@ export interface McpDiscoveryAdapter {
   projectConfigs: readonly McpConfigLocation[];
   /**
    * User-scoped (`~`) MCP config files this agent reads. Catalog 只读发现;
-   * 写入方是 agent-managed-assets/registry.ts(pier-memory 全局注册,
-   * merge-don't-clobber + 指纹归属),不经本模块。
+   * 写入方是 agent-managed-assets(pier-memory 全局注册,
+   * merge-don't-clobber + 指纹归属),不经本模块。记忆只写 **第一条**
+   * userConfig(各智能体原生路径);交叉复用路径留给发现,不重复写入。
    */
   userConfigs: readonly McpConfigLocation[];
   verifiedOn: string;
 }
 
-function project(
+export function mcpProject(
   path: string,
   format: McpConfigFormat = "json-mcp-servers"
 ): McpConfigLocation {
   return { format, path, scope: "project" };
 }
 
-function user(
+export function mcpUser(
   path: string,
-  format: McpConfigFormat = "json-mcp-servers"
+  format: McpConfigFormat = "json-mcp-servers",
+  extra?: Pick<McpConfigLocation, "envRelative" | "homeEnv" | "jsoncSibling">
 ): McpConfigLocation {
-  return { format, path, scope: "user" };
+  return { format, path, scope: "user", ...extra };
 }
 
-/**
- * MCP discovery adapter fact table (skills `adapter-facts.ts` parallel).
- *
- * Only agents listed here participate in MCP availability. Shared paths
- * (e.g. `.mcp.json` for Claude + OMP) are declared on each consumer — the
- * registry derives unique probes and multi-agent effects.
- */
-export const MCP_DISCOVERY_ADAPTERS: readonly McpDiscoveryAdapter[] = [
-  {
-    agentKind: "claude",
-    consumesMcp: true,
-    projectConfigs: [project(".mcp.json")],
-    userConfigs: [user(".claude.json", "claude-user-json")],
-    officialDocsUrl: "https://code.claude.com/docs/en/mcp",
-    verifiedOn: "2026-07-24",
-  },
-  {
-    agentKind: "cursor",
-    consumesMcp: true,
-    projectConfigs: [project(".cursor/mcp.json")],
-    userConfigs: [user(".cursor/mcp.json")],
-    officialDocsUrl: "https://cursor.com/docs/context/mcp",
-    verifiedOn: "2026-07-24",
-  },
-  {
-    agentKind: "codex",
-    consumesMcp: true,
-    projectConfigs: [project(".codex/config.toml", "codex-toml")],
-    userConfigs: [user(".codex/config.toml", "codex-toml")],
-    officialDocsUrl: "https://developers.openai.com/codex/mcp",
-    verifiedOn: "2026-07-24",
-  },
-  {
-    agentKind: "opencode",
-    consumesMcp: true,
-    // OpenCode native config uses `mcp` (not project `.mcp.json`).
-    projectConfigs: [project("opencode.json", "opencode-json")],
-    userConfigs: [user(".config/opencode/opencode.json", "opencode-json")],
-    officialDocsUrl: "https://opencode.ai/docs/mcp-servers",
-    verifiedOn: "2026-07-24",
-  },
-  {
-    agentKind: "gemini",
-    consumesMcp: true,
-    projectConfigs: [project(".gemini/settings.json")],
-    userConfigs: [user(".gemini/settings.json")],
-    officialDocsUrl: "https://geminicli.com/docs/tools/mcp-server/",
-    verifiedOn: "2026-07-24",
-  },
-  {
-    agentKind: "omp",
-    consumesMcp: true,
-    // OMP native + documented cross-tool discovery (omp.sh/docs/mcp).
-    projectConfigs: [
-      project(".omp/mcp.json"),
-      project(".mcp.json"),
-      project("mcp.json"),
-      project(".cursor/mcp.json"),
-      project("opencode.json", "opencode-json"),
-    ],
-    userConfigs: [
-      user(".omp/agent/mcp.json"),
-      user(".cursor/mcp.json"),
-      user(".config/opencode/opencode.json", "opencode-json"),
-    ],
-    officialDocsUrl: "https://omp.sh/docs/mcp",
-    verifiedOn: "2026-07-24",
-  },
-];
+const ENV_HOME_FALLBACK: Readonly<Record<string, string>> = {
+  CLINE_DIR: ".cline",
+  CODEX_HOME: ".codex",
+  GROK_HOME: ".grok",
+  KIMI_CODE_HOME: ".kimi-code",
+  XDG_CONFIG_HOME: ".config",
+};
+
+function expandEnvHome(
+  raw: string | undefined,
+  home: string,
+  fallbackRel: string
+): string {
+  if (!raw) {
+    return join(home, fallbackRel);
+  }
+  if (raw === "~") {
+    return home;
+  }
+  if (raw.startsWith("~/")) {
+    return join(home, raw.slice(2));
+  }
+  return isAbsolute(raw) ? raw : join(home, fallbackRel);
+}
+
+/** User MCP path: `homeEnv`/`envRelative` when set, otherwise `path` under home. */
+export function resolveMcpUserConfigPath(
+  loc: McpConfigLocation,
+  home: string,
+  env: NodeJS.ProcessEnv
+): string {
+  const rel = loc.path.replace(/^~\//u, "");
+  if (loc.homeEnv && loc.envRelative) {
+    const fallback = ENV_HOME_FALLBACK[loc.homeEnv] ?? rel.split("/")[0] ?? "";
+    const root = expandEnvHome(env[loc.homeEnv], home, fallback);
+    return join(root, loc.envRelative);
+  }
+  return join(home, ...rel.split("/"));
+}

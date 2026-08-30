@@ -38,6 +38,8 @@ describe("pier.memory governance", () => {
     expect(ui).toContain("# 项目记忆：设置页表面");
     expect(ui).toContain("pier.memory.project");
     expect(ui).toContain("设置 → 项目");
+    expect(ui).toContain('Button variant="destructive"');
+    expect(ui).toContain("self-start");
     expect(spec).toContain("projectSettings");
   });
 
@@ -98,6 +100,10 @@ describe("pier.memory governance", () => {
     );
     expect(v3).toContain("# 项目记忆 v3:全局注册 + 运行时解析");
     expect(v3).toContain("仓库内文件零写入");
+    expect(v3).toContain("MCP_DISCOVERY_ADAPTERS");
+    expect(v3).toContain("第一条 userConfig");
+    expect(v3).toContain("consumesMcp 只表示产品官方吃 MCP");
+    expect(v3).not.toContain("六个固定目标");
     expect(v3).toContain(
       "2026-08-28-project-memory-mcp-instructions-design.md"
     );
@@ -110,6 +116,16 @@ describe("pier.memory governance", () => {
     );
     expect(reconcile).not.toContain("applyMemoryTarget");
     expect(reconcile).not.toContain("isTracked");
+    const registry = readFileSync(
+      join(ROOT, "src/main/services/agent-managed-assets/registry.ts"),
+      "utf8"
+    );
+    expect(registry).not.toContain('agent: "claude"');
+    const targets = readFileSync(
+      join(ROOT, "src/main/services/agent-managed-assets/memory-targets.ts"),
+      "utf8"
+    );
+    expect(targets).toContain("MCP_DISCOVERY_ADAPTERS");
   });
 
   it("locks MCP instructions as the default-enable guidance path", () => {

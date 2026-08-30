@@ -1,9 +1,12 @@
 import {
+  parseAmpSettingsMcpServerNames,
   parseClaudeUserJsonMcpServerNames,
   parseCodexTomlMcpServerNames,
+  parseGooseYamlMcpServerNames,
   parseJsonMcpServerNames,
   parseMcpServerNames,
   parseOpencodeJsonMcpServerNames,
+  parseVibeTomlMcpServerNames,
 } from "@main/services/agent-mcp-catalog/parse-server-names.ts";
 import { describe, expect, it } from "vitest";
 
@@ -67,6 +70,33 @@ x = 1
         null
       )
     ).toEqual(["a"]);
+  });
+
+  it("reads Amp amp.mcpServers, Goose extensions, and Vibe array tables", () => {
+    expect(
+      parseAmpSettingsMcpServerNames(
+        JSON.stringify({
+          "amp.mcpServers": { playwright: { command: "npx" } },
+        })
+      )
+    ).toEqual(["playwright"]);
+    expect(
+      parseGooseYamlMcpServerNames(
+        "extensions:\n  filesystem:\n    type: stdio\n"
+      )
+    ).toEqual(["filesystem"]);
+    expect(
+      parseVibeTomlMcpServerNames(
+        '[[mcp_servers]]\nname = "alpha"\ncommand = "x"\n'
+      )
+    ).toEqual(["alpha"]);
+    expect(
+      parseMcpServerNames(
+        "mcp_servers:\n  github:\n    command: npx\n",
+        "hermes-yaml",
+        null
+      )
+    ).toEqual(["github"]);
   });
 
   it("reads OpenCode mcp map and optional mcpServers", () => {

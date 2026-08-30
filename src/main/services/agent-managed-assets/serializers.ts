@@ -1,38 +1,40 @@
-import { createHash } from "node:crypto";
 import {
   applyEdits,
   modify,
   type ParseError,
   parse as parseJsonc,
 } from "jsonc-parser";
-import { parse as parseToml } from "smol-toml";
+import {
+  ENGINE_PACKAGE,
+  foreignEntryConflict,
+  type MemoryConfigFormat,
+  type PlanFail,
+  type PlanOk,
+  SERVER_KEY,
+  sha,
+  withTrailingNewline,
+} from "./serializers-shared.ts";
+import {
+  fingerprintTomlMarker,
+  planTomlAppend,
+  planTomlMarkerRemove,
+  planVibeAppend,
+} from "./serializers-toml.ts";
+import {
+  fingerprintYamlSection,
+  planYamlSectionRemove,
+  planYamlSectionUpsert,
+} from "./serializers-yaml.ts";
 
-export const SERVER_KEY = "pier-memory";
-/**
- * 引擎精确锁定 **日历版本**(该包自 0.6.2 后改用 CalVer;"0.6.3" 只是包内部
- * serverInfo 版本串,npm 上不存在)。不得回退 0.6.2:其存储路径硬编码、
- * 不读 MEMORY_FILE_PATH。升级随 Pier 发版。
- */
-export const ENGINE_PACKAGE = "@modelcontextprotocol/server-memory@2026.7.4";
-const BEGIN = "# pier-managed:pier-memory begin";
-const END = "# pier-managed:pier-memory end";
-
-export type MemoryConfigFormat =
-  | "mcp-servers-json"
-  | "opencode-json"
-  | "codex-toml";
-
-export interface PlanOk {
-  fingerprint: string;
-  next: string | null;
-  ok: true;
-}
-export interface PlanFail {
-  ok: false;
-  reason: string;
-}
-
-const sha = (value: string) => createHash("sha256").update(value).digest("hex");
+export {
+  ENGINE_PACKAGE,
+  type MemoryConfigFormat,
+  type PlanFail,
+  type PlanOk,
+  SERVER_KEY,
+} from "./serializers-shared.ts";
+export { planTomlAppend, planVibeAppend } from "./serializers-toml.ts";
+export { buildGooseLauncherEntry } from "./serializers-yaml.ts";
 
 const JSONC_EDIT = {
   formattingOptions: { insertSpaces: true, tabSize: 2 },
@@ -67,31 +69,6 @@ function managedEntryOf(
     return;
   }
   return (sectionRaw as Record<string, unknown>)[SERVER_KEY];
-}
-
-function foreignEntryConflict(
-  existing: unknown,
-  entry: Record<string, unknown>,
-  ownedFingerprint?: string
-): PlanFail | null {
-  if (existing === undefined) {
-    return null;
-  }
-  const existingSha = sha(JSON.stringify(existing));
-  if (
-    existingSha !== sha(JSON.stringify(entry)) &&
-    existingSha !== ownedFingerprint
-  ) {
-    return {
-      ok: false,
-      reason: `${SERVER_KEY} already defined by someone else`,
-    };
-  }
-  return null;
-}
-
-function withTrailingNewline(value: string): string {
-  return value.endsWith("\n") ? value : `${value}\n`;
 }
 
 function isEmptyObjectText(raw: string): boolean {
@@ -142,10 +119,31 @@ export function buildOpenCodeLauncherEntry(
   return { command: ["node", launcherPath], type: "local" };
 }
 
+export function buildCopilotLauncherEntry(
+  launcherPath: string
+): Record<string, unknown> {
+  return {
+    args: [launcherPath],
+    command: "node",
+    tools: ["*"],
+    type: "local",
+  };
+}
+
+export function buildRovoLauncherEntry(
+  launcherPath: string
+): Record<string, unknown> {
+  return {
+    args: [launcherPath],
+    command: "node",
+    transport: "stdio",
+  };
+}
+
 function upsertJson(
   raw: string | null,
   entry: Record<string, unknown>,
-  topLevelKey: "mcpServers" | "mcp",
+  topLevelKey: string,
   ownedFingerprint?: string
 ): PlanOk | PlanFail {
   let doc: Record<string, unknown> = {};
@@ -281,107 +279,11 @@ function planOpenCodeRemove(raw: string): PlanOk | PlanFail {
   return { fingerprint, next: withTrailingNewline(next), ok: true };
 }
 
-function tomlBlock(entry: Record<string, unknown>): string {
-  const command = typeof entry.command === "string" ? entry.command : "";
-  const args = Array.isArray(entry.args) ? (entry.args as string[]) : [];
-  const env =
-    entry.env && typeof entry.env === "object" && !Array.isArray(entry.env)
-      ? (entry.env as Record<string, string>)
-      : null;
-  const argList = args.map((arg) => JSON.stringify(arg)).join(", ");
-  const lines = [
-    BEGIN,
-    `[mcp_servers.${SERVER_KEY}]`,
-    `command = ${JSON.stringify(command)}`,
-    `args = [${argList}]`,
-  ];
-  if (env && Object.keys(env).length > 0) {
-    const envPairs = Object.entries(env)
-      .map(([key, value]) => `${key} = ${JSON.stringify(value)}`)
-      .join(", ");
-    lines.push(`env = { ${envPairs} }`);
-  }
-  lines.push(END, "");
-  return lines.join("\n");
+function jsonSectionKey(format: MemoryConfigFormat): string {
+  return format === "amp-settings-json" ? "amp.mcpServers" : "mcpServers";
 }
 
-/** marker 块指纹匹配 ownedFingerprint 时返回去掉该块的源文;否则 null。 */
-function stripOwnedTomlBlock(
-  source: string,
-  ownedFingerprint: string | undefined
-): string | null {
-  if (!ownedFingerprint) {
-    return null;
-  }
-  const beginAt = source.indexOf(BEGIN);
-  const endAt = source.indexOf(END);
-  if (beginAt < 0 || endAt < 0 || endAt < beginAt) {
-    return null;
-  }
-  const blockEnd = endAt + END.length;
-  const afterNewline =
-    source.charAt(blockEnd) === "\n" ? blockEnd + 1 : blockEnd;
-  if (sha(source.slice(beginAt, afterNewline)) !== ownedFingerprint) {
-    return null;
-  }
-  return `${source.slice(0, beginAt)}${source.slice(afterNewline)}`;
-}
-
-export function planTomlAppend(
-  raw: string | null,
-  entry: Record<string, unknown>,
-  ownedFingerprint?: string
-): PlanOk | PlanFail {
-  let source = raw ?? "";
-  try {
-    const parsed = parseToml(source) as {
-      mcp_servers?: Record<string, unknown>;
-    };
-    if (parsed.mcp_servers?.[SERVER_KEY] !== undefined) {
-      const stripped = stripOwnedTomlBlock(source, ownedFingerprint);
-      if (stripped === null) {
-        return {
-          ok: false,
-          reason: `${SERVER_KEY} already defined in codex config`,
-        };
-      }
-      source = stripped;
-    }
-  } catch (error) {
-    return {
-      ok: false,
-      reason: `codex config is not valid TOML: ${String(error)}`,
-    };
-  }
-  const block = tomlBlock(entry);
-  const prefix =
-    source === "" || source.endsWith("\n") ? source : `${source}\n`;
-  return { fingerprint: sha(block), next: `${prefix}${block}`, ok: true };
-}
-
-export function planRemove(
-  raw: string,
-  format: MemoryConfigFormat
-): PlanOk | PlanFail {
-  if (format === "codex-toml") {
-    const beginAt = raw.indexOf(BEGIN);
-    const endAt = raw.indexOf(END);
-    if (beginAt < 0 || endAt < 0 || endAt < beginAt) {
-      return { ok: false, reason: "managed block not found" };
-    }
-    const blockEnd = endAt + END.length;
-    const afterNewline =
-      raw.charAt(blockEnd) === "\n" ? blockEnd + 1 : blockEnd;
-    const block = raw.slice(beginAt, afterNewline);
-    return {
-      fingerprint: sha(block),
-      next: `${raw.slice(0, beginAt)}${raw.slice(afterNewline)}`,
-      ok: true,
-    };
-  }
-  if (format === "opencode-json") {
-    return planOpenCodeRemove(raw);
-  }
+function planJsonKeyedRemove(raw: string, key: string): PlanOk | PlanFail {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (
@@ -392,7 +294,6 @@ export function planRemove(
       return { ok: false, reason: "config root is not an object" };
     }
     const doc = { ...(parsed as Record<string, unknown>) };
-    const key = "mcpServers";
     const sectionRaw = doc[key];
     if (
       sectionRaw === null ||
@@ -425,42 +326,89 @@ export function planRemove(
   }
 }
 
+export function planRemove(
+  raw: string,
+  format: MemoryConfigFormat
+): PlanOk | PlanFail {
+  if (format === "codex-toml" || format === "vibe-toml") {
+    return planTomlMarkerRemove(raw);
+  }
+  if (format === "opencode-json") {
+    return planOpenCodeRemove(raw);
+  }
+  if (format === "goose-yaml") {
+    return planYamlSectionRemove(raw, "extensions");
+  }
+  if (format === "hermes-yaml") {
+    return planYamlSectionRemove(raw, "mcp_servers");
+  }
+  return planJsonKeyedRemove(raw, jsonSectionKey(format));
+}
+
+export function planMemoryUpsert(
+  format: MemoryConfigFormat,
+  raw: string | null,
+  entry: Record<string, unknown>,
+  ownedFingerprint?: string
+): PlanOk | PlanFail {
+  if (format === "codex-toml") {
+    return planTomlAppend(raw, entry, ownedFingerprint);
+  }
+  if (format === "vibe-toml") {
+    return planVibeAppend(raw, entry, ownedFingerprint);
+  }
+  if (format === "opencode-json") {
+    return planOpenCodeUpsert(raw, entry, ownedFingerprint);
+  }
+  if (format === "goose-yaml") {
+    return planYamlSectionUpsert(raw, "extensions", entry, ownedFingerprint);
+  }
+  if (format === "hermes-yaml") {
+    return planYamlSectionUpsert(raw, "mcp_servers", entry, ownedFingerprint);
+  }
+  if (format === "amp-settings-json") {
+    return upsertJson(raw, entry, "amp.mcpServers", ownedFingerprint);
+  }
+  return planJsonUpsert(raw, entry, ownedFingerprint);
+}
+
+const OPENCODE_JSON_BASENAMES = new Set([
+  "crush.json",
+  "crush.jsonc",
+  "kilo.json",
+  "kilo.jsonc",
+  "opencode.json",
+  "opencode.jsonc",
+]);
+
 export function inferMemoryFormat(path: string): MemoryConfigFormat {
-  if (path.endsWith(".toml")) {
+  const normalized = path.replaceAll("\\", "/");
+  if (
+    normalized.endsWith("/.vibe/config.toml") ||
+    normalized.endsWith("/vibe/config.toml")
+  ) {
+    return "vibe-toml";
+  }
+  if (normalized.endsWith(".toml")) {
     return "codex-toml";
   }
-  if (path.endsWith("opencode.json") || path.endsWith("opencode.jsonc")) {
+  if (normalized.endsWith("/goose/config.yaml")) {
+    return "goose-yaml";
+  }
+  if (normalized.endsWith("/.hermes/config.yaml")) {
+    return "hermes-yaml";
+  }
+  if (normalized.endsWith("/amp/settings.json")) {
+    return "amp-settings-json";
+  }
+  const base = normalized.split("/").pop() ?? "";
+  if (OPENCODE_JSON_BASENAMES.has(base)) {
     return "opencode-json";
   }
   return "mcp-servers-json";
 }
 
-export function fingerprintManagedSlice(
-  raw: string | null,
-  format: MemoryConfigFormat
-): string {
-  if (raw === null) {
-    return "absent";
-  }
-  if (format === "codex-toml") {
-    const beginAt = raw.indexOf(BEGIN);
-    const endAt = raw.indexOf(END);
-    if (beginAt < 0 || endAt < 0 || endAt < beginAt) {
-      return "absent";
-    }
-    const blockEnd = endAt + END.length;
-    const afterNewline =
-      raw.charAt(blockEnd) === "\n" ? blockEnd + 1 : blockEnd;
-    return sha(raw.slice(beginAt, afterNewline));
-  }
-  if (format === "opencode-json") {
-    const parsed = parseConfigObject(raw);
-    if (!parsed.ok) {
-      return "absent";
-    }
-    const entry = managedEntryOf(parsed.doc, "mcp");
-    return entry === undefined ? "absent" : sha(JSON.stringify(entry));
-  }
+function fingerprintJsonSection(raw: string, key: string): string {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (
@@ -470,8 +418,7 @@ export function fingerprintManagedSlice(
     ) {
       return "absent";
     }
-    const doc = parsed as Record<string, unknown>;
-    const sectionRaw = doc.mcpServers;
+    const sectionRaw = (parsed as Record<string, unknown>)[key];
     if (
       sectionRaw === null ||
       typeof sectionRaw !== "object" ||
@@ -480,11 +427,35 @@ export function fingerprintManagedSlice(
       return "absent";
     }
     const entry = (sectionRaw as Record<string, unknown>)[SERVER_KEY];
-    if (entry === undefined) {
-      return "absent";
-    }
-    return sha(JSON.stringify(entry));
+    return entry === undefined ? "absent" : sha(JSON.stringify(entry));
   } catch {
     return "absent";
   }
+}
+
+export function fingerprintManagedSlice(
+  raw: string | null,
+  format: MemoryConfigFormat
+): string {
+  if (raw === null) {
+    return "absent";
+  }
+  if (format === "codex-toml" || format === "vibe-toml") {
+    return fingerprintTomlMarker(raw);
+  }
+  if (format === "goose-yaml") {
+    return fingerprintYamlSection(raw, "extensions");
+  }
+  if (format === "hermes-yaml") {
+    return fingerprintYamlSection(raw, "mcp_servers");
+  }
+  if (format === "opencode-json") {
+    const parsed = parseConfigObject(raw);
+    if (!parsed.ok) {
+      return "absent";
+    }
+    const entry = managedEntryOf(parsed.doc, "mcp");
+    return entry === undefined ? "absent" : sha(JSON.stringify(entry));
+  }
+  return fingerprintJsonSection(raw, jsonSectionKey(format));
 }

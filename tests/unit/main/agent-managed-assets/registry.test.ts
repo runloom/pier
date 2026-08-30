@@ -62,6 +62,7 @@ describe("memory global registry", () => {
     // 未安装的智能体不落文件。
     expect(existsSync(join(h, ".cursor", "mcp.json"))).toBe(false);
     expect(existsSync(join(h, ".gemini", "settings.json"))).toBe(false);
+    expect(existsSync(join(h, ".grok", "config.toml"))).toBe(false);
   });
 
   it("is idempotent and preserves foreign user entries", async () => {
@@ -422,16 +423,117 @@ describe("memory global registry", () => {
     ).toContain("not configured");
   });
 
-  it("honors CODEX_HOME and XDG_CONFIG_HOME in target paths", () => {
+  it("honors CODEX_HOME, GROK_HOME and XDG_CONFIG_HOME in target paths", () => {
     const targets = memoryGlobalTargets({
-      env: { CODEX_HOME: "~/alt-codex", XDG_CONFIG_HOME: "/xdg" },
+      env: {
+        CODEX_HOME: "~/alt-codex",
+        GROK_HOME: "~/alt-grok",
+        XDG_CONFIG_HOME: "/xdg",
+      },
       home: "/home/u",
     });
-    expect(targets.find((target) => target.agent === "codex")?.abs).toBe(
-      "/home/u/alt-codex/config.toml"
+    expect(
+      targets.find((target) => target.consumers.includes("codex"))?.abs
+    ).toBe("/home/u/alt-codex/config.toml");
+    expect(
+      targets.find((target) => target.consumers.includes("grok"))?.abs
+    ).toBe("/home/u/alt-grok/config.toml");
+    expect(
+      targets.find((target) => target.consumers.includes("opencode"))?.abs
+    ).toBe("/xdg/opencode/opencode.json");
+  });
+
+  it("registers grok and omp native user configs when installed", async () => {
+    const h = home();
+    const rows = await convergeMemoryRegistry({
+      env: {},
+      home: h,
+      installedAgents: ["grok", "omp"],
+      launcherPath: LAUNCHER,
+    });
+    expect(rows.every((row) => row.outcome === "written")).toBe(true);
+    const grok = readFileSync(join(h, ".grok", "config.toml"), "utf8");
+    expect(grok).toContain("[mcp_servers.pier-memory]");
+    expect(grok).toContain(LAUNCHER);
+    const omp = JSON.parse(
+      readFileSync(join(h, ".omp", "agent", "mcp.json"), "utf8")
+    ) as {
+      mcpServers: Record<string, { args: string[]; command: string }>;
+    };
+    expect(omp.mcpServers["pier-memory"]).toEqual({
+      args: [LAUNCHER],
+      command: "node",
+    });
+  });
+
+  it("writes Copilot type/tools and Rovo transport on launcher entries", async () => {
+    const h = home();
+    const rows = await convergeMemoryRegistry({
+      env: {},
+      home: h,
+      installedAgents: ["copilot", "rovo"],
+      launcherPath: LAUNCHER,
+    });
+    expect(rows.every((row) => row.outcome === "written")).toBe(true);
+    const copilot = JSON.parse(
+      readFileSync(join(h, ".copilot", "mcp-config.json"), "utf8")
+    ) as {
+      mcpServers: Record<
+        string,
+        { args: string[]; command: string; tools: string[]; type: string }
+      >;
+    };
+    expect(copilot.mcpServers["pier-memory"]).toEqual({
+      args: [LAUNCHER],
+      command: "node",
+      tools: ["*"],
+      type: "local",
+    });
+    const rovo = JSON.parse(
+      readFileSync(join(h, ".rovodev", "mcp.json"), "utf8")
+    ) as {
+      mcpServers: Record<
+        string,
+        { args: string[]; command: string; transport: string }
+      >;
+    };
+    expect(rovo.mcpServers["pier-memory"]).toEqual({
+      args: [LAUNCHER],
+      command: "node",
+      transport: "stdio",
+    });
+  });
+
+  it("registers amp, goose, and vibe native configs", async () => {
+    const h = home();
+    const rows = await convergeMemoryRegistry({
+      env: {},
+      home: h,
+      installedAgents: ["amp", "goose", "mistral-vibe"],
+      launcherPath: LAUNCHER,
+    });
+    expect(rows.every((row) => row.outcome === "written")).toBe(true);
+    const amp = JSON.parse(
+      readFileSync(join(h, ".config", "amp", "settings.json"), "utf8")
+    ) as { "amp.mcpServers": Record<string, { command: string }> };
+    expect(amp["amp.mcpServers"]["pier-memory"]?.command).toBe("node");
+    const goose = readFileSync(
+      join(h, ".config", "goose", "config.yaml"),
+      "utf8"
     );
-    expect(targets.find((target) => target.agent === "opencode")?.abs).toBe(
-      "/xdg/opencode/opencode.json"
+    expect(goose).toContain("cmd: node");
+    expect(goose).toContain("type: stdio");
+    const vibe = readFileSync(join(h, ".vibe", "config.toml"), "utf8");
+    expect(vibe).toContain("[[mcp_servers]]");
+    expect(vibe).toContain('name = "pier-memory"');
+  });
+
+  it("shares ~/.claude.json between claude and openclaude", () => {
+    const targets = memoryGlobalTargets({ env: {}, home: "/home/u" });
+    const claude = targets.find((target) =>
+      target.consumers.includes("claude")
     );
+    expect(claude?.consumers).toEqual(["claude", "openclaude"]);
+    expect(claude?.abs).toBe("/home/u/.claude.json");
   });
 });

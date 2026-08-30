@@ -77,7 +77,7 @@
   - `ItemDescription`：实体名 · 类型白话（约定 / 踩过的坑 / 拍板决策 / 环境事实）
   - `ItemActions`：`Trash2` 的 `icon-sm` ghost 按钮，`aria-label` 删除这条记忆
 - 分组用 `FieldLegend` 或 `DIALOG_SECTION_TITLE_CLASS` 同类小节标题，顺序 convention → pitfall → decision → environment。不要为分组加 `Separator`，除非无法用标题表达。
-- 卡底主操作：`Button variant="outline"`「清空本项目记忆」（设置页不是 content dialog，**不要** `setFooter`）。
+- 卡底主操作：内容宽度的 `Button variant="destructive"`「清空本项目记忆」（`self-start`，禁止拉满卡片；`Trash2` + `data-icon="inline-start"`，与技能删除同构）。设置页不是 content dialog，**不要** `setFooter`。
 - 启用但无条目：卡内 `Empty`（与 MCP 空列表同构），不要假列表。
 - 未启用且文件空：不渲染条目卡。
 - 文件 > 8MB：条目卡只留说明，禁止列出和删除。
