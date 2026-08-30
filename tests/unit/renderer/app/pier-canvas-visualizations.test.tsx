@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { DataChart } from "@pier/ui/data-chart.tsx";
-import { isDiagramShrunk } from "@pier/ui/mermaid/scene.tsx";
 import { Mermaid } from "@pier/ui/mermaid.tsx";
 import {
   cleanup,
@@ -324,38 +323,6 @@ describe("Pier Canvas visualizations", () => {
     expect(onOpenFullscreen).toHaveBeenCalledTimes(1);
   });
 
-  it("flags shrink only past natural width with a measured container", () => {
-    // Unmeasured (jsdom / pre-layout) never counts as shrunk.
-    expect(isDiagramShrunk(600, 0)).toBe(false);
-    expect(isDiagramShrunk(0, 320)).toBe(false);
-    // Fits: equal or slightly smaller than the container.
-    expect(isDiagramShrunk(320, 320)).toBe(false);
-    expect(isDiagramShrunk(321, 320)).toBe(false);
-    // Scaled down.
-    expect(isDiagramShrunk(640, 320)).toBe(true);
-  });
-
-  it("omits the shrink hint when the diagram is not measured as scaled", async () => {
-    render(
-      <Mermaid
-        aria-label="未缩"
-        edges={EDGES}
-        nodes={NODES}
-        onOpenFullscreen={() => {}}
-        shrinkHint="图表已缩小，点击查看全屏"
-      />
-    );
-    await screen.findByLabelText("未缩");
-    await waitFor(() =>
-      expect(
-        document.querySelector('[data-slot="mermaid-host"] svg')
-      ).toBeTruthy()
-    );
-    // jsdom reports clientWidth 0, so the hint must stay hidden.
-    expect(
-      document.querySelector('[data-slot="mermaid-shrink-hint"]')
-    ).toBeNull();
-  });
   it("opens host content preview store from HostMermaid fullscreen", async () => {
     useContentPreviewStore.setState({
       id: "content-preview",

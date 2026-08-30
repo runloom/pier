@@ -879,6 +879,11 @@ describe("MarkdownPreview", () => {
     // The fullscreen button's own click must not bubble into a second open.
     fireEvent.click(screen.getByRole("button", { name: "View fullscreen" }));
     expect(openImage).toHaveBeenCalledTimes(1);
+    // The overlay pins the resolved reading color mode (auto → app theme) so
+    // its chrome matches the baked SVG paper.
+    expect(openImage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ colorMode: "dark" })
+    );
 
     // Plain svg surface click opens the preview.
     fireEvent.click(shell.querySelector("svg")!);
@@ -894,7 +899,7 @@ describe("MarkdownPreview", () => {
     expect(openImage).toHaveBeenCalledTimes(2);
   });
 
-  it("shows the labeled shrink chip and capped width when scaled down", async () => {
+  it("caps the diagram width to the slot when the natural size is wider", async () => {
     diagramViewportWidth.contentWidth = 320;
     const charts: RendererPluginContext["charts"] = {
       renderMermaid: vi.fn(async () => ({
@@ -921,7 +926,6 @@ describe("MarkdownPreview", () => {
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
           diagramPreviewTitle: "Diagram preview",
-          diagramScaledHint: "Scaled down — click to view fullscreen",
           imagePreviewFailed: "Unable to open image preview",
           imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
@@ -930,30 +934,24 @@ describe("MarkdownPreview", () => {
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
-        sessionId="markdown-diagram-shrink-label"
+        sessionId="markdown-diagram-width-cap"
         source={{ kind: "disk", path: "README.md", root: "/repo" }}
         value={"```mermaid\ngraph LR; A-->B\n```"}
       />
     );
+    // Natural 640px in a 320px slot: natural-capped sizing scales the SVG down.
     await waitFor(() => {
-      expect(
-        container.querySelector('[data-slot="markdown-diagram-shrink-hint"]')
-      ).not.toBeNull();
+      const svg = container.querySelector<SVGElement>(
+        '[data-slot="markdown-diagram"] svg'
+      );
+      expect(svg?.style.width).toBe("320px");
     });
-    // Threading ir-renderer → diagram carries the hint copy into the chip.
-    expect(
-      container.querySelector('[data-slot="markdown-diagram-shrink-hint"] span')
-    ).toHaveTextContent("Scaled down — click to view fullscreen");
-    // The same measurement that raises the chip caps the SVG to the slot.
-    const svg = container.querySelector<SVGElement>(
-      '[data-slot="markdown-diagram"] svg'
-    )!;
-    expect(svg.style.width).toBe("320px");
     diagramViewportWidth.contentWidth = 0;
   });
 
-  it("falls back to an icon-only shrink chip when the hint label is omitted", async () => {
-    diagramViewportWidth.contentWidth = 320;
+  it("keeps the natural diagram width when the slot cannot be measured", async () => {
+    // contentBoxWidthPx stays 0 (mock default) → slotWidth falls back to the
+    // intrinsic width instead of collapsing the diagram.
     const charts: RendererPluginContext["charts"] = {
       renderMermaid: vi.fn(async () => ({
         ok: true as const,
@@ -987,22 +985,17 @@ describe("MarkdownPreview", () => {
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
-        sessionId="markdown-diagram-shrink-icon"
+        sessionId="markdown-diagram-natural-width"
         source={{ kind: "disk", path: "README.md", root: "/repo" }}
         value={"```mermaid\ngraph LR; A-->B\n```"}
       />
     );
     await waitFor(() => {
-      expect(
-        container.querySelector('[data-slot="markdown-diagram-shrink-hint"]')
-      ).not.toBeNull();
+      const svg = container.querySelector<SVGElement>(
+        '[data-slot="markdown-diagram"] svg'
+      );
+      expect(svg?.style.width).toBe("640px");
     });
-    const chip = container.querySelector(
-      '[data-slot="markdown-diagram-shrink-hint"]'
-    )!;
-    expect(chip.querySelector("span")).toBeNull();
-    expect(chip.querySelector("svg")).not.toBeNull();
-    diagramViewportWidth.contentWidth = 0;
   });
   it("stops nested double-click source jumps at the nearest block", async () => {
     const onJumpToSource = vi.fn();
@@ -1520,7 +1513,7 @@ describe("MarkdownPreview", () => {
       '[data-slot="markdown-prose"]'
     ) as HTMLElement;
     expect(prose.style.getPropertyValue("--md-scale")).toBe("1");
-    expect(prose).toHaveAttribute("data-measure", "comfortable");
+    expect(prose).toHaveAttribute("data-measure", "wide");
 
     const h1 = await screen.findByRole("heading", { name: "Title", level: 1 });
     const h2 = screen.getByRole("heading", { name: "Section", level: 2 });
@@ -1584,11 +1577,11 @@ describe("MarkdownPreview", () => {
       await import(
         "@plugins/builtin/files/renderer/markdown/preview-preferences.ts"
       );
-    writeMarkdownMeasureMode("wide");
+    writeMarkdownMeasureMode("comfortable");
     await waitFor(() => {
       expect(
         container.querySelector('[data-slot="markdown-prose"]')
-      ).toHaveAttribute("data-measure", "wide");
+      ).toHaveAttribute("data-measure", "comfortable");
       expect(
         container.querySelector('[data-slot="markdown-preview-toc"]')
       ).toHaveAttribute("data-side", "right");

@@ -270,13 +270,13 @@ function renderBlock(
               // CSS-var mermaid inherits paper tokens; remount keeps node ids clean
               // when reading appearance flips the preview color mode.
               charts={context.charts}
+              colorMode={context.colorMode}
               contentPreview={context.fileResources?.contentPreview}
               errorLabel={context.labels.diagramFailed}
               key={`mermaid:${context.colorMode}:${block.range.startOffset}`}
               label={context.labels.diagramLabel}
               openFullscreenLabel={context.labels.openFullscreen}
               previewTitle={context.labels.diagramPreviewTitle}
-              shrinkHintLabel={context.labels.diagramScaledHint}
               source={block.value}
             />
           </div>

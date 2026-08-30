@@ -40,7 +40,8 @@ export interface RelocateContext {
   tryClaim(
     live: RelocateLiveOffer,
     target: PanelTransferTargetRef,
-    placement: PanelTransferPlacement
+    placement: PanelTransferPlacement,
+    options?: { focusOnCommit?: boolean }
   ): Promise<PanelTransferResult> | PanelTransferResult;
   waitForOffer(
     transferId: string,
@@ -122,7 +123,10 @@ export async function relocatePanelTransfer(
         runtimeWindowId: `pending:${live.transferId}`,
         windowRecordId: `pending:${live.transferId}`,
       },
-      input.placement ?? { kind: "root" }
+      input.placement ?? { kind: "root" },
+      // Menu-initiated relocate: raise the new window once it commits
+      // (it is created showInactive + show-held, so nothing else focuses it).
+      { focusOnCommit: true }
     );
   }
 
@@ -155,6 +159,7 @@ export async function relocatePanelTransfer(
       runtimeWindowId: found.id,
       windowRecordId: found.recordId,
     },
-    placement
+    placement,
+    { focusOnCommit: true }
   );
 }

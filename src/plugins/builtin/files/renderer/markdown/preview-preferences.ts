@@ -23,7 +23,7 @@ const FONT_SCALE_KEY = "pier.files.markdown.fontScale";
 const MEASURE_MODE_KEY = "pier.files.markdown.measureMode";
 const READING_APPEARANCE_KEY = "pier.files.markdown.readingAppearance";
 
-/** Broader reading zoom; 1 = body matches fenced code at 13px. */
+/** Broader reading zoom; applies to the whole prose surface, code included. */
 const FONT_SCALES = [0.75, 0.85, 1, 1.15, 1.35, 1.6, 2] as const;
 export type MarkdownFontScale = (typeof FONT_SCALES)[number];
 
@@ -74,9 +74,10 @@ function readStoredFontScale(): MarkdownFontScale {
 }
 
 function readStoredMeasureMode(): MarkdownMeasureMode {
-  return preferenceStorage()?.getItem(MEASURE_MODE_KEY) === "wide"
-    ? "wide"
-    : "comfortable";
+  // Unset → wide: workbench panels are usually split; 42rem only when chosen.
+  return preferenceStorage()?.getItem(MEASURE_MODE_KEY) === "comfortable"
+    ? "comfortable"
+    : "wide";
 }
 
 function readStoredReadingAppearance(): MarkdownReadingAppearance {

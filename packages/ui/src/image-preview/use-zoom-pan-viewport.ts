@@ -16,6 +16,8 @@ import {
   measureContainScale,
   PAN_CLICK_SLOP_PX,
   pinchZoom,
+  VIEWPORT_CONTROLS_INSET_PX,
+  VIEWPORT_PADDING_PX,
   ZOOM_FACTOR,
 } from "./canvas-math.ts";
 
@@ -65,6 +67,9 @@ export function useZoomPanViewport({
       measureContainScale({
         naturalHeight: natural.height,
         naturalWidth: natural.width,
+        // The viewport reserves a bottom band for the floating zoom pill
+        // (pb-16 / VIEWPORT_CONTROLS_INSET_PX): fit into the area above it.
+        paddingYPx: VIEWPORT_PADDING_PX / 2 + VIEWPORT_CONTROLS_INSET_PX,
         viewportHeight: viewport.clientHeight,
         viewportWidth: viewport.clientWidth,
       })

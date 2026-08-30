@@ -3,6 +3,14 @@
  * not resolve, so nodes fill black and strokes vanish. Bake theme tokens from
  * a live paper element onto a clone before encoding, and pin intrinsic size so
  * the fullscreen image canvas can zoom.
+ *
+ * Markdown mermaid renders with `transparent: true`: in place, the reading
+ * paper shows through. The standalone preview sits on host chrome that follows
+ * the app theme, not the paper preference, so the paper color must also travel
+ * inside the image — otherwise a light paper in a dark app shows the diagram
+ * ink (baked dark) floating on the dark app backdrop. A first-child backdrop
+ * rect carries the paper color; unlike root CSS `background`, every SVG
+ * consumer (img, canvas rasterization, external viewers) paints a rect.
  */
 export function bakeSvgForStandalonePreview(
   svg: SVGElement,
@@ -45,7 +53,51 @@ export function bakeSvgForStandalonePreview(
   ].join(";");
   const existing = clone.getAttribute("style")?.trim() ?? "";
   clone.setAttribute("style", existing ? `${existing};${baked}` : baked);
+  paintPaperBackdrop(clone, bg);
   return new XMLSerializer().serializeToString(clone);
+}
+
+/**
+ * Insert a viewport-sized rect as the first child so the baked paper color
+ * sits under the whole diagram. `ensureSvgIntrinsicSize` just pinned a
+ * viewBox; paint in user units so a non-zero viewBox origin (e.g. from the
+ * getBBox fallback) leaves no unpainted band. Percentages anchor at
+ * user-space (0,0), so they are only the no-viewBox fallback.
+ */
+function paintPaperBackdrop(clone: SVGElement, bg: string): void {
+  const backdrop = clone.ownerDocument.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "rect"
+  );
+  const viewBox = parseViewBox(clone.getAttribute("viewBox"));
+  if (viewBox) {
+    backdrop.setAttribute("x", String(viewBox.x));
+    backdrop.setAttribute("y", String(viewBox.y));
+    backdrop.setAttribute("width", String(viewBox.width));
+    backdrop.setAttribute("height", String(viewBox.height));
+  } else {
+    backdrop.setAttribute("width", "100%");
+    backdrop.setAttribute("height", "100%");
+  }
+  backdrop.setAttribute("fill", bg);
+  backdrop.setAttribute("data-slot", "svg-paper-backdrop");
+  clone.insertBefore(backdrop, clone.firstChild);
+}
+
+function parseViewBox(
+  raw: string | null
+): { height: number; width: number; x: number; y: number } | null {
+  if (!raw) return null;
+  const parts = raw
+    .trim()
+    .split(/[\s,]+/u)
+    .map(Number);
+  if (parts.length !== 4 || parts.some((value) => !Number.isFinite(value))) {
+    return null;
+  }
+  const [x, y, width, height] = parts as [number, number, number, number];
+  if (!(width > 0 && height > 0)) return null;
+  return { height, width, x, y };
 }
 
 /** Prefer viewBox so data-URL image zoom has stable naturalWidth/Height. */
@@ -101,9 +153,4 @@ function ensureSvgIntrinsicSize(clone: SVGElement, live: SVGElement): void {
   } catch {
     // getBBox throws when the node is not rendered; leave attributes as-is.
   }
-}
-
-/** @deprecated Prefer bakeSvgForStandalonePreview — mermaid call sites. */
-export function bakeMermaidSvgForStandalonePreview(svg: SVGElement): string {
-  return bakeSvgForStandalonePreview(svg);
 }

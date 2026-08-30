@@ -200,6 +200,12 @@
       "description": "レビューツリーのフォルダをすべて折りたたみます。",
       "title": "フォルダを折りたたむ"
     },
+    "pier.git.review.openDirectory": {
+      "aliases": ["ディレクトリを開く", "プロジェクトフォルダを開く"],
+      "category": "git",
+      "description": "Files のディレクトリツリーでこのプロジェクトを開きます。",
+      "title": "git: ディレクトリを開く"
+    },
     "pier.git.review.copyPath": {
       "category": "git",
       "description": "選んだ変更の絶対パスをコピーします。",
@@ -487,6 +493,8 @@
     "ui.reviewTreeNoSearchResultsTitle": "一致する変更はありません",
     "ui.reviewTreeNoSearchResultsDescription": "別のファイル名やパスを試してください。",
     "ui.reviewOpenFile": "ファイルを開く",
+    "ui.reviewOpenDirectory": "ディレクトリを開く",
+    "ui.reviewOpenDirectoryFailed": "プロジェクトディレクトリを開けません",
     "ui.reviewOpenFileFailed": "ファイルを開けませんでした",
     "ui.reviewOpenInEditor": "ソースへジャンプ",
     "ui.reviewDiffContextMenuFailed": "メニューを開けません",

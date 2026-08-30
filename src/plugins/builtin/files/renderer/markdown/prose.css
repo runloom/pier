@@ -2,7 +2,7 @@
 
 [data-slot="markdown-prose"] {
   --md-scale: 1;
-  --md-font-size: calc(13px * var(--md-scale));
+  --md-font-size: calc(15px * var(--md-scale));
   --md-line-height: 1.7;
   /* Root rem: independent of document font, CJK/Latin mix, and --md-scale. */
   --md-measure-comfortable: 42rem;
@@ -328,7 +328,9 @@
 }
 
 [data-slot="markdown-prose"] .md-pre pre {
-  font-size: 1em;
+  /* 业界惯例：代码块取正文的 75–90%（GitHub 75%、Tailwind prose 85.7%、
+     Notion 87.5%）。1em 会让 80 列常规代码全部横向溢出阅读版心。 */
+  font-size: 0.85em;
   line-height: 1.55;
 }
 

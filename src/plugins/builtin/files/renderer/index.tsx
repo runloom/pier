@@ -50,6 +50,7 @@ import { filesPanelTabChrome } from "./panel/tab.ts";
 import { createFilesPanelTransferRegistration } from "./panel/transfer-registration.ts";
 import { readFilesPanelViewMode } from "./panel/transfer-state.ts";
 import { createFilesOpenDirectoryAction } from "./project/open-directory-action.ts";
+import { registerFilesProjectDirectoryReveal } from "./project/open-directory-reveal.ts";
 import { registerFilesProjectStatusItem } from "./project/status-item.tsx";
 import { createSaveAllAction } from "./save/all-action.ts";
 import {
@@ -361,6 +362,7 @@ export const filesRendererPlugin: RendererPluginModule = {
       }),
       // Git review / host openInEditor → project tree reveal (explicit center).
       registerFilesDiskOpenTreeReveal(context),
+      registerFilesProjectDirectoryReveal(context),
       // openInEditor({ line }) → goToLine after the disk tab opens.
       registerFilesDiskOpenLineReveal(editorController, context),
       // Comment jump / preferPreview → seed preview mode.

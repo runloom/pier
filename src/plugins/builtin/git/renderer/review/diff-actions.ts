@@ -106,7 +106,7 @@ export function registerGitReviewDiffActions(
     id: GIT_REVIEW_OPEN_IN_EDITOR_COMMAND_ID,
     metadata: {
       categoryKey: "git",
-      group: "1_review",
+      group: "1_open",
       iconComponent: FileText,
       menuHidden: (invocation) =>
         parseGitReviewDiffOpenMetadata(invocation) == null,

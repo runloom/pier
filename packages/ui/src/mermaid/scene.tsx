@@ -1,6 +1,5 @@
 "use client";
 
-import { Maximize2 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -26,17 +25,6 @@ const DEFAULT_STAGE_LABELS: ImagePreviewCanvasLabels = {
   zoomOut: "Zoom out",
 };
 
-/**
- * True when the rendered diagram's natural width exceeds its container, i.e.
- * mermaid scaled it down. Zero shown width (unmeasured / jsdom) never counts.
- */
-export function isDiagramShrunk(
-  naturalWidth: number,
-  shownWidth: number
-): boolean {
-  return shownWidth > 0 && naturalWidth > shownWidth + 1;
-}
-
 export function MermaidScene(props: MermaidProps) {
   const {
     "aria-label": ariaLabel,
@@ -52,7 +40,6 @@ export function MermaidScene(props: MermaidProps) {
     presentation,
     renderNodeContent,
     selectedId,
-    shrinkHint,
     source,
     stageControlLabels,
   } = props;
@@ -62,9 +49,7 @@ export function MermaidScene(props: MermaidProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const rootsRef = useRef(new Map<string, Root>());
   const paintRef = useRef<() => void>(() => undefined);
-  const measureRef = useRef<() => void>(() => undefined);
   const [failed, setFailed] = useState(false);
-  const [shrunk, setShrunk] = useState(false);
   const rawId = useId().replace(/[^a-zA-Z0-9]/g, "");
   const renderId = `mm${rawId || "graph"}`;
 
@@ -100,22 +85,6 @@ export function MermaidScene(props: MermaidProps) {
       );
     }
   };
-  // Latest measurement closure: shared by the resize observer and the
-  // post-injection re-measure inside the render effect, so both always see
-  // the current props/state without widening effect dependencies.
-  measureRef.current = () => {
-    if (isStage) {
-      return;
-    }
-    const host = hostRef.current;
-    if (!host || failed) {
-      return;
-    }
-    const svg = host.querySelector("svg");
-    const natural = svg?.viewBox?.baseVal.width ?? 0;
-    setShrunk(isDiagramShrunk(natural, host.clientWidth));
-  };
-
   useEffect(() => {
     let cancelled = false;
     const host = hostRef.current;
@@ -145,9 +114,6 @@ export function MermaidScene(props: MermaidProps) {
         flushSync(() => {
           paintRef.current();
         });
-        // A source swap can leave the host box identical, so the resize
-        // observer never fires — re-measure right after injection.
-        measureRef.current();
       })
       .catch(() => {
         if (!cancelled) {
@@ -163,27 +129,6 @@ export function MermaidScene(props: MermaidProps) {
   useEffect(() => {
     paintRef.current();
   });
-
-  // Inline cards only: stage previews own zoom controls already. Re-runs on
-  // isStage; source swaps re-measure inside the render effect's .then()
-  // because an unchanged host box never triggers the resize observer.
-  useEffect(() => {
-    if (isStage) {
-      setShrunk(false);
-      return;
-    }
-    measureRef.current();
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
-    const observer = new ResizeObserver(() => measureRef.current());
-    if (hostRef.current) {
-      observer.observe(hostRef.current);
-    }
-    return () => {
-      observer.disconnect();
-    };
-  }, [isStage]);
 
   const mermaidHost = (
     <div
@@ -248,16 +193,6 @@ export function MermaidScene(props: MermaidProps) {
     >
       {mermaidHost}
       {failedNotice}
-      {shrunk && !failed ? (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute right-2 bottom-2 z-10 flex items-center gap-1 rounded-full border bg-background/90 px-2 py-0.5 text-muted-foreground text-xs shadow-sm"
-          data-slot="mermaid-shrink-hint"
-        >
-          {shrinkHint ? <span>{shrinkHint}</span> : null}
-          <Maximize2 className="size-3" />
-        </div>
-      ) : null}
     </MermaidShell>
   );
 }

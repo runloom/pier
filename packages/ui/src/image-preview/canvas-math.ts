@@ -8,6 +8,12 @@ export const PAN_CLICK_SLOP_PX = 4;
 export const KEYBOARD_PAN_STEP_PX = 48;
 /** Matches Tailwind `p-3` on the viewport (12px × 2). */
 export const VIEWPORT_PADDING_PX = 24;
+/**
+ * Extra bottom viewport inset clearing the floating zoom controls pill
+ * (pb-4 + 28px buttons + shadow), so fit and resting scroll positions never
+ * leave content under the controls. Matches `pb-16` on the viewport section.
+ */
+export const VIEWPORT_CONTROLS_INSET_PX = 64;
 /** Trackpad pinch (ctrl+wheel) exponent per deltaY unit. */
 export const PINCH_ZOOM_SENSITIVITY = 0.01;
 
@@ -24,14 +30,21 @@ export function pinchZoom(base: number, deltaY: number): number {
 export function measureContainScale(args: {
   naturalHeight: number;
   naturalWidth: number;
+  /** Total padding subtracted per axis (both sides). Default VIEWPORT_PADDING_PX. */
   paddingPx?: number;
+  /**
+   * Vertical override when the viewport reserves a bottom controls band
+   * (top padding + VIEWPORT_CONTROLS_INSET_PX). Horizontal stays paddingPx.
+   */
+  paddingYPx?: number;
   viewportHeight: number;
   viewportWidth: number;
 }): number {
-  const pad = args.paddingPx ?? VIEWPORT_PADDING_PX;
+  const padX = args.paddingPx ?? VIEWPORT_PADDING_PX;
+  const padY = args.paddingYPx ?? args.paddingPx ?? VIEWPORT_PADDING_PX;
   if (args.naturalWidth <= 0 || args.naturalHeight <= 0) return 1;
-  const availW = Math.max(1, args.viewportWidth - pad);
-  const availH = Math.max(1, args.viewportHeight - pad);
+  const availW = Math.max(1, args.viewportWidth - padX);
+  const availH = Math.max(1, args.viewportHeight - padY);
   return clampZoom(
     Math.min(availW / args.naturalWidth, availH / args.naturalHeight, 1)
   );

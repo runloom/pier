@@ -23,7 +23,6 @@ import type { GitReviewTreeModel } from "./tree.tsx";
 import { registerGitReviewTreeFolderHandlers } from "./tree-collapse-registry.ts";
 import { revealGitReviewTreeSelection } from "./tree-reveal-selection.ts";
 
-const REVIEW_TREE_WIDTH_STORAGE_KEY = "pier.git.review.treeWidthPx";
 const GIT_REVIEW_TREE_EXPAND_ALL_MAX_LEVELS = 64;
 
 const EMPTY_REVIEW_TREE_MODEL = {
@@ -279,7 +278,6 @@ export function GitReviewPanelLayout({
       onSidebarAutoCollapse={collapseSidebar}
       sidebar={sidebar}
       sidebarPanelId="git-review-tree"
-      sidebarWidthStorageKey={REVIEW_TREE_WIDTH_STORAGE_KEY}
     >
       {children}
     </FilePanelLayout>
