@@ -27,7 +27,9 @@ import {
 } from "./aggregator-session-title.ts";
 import {
   buildForegroundActivityBroadcast,
+  commandOwnedAgent,
   createPanelSlotRegistry,
+  pruneExpiredCooldownEntries,
 } from "./aggregator-slots.ts";
 import {
   logAgentEventDropped,
@@ -95,9 +97,6 @@ export function createForegroundActivityAggregator(
   const timerCtx: TimerCtx = { now, scheduleEmit, slots };
   const { dropSlotIfEmpty, slotFor } = createPanelSlotRegistry(slots);
   const subagentSessions = createSubagentSessionRegistry();
-  function commandOwnedAgent(slot: PanelSlot | undefined) {
-    return slot?.command?.kind === "agent-launch" ? slot.command.agentId : null;
-  }
 
   function closeSlot(
     key: string,
@@ -115,13 +114,7 @@ export function createForegroundActivityAggregator(
   }
 
   function pruneExpiredCooldowns(): void {
-    for (const map of [panelCooldownUntil, hookCooldownUntil]) {
-      for (const [id, until] of map) {
-        if (now() >= until) {
-          map.delete(id);
-        }
-      }
-    }
+    pruneExpiredCooldownEntries([panelCooldownUntil, hookCooldownUntil], now);
     hookScopes.pruneExpiredCooldowns();
   }
 
@@ -396,6 +389,9 @@ export function createForegroundActivityAggregator(
         scheduleEmit();
       }
       pruneExpiredCooldowns();
+    },
+    panelCommandOwnedAgent(panelId, windowId) {
+      return commandOwnedAgent(slots.get(panelKey(windowId, panelId)));
     },
     ptyExited(panelId, windowId) {
       const keys = keysForPanel(slots, panelId, windowId);

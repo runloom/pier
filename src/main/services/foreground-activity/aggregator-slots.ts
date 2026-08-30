@@ -1,9 +1,31 @@
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   ForegroundActivity,
   ForegroundActivityBroadcast,
 } from "@shared/contracts/foreground-activity.ts";
 import type { PanelSlot } from "./entry.ts";
 import { projectSlot } from "./slot-projection.ts";
+
+/** OSC 点亮的前台命令层归属 agent；非 agent-launch 命令层 → null。 */
+export function commandOwnedAgent(
+  slot: PanelSlot | undefined
+): AgentKind | null {
+  return slot?.command?.kind === "agent-launch" ? slot.command.agentId : null;
+}
+
+/** 清理已到期的冷却记录（面板关闭 / hook 迟到拦截等冷却窗口共用）。 */
+export function pruneExpiredCooldownEntries(
+  maps: Iterable<Map<string, number>>,
+  now: () => number
+): void {
+  for (const map of maps) {
+    for (const [id, until] of map) {
+      if (now() >= until) {
+        map.delete(id);
+      }
+    }
+  }
+}
 
 export function buildForegroundActivityBroadcast(
   slots: ReadonlyMap<string, PanelSlot>,

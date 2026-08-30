@@ -78,6 +78,10 @@ export const PIER_HOOKS_CURRENT_NAME = "current";
  *
  * 要点：
  * - PIER_PANEL_ID / PIER_WINDOW_ID 缺失时 exit 0（非 Pier 启动的 agent 静默跳过）
+ * - v3 附带 emit 进程的控制终端（`ps -o tty=`）：从 Pier 终端启动的 GUI
+ *   （如 `cursor .` 开 IDE）继承 PIER_* env，其内部 agent 触发共享 hook 时
+ *   事件会伪装成该面板——消费端用 tty 与面板 PTY 比对甄别；ps 失败时不写
+ *   字段（fail-open），甄别始终在消费端，不在脚本里拒发
  * - macOS 默认 date 不支持 %N，fallback 到 %s000000000
  * - `_var` 下划线前缀避免污染宿主 shell 变量命名空间
  * - 未知 kind → case 无匹配 → 静默 no-op
@@ -213,6 +217,8 @@ case "$1" in
         ;;
     esac
     [ -n "$_prompt_snippet" ] && _json="\${_json},\\"promptSnippet\\":\\"\${_prompt_snippet}\\""
+    _pier_tty=$(ps -o tty= -p $$ 2>/dev/null | LC_ALL=C tr -cd 'A-Za-z0-9/?-')
+    [ -n "$_pier_tty" ] && _json="\${_json},\\"tty\\":\\"\${_pier_tty}\\""
     _spawn_gen=$PIER_AGENT_SPAWN_GENERATION
     case "$_spawn_gen" in
       ''|*[!0-9]*) ;;
