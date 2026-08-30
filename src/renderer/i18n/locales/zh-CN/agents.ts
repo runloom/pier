@@ -28,6 +28,7 @@ export const agents = {
   },
   titleBar: {
     countsAria: "本机智能体：{{needsYou}} 需要你处理，{{running}} 运行中",
+    tooltip: "智能体",
   },
   collab: {
     title: "智能体协作",
