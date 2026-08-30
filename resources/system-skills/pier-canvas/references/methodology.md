@@ -70,7 +70,7 @@ Rules:
 
 ## Recipes (not methodology axes)
 
-`packs/recipes/design` and `packs/recipes/orchestration` are **freeform**
+`packs/recipes/design` and `packs/recipes/board` are **freeform**
 starters (`recipe=` on `/pier-canvas`). They do not add a fourth axis, do
 not invent overview tabs, and do not replace `design-doc` / `closed-loop`.
 See SKILL.md **Stage selection**.
@@ -146,7 +146,7 @@ Start from `templates/overview.canvas.tsx`.
 
 `recipe=` is **not** a fourth methodology axis. Packs live under
 `packs/recipes/` and force Workflow B (freeform). Known ids: `design`
-(world mockup), `orchestration` (DAG viewer), `board` (fill kanban).
+(world mockup), `board` (fill kanban).
 
 ## Entry
 

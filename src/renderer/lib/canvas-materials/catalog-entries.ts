@@ -152,36 +152,6 @@ export const CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> = {
     "<Field><FieldLabel>…</FieldLabel><Input /></Field>",
     p("orientation", "vertical | horizontal", "vertical", "orientation")
   ),
-  FlowGraph: entry(
-    [
-      "<FlowGraph",
-      `  aria-label="…"`,
-      `  presentation="plain"`,
-      "  nodes={[{ id, label, status, meta, badge }]}",
-      "  edges={[{ source, target, label }]}",
-      "  renderOverlay={({ positions }) => …}",
-      "/>",
-    ].join("\n"),
-    p("nodes", "FlowGraphNode[]", "—", "nodes"),
-    p("edges", "FlowGraphEdge[]", "—", "edges"),
-    p(
-      "direction",
-      "left-to-right | top-to-bottom",
-      "left-to-right",
-      "direction"
-    ),
-    p("positions", "Record<string, { x, y }>", "—", "flowGraphPositions"),
-    p(
-      "onNodePositionsChange",
-      "(positions) => void",
-      "—",
-      "onNodePositionsChange"
-    ),
-    p("onSelectNode", "(id) => void", "—", "onSelectNode"),
-    p("renderNodeContent", "(node) => ReactNode", "—", "renderNodeContent"),
-    p("renderOverlay", "(layout) => ReactNode", "—", "flowGraphOverlay"),
-    p("expandable", "boolean", "true", "expandable")
-  ),
   Frame: entry(
     "<Frame maxWidth={720}>…</Frame>",
     p("maxWidth", "number", "—", "maxWidth")
@@ -294,7 +264,7 @@ export const CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> = {
       "—",
       "onDropItem"
     ),
-    p("onDrop", "(itemId: string) => void", "—", "onDrop")
+    p("Droppable.onDrop", "(itemId: string) => void", "—", "onDrop")
   ),
   Spinner: entry("<Spinner />", CLASS_NAME_PROP),
   Stack: entry(

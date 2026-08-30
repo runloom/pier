@@ -137,14 +137,27 @@ export function useHostSnapshot(
     }
 
     let cancelled = false;
+    // Push payloads are the freshest truth; the initial snapshot pull only
+    // hydrates. If a broadcast lands while the pull is in flight, the stale
+    // snapshot resolution must not overwrite it.
+    let pushed = false;
     let pending: Promise<unknown> | undefined;
     const apply = (data: unknown): void => {
       if (!cancelled) {
         setState({ data, error: null, status: "ready" });
       }
     };
+    const applyPush = (data: unknown): void => {
+      pushed = true;
+      apply(data);
+    };
+    const applySnapshot = (data: unknown): void => {
+      if (!pushed) {
+        apply(data);
+      }
+    };
     const fail = (error: unknown): void => {
-      if (cancelled) {
+      if (cancelled || pushed) {
         return;
       }
       if (isUnsupported(error)) {
@@ -167,7 +180,7 @@ export function useHostSnapshot(
           payload,
           type: "pluginData.snapshot",
         })
-        .then(apply, fail);
+        .then(applySnapshot, fail);
       bridge
         .invoke({
           payload,
@@ -180,7 +193,7 @@ export function useHostSnapshot(
           if (!isPluginDataEventFor(event, pluginTarget)) {
             return;
           }
-          apply(extractPluginDataEvent(event));
+          applyPush(extractPluginDataEvent(event));
         }
       );
       return () => {
@@ -196,12 +209,12 @@ export function useHostSnapshot(
       };
     }
     if (snapshotId) {
-      pending = bridge.snapshot(snapshotId).then(apply, fail);
+      pending = bridge.snapshot(snapshotId).then(applySnapshot, fail);
     } else {
       setState({ data: null, error: null, status: "ready" });
     }
     const unsub = liveChannel
-      ? bridge.subscribe(liveChannel, apply)
+      ? bridge.subscribe(liveChannel, applyPush)
       : () => undefined;
     return () => {
       cancelled = true;

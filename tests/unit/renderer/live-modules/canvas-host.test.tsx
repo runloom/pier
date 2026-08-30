@@ -180,6 +180,183 @@ describe("canvas host runtime", () => {
     });
   });
 
+  it("keeps a live push when the initial snapshot resolves later (canonical)", async () => {
+    let resolveSnapshot: ((value: unknown) => void) | undefined;
+    const snapshot = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveSnapshot = resolve;
+        })
+    );
+    let listener: ((payload: unknown) => void) | undefined;
+    const subscribe = vi.fn(
+      (_channel: string, fn: (payload: unknown) => void) => {
+        listener = fn;
+        return () => undefined;
+      }
+    );
+    window.pier = {
+      canvasHost: {
+        inspect: host.inspect,
+        invoke: vi.fn(),
+        snapshot,
+        subscribe,
+      },
+    } as unknown as typeof window.pier;
+
+    const { result } = renderHook(() => useHostSnapshot("foreground-activity"));
+    act(() => {
+      listener?.({ activities: ["fresh"], ts: 2 });
+    });
+    expect(result.current.data).toEqual({ activities: ["fresh"], ts: 2 });
+
+    // The stale pull resolves after the broadcast: it must not win.
+    await act(async () => {
+      resolveSnapshot?.({ activities: [], ts: 1 });
+      await Promise.resolve();
+    });
+    expect(result.current).toEqual({
+      data: { activities: ["fresh"], ts: 2 },
+      error: null,
+      status: "ready",
+    });
+  });
+
+  it("ignores a late snapshot failure once a push landed (canonical)", async () => {
+    let rejectSnapshot: ((error: unknown) => void) | undefined;
+    const snapshot = vi.fn(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSnapshot = reject;
+        })
+    );
+    let listener: ((payload: unknown) => void) | undefined;
+    const subscribe = vi.fn(
+      (_channel: string, fn: (payload: unknown) => void) => {
+        listener = fn;
+        return () => undefined;
+      }
+    );
+    window.pier = {
+      canvasHost: {
+        inspect: host.inspect,
+        invoke: vi.fn(),
+        snapshot,
+        subscribe,
+      },
+    } as unknown as typeof window.pier;
+
+    const { result } = renderHook(() => useHostSnapshot("foreground-activity"));
+    act(() => {
+      listener?.({ ts: 2 });
+    });
+    await act(async () => {
+      rejectSnapshot?.(new Error("boom"));
+      await Promise.resolve();
+    });
+    expect(result.current).toEqual({
+      data: { ts: 2 },
+      error: null,
+      status: "ready",
+    });
+  });
+
+  it("keeps a live plugin push when the projection snapshot resolves later", async () => {
+    let resolveSnapshot: ((value: unknown) => void) | undefined;
+    const invoke = vi.fn((command: { type: string }) => {
+      if (command.type === "pluginData.snapshot") {
+        return new Promise((resolve) => {
+          resolveSnapshot = resolve;
+        });
+      }
+      return Promise.resolve(undefined);
+    });
+    let listener: ((event: unknown) => void) | undefined;
+    const subscribe = vi.fn(
+      (_channel: string, fn: (event: unknown) => void) => {
+        listener = fn;
+        return () => undefined;
+      }
+    );
+    window.pier = {
+      canvasHost: {
+        inspect: host.inspect,
+        invoke,
+        snapshot: vi.fn(),
+        subscribe,
+      },
+    } as unknown as typeof window.pier;
+
+    const { result } = renderHook(() =>
+      useHostSnapshot("plugin:pier.codex/accounts.usage")
+    );
+    act(() => {
+      listener?.({
+        key: "accounts.usage",
+        payload: "fresh",
+        pluginId: "pier.codex",
+      });
+    });
+    expect(result.current.data).toBe("fresh");
+
+    await act(async () => {
+      resolveSnapshot?.({ used: 1 });
+      await Promise.resolve();
+    });
+    expect(result.current).toEqual({
+      data: "fresh",
+      error: null,
+      status: "ready",
+    });
+  });
+
+  it("ignores a late plugin snapshot failure once a push landed", async () => {
+    let rejectSnapshot: ((error: unknown) => void) | undefined;
+    const invoke = vi.fn((command: { type: string }) => {
+      if (command.type === "pluginData.snapshot") {
+        return new Promise((_resolve, reject) => {
+          rejectSnapshot = reject;
+        });
+      }
+      return Promise.resolve(undefined);
+    });
+    let listener: ((event: unknown) => void) | undefined;
+    const subscribe = vi.fn(
+      (_channel: string, fn: (event: unknown) => void) => {
+        listener = fn;
+        return () => undefined;
+      }
+    );
+    window.pier = {
+      canvasHost: {
+        inspect: host.inspect,
+        invoke,
+        snapshot: vi.fn(),
+        subscribe,
+      },
+    } as unknown as typeof window.pier;
+
+    const { result } = renderHook(() =>
+      useHostSnapshot("plugin:pier.codex/accounts.usage")
+    );
+    act(() => {
+      listener?.({
+        key: "accounts.usage",
+        payload: "fresh",
+        pluginId: "pier.codex",
+      });
+    });
+    await act(async () => {
+      rejectSnapshot?.(new Error("projection not declared"));
+      await Promise.resolve();
+    });
+    expect(result.current).toEqual({
+      data: "fresh",
+      error: null,
+      status: "ready",
+    });
+  });
+
   it("propagates plugin snapshot command failures to the error state", async () => {
     const invoke = vi.fn(async () => {
       throw new Error("projection not declared");

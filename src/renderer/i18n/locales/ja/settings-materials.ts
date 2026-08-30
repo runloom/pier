@@ -10,7 +10,7 @@ export const settingsMaterials = {
   familyLayout: "レイアウト",
   familyControl: "コントロール",
   familyViz: "図",
-  familyData: "API",
+  familyData: "データと API",
   resultCount: "{{shown}} / {{total}}",
   emptyTitle: "一致するマテリアルはありません",
   emptyDescription:
@@ -55,14 +55,6 @@ export const settingsMaterials = {
   specimenChartLine: "折れ線グラフの例",
   specimenChartArea: "面グラフの例",
   specimenChartDonut: "ドーナツグラフの例",
-  specimenGraphDisplay: "図の例",
-  specimenGraphLive: "ライブ状態の例",
-  specimenGraphStart: "開始",
-  specimenGraphDecide: "通す？",
-  specimenGraphDone: "完了",
-  specimenGraphCompile: "コンパイル",
-  specimenGraphPublish: "公開",
-  specimenGraphQueued: "待機中",
   hostApi: {
     lead: "%commands% 個のコマンド · %events% 個のイベント",
   },
@@ -118,13 +110,6 @@ export const settingsMaterials = {
       "ネイティブ mermaid テキスト。シーケンス、状態、クラス、ER、マインドマップに使います。",
     renderNodeContent:
       "タイトルの下の表示。そのノードは contentHeight を設定する必要があります。",
-    flowGraphPositions:
-      "ノード位置。省略すると組み込みの階層レイアウトを使います。",
-    onNodePositionsChange:
-      "ノードをドラッグしたあとに呼ばれます。レイアウトを残すなら自分で保存します。",
-    onSelectNode: "ノードを選んだときに呼ばれます。",
-    flowGraphOverlay:
-      "レイアウト済みのノード位置に置く印（ゲートやキャプション）。オーバーレイはポインターを無視します。子が操作を受けるなら、その子でポインターを有効にします。",
     sortableItems: "表示順の項目 id。",
     onReorder: "このリスト内でドロップしたあとの新しい順。",
     onDropItem:
@@ -213,8 +198,6 @@ export const settingsMaterials = {
     Tooltip: "ホバーヒント",
     Table: "表",
     DataChart: "推移と比較",
-    FlowGraph:
-      "状態色つきのライブグラフ。ノードに補足を置け、実行中の辺は流れます。",
     Mermaid:
       "ノードからフローを描き、ネイティブ mermaid のシーケンス、状態、クラス、ER、マインドマップも使えます。",
     canvasFile: "キャンバス隣のファイル用サンドボックス。競合も含みます",

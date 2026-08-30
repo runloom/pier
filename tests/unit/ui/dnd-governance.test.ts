@@ -12,25 +12,7 @@ function dirSource(rel: string): string {
     .join("\n");
 }
 
-describe("FlowGraph / DnD canvas primitives", () => {
-  it("does not expose topology editing or react-flow", () => {
-    const source = dirSource("packages/ui/src/flow-graph");
-    expect(source).not.toMatch(/onConnect\b/);
-    expect(source).not.toMatch(/onAddEdge\b/);
-    expect(source).not.toMatch(/onEdgesChange\b/);
-    expect(source).not.toMatch(/isConnectable\b/);
-    expect(source).not.toContain("@xyflow");
-    expect(source).not.toContain("react-flow");
-    expect(source).not.toContain("reactflow");
-    expect(source).not.toContain("feTurbulence");
-    expect(source).toContain("onNodePositionsChange");
-    expect(source).toContain("onSelectNode");
-    expect(source).toContain("renderOverlay");
-    expect(source).toContain("renderNodeContent");
-    expect(source).toContain('"ready"');
-    expect(source).toContain('"blocked"');
-  });
-
+describe("DnD canvas primitives", () => {
   it("implements DnD with pointer events and no @dnd-kit", () => {
     const source = dirSource("packages/ui/src/dnd");
     expect(source).not.toContain("@dnd-kit");

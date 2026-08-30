@@ -18,8 +18,10 @@ function statusOf(state: {
   error: string | null;
   snapshot: PierResourceSnapshot | null;
 }): CanvasSystemResources["status"] {
-  if (state.error) return "error";
-  return state.snapshot ? "ready" : "loading";
+  // 与 useHostSnapshot("resources") 同语义：已有快照先展示（error 字段仍附带），
+  // 只有完全无数据时才落 error / loading。
+  if (state.snapshot) return "ready";
+  return state.error ? "error" : "loading";
 }
 
 /**

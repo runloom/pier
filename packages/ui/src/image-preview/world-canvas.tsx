@@ -329,7 +329,8 @@ function ZoomPanWorldStage({
  * `card` — static fit-all snapshot (does not capture wheel / page scroll).
  * `stage` — ContentPreviewHost fullscreen: fit by default, wheel/buttons zoom,
  * drag pan. Live-module canvas preview must NOT wrap this; it keeps a stable
- * host DOM and consumes `useZoomPanViewport` directly (design §3.4).
+ * host DOM and consumes `WorldViewportFrame` + `useWorldCamera` directly
+ * (design §3.4).
  */
 export function HtmlWorldCanvas({
   children,

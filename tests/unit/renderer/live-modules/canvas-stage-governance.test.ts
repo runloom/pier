@@ -3,10 +3,10 @@
  *
  * 锁定：
  * 1. 一个壳 — stage 判定单一来源在 canvas-stage.ts；预览目录无第二处推断。
- * 2. 无 fork — world 交互只消费 @pier/ui image-preview 的共享缩放数学
- *    （useZoomPanViewport / ImagePreviewControls / INTERACTIVE_PAN_IGNORE），
- *    预览目录不得自写缩放数学；canvas.tsx 不得 import HtmlWorldCanvas
- *    （包 stage 会重挂 live-module host）。
+ * 2. 无 fork — world 交互只消费 @pier/ui image-preview 的共享相机数学
+ *    （useWorldCamera / canvas-math / WorldViewportFrame / ImagePreviewControls /
+ *    INTERACTIVE_PAN_IGNORE），预览目录不得自写缩放数学；canvas.tsx 不得
+ *    import HtmlWorldCanvas（包 stage 会重挂 live-module host）。
  * 3. world 视口：相机 transform（overflow-hidden，无滚动条）；wheel = 平移，
  *    ctrl+wheel = 光标锚定缩放，无聚焦门控。
  * 4. WorldStage marker 唯一所有者是 pier-canvas-artboard.tsx。

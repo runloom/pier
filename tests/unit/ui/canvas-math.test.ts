@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import {
   anchoredScrollAfterZoom,
-  canvasWorldScale,
   fitCamera,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -136,22 +135,6 @@ describe("softClampCamera", () => {
   it("does not touch a camera already in range", () => {
     const camera = { scale: 1, x: -100, y: 150 };
     expect(softClampCamera(camera, content, viewport)).toEqual(camera);
-  });
-});
-
-describe("canvasWorldScale", () => {
-  it("returns visual over layout width", () => {
-    const el = document.createElement("div");
-    Object.defineProperty(el, "offsetWidth", { value: 200 });
-    el.getBoundingClientRect = () => ({ width: 100 }) as unknown as DOMRect;
-    expect(canvasWorldScale(el)).toBe(0.5);
-  });
-
-  it("falls back to 1 before layout", () => {
-    const el = document.createElement("div");
-    Object.defineProperty(el, "offsetWidth", { value: 0 });
-    el.getBoundingClientRect = () => ({ width: 0 }) as unknown as DOMRect;
-    expect(canvasWorldScale(el)).toBe(1);
   });
 });
 

@@ -19,9 +19,8 @@ declaration for each API you plan to use:
   `host.invoke` / `host.subscribe` / `host.snapshot` on the canvas; do
   not wrap those capabilities as product hooks. Adjacent files are
   `useCanvasFile`; global `file.*` is the host `file` domain.
-- `visualizations.d.ts` for `DataChart`, `Mermaid`, and `FlowGraph`.
-  `Mermaid` is a static diagram (architecture / sequence). `FlowGraph` is
-  a live DAG (status coloring + optional drag-to-place). Markdown preview
+- `visualizations.d.ts` for `DataChart` and `Mermaid`.
+  `Mermaid` is a static diagram (architecture / sequence). Markdown preview
   keeps a separate mermaid fence path.
 - `forms.d.ts` for controls, selection, and toggle composition.
 - `primitives.d.ts` for the complete standard UI primitive inventory.
@@ -133,8 +132,7 @@ stay there. Put complex calculations in pure adjacent modules.
 One component: `Mermaid`. The host paints with mermaid.js (parse + layout +
 paint). There is no second layout engine.
 
-**Static architecture / sequence** — `Mermaid`. **Live DAG / pipeline
-status** — `FlowGraph` (`recipe=orchestration`). Do not use `Mermaid` for a
+**Static architecture / sequence** — `Mermaid`. Do not use `Mermaid` for a
 viewer that recolors from a poll or persists node positions.
 
 **Flowchart / architecture** — pass `nodes` and `edges`. The host
@@ -144,7 +142,7 @@ Set `shape` (`round` / `diamond` / `rect` / `circle`) for notation
 silhouettes. Omit `shape` (or set `kind` / `tone`) for Pier cards.
 `status` / `renderNodeContent` remain as leftover APIs for static
 architecture diagrams that need a run glyph — **not** for a polling
-viewer (`FlowGraph` owns that).
+viewer.
 
 **Sequence, state, class, ER, mindmap** — pass native mermaid `source`. Do
 not compile those families from `nodes` / `edges`. mermaid.js classifies the
@@ -191,35 +189,8 @@ Rules:
   Their edges dash too.
 - Short predicates on edges; long copy belongs on node `meta` or a caption.
 - Do not infer `kind` from the title string.
-- **Live DAG / pipeline graphs:** use `FlowGraph` (status coloring +
-  optional `onNodePositionsChange`). `Mermaid` `status` / `renderNodeContent`
-  stays for static architecture diagrams that need a run glyph, not for a
-  polling viewer.
-
-## FlowGraph
-
-Live DAG / pipeline viewer. Root it in `WorldStage` with
-`presentation="plain"` (the host also infers plain inside a world stage).
-
-| Field | Role |
-|---|---|
-| `status` | `queued` · `ready` · `running` · `blocked` · `success` · `failed` · `skipped` |
-| `meta` | Secondary line under the title |
-| `badge` | Corner chip (display only) |
-| `contentHeight` | Reserved px when `renderNodeContent` paints this node |
-| edge `label` | Drawn on the path. A `running` source dashes the edge |
-
-`renderOverlay({ positions, width, height })` places gates and captions on
-the laid-out plane. The overlay root ignores pointer events; turn them on
-for a child that must be clicked.
-
-`layoutFlowGraph` recomputes ranks. Pass no `positions`, or `{}`, to
-relayer. Do not add a force-directed layout.
-
-Inspect with `onSelectNode` and a `Stack` / `Text` beside the graph. Keep
-Run / Refresh / parallel controls as canvas `Button` / `Select` composition.
-Do not put interactive controls inside `renderNodeContent`. Do not invent
-topology editing (`onConnect`) or a host run toolbar.
+- `Mermaid` `status` / `renderNodeContent` stays for static architecture
+  diagrams that need a run glyph, not for a polling viewer.
 
 ## Data and state
 
