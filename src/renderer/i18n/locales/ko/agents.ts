@@ -29,6 +29,7 @@ export const agents = {
   },
   titleBar: {
     countsAria: "에이전트: 처리 필요 {{needsYou}}건, 실행 중 {{running}}건",
+    tooltip: "에이전트",
   },
   collab: {
     title: "에이전트 협업",
