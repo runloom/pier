@@ -76,6 +76,7 @@ describe("PanelTransferService", () => {
       closeOpenWindowRecord: vi.fn(async () => undefined),
       createForTransfer: createForTransfer as never,
       destroyForTransfer: vi.fn(async () => undefined),
+      focus: vi.fn(),
       holdRendererShow: vi.fn(),
       list: vi.fn(() => [
         { focused: true, id: "main", recordId: "record-main" },
@@ -404,6 +405,115 @@ describe("PanelTransferService", () => {
       })
     ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
     expect(releaseCalls).toBe(1);
+  });
+
+  it("relocate new-window focuses the created window after commit", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.relocate(source, {
+        target: { kind: "new-window" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(windows.focus).toHaveBeenCalledExactlyOnceWith("w-new");
+  });
+
+  it("relocate managed window focuses the target window after commit", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.relocate(source, {
+        placement: { kind: "root" },
+        target: { kind: "window", windowId: "w-1" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(windows.focus).toHaveBeenCalledExactlyOnceWith("w-1");
+  });
+
+  it("failed relocate never focuses the target window", async () => {
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      if (command.type === "panelTransfer.stageTarget") {
+        return {
+          error: { message: "stage failed" },
+          ok: false,
+          requestId: "r1",
+        };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.relocate(source, {
+        target: { kind: "new-window" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ code: "transfer_failed", ok: false });
+    expect(windows.focus).not.toHaveBeenCalled();
+  });
+
+  it("focus failure does not fail a committed relocate", async () => {
+    vi.mocked(windows.focus).mockImplementation(() => {
+      throw new Error("focus boom");
+    });
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.relocate(source, {
+        target: { kind: "new-window" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(windows.focus).toHaveBeenCalledExactlyOnceWith("w-new");
+  });
+
+  it("drop does not focus the target window (drag semantics)", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const target = caller("w-1", "record-w1", 2);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.drop(target, {
+        placement: { kind: "root" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(windows.focus).not.toHaveBeenCalled();
+  });
+
+  it("finishDrag outside does not focus the created window (drag semantics)", async () => {
+    cursor = { x: 5000, y: 5000 }; // outside both windows
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    const result = await service.finishDrag(source, TRANSFER_A);
+    expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(createForTransfer).toHaveBeenCalledOnce();
+    expect(windows.focus).not.toHaveBeenCalled();
   });
 
   it("tryClaim is unique; second different claim is already_claimed", async () => {

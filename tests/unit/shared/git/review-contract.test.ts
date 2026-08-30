@@ -1,4 +1,5 @@
 import {
+  canonicalizeGitReviewTarget,
   getGitReviewFileSourceIdentity,
   gitReviewFileDocumentRequestSchema,
   gitReviewFileDocumentResultSchema,
@@ -6,6 +7,9 @@ import {
   gitReviewFileSourceSchema,
   gitReviewIndexEntrySchema,
   gitReviewIndexOkSchema,
+  gitReviewTargetIdentityKey,
+  gitReviewTargetSchema,
+  isGitReviewCommitRange,
 } from "@shared/contracts/git/review.ts";
 import { gitStatusSchema } from "@shared/contracts/git.ts";
 import { describe, expect, it } from "vitest";
@@ -98,6 +102,60 @@ describe("Git review shared contract", () => {
     expect(gitReviewFileSourceSchema.parse(withoutTarget).target).toEqual({
       kind: "uncommitted",
     });
+  });
+
+  it("commit fromOid 表示连续范围，等于 oid 时归一成单篇", () => {
+    const newest = "2".repeat(40);
+    const oldest = "1".repeat(40);
+    const range = gitReviewTargetSchema.parse({
+      fromOid: oldest,
+      kind: "commit",
+      oid: newest,
+    });
+    expect(range).toEqual({
+      fromOid: oldest,
+      kind: "commit",
+      oid: newest,
+    });
+    expect(isGitReviewCommitRange(range)).toBe(true);
+    expect(gitReviewTargetIdentityKey(range)).toBe(
+      `commit:${oldest}..${newest}`
+    );
+
+    const sameEnds = canonicalizeGitReviewTarget({
+      fromOid: newest,
+      kind: "commit",
+      oid: newest,
+    });
+    expect(sameEnds).toEqual({ kind: "commit", oid: newest });
+    expect(isGitReviewCommitRange(sameEnds)).toBe(false);
+    expect(gitReviewTargetIdentityKey(sameEnds)).toBe(`commit:${newest}`);
+    expect(
+      getGitReviewFileSourceIdentity({
+        ...normalizedSource,
+        target: {
+          fromOid: newest,
+          kind: "commit",
+          oid: newest,
+        },
+      })
+    ).toBe(
+      getGitReviewFileSourceIdentity({
+        ...normalizedSource,
+        target: { kind: "commit", oid: newest },
+      })
+    );
+    expect(
+      getGitReviewFileSourceIdentity({
+        ...normalizedSource,
+        target: range,
+      })
+    ).not.toBe(
+      getGitReviewFileSourceIdentity({
+        ...normalizedSource,
+        target: { kind: "commit", oid: newest },
+      })
+    );
   });
 
   it("keeps scope, safe paths, and the renderer entry projection strict", () => {

@@ -35,8 +35,9 @@ export default function CanvasKit() {
             画布物料
           </Text>
           <Text className="max-w-3xl text-sm leading-relaxed" tone="secondary">
-            从 `pier/canvas` 和 `pier/host` 组合页面。布局、控件、图示是积木实样；API
-            是能力目录（签名、用法、字段），没有实样井。设置里不再放物料目录；完整说明后续会放到官网文档。
+            从 `pier/canvas` 和 `pier/host`
+            组合页面。布局、控件、图示、数据是积木实样；API
+            是能力目录（`useCanvasFile` + 宿主各域的签名、用法、字段），没有实样井。设置里不再放物料目录；完整说明后续会放到官网文档。
           </Text>
         </Stack>
         <Tabs onValueChange={setTab} value={tab}>

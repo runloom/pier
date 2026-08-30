@@ -9,7 +9,7 @@ export const settingsMaterials = {
   familyLayout: "Layout",
   familyControl: "Controls",
   familyViz: "Diagrams",
-  familyData: "API",
+  familyData: "Data & API",
   resultCount: "{{shown}} / {{total}}",
   emptyTitle: "No matching materials",
   emptyDescription: "Try another search, or set Type back to All.",
@@ -53,14 +53,6 @@ export const settingsMaterials = {
   specimenChartLine: "Line chart sample",
   specimenChartArea: "Area chart sample",
   specimenChartDonut: "Donut chart sample",
-  specimenGraphDisplay: "Diagram sample",
-  specimenGraphLive: "Live status sample",
-  specimenGraphStart: "Start",
-  specimenGraphDecide: "Pass?",
-  specimenGraphDone: "Done",
-  specimenGraphCompile: "Compile",
-  specimenGraphPublish: "Publish",
-  specimenGraphQueued: "Queued",
   hostApi: {
     lead: "%commands% commands · %events% events",
   },
@@ -116,13 +108,6 @@ export const settingsMaterials = {
       "Native mermaid text. Use this for sequence, state, class, ER, and mind map.",
     renderNodeContent:
       "Display chrome under the title. That node must set contentHeight.",
-    flowGraphPositions:
-      "Optional node positions. Omit to use the built-in layout.",
-    onNodePositionsChange:
-      "Called after a node is dragged. Save this if you want the layout to stick.",
-    onSelectNode: "Called when a node is selected.",
-    flowGraphOverlay:
-      "Marks anchored to laid-out node positions, such as gates or captions. The overlay ignores pointer events unless a child turns them back on.",
     sortableItems: "Item ids in display order.",
     onReorder: "Called with the new order after a drop in this list.",
     onDropItem:
@@ -210,8 +195,6 @@ export const settingsMaterials = {
     Tooltip: "Hover hint",
     Table: "Table",
     DataChart: "Trends and comparisons",
-    FlowGraph:
-      "Live graph with status colors. Nodes can carry a secondary line; edges follow a running source.",
     Mermaid:
       "Flowcharts from nodes, plus native mermaid sequence, state, class, ER, and mind maps.",
     canvasFile: "Sibling-file sandbox next to the canvas, including conflicts",

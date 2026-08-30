@@ -21,5 +21,9 @@
  *     claude 命令加 CURSOR_VERSION 跳过守卫。
  * 15 = emit 等锁超时先回收已死锁主再降级无锁 append（活着的 rotation
  *     仍可能重叠，不保证原子）；JS/Python writer 超时仍写出。
+ * 16 = v3 emit 附带 emit 进程控制终端（`"tty"`）：甄别从 Pier 终端启动、
+ *     继承 PIER_* env 的 GUI 进程树（`cursor .` 开 IDE 后 IDE 内 agent
+ *     触发共享 hook）冒充面板事件；判定在消费端（tty ≠ 面板 PTY 且未
+ *     点亮该 agent 才拒），脚本侧只采集不拒发。
  */
-export const PIER_HOOK_COMMAND_GENERATION = 15;
+export const PIER_HOOK_COMMAND_GENERATION = 16;

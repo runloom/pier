@@ -36,7 +36,8 @@ interface RangeExecOptions {
 
 /**
  * 把 commit/branch 目标解析为不可变的 (base, head) OID 对:
- * - commit: base = 首父(根提交用空树), head = 该 commit
+ * - commit: base = 最老一篇的首父(根提交用空树), head = 最新一篇
+ *   无 fromOid 时最老=最新，即相对首父
  * - branch: base = merge-base(ref, HEAD)(无共同祖先退化为 ref tip), head = HEAD
  */
 export async function resolveGitReviewRangeBounds(
@@ -50,20 +51,21 @@ export async function resolveGitReviewRangeBounds(
   control: RangeExecOptions
 ): Promise<GitReviewRangeBounds> {
   if (options.target.kind === "commit") {
-    const headOid = await resolveCommitOid(
+    const { newestOid, oldestOid } = await resolveCommitRangeEndpoints(
       execGitRaw,
       options.cwd,
-      `${options.target.oid}^{commit}`,
+      options.target.oid,
+      options.target.fromOid,
       control
     );
     const baseOid =
       (await tryResolveCommitOid(
         execGitRaw,
         options.cwd,
-        `${options.target.oid}^1`,
+        `${oldestOid}^1`,
         control
       )) ?? EMPTY_TREE_OID[options.objectFormat];
-    return Object.freeze({ baseOid, headOid });
+    return Object.freeze({ baseOid, headOid: newestOid });
   }
   if (options.headOid === null) {
     throw new GitReviewIndexInputError(
@@ -86,6 +88,87 @@ export async function resolveGitReviewRangeBounds(
     baseOid: mergeBase ?? refTip,
     headOid: options.headOid,
   });
+}
+
+async function resolveCommitRangeEndpoints(
+  execGitRaw: ExecGitRaw,
+  cwd: string,
+  oid: string,
+  fromOid: string | undefined,
+  control: RangeExecOptions
+): Promise<{ newestOid: string; oldestOid: string }> {
+  const resolvedOid = await resolveCommitOid(
+    execGitRaw,
+    cwd,
+    `${oid}^{commit}`,
+    control
+  );
+  if (fromOid === undefined || fromOid === oid) {
+    return { newestOid: resolvedOid, oldestOid: resolvedOid };
+  }
+  const resolvedFromOid = await resolveCommitOid(
+    execGitRaw,
+    cwd,
+    `${fromOid}^{commit}`,
+    control
+  );
+  if (resolvedFromOid === resolvedOid) {
+    return { newestOid: resolvedOid, oldestOid: resolvedOid };
+  }
+  if (
+    await isCommitAncestor(
+      execGitRaw,
+      cwd,
+      resolvedFromOid,
+      resolvedOid,
+      control
+    )
+  ) {
+    return { newestOid: resolvedOid, oldestOid: resolvedFromOid };
+  }
+  if (
+    await isCommitAncestor(
+      execGitRaw,
+      cwd,
+      resolvedOid,
+      resolvedFromOid,
+      control
+    )
+  ) {
+    return { newestOid: resolvedFromOid, oldestOid: resolvedOid };
+  }
+  throw new GitReviewIndexInputError("Git Review 提交范围没有祖先关系");
+}
+
+async function isCommitAncestor(
+  execGitRaw: ExecGitRaw,
+  cwd: string,
+  ancestorOid: string,
+  descendantOid: string,
+  control: RangeExecOptions
+): Promise<boolean> {
+  try {
+    const result = await execGitRaw(
+      ["merge-base", "--is-ancestor", ancestorOid, descendantOid],
+      {
+        budget: control.budget,
+        cwd,
+        maxOutputBytes: RANGE_RESOLUTION_MAX_OUTPUT_BYTES,
+        mode: "collect",
+        ...(control.signal === undefined ? {} : { signal: control.signal }),
+      }
+    );
+    return result.kind === "collected";
+  } catch (error) {
+    if (
+      error instanceof GitExecRawError &&
+      error.causeKind === "exit" &&
+      error.exitCode === 1
+    ) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 async function resolveCommitOid(

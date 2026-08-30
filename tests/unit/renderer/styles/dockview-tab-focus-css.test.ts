@@ -141,11 +141,12 @@ describe("Pier dockview tab focus CSS", () => {
     expect(css).toContain(
       '.dv-tab.dv-active-tab [data-slot="panel-tab-separator"]'
     );
-    // Hover must not hide the tick (panel tabs have no Chrome raised shape).
-    expect(css).not.toContain(
-      '.dv-tab:hover [data-slot="panel-tab-separator"]'
+    expect(css).toContain(
+      '.dv-tab.dv-active-tab\n  + .dv-tab\n  [data-slot="panel-tab-separator"]'
     );
-    expect(css).not.toContain(
+    // Hover hides both ticks, same as selected (wash already cuts the tab).
+    expect(css).toContain('.dv-tab:hover [data-slot="panel-tab-separator"]');
+    expect(css).toContain(
       '.dv-tab:hover\n  + .dv-tab\n  [data-slot="panel-tab-separator"]'
     );
   });

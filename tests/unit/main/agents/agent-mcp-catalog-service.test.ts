@@ -125,7 +125,11 @@ describe("createAgentMcpCatalogService", () => {
     const server = snap.servers.find((s) => s.name === "shadcn");
     expect(server?.listings.map((l) => l.agentId).sort()).toEqual([
       "claude",
+      "codebuddy",
+      "copilot",
       "omp",
+      "openclaude",
+      "qodercli",
     ]);
     expect(
       server?.effects

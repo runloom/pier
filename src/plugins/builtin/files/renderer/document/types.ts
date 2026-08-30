@@ -186,6 +186,8 @@ export interface FilesDocument {
   durabilityUnknown: boolean;
   eol: FileDocumentEol | null;
   error: string | null;
+  /** Read failed with EPERM (TCC); UI on macOS shows the Files & Folders guide. */
+  folderAccessBlocked?: boolean;
   format: FileDocumentFormat | null;
   hasBackingStore: boolean;
   id: string;

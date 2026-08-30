@@ -4,6 +4,10 @@ import {
   parseGitReviewDiffOpenMetadata,
   registerGitReviewDiffActions,
 } from "@plugins/builtin/git/renderer/review/diff-actions.ts";
+import {
+  GIT_REVIEW_OPEN_DIRECTORY_COMMAND_ID,
+  registerGitReviewOpenDirectoryAction,
+} from "@plugins/builtin/git/renderer/review/directory/open-action.ts";
 import { GIT_REVIEW_TREE_ITEM_SURFACE } from "@plugins/builtin/git/renderer/review/tree-actions.ts";
 import { parseGitReviewTreeItemMetadata } from "@plugins/builtin/git/renderer/review/tree-item-model.ts";
 import {
@@ -18,16 +22,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";
 
-function collectActionIds(
+function menuSketch(
   entries: ReturnType<typeof buildMenuEntries>
-): string[] {
-  const ids: string[] = [];
-  for (const entry of entries) {
-    if (entry.type === "action") {
-      ids.push(entry.id);
+): Array<"|" | string> {
+  return entries.map((entry) => {
+    if (entry.type === "separator") {
+      return "|";
     }
-  }
-  return ids;
+    if (entry.type === "action" || entry.type === "checkbox") {
+      return entry.id;
+    }
+    return entry.type === "role" ? entry.role : entry.label;
+  });
 }
 
 describe("git review diff open actions", () => {
@@ -45,7 +51,15 @@ describe("git review diff open actions", () => {
     dialogs: {
       alert: vi.fn(async () => undefined),
     },
-    files: { openInEditor, reveal },
+    files: {
+      openInEditor,
+      openProjectDirectory: vi.fn(async () => ({
+        instanceId: "x",
+        ok: true,
+        reused: false,
+      })),
+      reveal,
+    },
     i18n: {
       t: (_key: string, _values: unknown, fallback: string) => fallback,
     },
@@ -61,6 +75,7 @@ describe("git review diff open actions", () => {
     success.mockClear();
     reveal.mockClear();
     const disposeDiff = registerGitReviewDiffActions(context);
+    const disposeDirectory = registerGitReviewOpenDirectoryAction(context);
     const disposePath = registerGitReviewTreePathActions({
       context,
       parseItem: parseGitReviewTreeItemMetadata,
@@ -68,6 +83,7 @@ describe("git review diff open actions", () => {
     });
     dispose = () => {
       disposeDiff();
+      disposeDirectory();
       disposePath();
     };
   });
@@ -165,21 +181,21 @@ describe("git review diff open actions", () => {
   });
 
   it("shows path actions and path-with-range on the diff surface", () => {
-    const ids = collectActionIds(
-      buildMenuEntries(GIT_REVIEW_DIFF_SURFACE, {
-        metadata: {
-          contextId: "ctx",
-          gitRootPath: "/repo",
-          line: 18,
-          path: "src/a.ts",
-          selectionEndLine: 21,
-          selectionStartLine: 18,
-        },
-        surface: GIT_REVIEW_DIFF_SURFACE,
-      })
-    );
-    expect(ids).toEqual([
+    const menu = buildMenuEntries(GIT_REVIEW_DIFF_SURFACE, {
+      metadata: {
+        contextId: "ctx",
+        gitRootPath: "/repo",
+        line: 18,
+        path: "src/a.ts",
+        selectionEndLine: 21,
+        selectionStartLine: 18,
+      },
+      surface: GIT_REVIEW_DIFF_SURFACE,
+    });
+    expect(menuSketch(menu)).toEqual([
       GIT_REVIEW_OPEN_IN_EDITOR_COMMAND_ID,
+      GIT_REVIEW_OPEN_DIRECTORY_COMMAND_ID,
+      "|",
       GIT_REVIEW_COPY_PATH_COMMAND_ID,
       GIT_REVIEW_COPY_RELATIVE_PATH_COMMAND_ID,
       GIT_REVIEW_COPY_PATH_WITH_RANGE_COMMAND_ID,
@@ -188,18 +204,18 @@ describe("git review diff open actions", () => {
   });
 
   it("keeps path-with-range visible like the editor when there is no line span", () => {
-    const ids = collectActionIds(
-      buildMenuEntries(GIT_REVIEW_DIFF_SURFACE, {
-        metadata: {
-          contextId: "ctx",
-          gitRootPath: "/repo",
-          path: "src/a.ts",
-        },
-        surface: GIT_REVIEW_DIFF_SURFACE,
-      })
-    );
-    expect(ids).toEqual([
+    const menu = buildMenuEntries(GIT_REVIEW_DIFF_SURFACE, {
+      metadata: {
+        contextId: "ctx",
+        gitRootPath: "/repo",
+        path: "src/a.ts",
+      },
+      surface: GIT_REVIEW_DIFF_SURFACE,
+    });
+    expect(menuSketch(menu)).toEqual([
       GIT_REVIEW_OPEN_IN_EDITOR_COMMAND_ID,
+      GIT_REVIEW_OPEN_DIRECTORY_COMMAND_ID,
+      "|",
       GIT_REVIEW_COPY_PATH_COMMAND_ID,
       GIT_REVIEW_COPY_RELATIVE_PATH_COMMAND_ID,
       GIT_REVIEW_COPY_PATH_WITH_RANGE_COMMAND_ID,

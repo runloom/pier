@@ -3,6 +3,9 @@
  * command/args/env/url payloads (secrets stay out of the catalog snapshot).
  */
 
+import { parse as parseToml } from "smol-toml";
+import { parse as parseYaml } from "yaml";
+
 const MAX_BYTES = 512 * 1024;
 
 /** `[mcp_servers.name]` or `[mcp_servers."name"]` — Codex user config. */
@@ -13,7 +16,11 @@ export type McpConfigFormat =
   | "json-mcp-servers"
   | "claude-user-json"
   | "codex-toml"
-  | "opencode-json";
+  | "opencode-json"
+  | "amp-settings-json"
+  | "goose-yaml"
+  | "hermes-yaml"
+  | "vibe-toml";
 
 function uniqueSorted(names: Iterable<string>): string[] {
   return [...new Set(names)]
@@ -117,6 +124,69 @@ export function parseClaudeUserJsonMcpServerNames(
   return uniqueSorted(names);
 }
 
+function keysOfRecord(value: unknown, key: string): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const nested = (value as Record<string, unknown>)[key];
+  if (!nested || typeof nested !== "object" || Array.isArray(nested)) return [];
+  return Object.keys(nested as Record<string, unknown>).filter(
+    (name) => typeof name === "string" && name.trim().length > 0
+  );
+}
+
+export function parseAmpSettingsMcpServerNames(raw: string): string[] {
+  try {
+    return uniqueSorted(
+      keysOfRecord(JSON.parse(raw) as unknown, "amp.mcpServers")
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function parseGooseYamlMcpServerNames(raw: string): string[] {
+  try {
+    return uniqueSorted(keysOfRecord(parseYaml(raw), "extensions"));
+  } catch {
+    return [];
+  }
+}
+
+export function parseHermesYamlMcpServerNames(raw: string): string[] {
+  try {
+    return uniqueSorted(keysOfRecord(parseYaml(raw), "mcp_servers"));
+  } catch {
+    return [];
+  }
+}
+
+export function parseVibeTomlMcpServerNames(raw: string): string[] {
+  try {
+    const parsed: unknown = parseToml(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return [];
+    }
+    const servers = (parsed as { mcp_servers?: unknown }).mcp_servers;
+    if (Array.isArray(servers)) {
+      return uniqueSorted(
+        servers.flatMap((item) => {
+          if (
+            item !== null &&
+            typeof item === "object" &&
+            !Array.isArray(item) &&
+            typeof (item as { name?: unknown }).name === "string"
+          ) {
+            return [(item as { name: string }).name];
+          }
+          return [];
+        })
+      );
+    }
+    return uniqueSorted(keysOfRecord(parsed, "mcp_servers"));
+  } catch {
+    return [];
+  }
+}
+
 export function parseMcpServerNames(
   raw: string,
   format: McpConfigFormat,
@@ -128,10 +198,18 @@ export function parseMcpServerNames(
   switch (format) {
     case "codex-toml":
       return parseCodexTomlMcpServerNames(raw);
+    case "vibe-toml":
+      return parseVibeTomlMcpServerNames(raw);
     case "claude-user-json":
       return parseClaudeUserJsonMcpServerNames(raw, projectRootPath);
     case "opencode-json":
       return parseOpencodeJsonMcpServerNames(raw);
+    case "amp-settings-json":
+      return parseAmpSettingsMcpServerNames(raw);
+    case "goose-yaml":
+      return parseGooseYamlMcpServerNames(raw);
+    case "hermes-yaml":
+      return parseHermesYamlMcpServerNames(raw);
     default:
       return parseJsonMcpServerNames(raw);
   }

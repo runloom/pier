@@ -27,6 +27,7 @@ function hookEvent(
     kind: "agentEvent",
     panelId: "panel-1",
     sessionId: "session-1",
+    turnId: "prompt-1",
     v: 1,
     windowId: "1",
     ...overrides,
@@ -58,7 +59,7 @@ describe("classifyGrokUpdatesLine", () => {
     ).toEqual({
       nativeEvent: "grok.updates.turn_completed.cancelled",
       pierEvent: "TurnInterrupted",
-      turnId: "",
+      turnId: "prompt-1",
     });
   });
 
@@ -68,7 +69,7 @@ describe("classifyGrokUpdatesLine", () => {
     ).toEqual({
       nativeEvent: "grok.updates.turn_completed.end_turn",
       pierEvent: "TurnCompleted",
-      turnId: "",
+      turnId: "prompt-1",
     });
   });
 
@@ -78,6 +79,22 @@ describe("classifyGrokUpdatesLine", () => {
     ).toBeNull();
     expect(
       classifyGrokUpdatesLine(turnCompletedLine("rate_limit").trim())
+    ).toBeNull();
+  });
+
+  it("缺少 prompt_id 时丢弃终态，禁止空 id owner 回退", () => {
+    expect(
+      classifyGrokUpdatesLine(
+        JSON.stringify({
+          method: "session/update",
+          params: {
+            update: {
+              sessionUpdate: "turn_completed",
+              stop_reason: "end_turn",
+            },
+          },
+        })
+      )
     ).toBeNull();
   });
 
@@ -149,6 +166,7 @@ describe("createGrokTranscriptReconciler", () => {
       nativeEvent: "grok.updates.turn_completed.cancelled",
       panelId: "panel-1",
       sessionId: "session-1",
+      turnId: "prompt-1",
       v: 3,
       windowId: "1",
     });

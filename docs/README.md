@@ -1,12 +1,12 @@
 # Pier 文档
 
-Pier 是本地 AI 开发工作台。根目录 [`README.md`](../README.md) 是产品前门，介绍产品定位、核心工作流、能力边界、安装与首次使用；本页按用户、贡献者和维护者的常见任务整理深入资料。
+Pier 是给命令行 AI 用的桌面工作台。根目录 [`README.md`](../README.md) 是产品前门，先讲谁在等你，以及文件、编辑、Git 在同一个窗口；本页按用户、贡献者和维护者的常见任务整理深入资料。
 
 ## 使用 Pier
 
 | 文档 | 适合谁 | 你会找到什么 |
 | --- | --- | --- |
-| [项目 README](../README.md) | 初次了解 Pier 的用户 | 产品定位、核心工作流、能力边界、安装与首次使用 |
+| [项目 README](../README.md) | 初次了解 Pier 的用户 | 给谁用、谁在等你、Git、Canvas 编排、能力边界、安装与首次使用 |
 | [GitHub Releases](https://github.com/runloom/pier/releases) | 安装桌面端的用户 | 适用于 macOS 的当前安装包与版本说明 |
 | [CLI 用户手册](../.pier/canvases/pier-cli-user-manual/README.md) | 需要从命令行控制 Pier 的用户与工具调用方 | 控制正在本机运行的 Pier；包含上手步骤、常用命令和状态语义 |
 | [变更日志](../CHANGELOG.md) | 所有人 | 版本变化与尚未发布的更新 |

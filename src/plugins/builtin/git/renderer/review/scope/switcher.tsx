@@ -1,0 +1,283 @@
+import { Button } from "@pier/ui/button.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+} from "@pier/ui/select.tsx";
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type { GitReviewTarget } from "@shared/contracts/git/review.ts";
+import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
+import { ChevronDown } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { pluginText } from "../../plugin-text.ts";
+import {
+  GitReviewBranchCombobox,
+  GitReviewCommitCombobox,
+} from "./comboboxes.tsx";
+
+/** 与 loomdesk 一致的默认对比分支优先级(排除当前分支)。 */
+const DEFAULT_TARGET_BRANCH_NAMES = [
+  "main",
+  "master",
+  "origin/main",
+  "origin/master",
+];
+
+type GitReviewScopeKind = GitReviewTarget["kind"];
+
+function preferredTargetBranch(
+  branches: readonly GitDiffBranchOption[]
+): GitDiffBranchOption | null {
+  for (const name of DEFAULT_TARGET_BRANCH_NAMES) {
+    const match = branches.find(
+      (branch) => branch.name === name && !branch.current
+    );
+    if (match) {
+      return match;
+    }
+  }
+  return branches.find((branch) => !branch.current) ?? null;
+}
+
+/**
+ * Changes 面板 header 左侧的 review 目标切换:
+ * 第一段是 scope Select(未提交/提交/分支);commit/branch 在右侧内联第二段
+ * combobox,并在切换 scope 时自动选中默认目标(最新提交 / main·master 系默认分支)。
+ */
+export function GitReviewScopeSwitcher({
+  context,
+  gitRootPath,
+  onSelectTarget,
+  onTargetSelectionPendingChange,
+  target,
+}: {
+  readonly context: RendererPluginContext;
+  readonly gitRootPath: string;
+  readonly onSelectTarget: (target: GitReviewTarget) => void;
+  readonly onTargetSelectionPendingChange?: (
+    pending: boolean,
+    scopeKind?: "branch" | "commit"
+  ) => void;
+  readonly target: GitReviewTarget;
+}): React.JSX.Element {
+  // 切到 commit/branch 后 target 尚未变化(自动/手动选定目标前);pending 驱动 UI。
+  const [pendingKind, setPendingKind] = useState<GitReviewScopeKind | null>(
+    null
+  );
+  const kind = pendingKind ?? target.kind;
+  // 自动选取效果只应由 pendingKind 驱动;回调经 ref 消费避免随渲染重跑。
+  const onSelectTargetRef = useRef(onSelectTarget);
+  onSelectTargetRef.current = onSelectTarget;
+  const pendingKindRef = useRef(pendingKind);
+  pendingKindRef.current = pendingKind;
+
+  // 列表勾选走面板 session，不会经过下面 combobox 的 onSelectTarget 包装。
+  // 目标已经落到 pending 的 kind 时立刻清 pending，让自动选取 effect cleanup
+  // 把 cancelled 置位，避免 in-flight 最新提交把用户勾选盖掉。
+  useLayoutEffect(() => {
+    if (pendingKind === null || target.kind !== pendingKind) {
+      return;
+    }
+    pendingKindRef.current = null;
+    setPendingKind(null);
+    onTargetSelectionPendingChange?.(false);
+  }, [onTargetSelectionPendingChange, pendingKind, target.kind]);
+  const scopeLabels: Record<GitReviewScopeKind, string> = {
+    branch: pluginText(context, "reviewScopeBranch", "Branch"),
+    commit: pluginText(context, "reviewScopeCommit", "Commit"),
+    uncommitted: pluginText(context, "reviewScopeUncommitted", "Uncommitted"),
+  };
+
+  // 对齐 loomdesk:切到 commit scope 未选目标时自动选最新提交。
+  // 搜索失败或无候选时回退 pending 并提示,避免 header 显示新 scope
+  // 而面板仍渲染旧目标的脱节状态。
+  useEffect(() => {
+    if (pendingKind !== "commit") {
+      return;
+    }
+    let cancelled = false;
+    const revert = (key: string, fallback: string) => {
+      if (cancelled) {
+        return;
+      }
+      setPendingKind(null);
+      onTargetSelectionPendingChange?.(false);
+      context.notifications.error(pluginText(context, key, fallback));
+    };
+    context.git
+      .searchCommits(gitRootPath, { limit: 1, query: "" })
+      .then((result) => {
+        if (cancelled || pendingKindRef.current !== "commit") {
+          return;
+        }
+        if (result.status !== "ok") {
+          revert(
+            "reviewScopeCommitsLoadFailed",
+            "Couldn't load commits. Try again."
+          );
+          return;
+        }
+        const latest = result.items[0];
+        if (!latest) {
+          revert(
+            "reviewScopeNoCommitsToReview",
+            "This repository has no commits to review."
+          );
+          return;
+        }
+        setPendingKind(null);
+        onTargetSelectionPendingChange?.(false);
+        onSelectTargetRef.current({ kind: "commit", oid: latest.hash });
+      })
+      .catch(() => {
+        revert(
+          "reviewScopeCommitsLoadFailed",
+          "Couldn't load commits. Try again."
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [context, gitRootPath, onTargetSelectionPendingChange, pendingKind]);
+
+  // 对齐 loomdesk:切到 branch scope 未选目标时自动选默认分支(main/master 系)。
+  // 失败回退语义同上方 commit 效果。
+  useEffect(() => {
+    if (pendingKind !== "branch") {
+      return;
+    }
+    let cancelled = false;
+    const revert = (key: string, fallback: string) => {
+      if (cancelled) {
+        return;
+      }
+      setPendingKind(null);
+      onTargetSelectionPendingChange?.(false);
+      context.notifications.error(pluginText(context, key, fallback));
+    };
+    context.git
+      .searchBranches(gitRootPath, {
+        diffMode: "commitGraph",
+        limit: 1000,
+        query: "",
+      })
+      .then((result) => {
+        if (cancelled || pendingKindRef.current !== "branch") {
+          return;
+        }
+        if (result.status !== "ok") {
+          revert(
+            "reviewScopeBranchesLoadFailed",
+            "Couldn't load branches. Try again."
+          );
+          return;
+        }
+        const preferred = preferredTargetBranch(result.items);
+        if (!preferred) {
+          revert(
+            "reviewScopeNoOtherBranches",
+            "No other branches to compare against."
+          );
+          return;
+        }
+        setPendingKind(null);
+        onTargetSelectionPendingChange?.(false);
+        onSelectTargetRef.current({ kind: "branch", ref: preferred.name });
+      })
+      .catch(() => {
+        revert(
+          "reviewScopeBranchesLoadFailed",
+          "Couldn't load branches. Try again."
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [context, gitRootPath, onTargetSelectionPendingChange, pendingKind]);
+
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <Select
+        onValueChange={(value) => {
+          if (value === "uncommitted") {
+            setPendingKind(null);
+            onTargetSelectionPendingChange?.(false);
+            if (target.kind !== "uncommitted") {
+              onSelectTarget({ kind: "uncommitted" });
+            }
+            return;
+          }
+          if (value === "commit" || value === "branch") {
+            const nextPendingKind = value === target.kind ? null : value;
+            setPendingKind(nextPendingKind);
+            if (nextPendingKind === null) {
+              onTargetSelectionPendingChange?.(false);
+            } else {
+              onTargetSelectionPendingChange?.(true, nextPendingKind);
+            }
+          }
+        }}
+        value={kind}
+      >
+        {/* kit 无 sm 触发器实体样式;header 24px 密度沿 panel-overflow 的
+            asChild+Button 先例。 */}
+        <SelectTrigger
+          aria-label={pluginText(
+            context,
+            "reviewScopeSwitcherLabel",
+            "Select review target"
+          )}
+          asChild
+        >
+          <Button
+            data-testid="git-review-scope-switcher"
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            <span className="min-w-0 truncate">{scopeLabels[kind]}</span>
+            <ChevronDown data-icon="inline-end" />
+          </Button>
+        </SelectTrigger>
+        <SelectContent align="start" position="popper">
+          <SelectGroup>
+            <SelectItem value="uncommitted">
+              {scopeLabels.uncommitted}
+            </SelectItem>
+            <SelectItem value="commit">{scopeLabels.commit}</SelectItem>
+            <SelectItem value="branch">{scopeLabels.branch}</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {kind === "commit" ? (
+        <GitReviewCommitCombobox
+          context={context}
+          gitRootPath={gitRootPath}
+          onSelectTarget={(next) => {
+            setPendingKind(null);
+            onTargetSelectionPendingChange?.(false);
+            onSelectTarget(next);
+          }}
+          selectedFromOid={
+            target.kind === "commit" ? (target.fromOid ?? null) : null
+          }
+          selectedOid={target.kind === "commit" ? target.oid : null}
+        />
+      ) : null}
+      {kind === "branch" ? (
+        <GitReviewBranchCombobox
+          context={context}
+          gitRootPath={gitRootPath}
+          onPick={(branch) => {
+            setPendingKind(null);
+            onTargetSelectionPendingChange?.(false);
+            onSelectTarget({ kind: "branch", ref: branch.name });
+          }}
+          selectedRef={target.kind === "branch" ? target.ref : null}
+        />
+      ) : null}
+    </div>
+  );
+}

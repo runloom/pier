@@ -263,6 +263,8 @@ describe("opencode-json upsert", () => {
     expect(inferMemoryFormat("/xdg/opencode/opencode.json")).toBe(
       "opencode-json"
     );
+    expect(inferMemoryFormat("/xdg/kilo/kilo.json")).toBe("opencode-json");
+    expect(inferMemoryFormat("/xdg/crush/crush.jsonc")).toBe("opencode-json");
   });
 });
 

@@ -4,7 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const invokeMock = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", () => ({
-  ipcRenderer: { invoke: invokeMock },
+  ipcRenderer: {
+    getMaxListeners: () => 10,
+    invoke: invokeMock,
+    setMaxListeners: vi.fn(),
+  },
 }));
 
 import { filesApi } from "@preload/file-api.ts";

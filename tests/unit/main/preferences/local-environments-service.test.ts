@@ -14,6 +14,7 @@ import {
   type LocalEnvironmentService,
   LocalEnvironmentServiceError,
 } from "@main/services/local-environments-service.ts";
+import { applyCanonicalProjectRegistration } from "@main/services/local-environments-service-wire.ts";
 import type { ProcessEnvironmentService } from "@main/services/process-environment-service.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -153,6 +154,65 @@ describe("createLocalEnvironmentService", () => {
       setupCommand: "team setup",
       updatedAt: 999,
     });
+  });
+
+  it("addProject registers the git primary checkout when the path is a worktree", async () => {
+    const mainPath = await makeDir("repo");
+    const worktreePath = await makeDir("repo.worktree-feat");
+    const canonicalMain = await realpath(mainPath);
+    const canonicalWorktree = await realpath(worktreePath);
+    const withFamily = createLocalEnvironmentService({
+      filePath: join(tempDir, "local-environments-family.json"),
+      now: () => now,
+      processEnvironment: fakeProcessEnvironment(),
+      resolveGitWorktreeFamily: async () => ({
+        linkedPaths: [canonicalWorktree],
+        mainPath: canonicalMain,
+      }),
+    });
+
+    const result = await withFamily.addProject({
+      projectRootPath: worktreePath,
+    });
+
+    expect(result.projects).toHaveLength(1);
+    expect(result.projects[0]?.projectRootPath).toBe(canonicalMain);
+    expect(result.worktreeBindings).toEqual([
+      {
+        createdAt: 1000,
+        projectRootPath: canonicalMain,
+        worktreePath: canonicalWorktree,
+      },
+    ]);
+    await expect(existsProjectFile(mainPath)).resolves.toBe(true);
+    await expect(existsProjectFile(worktreePath)).resolves.toBe(false);
+  });
+
+  it("addProject does not duplicate the primary checkout and drops linked worktree rows", async () => {
+    const mainPath = await makeDir("repo-main");
+    const worktreePath = await makeDir("repo-linked");
+    const canonicalMain = await realpath(mainPath);
+    const canonicalWorktree = await realpath(worktreePath);
+    const withFamily = createLocalEnvironmentService({
+      filePath: join(tempDir, "local-environments-dedupe.json"),
+      now: () => now,
+      processEnvironment: fakeProcessEnvironment(),
+      resolveGitWorktreeFamily: async () => ({
+        linkedPaths: [canonicalWorktree],
+        mainPath: canonicalMain,
+      }),
+    });
+
+    await withFamily.addProject({ projectRootPath: mainPath });
+    const again = await withFamily.addProject({
+      projectRootPath: worktreePath,
+    });
+
+    expect(again.projects.map((project) => project.projectRootPath)).toEqual([
+      canonicalMain,
+    ]);
+    expect(again.worktreeBindings).toHaveLength(1);
+    expect(again.worktreeBindings[0]?.worktreePath).toBe(canonicalWorktree);
   });
 
   it("addProject is idempotent and preserves the existing config file", async () => {
@@ -469,5 +529,57 @@ describe("createLocalEnvironmentService", () => {
     await expect(
       gated.addProject({ projectRootPath: homePath })
     ).rejects.toMatchObject({ reason: "pier_home_forbidden" });
+  });
+});
+
+describe("applyCanonicalProjectRegistration", () => {
+  it("keeps the primary checkout and drops only the picked worktree row", () => {
+    const next = applyCanonicalProjectRegistration(
+      {
+        projects: [
+          { kind: "project", projectRootPath: "/wt" },
+          { kind: "project", projectRootPath: "/wt-sibling" },
+          { kind: "project", projectRootPath: "/main" },
+        ],
+        version: 1,
+        worktreeBindings: [],
+      },
+      {
+        canonicalPath: "/main",
+        now: 1,
+        pickedPath: "/wt",
+      }
+    );
+    expect(next.projects.map((entry) => entry.projectRootPath)).toEqual([
+      "/wt-sibling",
+      "/main",
+    ]);
+    expect(next.worktreeBindings).toEqual([
+      {
+        createdAt: 1,
+        projectRootPath: "/main",
+        worktreePath: "/wt",
+      },
+    ]);
+  });
+
+  it("does not collapse sibling worktree rows when registering the primary checkout", () => {
+    const next = applyCanonicalProjectRegistration(
+      {
+        projects: [{ kind: "project", projectRootPath: "/wt" }],
+        version: 1,
+        worktreeBindings: [],
+      },
+      {
+        canonicalPath: "/main",
+        now: 2,
+        pickedPath: "/main",
+      }
+    );
+    expect(next.projects.map((entry) => entry.projectRootPath)).toEqual([
+      "/wt",
+      "/main",
+    ]);
+    expect(next.worktreeBindings).toEqual([]);
   });
 });

@@ -37,7 +37,7 @@ Unknown pack ids are hard failures (do not guess).
 | `content` | `design-doc` | Content pack id under `packs/content/` |
 | `presentation` | *resolved* | See **Pack selection**. Do not default every overview to five tabs. |
 | `ui` | `pier-default` | UI pack id under `packs/ui/` |
-| `recipe` | (none) | Freeform starter: `design`, `orchestration`, or `board` (see **Stage selection**). Ignored in methodology mode. |
+| `recipe` | (none) | Freeform starter: `design` or `board` (see **Stage selection**). Ignored in methodology mode. |
 | `slug` | derived from title | Directory name under `.pier/canvases/<slug>/` |
 | `locale` | injected by Pier | BCP-47 UI language (`en`, `zh-CN`, …). Host adds this on send. |
 
@@ -85,9 +85,6 @@ Examples (skill calls, not shell):
 
 /pier-canvas mode=freeform recipe=design
   Multi-device mockup on a world stage
-
-/pier-canvas mode=freeform recipe=orchestration
-  Live DAG viewer (FlowGraph + watch + declared command)
 
 /pier-canvas mode=freeform recipe=board
   Full-bleed kanban (fill + Sortable / Droppable + sibling JSON)
@@ -164,7 +161,6 @@ code — do not ask the user to choose a shell:**
 | `recipe` | Pack | Stage | Start from |
 | --- | --- | --- | --- |
 | `design` | `packs/recipes/design/` | world | `templates/design-mockup.canvas.tsx` |
-| `orchestration` | `packs/recipes/orchestration/` | world | `templates/dag-viewer.canvas.tsx` |
 | `board` | `packs/recipes/board/` | fill | `templates/kanban.canvas.tsx` |
 
 When `recipe=` is set, use **Workflow B** (freeform). Do not invent methodology
@@ -248,18 +244,6 @@ Use when `mode=freeform` (or the user clearly asks for an unconstrained canvas).
      catalogs must look like product UI).
      - **`recipe=design`**: `WorldStage` root; `Artboard preset` + `Layer`;
        comments stay in host Design Mode (do not fake annotation chrome).
-     - **`recipe=orchestration`**: `WorldStage` + `FlowGraph` with
-       `presentation="plain"`; persist node positions with `useCanvasFile`
-       (`state/positions.json`); declare commands in `instance.json` and call
-       `file.invokeCommand(key)`. After `{ kind: "started" }`, pull
-       `host.invoke({ type: "run.output", runId })` and
-       `useHostSnapshot("pier://tasks:runs-changed")`. Poll a loopback
-       service with `fetch("http://127.0.0.1:…")` — never `https:`. Status
-       lives in the external system; this canvas is a viewer. Node `meta` /
-       `badge`, `renderOverlay` (gates), and `onSelectNode` + a `Stack` beside
-       the graph are the inspect surface. `renderNodeContent` is display
-       chrome (`contentHeight` required); keep buttons beside the graph.
-       Relayout with `layoutFlowGraph` or by writing empty positions.
      - **`recipe=board`**: root `<Stack fill>`; `Droppable` columns +
        `Sortable` cards; persist the board with `useCanvasFile` (`board.json`)
        and `watch` so other windows stay in sync. Cross-column moves land in
@@ -287,14 +271,11 @@ Use when `mode=freeform` (or the user clearly asks for an unconstrained canvas).
   `classDiagram`, `erDiagram`, `mindmap`) — do not invent a nodes/edges
   dialect for `sequence` or class diagrams. Do not paint `tone` as
   decoration, and do not invent a left color rail. The host writes mermaid
-  flowchart text and paints Pier chrome on slotted nodes. **Live DAG /
-  pipeline viewers use `FlowGraph`** (`recipe=orchestration`), not Mermaid.
-  Put `presentation="plain"` on the world stage. Live-DAG display chrome
-  belongs on FlowGraph (`renderNodeContent` + `contentHeight`, `renderOverlay`,
-  node `meta` / `badge`). Mermaid `status` / `renderNodeContent` is leftover
-  for static architecture diagrams that need a run glyph — do not teach it
-  as a polling viewer.
-  See [authoring](references/authoring.md) **Mermaid** and **FlowGraph**.
+  flowchart text and paints Pier chrome on slotted nodes. Mermaid is a
+  **static** diagram: do not build a polling viewer that recolors it from
+  live data. Mermaid `status` / `renderNodeContent` is leftover for static
+  architecture diagrams that need a run glyph.
+  See [authoring](references/authoring.md) **Mermaid**.
 - Prefer direct layout over unnecessary card stacking.
 - Every user action needs a recognizable UI change or error response.
 - Add `schemaVersion` to adjacent `data.json` files. Data-focused Canvases

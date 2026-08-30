@@ -107,8 +107,49 @@ describe("files-tree-store", () => {
     expect(snapshot.rootLoaded).toBe(true);
     expect(snapshot.rootLoading).toBe(false);
     expect(snapshot.rootError).toBe("Permission denied");
+    expect(snapshot.rootErrorFolderAccessBlocked).toBe(false);
     expect(snapshot.entriesByPath.size).toBe(0);
     expect(snapshot.directoryStatesByPath.size).toBe(0);
+  });
+
+  it("flags EPERM permission_denied root failures for the folder-access guide", async () => {
+    const denied = new Error(
+      "EPERM: operation not permitted, scandir '/Users/u/Desktop/p'"
+    ) as Error & { code?: string; osCode?: string };
+    denied.code = "permission_denied";
+    denied.osCode = "EPERM";
+    const list = vi.fn<FilesListApi>(() => Promise.reject(denied));
+
+    loadFilesTreeRoot(ROOT, list, "Failed to load files");
+    await settleStorePromises();
+
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.rootErrorFolderAccessBlocked).toBe(true);
+    expect(snapshot.rootError).toContain("EPERM");
+
+    // 授权后重试成功要清掉权限标记。
+    const recovered = vi.fn<FilesListApi>(() => Promise.resolve([]));
+    await reloadFilesTreeRoot(ROOT, recovered, "Failed to load files");
+    const next = getFilesTreeSnapshot(ROOT);
+    expect(next.rootError).toBeNull();
+    expect(next.rootErrorFolderAccessBlocked).toBe(false);
+  });
+
+  it("does not flag unix-mode EACCES as the folder-access guide", async () => {
+    const denied = new Error(
+      "EACCES: permission denied, scandir '/tmp/p'"
+    ) as Error & {
+      code?: string;
+      osCode?: string;
+    };
+    denied.code = "permission_denied";
+    denied.osCode = "EACCES";
+    const list = vi.fn<FilesListApi>(() => Promise.reject(denied));
+
+    loadFilesTreeRoot(ROOT, list, "Failed to load files");
+    await settleStorePromises();
+
+    expect(getFilesTreeSnapshot(ROOT).rootErrorFolderAccessBlocked).toBe(false);
   });
 
   it("does not start a duplicate root request while the first root load is in flight", async () => {

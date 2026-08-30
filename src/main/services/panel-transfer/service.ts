@@ -53,6 +53,8 @@ interface LiveOffer {
   capability: PanelTransferOffer["capability"];
   claim?: {
     deferred: PromiseWithResolvers<PanelTransferResult>;
+    /** Menu-initiated relocate focuses the target window after commit. */
+    focusOnCommit: boolean;
     kind: "internal" | "managed";
     placement: PanelTransferPlacement;
     runnerStarted: boolean;
@@ -179,7 +181,8 @@ export function createPanelTransferService(
   const tryClaim = (
     live: LiveOffer,
     target: PanelTransferTargetRef,
-    placement: PanelTransferPlacement
+    placement: PanelTransferPlacement,
+    options?: { focusOnCommit?: boolean }
   ): Promise<PanelTransferResult> | PanelTransferResult => {
     if (live.unsupported || live.capability === "unsupported") {
       return panelTransferFailure(
@@ -205,6 +208,7 @@ export function createPanelTransferService(
     const deferred = Promise.withResolvers<PanelTransferResult>();
     live.claim = {
       deferred,
+      focusOnCommit: options?.focusOnCommit ?? false,
       kind: target.kind,
       placement,
       runnerStarted: false,
@@ -302,6 +306,24 @@ export function createPanelTransferService(
           });
         })
       );
+      // Intentional (menu) relocate: raise + focus the target once the
+      // transfer fully committed and the empty source window was closed.
+      // The window port is synchronous best-effort; focus failure must not
+      // retroactively fail a committed transfer.
+      if (result.ok && claim.focusOnCommit) {
+        try {
+          args.windows.focus(claim.target.runtimeWindowId);
+        } catch (focusError) {
+          console.error(
+            "[panelTransfer] focus target failed",
+            `transferId=${live.transferId}`,
+            `target=${claim.target.runtimeWindowId}`,
+            focusError instanceof Error
+              ? focusError.message
+              : String(focusError)
+          );
+        }
+      }
       rememberTombstone(live.transferId, result);
       claim.deferred.resolve(result);
     } catch (error) {
@@ -462,8 +484,8 @@ export function createPanelTransferService(
           getOffer: (id) => offers.get(id) as RelocateLiveOffer | undefined,
           pruneTombstones,
           resolveDefaultPlacement: createResolveDefaultPlacement(renderer),
-          tryClaim: (live, target, placement) =>
-            tryClaim(live as LiveOffer, target, placement),
+          tryClaim: (live, target, placement, options) =>
+            tryClaim(live as LiveOffer, target, placement, options),
           waitForOffer: async (id, timeoutMs) =>
             (await waitForOffer(id, timeoutMs)) as RelocateLiveOffer | null,
           windows: args.windows,

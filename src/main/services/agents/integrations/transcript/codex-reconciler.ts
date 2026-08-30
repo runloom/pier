@@ -254,3 +254,10 @@ function createCodexTranscriptLineClassifier(): (
     };
   };
 }
+
+/** 单行分类（治理测试 / 格式契约）；交互对账仍需 stateful classifier。 */
+export function classifyCodexTranscriptLine(
+  line: string
+): TranscriptTerminalRecord | null {
+  return createCodexTranscriptLineClassifier()(line);
+}

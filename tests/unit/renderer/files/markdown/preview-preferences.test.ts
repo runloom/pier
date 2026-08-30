@@ -60,6 +60,11 @@ describe("markdown-preview-preferences", () => {
     expect(localStorage.getItem("pier.files.markdown.measureMode")).toBe(
       "wide"
     );
+    writeMarkdownMeasureMode("comfortable");
+    expect(readMarkdownMeasureMode()).toBe("comfortable");
+    expect(localStorage.getItem("pier.files.markdown.measureMode")).toBe(
+      "comfortable"
+    );
   });
 
   it("defaults reading appearance to auto and persists light/dark", () => {

@@ -70,7 +70,9 @@ describe("GitReviewToolbar", () => {
         viewOptions={{ diffStyle: "unified", wrapLines: false }}
       />
     );
-    expect(screen.getByTestId("git-review-commit")).toHaveTextContent("Commit");
+    const commit = screen.getByTestId("git-review-commit");
+    expect(commit).toHaveTextContent("Commit");
+    expect(commit.querySelector("svg")).toBeNull();
     expect(
       screen.getByTestId("git-review-toolbar").lastElementChild
     ).toHaveAttribute("data-testid", "git-review-commit");

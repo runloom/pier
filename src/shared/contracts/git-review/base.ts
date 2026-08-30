@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { gitChangeSummarySchema } from "../git.ts";
+import { canonicalizeGitReviewTarget } from "./commit-target.ts";
 import {
   GIT_REVIEW_GROUP_ORDER,
   GIT_REVIEW_MAX_SECTIONS,
@@ -36,12 +37,17 @@ const gitReviewBranchRefSchema = z
 /**
  * Review 目标：
  * - uncommitted: 工作区未提交变更(unstaged/staged/conflict 分组)
- * - commit: 单个 commit 相对首父(根提交相对空树)的 range diff(committed 分组)
+ * - commit: 相对首父的 range diff；可选 fromOid 表示 oldest^..oid 净变化
+ *   （fromOid 缺省或等于 oid 时与单篇相同）
  * - branch: merge-base(HEAD, ref)..HEAD 的 range diff(committed 分组)
  */
 export const gitReviewTargetSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("uncommitted") }),
-  z.strictObject({ kind: z.literal("commit"), oid: gitReviewCommitOidSchema }),
+  z.strictObject({
+    fromOid: gitReviewCommitOidSchema.optional(),
+    kind: z.literal("commit"),
+    oid: gitReviewCommitOidSchema,
+  }),
   z.strictObject({ kind: z.literal("branch"), ref: gitReviewBranchRefSchema }),
 ]);
 export type GitReviewTarget = z.infer<typeof gitReviewTargetSchema>;
@@ -79,7 +85,7 @@ function getGitReviewFileSourceIdentityTuple(
   return [
     source.contextId,
     source.gitRootPath,
-    source.target,
+    canonicalizeGitReviewTarget(source.target),
     source.path,
     source.oldPaths,
   ];

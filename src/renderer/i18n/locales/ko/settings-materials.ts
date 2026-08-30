@@ -9,7 +9,7 @@ export const settingsMaterials = {
   familyLayout: "레이아웃",
   familyControl: "컨트롤",
   familyViz: "다이어그램",
-  familyData: "API",
+  familyData: "데이터와 API",
   resultCount: "{{shown}} / {{total}}",
   emptyTitle: "일치하는 머티리얼이 없습니다",
   emptyDescription: "다른 검색어를 쓰거나 종류를 전체로 되돌리세요.",
@@ -53,14 +53,6 @@ export const settingsMaterials = {
   specimenChartLine: "꺾은선 차트 예",
   specimenChartArea: "영역 차트 예",
   specimenChartDonut: "도넛 차트 예",
-  specimenGraphDisplay: "다이어그램 예",
-  specimenGraphLive: "실시간 상태 예",
-  specimenGraphStart: "시작",
-  specimenGraphDecide: "통과?",
-  specimenGraphDone: "완료",
-  specimenGraphCompile: "컴파일",
-  specimenGraphPublish: "게시",
-  specimenGraphQueued: "대기 중",
   hostApi: {
     lead: "명령 %commands%개 · 이벤트 %events%개",
   },
@@ -113,12 +105,6 @@ export const settingsMaterials = {
       "네이티브 mermaid 텍스트. 시퀀스, 상태, 클래스, ER, 마인드맵에 씁니다.",
     renderNodeContent:
       "제목 아래 표시. 해당 노드는 contentHeight를 설정해야 합니다.",
-    flowGraphPositions: "노드 위치. 생략하면 내장 계층 레이아웃을 씁니다.",
-    onNodePositionsChange:
-      "노드를 드래그한 뒤에 호출됩니다. 레이아웃을 남기려면 직접 저장하세요.",
-    onSelectNode: "노드를 골랐을 때 호출됩니다.",
-    flowGraphOverlay:
-      "배치된 노드 위치에 붙는 표시(게이트, 캡션). 오버레이는 포인터를 무시합니다. 자식이 클릭되어야 하면 그 자식에서 포인터를 켭니다.",
     sortableItems: "표시 순서의 항목 id.",
     onReorder: "이 목록 안에서 놓은 뒤의 새 순서.",
     onDropItem:
@@ -206,8 +192,6 @@ export const settingsMaterials = {
     Tooltip: "호버 힌트",
     Table: "표",
     DataChart: "추세와 비교",
-    FlowGraph:
-      "상태 색이 있는 라이브 그래프. 노드에 보조 설명을 달 수 있고, 실행 중인 변은 따라 흐릅니다.",
     Mermaid:
       "노드로 흐름을 그리고, 네이티브 mermaid 시퀀스, 상태, 클래스, ER, 마인드맵도 씁니다.",
     canvasFile: "캔버스 옆 파일용 샌드박스. 충돌 포함",

@@ -6,6 +6,22 @@ import type {
   TerminalAgentPanelMetadata,
   TerminalTryResumeLastSpec,
 } from "@shared/contracts/terminal.ts";
+import {
+  ampResume,
+  antigravityResume,
+  appendResumeFlag,
+  clineResume,
+  codexResume,
+  copilotResume,
+  gooseResume,
+  kimiResume,
+  opencodeFamilyResume,
+  piResume,
+  type ResumeBuildArgs,
+  stripEqualsPrefixed,
+  stripFlags,
+  withCommand,
+} from "./resume-command-builders.ts";
 
 type ResumeUnsupportedReason =
   | "missing-launch-command"
@@ -33,77 +49,11 @@ export type AgentResumeResolution =
       resumed: false;
     };
 
-interface ResumeBuildArgs {
-  cwd: string | undefined;
-  launch: TerminalAgentRestoreLaunchOptions;
-  sessionId: string;
-  words: string[];
-}
-
-const SHELL_SAFE_RE = /^[A-Za-z0-9_./:@%+=,-]+$/;
-
-function shellQuote(value: string): string {
-  if (SHELL_SAFE_RE.test(value)) {
-    return value;
-  }
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function commandFromWords(words: readonly string[]): string {
-  return words.map(shellQuote).join(" ");
-}
-
-function stripFlags(
-  words: readonly string[],
-  flagsWithValue: ReadonlySet<string>,
-  booleanFlags: ReadonlySet<string> = new Set()
-): string[] {
-  const out: string[] = [];
-  let skipNext = false;
-  for (const word of words) {
-    if (skipNext) {
-      skipNext = false;
-      continue;
-    }
-    if (flagsWithValue.has(word)) {
-      skipNext = true;
-      continue;
-    }
-    if (booleanFlags.has(word)) {
-      continue;
-    }
-    out.push(word);
-  }
-  return out;
-}
-
-/** Drop `--flag=value` / `-r=value` tokens left after token-based stripFlags. */
-function stripEqualsPrefixed(
-  words: readonly string[],
-  prefixes: readonly string[]
-): string[] {
-  return words.filter(
-    (word) => !prefixes.some((prefix) => word.startsWith(`${prefix}=`))
-  );
-}
-
 function baseCommand(
   launch: TerminalAgentRestoreLaunchOptions,
   agentId: AgentKind
 ): string | null {
   return launch.command ?? getAgentCatalogEntry(agentId)?.launchCmd ?? null;
-}
-
-function withCommand(
-  launch: TerminalAgentRestoreLaunchOptions,
-  cwd: string | undefined,
-  words: readonly string[]
-): TerminalAgentRestoreLaunchOptions {
-  return {
-    ...(launch.agentId && { agentId: launch.agentId }),
-    command: commandFromWords(words),
-    ...((cwd ?? launch.cwd) ? { cwd: cwd ?? launch.cwd } : {}),
-  };
 }
 
 function unsupported(agentId: AgentKind): AgentResumeAdapter {
@@ -115,160 +65,6 @@ function sessionAdapter(
   build: AgentResumeBuild
 ): AgentResumeAdapter {
   return { agentId, build, support: "session-id" };
-}
-
-function appendResumeFlag(
-  args: ResumeBuildArgs,
-  flag: string
-): TerminalAgentRestoreLaunchOptions {
-  const words = stripEqualsPrefixed(
-    stripFlags(
-      args.words,
-      new Set([flag, "-r"]),
-      new Set(["--continue", "-c", "--resume-picker"])
-    ),
-    [flag, "-r"]
-  );
-  return withCommand(args.launch, args.cwd, [...words, flag, args.sessionId]);
-}
-
-function codexResume(args: ResumeBuildArgs): TerminalAgentRestoreLaunchOptions {
-  const [binary, ...rest] = args.words;
-  const words = binary
-    ? [binary, ...stripFlags(rest, new Set(), new Set(["resume", "fork"]))]
-    : args.words;
-  return withCommand(args.launch, args.cwd, [
-    ...words,
-    "resume",
-    args.sessionId,
-  ]);
-}
-
-function opencodeFamilyResume(
-  args: ResumeBuildArgs
-): TerminalAgentRestoreLaunchOptions {
-  const words = stripEqualsPrefixed(
-    stripFlags(
-      args.words,
-      new Set(["--session", "-s"]),
-      new Set(["--continue", "-c", "--fork"])
-    ),
-    ["--session", "-s"]
-  );
-  return withCommand(args.launch, args.cwd, [
-    ...words,
-    "--session",
-    args.sessionId,
-  ]);
-}
-
-function ampResume(args: ResumeBuildArgs): TerminalAgentRestoreLaunchOptions {
-  return withCommand(args.launch, args.cwd, [
-    ...args.words,
-    "threads",
-    "continue",
-    args.sessionId,
-  ]);
-}
-
-/** Copilot CLI documents `copilot --resume=<uuid>` (equals form). */
-function copilotResume(
-  args: ResumeBuildArgs
-): TerminalAgentRestoreLaunchOptions {
-  const words = stripEqualsPrefixed(
-    stripFlags(
-      args.words,
-      new Set(["--resume", "-r"]),
-      new Set(["--continue", "-c", "--resume-picker"])
-    ),
-    ["--resume", "-r"]
-  );
-  return withCommand(args.launch, args.cwd, [
-    ...words,
-    `--resume=${args.sessionId}`,
-  ]);
-}
-
-/**
- * Kimi accepts `--session`/`--resume` with short `-S`/`-r`, and `-C` for
- * continue (not only `-c`). Prefer `--resume <id>` for Pier restore.
- */
-function kimiResume(args: ResumeBuildArgs): TerminalAgentRestoreLaunchOptions {
-  const words = stripEqualsPrefixed(
-    stripFlags(
-      args.words,
-      new Set(["--resume", "--session", "-r", "-S"]),
-      new Set(["--continue", "-c", "-C", "--resume-picker"])
-    ),
-    ["--resume", "--session", "-r", "-S"]
-  );
-  return withCommand(args.launch, args.cwd, [
-    ...words,
-    "--resume",
-    args.sessionId,
-  ]);
-}
-
-/**
- * Antigravity (agy): resume a conversation by id.
- * Docs: `agy --conversation <id>`; `-c` / `--continue` is "latest only".
- */
-function antigravityResume(
-  args: ResumeBuildArgs
-): TerminalAgentRestoreLaunchOptions {
-  const words = stripEqualsPrefixed(
-    stripFlags(
-      args.words,
-      new Set(["--conversation"]),
-      new Set(["--continue", "-c"])
-    ),
-    ["--conversation"]
-  );
-  return withCommand(args.launch, args.cwd, [
-    ...words,
-    "--conversation",
-    args.sessionId,
-  ]);
-}
-
-/**
- * Cline: `cline --id <session-id>`.
- * Do not strip bare `-c` — on Cline that is `--cwd`, not continue.
- */
-function clineResume(args: ResumeBuildArgs): TerminalAgentRestoreLaunchOptions {
-  const words = stripEqualsPrefixed(
-    stripFlags(args.words, new Set(["--id"]), new Set()),
-    ["--id"]
-  );
-  return withCommand(args.launch, args.cwd, [...words, "--id", args.sessionId]);
-}
-
-/**
- * Goose: resume via session subcommand using the hook session id.
- * Form: `goose session -r --session-id <id>` (not `--name`; hooks persist id).
- */
-function gooseResume(args: ResumeBuildArgs): TerminalAgentRestoreLaunchOptions {
-  const binary = args.words[0] ?? "goose";
-  let rest = args.words.slice(1);
-  if (rest[0] === "session") {
-    rest = rest.slice(1);
-  }
-  rest = stripEqualsPrefixed(
-    stripFlags(
-      rest,
-      new Set(["--name", "--session-id", "--path", "-n"]),
-      new Set(["-r", "--resume", "--continue", "-c"])
-    ),
-    ["--name", "--session-id", "--path", "-n"]
-  );
-  return withCommand(args.launch, args.cwd, [
-    binary,
-    "session",
-    "-r",
-    "--session-id",
-    args.sessionId,
-    ...rest,
-  ]);
 }
 
 export const AGENT_RESUME_ADAPTERS = {
@@ -306,6 +102,8 @@ export const AGENT_RESUME_ADAPTERS = {
   devin: sessionAdapter("devin", (args) => appendResumeFlag(args, "--resume")),
   // droid --help: `-r, --resume [sessionId]`.
   droid: sessionAdapter("droid", (args) => appendResumeFlag(args, "--resume")),
+  // gemini-cli bundle (sessionUtils.ts): `--resume {number}|{uuid}|latest` —
+  // uuid form is implemented even though --help only mentions number/latest.
   gemini: sessionAdapter("gemini", (args) =>
     appendResumeFlag(args, "--resume")
   ),
@@ -317,7 +115,8 @@ export const AGENT_RESUME_ADAPTERS = {
     appendResumeFlag(args, "--resume")
   ),
   kilo: sessionAdapter("kilo", opencodeFamilyResume),
-  // kimi --help: `--session`/`--resume` (`-S`/`-r`); `-C` continue.
+  // Kimi Code 0.38.x: pin by id is `--session <id>`; `--resume` was removed
+  // with the legacy kimi-cli generation.
   kimi: sessionAdapter("kimi", kimiResume),
   kiro: sessionAdapter("kiro", (args) => appendResumeFlag(args, "--resume-id")),
   "mimo-code": sessionAdapter("mimo-code", opencodeFamilyResume),
@@ -331,7 +130,9 @@ export const AGENT_RESUME_ADAPTERS = {
     appendResumeFlag(args, "--resume")
   ),
   opencode: sessionAdapter("opencode", opencodeFamilyResume),
-  pi: sessionAdapter("pi", (args) => appendResumeFlag(args, "--resume")),
+  // pi 0.84.4: `--resume` is a picker-only boolean; pin by id with
+  // `--session-id <id>` (exact project session id, recreated when missing).
+  pi: sessionAdapter("pi", piResume),
   qodercli: sessionAdapter("qodercli", (args) =>
     appendResumeFlag(args, "--resume")
   ),
@@ -422,8 +223,9 @@ export function resolveAgentResumeLastLaunch(args: {
     const cleaned = stripEqualsPrefixed(
       stripFlags(
         words,
-        new Set(["--resume", "-r", "--resume-id"]),
-        new Set(["--continue", "-c", "--resume-picker"])
+        new Set(["--resume-id"]),
+        new Set(["--continue", "-c", "--resume-picker"]),
+        new Set(["--resume", "-r"])
       ),
       ["--resume", "-r", "--resume-id"]
     );

@@ -40,22 +40,20 @@ export default function CompositionCanvas() {
             <Badge variant="info">composition</Badge>
             <Badge variant="outline">Example</Badge>
           </Row>
-          <Text as="h1" className="text-2xl font-semibold tracking-tight">
-            Proposal title
-          </Text>
-          <Text tone="secondary" className="text-sm leading-relaxed">
+          <Text as="h1">Proposal title</Text>
+          <Text tone="secondary">
             One sentence on the problem and the takeaway the reader should leave
             with.
           </Text>
         </Stack>
 
-        <Card className="border-status-info/30 bg-status-info/5">
+        <Card className="border-status-info/40 bg-status-info/10">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Conclusion</CardTitle>
             <CardDescription>Answer first, reasons second.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Text className="text-sm leading-relaxed">
+            <Text>
               Write the trade-off: what we will do, what we will not, and why
               now.
             </Text>
@@ -63,7 +61,7 @@ export default function CompositionCanvas() {
         </Card>
 
         <Stack gap={8}>
-          <Text className="text-sm font-medium">Critical path</Text>
+          <Text as="h2">Critical path</Text>
           <Mermaid
             aria-label="Example flow"
             direction="left-to-right"
@@ -76,7 +74,7 @@ export default function CompositionCanvas() {
             nodes={[
               { id: "A", kind: "artifact", title: "Input" },
               { id: "B", kind: "tool", title: "Process" },
-              { id: "C", title: "Output", tone: "success" },
+              { id: "C", kind: "artifact", title: "Output" },
               { id: "D", title: "Error", tone: "danger" },
             ]}
           />
@@ -85,7 +83,7 @@ export default function CompositionCanvas() {
         <Separator />
 
         <Stack gap={8}>
-          <Text className="text-sm font-medium">Options</Text>
+          <Text as="h2">Options</Text>
           <ItemGroup className="gap-2">
             <Item variant="outline" className="px-3 py-2">
               <ItemContent>

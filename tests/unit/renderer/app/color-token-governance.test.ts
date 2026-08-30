@@ -254,6 +254,22 @@ describe("color token governance", () => {
     }
   });
 
+  it("keeps content-preview color-mode selectors paired with the paper blocks", () => {
+    // The fullscreen preview overlay reuses the paper token blocks via a
+    // selector list. The block-level locks anchor on the markdown selector
+    // (kept LAST), so deleting the content-preview line would fail nothing
+    // else — assert the pairing explicitly for both modes.
+    const globals = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    for (const mode of ["light", "dark"] as const) {
+      expect(globals).toContain(
+        `[data-slot="content-preview"][data-color-mode="${mode}"],\n[data-slot="markdown-preview-root"][data-reading-appearance="${mode}"] {`
+      );
+    }
+  });
+
   it("keeps neutral actions independent from semantic state colors", () => {
     const globals = readFileSync(
       join(ROOT, "src/renderer/app/globals.css"),

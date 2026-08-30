@@ -14,6 +14,10 @@ node_modules
 !/build/icons/*.png
 !/build/design-sources/
 !/build/entitlements.mac.plist
+!/build/zh-Hans.lproj/
+!/build/zh-Hans.lproj/InfoPlist.strings
+!/build/zh_CN.lproj/
+!/build/zh_CN.lproj/InfoPlist.strings
 /package
 .env
 .env.*

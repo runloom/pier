@@ -38,13 +38,21 @@ function DropdownMenuContent({
   align = "start",
   sideOffset = 4,
   children,
+  container,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
+  /**
+   * Portal target for the menu. Inside token-scoped overlays (e.g. a host
+   * preview pinned to a fixed color mode) pass the overlay root so the menu
+   * inherits the scoped theme instead of the app theme.
+   */
+  container?: HTMLElement | null | undefined;
+}) {
   const overlayRef = useTerminalOverlay();
   const freezeRef = useFreezeFloatingOnClose();
   const composedRef = useComposedRefs(props.ref, overlayRef, freezeRef);
   return (
-    <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.Portal container={container}>
       <DropdownMenuPrimitive.Content
         align={align}
         className={cn(

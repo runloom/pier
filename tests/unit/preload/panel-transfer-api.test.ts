@@ -144,4 +144,19 @@ describe("panelTransfer preload API", () => {
       message: "nope",
     });
   });
+
+  it("forwards osCode from the command envelope", async () => {
+    const api = createPanelTransferApi();
+    ipcInvokeMock.mockResolvedValueOnce({
+      error: { code: "permission_denied", message: "blocked", osCode: "EPERM" },
+      ok: false,
+      requestId: "r-err-os",
+    });
+
+    await expect(api.cancel(TRANSFER_ID)).rejects.toMatchObject({
+      code: "permission_denied",
+      message: "blocked",
+      osCode: "EPERM",
+    });
+  });
 });

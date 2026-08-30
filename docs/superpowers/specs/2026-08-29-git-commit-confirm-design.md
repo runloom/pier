@@ -27,7 +27,7 @@
 
 - 命令 `pier.git.commit`（`git:write`），与 `Undo Last Commit` 对称
 - 提交型 content dialog：说明必填、包含未暂存（有未暂存时默认开）、提交后推送（设置默认关，dialog 只读初值）
-- 未提交审查 header「提交」打开**同一 handler**；按钮在视图工具栏**最右**
+- 未提交审查 header「提交」打开**同一 handler**；按钮在视图工具栏**最右**，纯文字、无图标（文案已是动作）
 - 只提交 index；勾未暂存时按路径 `git.stage` 再 commit，**禁止** `git add -A`
 - 打开即聚焦说明；Enter 换行；Mod+Enter 提交
 - 打开后计数/资格跟 `useGitStatus`（与状态栏同一 watch）；提交再 `getStatus`

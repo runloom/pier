@@ -9,7 +9,7 @@ export const settingsMaterials = {
   familyLayout: "布局",
   familyControl: "控件",
   familyViz: "图示",
-  familyData: "API",
+  familyData: "数据与 API",
   resultCount: "{{shown}} / {{total}}",
   emptyTitle: "没有匹配的物料",
   emptyDescription: "换个关键词，或把类型改回「全部」。",
@@ -53,14 +53,6 @@ export const settingsMaterials = {
   specimenChartLine: "折线图示例",
   specimenChartArea: "面积图示例",
   specimenChartDonut: "环形图示例",
-  specimenGraphDisplay: "普通展示",
-  specimenGraphLive: "运行状态",
-  specimenGraphStart: "开始",
-  specimenGraphDecide: "通过?",
-  specimenGraphDone: "完成",
-  specimenGraphCompile: "编译",
-  specimenGraphPublish: "发布",
-  specimenGraphQueued: "排队",
   hostApi: {
     lead: "%commands% 条命令 · %events% 个事件",
   },
@@ -109,11 +101,6 @@ export const settingsMaterials = {
     mermaidSource:
       "原生 mermaid 文本。时序、状态、类图、实体关系和思维导图用这个。",
     renderNodeContent: "画在标题下方的展示内容；该节点须设 contentHeight。",
-    flowGraphPositions: "节点位置。不写则用内置分层布局。",
-    onNodePositionsChange: "拖完节点后回调。要记住布局就自己存。",
-    onSelectNode: "选中节点时回调。",
-    flowGraphOverlay:
-      "按布局坐标放的标记（关口、说明）。默认不接收点击；子节点要交互时自己打开指针事件。",
     sortableItems: "按显示顺序的条目 id。",
     onReorder: "在本列表里放下后，回传新顺序。",
     onDropItem:
@@ -198,7 +185,6 @@ export const settingsMaterials = {
     Tooltip: "悬停说明",
     Table: "表格",
     DataChart: "数值趋势与对比",
-    FlowGraph: "带状态着色的活图。节点可带次要说明，边会跟跑。",
     Mermaid:
       "节点流程图，以及原生 mermaid 时序、状态、类图、实体关系和思维导图。",
     canvasFile: "读写画布相邻文件，含冲突；不是全局 file 命令",

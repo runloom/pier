@@ -29,6 +29,7 @@ export const agents = {
   },
   titleBar: {
     countsAria: "Agents: {{needsYou}} need attention, {{running}} running",
+    tooltip: "Agents",
   },
   collab: {
     title: "Agent collaboration",

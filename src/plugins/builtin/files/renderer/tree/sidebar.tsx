@@ -4,7 +4,6 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
-import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import {
   PierFileTree,
   type PierFileTreeApi,
@@ -23,6 +22,7 @@ import {
   useRef,
 } from "react";
 import { isFileMissingError } from "../editor/errors.ts";
+import { FileTreeLoadErrorEmpty } from "../folder-access/empty.tsx";
 import { createFilesTranslate } from "../i18n.ts";
 import { FilesMutationSuspendedError } from "../mutation/gate.ts";
 import { FilesSearchBar } from "../search/bar.tsx";
@@ -57,6 +57,7 @@ import { useFilesTreeSidebarPrefs } from "./use-sidebar-prefs.ts";
 import { useFilesTreeVisibility } from "./use-visibility.ts";
 
 const TREE_DOUBLE_CLICK_WINDOW_MS = 400;
+
 export function FileTreeSidebar({
   activeFilePath,
   context,
@@ -337,10 +338,18 @@ export function FileTreeSidebar({
   let content: ReactNode = null;
   if (snapshot.rootError) {
     content = (
-      <ErrorEmpty
-        className="min-h-0 flex-1 rounded-none border-0 p-4"
+      <FileTreeLoadErrorEmpty
+        blocked={snapshot.rootErrorFolderAccessBlocked}
+        context={context}
         description={snapshot.rootError}
-        title={t("panel.loadError.title", "Unable to load files")}
+        onRetry={() => {
+          reloadFilesTreeRoot(
+            root,
+            treeVisibility.list,
+            t("panel.loadError.fallback", "Failed to load files")
+          );
+        }}
+        t={t}
       />
     );
   } else if (!snapshot.rootLoaded) {

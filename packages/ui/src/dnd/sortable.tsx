@@ -367,7 +367,7 @@ export function Sortable({
   const gapRow = foreignGap ? (
     <li
       aria-hidden
-      className="shrink-0 rounded-lg border-2 border-primary/40 border-dashed bg-primary/5 transition-all duration-150"
+      className="shrink-0 rounded-lg border-2 border-primary/40 border-dashed bg-primary/5"
       data-slot="dnd-gap"
       key="dnd-gap"
       style={{ height: foreignGap.height }}

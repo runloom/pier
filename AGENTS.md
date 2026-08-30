@@ -347,6 +347,7 @@ section 根节点下的裸子节点。
 - 双源迁移已完成：老 `agent-session` broadcast 已下线，此通道是唯一活动广播源
 - 模块内不 import `services/agents/`（agent 只是 activity 的一种 kind，边界单向）
 - Agent 提供方（Provider）原生 session / transcript 只可作为对应适配器内部的兼容输入；宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放
+- **Transcript 终态对账纪律**：原生终态行带回合身份时 `classifyLine` 必须提取为 `turnId`（Grok `prompt_id`、Codex `turn_id`），缺席则丢弃该终态行，禁止空 id + owner 回退；无原生身份的空 `turnId` 终态受 PromptSubmit 文件水位约束（行尾 offset ≤ 该 scope 最近一次 PromptSubmit 时的文件 size 则丢弃；文件截断须清水位）；PromptSubmit 须先完成 transcript observe（写下水位）再 ingest；transcript 封账是软封，可被封账之后、同回合（或空 turnId）的新鲜 hook `ToolStart` 解封（事件 `ts` 若为 epoch 纳秒须先收到毫秒再比 `turnEndedAt`），`ToolComplete` 不解封；hook 终态与宿主合成终态（裸 Esc，`evidenceSource=host`）仍是硬封。检查点：`tests/unit/main/agents/transcript/tail-reconciler.test.ts`、`tests/unit/main/agents/grok/transcript-reconciler.test.ts`、`tests/unit/main/panel/foreground-activity-turn-state-machine.test.ts`、`tests/unit/main/agents/transcript/turn-identity-governance.test.ts`
 - 命令行 → 智能体身份只走 `src/shared/agent-command-detection.ts` 的 `matchAgentCommand`（OSC 133 C 先验点亮）：词元只来自 catalog 命令字段，产品 id / label 不参与（`cursor .` / `kiro` / `continue` 是启动器或内置命令，不得点亮）；`agent` / `acli` 泛名进 `AGENT_OSC_BIN_DENYLIST`；`qoder` / `qodercn` 合一启动器按 argv 分流 CLI/IDE；安装探测 `expectedBins`（除 denylist）必须能被 OSC 认到。检查点：`tests/unit/agent/command-detection-governance.test.ts`、`tests/unit/agent/command-detection.test.ts` 与 `tests/unit/main/agents/lifecycle/specs.test.ts` 的 expectedBins 词元锁
 
 #### 智能体 CLI 版本检测与更新 — 金标准
@@ -388,6 +389,13 @@ section 根节点下的裸子节点。
 - `PanelContext.projectRootPath` 是当前工作区路径锚点：Git 项目优先为 `gitRoot`，非 Git 目录为 `cwd`。
 - `contextId` 由 `worktreeKey` 稳定派生，用于面板上下文身份；任务、终端和插件上下文不再依赖额外 `projectId`。
 - 主体不维护 `Project` 注册表，也不把 `projectId` 作为跨模块外键；需要项目粒度能力时优先使用 `projectRootPath` / `gitRoot` / `worktreeRoot`。
+
+### 审查打开项目目录
+
+从 git 审查进入 Files **项目目录标签**（只有树、不打开文档）走宿主 `context.files.openProjectDirectory`，与 `openInEditor` 同构。git 不得 import files 插件；不得抢审查主点击；不得把「打开目录」放进 `GitReviewToolbar` 或审查顶栏芯片。在场入口是树 / diff / 审查 tab 右键「打开目录」：与「打开文件 / 跳转到源码」同组（`1_open`），与复制路径 / 在访达中显示分组（`6_path`）。tab 只在 `pier.git.changes` 上显示，打开该次审查 git 根。
+
+权威规格：[`docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md`](docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md)。  
+检查点：`tests/unit/renderer/git/review/open-directory-governance.test.ts`。
 
 ### LSP Gateway `src/main/services/lsp/session-broker.ts`
 

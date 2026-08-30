@@ -541,18 +541,26 @@
 }
 
 /*
- * Markdown preview paper appearance (files plugin).
- * Independent of app chrome: only the preview root sets
- * data-reading-appearance="light"|"dark". "auto" omits the attribute and
- * inherits app tokens. Values mirror :root / :root.light neutral shells AND
+ * Fixed light/dark token scopes, independent of app chrome. Two consumers:
+ * - Markdown preview paper (files plugin): the preview root sets
+ *   data-reading-appearance="light"|"dark"; "auto" omits the attribute and
+ *   inherits app tokens.
+ * - Host fullscreen content preview: image payloads may pin
+ *   data-color-mode="light"|"dark" so the whole overlay (backdrop, header
+ *   chrome, zoom controls) matches a baked image, e.g. a diagram rendered
+ *   against a fixed reading paper.
+ * Values mirror :root / :root.light neutral shells AND
  * status hues so prose, code chrome, TOC, callouts, search marks, Mermaid
  * tones, and scrollbars stay consistent. Root-level composite variables
  * (scrollbar thumb, status-neutral/done, interactive hover, action
  * secondary hover) resolve at declaration and inherit baked — they must
  * be re-declared here with the same formulas. Do not mirror toast tokens
  * (toasts portal outside the paper).
+ * Selector lists keep the markdown selector LAST: governance tests match
+ * `<markdown-selector>\s*{`.
  * Parity lock: tests/unit/renderer/app/color-token-governance.test.ts.
  */
+[data-slot="content-preview"][data-color-mode="light"],
 [data-slot="markdown-preview-root"][data-reading-appearance="light"] {
   color-scheme: light;
   --background: oklch(1 0 0);
@@ -641,6 +649,7 @@
   --status-done-border: color-mix(in oklab, var(--done) 24%, transparent);
 }
 
+[data-slot="content-preview"][data-color-mode="dark"],
 [data-slot="markdown-preview-root"][data-reading-appearance="dark"] {
   color-scheme: dark;
   --background: oklch(0.13 0 0);
@@ -1037,7 +1046,7 @@ body {
    - accent：S3=primary（同选中铬，防变深），S2/S1=muted-foreground
    - 面板 tab 铬（分割短线 / 悬停）见
      docs/superpowers/specs/2026-08-29-panel-tab-chrome-gold-standard.md
-     真实节点 `[data-slot="panel-tab-separator"]`；悬停不藏线；选中两侧才藏
+     真实节点 `[data-slot="panel-tab-separator"]`；选中 / 悬停都藏两侧短线
 
    窗口聚焦位: html[data-window-focused] (installWindowFocusAttribute) */
 
@@ -1145,13 +1154,18 @@ body {
   transition: opacity 80ms;
 }
 
-/* 第一颗没有左邻；选中底已经切开，只藏选中两侧。悬停不藏。 */
+/* 第一颗没有左邻；选中 / 悬停底已经切开，藏该 tab 两侧短线。 */
 .dockview-theme-pier
   .dv-tab:not(.dv-tab ~ .dv-tab)
   [data-slot="panel-tab-separator"],
 .dockview-theme-pier .dv-tab.dv-active-tab [data-slot="panel-tab-separator"],
 .dockview-theme-pier
   .dv-tab.dv-active-tab
+  + .dv-tab
+  [data-slot="panel-tab-separator"],
+.dockview-theme-pier .dv-tab:hover [data-slot="panel-tab-separator"],
+.dockview-theme-pier
+  .dv-tab:hover
   + .dv-tab
   [data-slot="panel-tab-separator"] {
   opacity: 0;

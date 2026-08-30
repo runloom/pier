@@ -53,7 +53,7 @@
 | 场景 | 允许的样子 |
 |---|---|
 | Ghostty 终端 | AppKit overlay + `autohidesScrollers` |
-| `data-scrollbar="none"` | 无条（命令面板、提及/补全、侧栏壳、面包屑、大纲细轨、通知列表、图片画布） |
+| `data-scrollbar="none"` | 无条（命令面板、提及/补全、审查提交选择列表、侧栏壳、面包屑、大纲细轨、通知列表、图片画布） |
 | Canvas world 预览台 | 相机 transform + `overflow-hidden` 视口，本就没有滚动条 |
 | Markdown 大纲 hover 列表 | `ScrollArea` + fade，藏 Radix 拇指 |
 | CodeMirror 小地图 | 独立概览，不是滚动条 |

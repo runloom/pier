@@ -9,6 +9,7 @@ import {
   parseFilesDiskSourceFromParams,
   sameFilesDiskSource,
 } from "./disk-source.ts";
+import { stableFileIdentityHash } from "./identity-hash.ts";
 
 /** 与 files 插件 `FILES_FILE_PANEL_ID` 对齐；宿主不 import 插件包。 */
 export const FILES_FILE_PANEL_COMPONENT_ID = "pier.files.filePanel";
@@ -18,18 +19,6 @@ export type {
   FilesDiskPathOpenedListener,
 } from "@plugins/api/files-disk-path-opened.ts";
 export { onFilesDiskPathOpened } from "@plugins/api/files-disk-path-opened.ts";
-
-const HASH_MULTIPLIER = 33;
-const HASH_MODULUS = 2_147_483_647;
-const HASH_SEED = 5381;
-
-function stableFileIdentityHash(input: string): string {
-  let hash = HASH_SEED;
-  for (let index = 0; index < input.length; index += 1) {
-    hash = (hash * HASH_MULTIPLIER + input.charCodeAt(index)) % HASH_MODULUS;
-  }
-  return hash.toString(36);
-}
 
 function createFilePanelNonce(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") {

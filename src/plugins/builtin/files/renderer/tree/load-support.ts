@@ -15,6 +15,8 @@ export interface FilesTreeSnapshot {
   directoryStatesByPath: ReadonlyMap<string, PierDirectoryLoadState>;
   entriesByPath: ReadonlyMap<string, FileEntry>;
   rootError: string | null;
+  /** 根加载失败是否为 EPERM（TCC），UI 在 macOS 上展示「打开系统设置」引导。 */
+  rootErrorFolderAccessBlocked: boolean;
   rootLoaded: boolean;
   rootLoading: boolean;
 }

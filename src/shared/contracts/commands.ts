@@ -486,6 +486,8 @@ export type PierCommandResult =
       error: {
         code: PierCommandErrorCode;
         message: string;
+        /** Node errno string (`EPERM` / `EACCES`) when the failure is a filesystem denial. */
+        osCode?: string;
       };
       ok: false;
       requestId: string;

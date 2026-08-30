@@ -18,6 +18,7 @@ import {
   type Page,
   test,
 } from "@playwright/test";
+import { FILE_PANEL_SIDEBAR_WIDTH_STORAGE_KEY } from "../../../packages/ui/src/file/panel-sidebar-width.ts";
 import {
   GIT_REVIEW_RESPONSIVE_INLINE_ENTER_PX,
   GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX,
@@ -2154,26 +2155,24 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       .toBeLessThan(widthBeforePointerDrag - 5);
     await expect
       .poll(async () =>
-        page.evaluate(() => {
+        page.evaluate((storageKey) => {
           const panel = document.querySelector<HTMLElement>(
             '[data-testid="git-review-tree"]'
           );
           const stored = Number.parseInt(
-            globalThis.localStorage.getItem("pier.git.review.treeWidthPx") ??
-              "",
+            globalThis.localStorage.getItem(storageKey) ?? "",
             10
           );
           return panel && Number.isFinite(stored)
             ? Math.abs(panel.getBoundingClientRect().width - stored)
             : Number.POSITIVE_INFINITY;
-        })
+        }, FILE_PANEL_SIDEBAR_WIDTH_STORAGE_KEY)
       )
       .toBeLessThanOrEqual(2);
-    const storedTreeWidth = await page.evaluate(() =>
-      Number.parseInt(
-        globalThis.localStorage.getItem("pier.git.review.treeWidthPx") ?? "",
-        10
-      )
+    const storedTreeWidth = await page.evaluate(
+      (storageKey) =>
+        Number.parseInt(globalThis.localStorage.getItem(storageKey) ?? "", 10),
+      FILE_PANEL_SIDEBAR_WIDTH_STORAGE_KEY
     );
 
     await reviewSeparator.focus();

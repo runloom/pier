@@ -167,6 +167,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_2 = {
   codebuddy: {
     integration: "active",
     transport: ["hook-command", "transcript-reconciler"],
+    transcriptTurnIdentity: "absent",
     evidence: {
       lifecycle: "native",
       ready: "reconciled",
@@ -226,6 +227,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_2 = {
   qodercli: {
     integration: "active",
     transport: ["hook-command", "transcript-reconciler"],
+    transcriptTurnIdentity: "absent",
     evidence: {
       lifecycle: "native",
       ready: "reconciled",

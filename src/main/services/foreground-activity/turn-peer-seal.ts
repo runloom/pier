@@ -11,6 +11,7 @@ import {
   applyTurnBookkeeping,
   nextStatusAfterTurnBookkeeping,
 } from "./turn-bookkeeping.ts";
+import type { AgentEventEvidenceSource } from "./types.ts";
 
 function sealTurnId(input: {
   event: AgentHookEventPayload;
@@ -38,6 +39,7 @@ function sealTurnId(input: {
 export function sealMatchingTurnPeers(input: {
   at: number;
   event: AgentHookEventPayload;
+  evidenceSource: AgentEventEvidenceSource;
   hook: HookLayer;
   originScope: HookScope;
   semantics: AgentTurnEventSemantics;
@@ -62,7 +64,9 @@ export function sealMatchingTurnPeers(input: {
       peer,
       input.event,
       input.semantics,
-      input.at
+      input.at,
+      undefined,
+      input.evidenceSource
     );
     if (!result.accepted) {
       continue;

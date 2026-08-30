@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join } from "node:path";
+import { dirname, join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import type { FilePathTransactionLock } from "../files/path-transaction-lock.ts";
 import {
@@ -9,13 +9,15 @@ import {
   recoverPendingTargets,
 } from "./ledger.ts";
 import {
-  buildLauncherEntry,
-  buildOpenCodeLauncherEntry,
-  inferMemoryFormat,
-  type MemoryConfigFormat,
-} from "./serializers.ts";
+  type MemoryGlobalTarget,
+  memoryGlobalTargets,
+} from "./memory-targets.ts";
+import { inferMemoryFormat } from "./serializers.ts";
 import { applyMemoryTarget, fingerprintOnDisk } from "./target.ts";
 import type { TargetRow } from "./types.ts";
+
+export type { MemoryGlobalTarget } from "./memory-targets.ts";
+export { memoryGlobalTargets } from "./memory-targets.ts";
 
 /**
  * v3 全局注册:每个智能体的**用户级全局配置**只有一条指向启动器的 pier-memory
@@ -31,85 +33,14 @@ export function memoryRegistryPath(home: string = homedir()): string {
   return join(home, ".pier", "memory", "registry.json");
 }
 
-export interface MemoryGlobalTarget {
-  abs: string;
-  agent: string;
-  entry: (launcherPath: string) => Record<string, unknown>;
-  format: MemoryConfigFormat;
-}
-
 /**
- * 与 agents/integrations/codex.ts 的 $CODEX_HOME 语义一致(shell tilde 展开);
- * 相对路径不可信(会相对 Electron cwd 落盘),回退默认。
- */
-function codexHome(env: NodeJS.ProcessEnv, home: string): string {
-  const raw = env.CODEX_HOME;
-  if (!raw) {
-    return join(home, ".codex");
-  }
-  if (raw === "~") {
-    return home;
-  }
-  if (raw.startsWith("~/")) {
-    return join(home, raw.slice(2));
-  }
-  return isAbsolute(raw) ? raw : join(home, ".codex");
-}
-
-/** omp 暂不覆盖:待核实其是否消费 ~/.claude.json(v3 spec 风险表)。 */
-export function memoryGlobalTargets(options?: {
-  env?: NodeJS.ProcessEnv;
-  home?: string;
-}): MemoryGlobalTarget[] {
-  const home = options?.home ?? homedir();
-  const env = options?.env ?? process.env;
-  const xdgConfig =
-    env.XDG_CONFIG_HOME && isAbsolute(env.XDG_CONFIG_HOME)
-      ? env.XDG_CONFIG_HOME
-      : join(home, ".config");
-  return [
-    {
-      abs: join(home, ".claude.json"),
-      agent: "claude",
-      entry: buildLauncherEntry,
-      format: "mcp-servers-json",
-    },
-    {
-      abs: join(home, ".cursor", "mcp.json"),
-      agent: "cursor",
-      entry: buildLauncherEntry,
-      format: "mcp-servers-json",
-    },
-    {
-      abs: join(codexHome(env, home), "config.toml"),
-      agent: "codex",
-      entry: buildLauncherEntry,
-      format: "codex-toml",
-    },
-    {
-      abs: join(home, ".gemini", "settings.json"),
-      agent: "gemini",
-      entry: buildLauncherEntry,
-      format: "mcp-servers-json",
-    },
-    {
-      abs: join(xdgConfig, "opencode", "opencode.json"),
-      agent: "opencode",
-      entry: buildOpenCodeLauncherEntry,
-      format: "opencode-json",
-    },
-  ];
-}
-
-/**
- * OpenCode 的 JSONC 优先级高于 JSON(与 agents/integrations/opencode.ts 一致):
- * `opencode.jsonc` 存在时写 `.json` 会被静默忽略。此时把目标改到 jsonc,
- * 由 serializer 用 jsonc-parser 局部编辑保留注释。
+ * JSONC 优先级高于 JSON(OpenCode / Kilo / Crush):写 `.json` 会被静默忽略。
+ * 目标改到 jsonc,由 serializer 用 jsonc-parser 局部编辑保留注释。
  */
 async function withLiveTargetAbs(
   target: MemoryGlobalTarget
 ): Promise<MemoryGlobalTarget> {
-  if (target.agent !== "opencode") {
+  if (!target.jsoncSibling) {
     return target;
   }
   const jsoncPath = target.abs.replace(/\.json$/u, ".jsonc");
@@ -326,20 +257,31 @@ async function runConverge(
     ...(args.env ? { env: args.env } : {}),
     home,
   })) {
-    if (!installed.has(target.agent)) {
+    const consumers = installedConsumers(target, installed);
+    if (consumers.length === 0) {
       continue;
     }
     const live = await withLiveTargetAbs(target);
     retargetOpenCodeSibling(registry, target.abs, live.abs);
-    rows.push(await convergeOneTarget(live, args, registry, path, lockFor));
+    rows.push(
+      await convergeOneTarget(live, consumers, args, registry, path, lockFor)
+    );
   }
   await saveRegistry(path, registry);
   return rows;
 }
 
+function installedConsumers(
+  target: MemoryGlobalTarget,
+  installed: ReadonlySet<string>
+): string[] {
+  return target.consumers.filter((id) => installed.has(id));
+}
+
 /** 逐目标错误隔离:单个配置不可读/不可写(EACCES 等)不得中止其余智能体。 */
 async function convergeOneTarget(
   target: MemoryGlobalTarget,
+  consumers: readonly string[],
   args: ConvergeMemoryRegistryArgs,
   registry: MemoryRegistry,
   registryPath: string,
@@ -350,7 +292,7 @@ async function convergeOneTarget(
       applyMemoryTarget({
         abs: target.abs,
         book: registry,
-        consumers: [target.agent],
+        consumers: [...consumers],
         desired: "enabled",
         entry: target.entry(args.launcherPath),
         format: target.format,
@@ -367,7 +309,7 @@ async function convergeOneTarget(
     };
     return {
       configPath: target.abs,
-      consumers: [target.agent],
+      consumers: [...consumers],
       detail,
       outcome: "failed",
     };
@@ -389,7 +331,8 @@ export async function memoryRegistryStatusRows(options: {
   const installed = new Set(options.installedAgents);
   const rows: TargetRow[] = [];
   for (const listed of targets) {
-    if (!installed.has(listed.agent)) {
+    const consumers = installedConsumers(listed, installed);
+    if (consumers.length === 0) {
       continue;
     }
     const target = await withLiveTargetAbs(listed);
@@ -397,17 +340,17 @@ export async function memoryRegistryStatusRows(options: {
     if (record?.lastOutcome !== "written") {
       rows.push({
         configPath: target.abs,
-        consumers: [target.agent],
+        consumers,
         detail: record?.detail ?? "not configured yet",
         outcome: "failed",
       });
       continue;
     }
-    const current = await fingerprintOnDisk(target.abs);
+    const current = await fingerprintOnDisk(target.abs, target.format);
     if (current !== record.fingerprint) {
       rows.push({
         configPath: target.abs,
-        consumers: [target.agent],
+        consumers,
         detail: "managed entry missing or changed on disk",
         outcome: "failed",
       });
@@ -415,7 +358,7 @@ export async function memoryRegistryStatusRows(options: {
     }
     rows.push({
       configPath: target.abs,
-      consumers: [target.agent],
+      consumers,
       outcome: "written",
     });
   }

@@ -247,6 +247,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "git",
+      id: "pier.git.review.openDirectory",
+      permissions: ["file:read", "panel:open"],
+      title: "git: Open Directory",
+    },
+    {
+      category: "git",
       id: "pier.git.review.copyPath",
       permissions: ["file:read"],
       title: "git: Copy Path",

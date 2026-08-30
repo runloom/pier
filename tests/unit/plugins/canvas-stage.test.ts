@@ -97,10 +97,12 @@ describe("canvasFlowMeasureClass", () => {
     );
   });
 
-  it("drops the measure on fill boards", () => {
+  it("drops the measure on fill boards and hands down a definite height", () => {
+    // h-full (not just min-h): percentage heights inside the composition
+    // must resolve so "single screen, inner scroll" holds.
     expect(
       canvasFlowMeasureClass({ docs: false, fill: true, stage: "flow" })
-    ).toBe("min-h-full w-full");
+    ).toBe("h-full min-h-full w-full");
     expect(
       canvasFlowMeasureClass({ docs: false, fill: true, stage: "flow" })
     ).not.toContain("max-w-5xl");

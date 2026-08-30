@@ -171,6 +171,12 @@ export interface PanelTransferWindowPort {
     windowId: string,
     transferId: string
   ): Promise<void>;
+  /**
+   * Raise and key-focus a window after a successful intentional relocate
+   * (menu-initiated move/copy). Drag-initiated transfers never call this —
+   * the cursor already sits on the target.
+   */
+  focus(windowId: string): void;
   holdRendererShow(windowId: string, reason: string): void;
   list(): Array<{
     focused: boolean;

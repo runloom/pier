@@ -27,7 +27,9 @@ import {
 } from "./aggregator-session-title.ts";
 import {
   buildForegroundActivityBroadcast,
+  commandOwnedAgent,
   createPanelSlotRegistry,
+  pruneExpiredCooldownEntries,
 } from "./aggregator-slots.ts";
 import {
   logAgentEventDropped,
@@ -95,9 +97,6 @@ export function createForegroundActivityAggregator(
   const timerCtx: TimerCtx = { now, scheduleEmit, slots };
   const { dropSlotIfEmpty, slotFor } = createPanelSlotRegistry(slots);
   const subagentSessions = createSubagentSessionRegistry();
-  function commandOwnedAgent(slot: PanelSlot | undefined) {
-    return slot?.command?.kind === "agent-launch" ? slot.command.agentId : null;
-  }
 
   function closeSlot(
     key: string,
@@ -115,13 +114,7 @@ export function createForegroundActivityAggregator(
   }
 
   function pruneExpiredCooldowns(): void {
-    for (const map of [panelCooldownUntil, hookCooldownUntil]) {
-      for (const [id, until] of map) {
-        if (now() >= until) {
-          map.delete(id);
-        }
-      }
-    }
+    pruneExpiredCooldownEntries([panelCooldownUntil, hookCooldownUntil], now);
     hookScopes.pruneExpiredCooldowns();
   }
 
@@ -289,9 +282,7 @@ export function createForegroundActivityAggregator(
         identity,
         semantics
       );
-      if (sessionEndHandled !== null) {
-        return sessionEndHandled;
-      }
+      if (sessionEndHandled !== null) return sessionEndHandled;
       const at = now();
       const hook = acquireHookLayer(
         key,
@@ -309,16 +300,21 @@ export function createForegroundActivityAggregator(
       if (hookScopes.prepareSessionStartScope(hook, identity, semantics)) {
         return true;
       }
-      const canUseScope =
-        hook.scopes.has(identity.key) || semantics.createsSession;
-      if (!canUseScope) {
+      if (!(hook.scopes.has(identity.key) || semantics.createsSession)) {
         logAgentEventDropped("ghost-rejected", key, event.event);
         return false;
       }
       const scope = getOrCreateHookScope(hook, identity, event, at);
       const workId = identity.subagentWorkPlan?.id;
       const overlayBefore = scope.displayQuestionId;
-      const result = bookkeepTurn(scope, event, semantics, at, workId);
+      const result = bookkeepTurn(
+        scope,
+        event,
+        semantics,
+        at,
+        workId,
+        options.evidenceSource
+      );
       applyDisplayQuestionOverlay(scope, event, options.evidenceSource);
       const overlayChanged = scope.displayQuestionId !== overlayBefore;
       if (!(result.accepted || overlayChanged)) {
@@ -396,6 +392,9 @@ export function createForegroundActivityAggregator(
         scheduleEmit();
       }
       pruneExpiredCooldowns();
+    },
+    panelCommandOwnedAgent(panelId, windowId) {
+      return commandOwnedAgent(slots.get(panelKey(windowId, panelId)));
     },
     ptyExited(panelId, windowId) {
       const keys = keysForPanel(slots, panelId, windowId);

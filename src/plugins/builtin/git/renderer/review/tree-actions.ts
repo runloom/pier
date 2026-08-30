@@ -2,6 +2,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FileText, Minus, Plus, Undo2 } from "lucide-react";
 import { pluginText } from "../plugin-text.ts";
 import { GIT_REVIEW_DIFF_SURFACE } from "./diff-actions.ts";
+import { registerGitReviewOpenDirectoryAction } from "./directory/open-action.ts";
 import { confirmGitDiscard } from "./discard.ts";
 import { GitReviewMutationAuthority } from "./mutation-authority.ts";
 import { registerGitReviewTreeFolderActions } from "./tree-folder-actions.ts";
@@ -70,8 +71,7 @@ export function registerGitReviewTreeActions(
       id: GIT_REVIEW_OPEN_FILE_COMMAND_ID,
       metadata: {
         categoryKey: "git",
-        // Single group: Open / Stage / Unstage / Discard with no separators.
-        group: "1_review",
+        group: "1_open",
         iconComponent: FileText,
         menuHidden: (invocation) => {
           const item = parseGitReviewTreeItemMetadata(invocation);
@@ -250,6 +250,7 @@ export function registerGitReviewTreeActions(
       parseItem: parseGitReviewTreeItemMetadata,
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     }),
+    registerGitReviewOpenDirectoryAction(context),
     registerGitReviewTreePathActions({
       context,
       parseItem: parseGitReviewTreeItemMetadata,

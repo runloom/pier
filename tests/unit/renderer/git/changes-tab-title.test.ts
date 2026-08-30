@@ -44,6 +44,19 @@ describe("gitChangesPanelTitle", () => {
     ).toBe("repo · abcdef0");
   });
 
+  it("appends short oid range for multi-commit scope", () => {
+    expect(
+      gitChangesPanelTitle({
+        gitRootPath: "/repo",
+        target: {
+          fromOid: "0123456789abcdef0123456789abcdef01234567",
+          kind: "commit",
+          oid: "abcdef0123456789abcdef0123456789abcdef01",
+        },
+      })
+    ).toBe("repo · 0123456–abcdef0");
+  });
+
   it("appends short ref for branch scope", () => {
     expect(
       gitChangesPanelTitle({

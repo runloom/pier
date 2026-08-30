@@ -1,4 +1,5 @@
 import type { AgentActivity } from "@shared/contracts/foreground-activity.ts";
+import type { PierResourceSnapshot } from "@shared/contracts/pier-resource.ts";
 import { emptyTaskRunsSnapshot } from "@shared/contracts/tasks.ts";
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -44,7 +45,35 @@ afterEach(() => {
     snapshot: emptyTaskRunsSnapshot(),
   });
   useUsageDataStore.getState().reset();
+  resourceModule.usePierResourceStore.setState({
+    cpuHistory: [],
+    error: null,
+    snapshot: null,
+  });
 });
+
+function makeResourceSnapshot(): PierResourceSnapshot {
+  return {
+    appProcesses: [],
+    meta: {
+      cpuWarmingUp: false,
+      platform: "darwin",
+      treeCapability: "full",
+    },
+    sampledAt: 1,
+    sessions: [],
+    summary: {
+      hotCount: 0,
+      pierAppCpuPercent: null,
+      pierAppMemoryBytes: 0,
+      terminalCount: 0,
+      totalRelatedCpuPercent: null,
+      totalRelatedMemoryBytes: 0,
+      workloadCpuPercent: null,
+      workloadMemoryBytes: 0,
+    },
+  };
+}
 
 describe("canvas hooks", () => {
   it("useActivityOverview returns window-scoped counts and rows", () => {
@@ -136,6 +165,36 @@ describe("canvas hooks", () => {
     expect(acquire).toHaveBeenCalledTimes(1);
     unmount();
     expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("useSystemResources stays ready when a poll fails after a snapshot", () => {
+    vi.spyOn(resourceModule, "acquirePierResourcePolling").mockReturnValue(
+      () => undefined
+    );
+    resourceModule.usePierResourceStore.setState({
+      cpuHistory: [],
+      error: "poll failed",
+      snapshot: makeResourceSnapshot(),
+    });
+    const { result } = renderHook(() => useSystemResources());
+    // Same semantics as useHostSnapshot("resources"): keep showing the last
+    // snapshot; the error rides along instead of blanking the canvas.
+    expect(result.current.status).toBe("ready");
+    expect(result.current.error).toBe("poll failed");
+    expect(result.current.snapshot).not.toBeNull();
+  });
+
+  it("useSystemResources reports error only when no snapshot exists", () => {
+    vi.spyOn(resourceModule, "acquirePierResourcePolling").mockReturnValue(
+      () => undefined
+    );
+    resourceModule.usePierResourceStore.setState({
+      cpuHistory: [],
+      error: "boom",
+      snapshot: null,
+    });
+    const { result } = renderHook(() => useSystemResources());
+    expect(result.current.status).toBe("error");
   });
 
   it("useCostOverview is read-only and has no refresh method", () => {

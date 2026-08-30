@@ -8,7 +8,7 @@ import { ipcRenderer } from "electron";
 
 /**
  * 统一解包 preload → main 的 PierCommandResult envelope。
- * ok 时返回 data;否则把 error.code 挂到抛出的 Error 上,
+ * ok 时返回 data;否则把 error.code / osCode 挂到抛出的 Error 上,
  * 供 renderer 侧按 PierCommandErrorCode 做分支处理。
  *
  * 原先 index.ts / git-api.ts / worktree-api.ts / plugin-settings-api.ts /
@@ -22,8 +22,12 @@ async function unpackPierCommandResult<T>(
   }
   const error = new Error(result.error.message) as Error & {
     code?: PierCommandErrorCode;
+    osCode?: string;
   };
   error.code = result.error.code;
+  if (result.error.osCode) {
+    error.osCode = result.error.osCode;
+  }
   throw error;
 }
 

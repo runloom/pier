@@ -219,6 +219,37 @@ describe("GitCommitOverlay", () => {
     expect(successMock).toHaveBeenCalledWith("Committed");
   });
 
+  it("shows a spinner on the commit button while git commit is in flight", async () => {
+    let release!: (value: boolean) => void;
+    commitMock.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          release = resolve;
+        })
+    );
+    await open();
+    fireEvent.change(screen.getByRole("textbox", { name: "Commit message" }), {
+      target: { value: "fix typo" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+    await waitFor(() => {
+      const submit = screen.getByRole("button", { name: "Commit" });
+      expect(submit).toHaveAttribute("aria-busy", "true");
+      expect(submit.querySelector('[data-slot="spinner"]')).not.toBeNull();
+    });
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    const message = screen.getByRole("textbox", { name: "Commit message" });
+    expect(message).toHaveAttribute("readonly");
+    expect(message).toBeEnabled();
+    expect(loadingMock).not.toHaveBeenCalled();
+    await act(async () => {
+      release(true);
+    });
+    await waitFor(() => {
+      expect(successMock).toHaveBeenCalledWith("Committed");
+    });
+  });
+
   it("defaults include-unstaged on and stages those paths before commit", async () => {
     await open(
       gitStatus({

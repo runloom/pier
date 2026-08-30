@@ -30,6 +30,7 @@ function pendingCreateKey(root: string, path: string): string {
 }
 
 function findTreeEntry(target: {
+  fallbackToRoot?: boolean | undefined;
   instanceId?: string | undefined;
   root?: string | undefined;
 }): FilesTreeRegistryEntry | null {
@@ -37,6 +38,9 @@ function findTreeEntry(target: {
     const byId = treeRegistry.get(target.instanceId);
     if (byId) {
       return byId;
+    }
+    if (target.fallbackToRoot === false) {
+      return null;
     }
     // Fall through to root match when treeId is stale (panel remount / group id
     // drift). Prefer same-root live tree over silent no-op.
@@ -118,6 +122,7 @@ let revealRetryGeneration = 0;
  * selectable. Does not schedule retries (callers that poll should use this).
  */
 export function tryRevealFilesTreePathOnce(target: {
+  fallbackToRoot?: boolean | undefined;
   instanceId?: string | undefined;
   options?: PierFileTreeRevealOptions | undefined;
   path: string;
@@ -132,6 +137,7 @@ export function tryRevealFilesTreePathOnce(target: {
 }
 
 export function revealFilesTreePath(target: {
+  fallbackToRoot?: boolean | undefined;
   instanceId?: string | undefined;
   options?: PierFileTreeRevealOptions | undefined;
   path: string;

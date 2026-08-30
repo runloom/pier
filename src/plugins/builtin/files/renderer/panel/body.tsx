@@ -352,6 +352,8 @@ export function ResolvedFilePanel({
   if (document.loadState === "error") {
     return (
       <FileReadErrorEmpty
+        {...(context ? { context } : {})}
+        folderAccessBlocked={document.folderAccessBlocked === true}
         message={document.error}
         onReload={
           document.source.kind === "disk"

@@ -145,7 +145,12 @@ export async function executePanelOpenCommand(
   for (const entry of pathEntries(command)) {
     const next = await classifyPath(entry);
     if ("error" in next) {
-      return commandFailure(requestId, next.error.code, next.error.message);
+      return commandFailure(
+        requestId,
+        next.error.code,
+        next.error.message,
+        next.error.osCode ? { osCode: next.error.osCode } : undefined
+      );
     }
     classified.push(next);
   }

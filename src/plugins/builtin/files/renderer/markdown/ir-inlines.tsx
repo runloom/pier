@@ -41,8 +41,6 @@ export interface MarkdownRendererLabels extends MarkdownCodeBlockLabels {
   diagramFailed: string;
   diagramLabel: string;
   diagramPreviewTitle: string;
-  /** Shown on the diagram shrink chip; omit for icon-only chip. */
-  diagramScaledHint?: string;
   imagePreviewFailed: string;
   imagePreviewTitle: string;
   incompleteTask: string;

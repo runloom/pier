@@ -1,5 +1,5 @@
 import { FolderTree, Search } from "lucide-react";
-import { type ReactNode, useLayoutEffect } from "react";
+import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { usePanelRef } from "react-resizable-panels";
 import { Button } from "../button.tsx";
 import {
@@ -9,11 +9,22 @@ import {
 } from "../resizable.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../tooltip.tsx";
 import { cn } from "../utils.ts";
+import {
+  FILE_PANEL_DEFAULT_SIDEBAR_WIDTH_PX,
+  FILE_PANEL_MIN_SIDEBAR_WIDTH_PX,
+  FILE_PANEL_SIDEBAR_WIDTH_STORAGE_KEY,
+  persistMigratedSidebarWidth,
+  readSidebarWidth,
+  subscribeSidebarWidth,
+  writeSidebarWidth,
+} from "./panel-sidebar-width.ts";
 
 export { FilePanelBreadcrumb } from "./panel-breadcrumb.tsx";
-
-export const FILE_PANEL_DEFAULT_SIDEBAR_WIDTH_PX = 256;
-export const FILE_PANEL_MIN_SIDEBAR_WIDTH_PX = 170;
+export {
+  FILE_PANEL_DEFAULT_SIDEBAR_WIDTH_PX,
+  FILE_PANEL_MIN_SIDEBAR_WIDTH_PX,
+  FILE_PANEL_SIDEBAR_WIDTH_STORAGE_KEY,
+} from "./panel-sidebar-width.ts";
 
 const MAC_PLATFORM_RE = /Mac|iPhone|iPad/i;
 
@@ -28,31 +39,6 @@ export function filePanelTreeToggleShortcutLabel(): string {
   return MAC_PLATFORM_RE.test(navigator.platform) ? "⌘B" : "Ctrl+B";
 }
 
-function readSidebarWidth(
-  storageKey: string,
-  defaultWidth: number,
-  minWidth: number
-): number {
-  try {
-    const raw = globalThis.localStorage?.getItem(storageKey);
-    const parsed = raw == null ? Number.NaN : Number.parseInt(raw, 10);
-    if (Number.isFinite(parsed) && parsed >= minWidth) {
-      return parsed;
-    }
-  } catch {
-    // localStorage 不可用时保持默认宽度。
-  }
-  return defaultWidth;
-}
-
-function writeSidebarWidth(storageKey: string, width: number): void {
-  try {
-    globalThis.localStorage?.setItem(storageKey, String(Math.round(width)));
-  } catch {
-    // 偏好持久化失败不影响面板使用。
-  }
-}
-
 /** Files 与只读文件浏览类面板共用的稳定结构：顶部栏横跨侧栏和正文。 */
 export function FilePanelLayout({
   children,
@@ -64,7 +50,7 @@ export function FilePanelLayout({
   onSidebarAutoCollapse,
   sidebar,
   sidebarPanelId,
-  sidebarWidthStorageKey,
+  sidebarWidthStorageKey = FILE_PANEL_SIDEBAR_WIDTH_STORAGE_KEY,
 }: {
   children: ReactNode;
   contentPanelId: string;
@@ -75,30 +61,95 @@ export function FilePanelLayout({
   onSidebarAutoCollapse: () => void;
   sidebar: ReactNode;
   sidebarPanelId: string;
-  sidebarWidthStorageKey: string;
+  sidebarWidthStorageKey?: string;
 }) {
   const sidebarPanelRef = usePanelRef();
+  const groupElementRef = useRef<HTMLDivElement | null>(null);
+  const applyingPreferenceRef = useRef(false);
   const sidebarVisible = sidebar != null;
   useLayoutEffect(() => {
     const panel = sidebarPanelRef.current;
     if (!panel) {
       return;
     }
-    if (sidebarVisible) {
-      const restoredWidth = readSidebarWidth(
-        sidebarWidthStorageKey,
-        defaultSidebarWidth,
-        minSidebarWidth
-      );
-      panel.expand();
-      const animationFrame = globalThis.requestAnimationFrame(() => {
-        sidebarPanelRef.current?.resize(`${restoredWidth}px`);
+
+    const hostWidthPx = (): number => groupElementRef.current?.clientWidth ?? 0;
+
+    const applyPreferenceWidth = (widthPx: number): void => {
+      // 未选中 dockview tab 是 display:none，组宽为 0；此时灌像素会被夹成 50%，切回后树突然变宽。
+      if (widthPx < minSidebarWidth || hostWidthPx() <= 0) {
+        return;
+      }
+      const current = sidebarPanelRef.current;
+      if (!current || current.isCollapsed()) {
+        return;
+      }
+      try {
+        if (Math.round(current.getSize().inPixels) === widthPx) {
+          return;
+        }
+      } catch {
+        // 尚未完成布局时仍尝试灌入目标宽度。
+      }
+      applyingPreferenceRef.current = true;
+      try {
+        current.resize(`${widthPx}px`);
+      } finally {
+        applyingPreferenceRef.current = false;
+      }
+    };
+
+    const unsubscribe = subscribeSidebarWidth(
+      sidebarWidthStorageKey,
+      applyPreferenceWidth
+    );
+
+    const groupElement = groupElementRef.current;
+    let lastHostWidth = groupElement?.clientWidth ?? 0;
+    let observer: ResizeObserver | undefined;
+    if (groupElement && typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => {
+        const width = groupElement.clientWidth;
+        const becameLaidOut = lastHostWidth <= 0 && width > 0;
+        lastHostWidth = width;
+        if (!(becameLaidOut && sidebarVisible)) {
+          return;
+        }
+        applyPreferenceWidth(
+          readSidebarWidth(
+            sidebarWidthStorageKey,
+            defaultSidebarWidth,
+            minSidebarWidth
+          )
+        );
       });
+      observer.observe(groupElement);
+    }
+
+    if (!sidebarVisible) {
+      panel.collapse();
       return () => {
-        globalThis.cancelAnimationFrame(animationFrame);
+        unsubscribe();
+        observer?.disconnect();
       };
     }
-    panel.collapse();
+
+    persistMigratedSidebarWidth(sidebarWidthStorageKey, minSidebarWidth);
+    panel.expand();
+    const animationFrame = globalThis.requestAnimationFrame(() => {
+      applyPreferenceWidth(
+        readSidebarWidth(
+          sidebarWidthStorageKey,
+          defaultSidebarWidth,
+          minSidebarWidth
+        )
+      );
+    });
+    return () => {
+      globalThis.cancelAnimationFrame(animationFrame);
+      unsubscribe();
+      observer?.disconnect();
+    };
   }, [
     defaultSidebarWidth,
     minSidebarWidth,
@@ -113,7 +164,23 @@ export function FilePanelLayout({
       data-slot="file-panel-layout"
     >
       {header}
-      <ResizablePanelGroup className="min-h-0 flex-1" orientation="horizontal">
+      <ResizablePanelGroup
+        className="min-h-0 flex-1"
+        elementRef={groupElementRef}
+        onLayoutChanged={(_layout, meta) => {
+          if (!(meta.isUserInteraction && sidebarVisible)) {
+            return;
+          }
+          if ((groupElementRef.current?.clientWidth ?? 0) <= 0) {
+            return;
+          }
+          const size = sidebarPanelRef.current?.getSize();
+          if (size !== undefined && size.inPixels >= minSidebarWidth) {
+            writeSidebarWidth(sidebarWidthStorageKey, size.inPixels);
+          }
+        }}
+        orientation="horizontal"
+      >
         <ResizablePanel
           aria-hidden={!sidebarVisible}
           className="min-h-0"
@@ -131,10 +198,12 @@ export function FilePanelLayout({
           maxSize="50%"
           minSize={String(minSidebarWidth).concat("px")}
           onResize={(panelSize, _id, previousPanelSize) => {
-            if (panelSize.inPixels >= minSidebarWidth) {
-              writeSidebarWidth(sidebarWidthStorageKey, panelSize.inPixels);
-            } else if (
+            if (applyingPreferenceRef.current) {
+              return;
+            }
+            if (
               sidebarVisible &&
+              panelSize.inPixels < minSidebarWidth &&
               previousPanelSize !== undefined &&
               sidebarPanelRef.current?.isCollapsed() === true
             ) {
@@ -184,7 +253,7 @@ export function FilePanelHeader({
       data-slot="file-panel-header"
     >
       {leading ? (
-        <div className="flex shrink-0 items-center">{leading}</div>
+        <div className="flex min-w-0 items-center">{leading}</div>
       ) : null}
       <div className="flex min-w-0 flex-1 items-center overflow-hidden">
         {center}

@@ -3,6 +3,7 @@ import type { FileListRequest } from "@shared/contracts/file.ts";
 import type { PierCapability } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { openFilesDiskPath } from "../../files/open-disk-file-panel.ts";
+import { openProjectDirectory } from "../../files/open-project-directory.ts";
 
 type AssertPluginCapability = (
   entry: PluginRegistryEntry | undefined,
@@ -88,6 +89,10 @@ export function createPluginFilesContext(
       assertPluginCapability(entry, "file:write");
       return window.pier.files.move(request);
     },
+    openFolderPermissionSettings: () => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.files.openFolderPermissionSettings();
+    },
     openInEditor: (request) => {
       assertPluginCapability(entry, "file:read");
       return openFilesDiskPath({
@@ -98,6 +103,15 @@ export function createPluginFilesContext(
         ...(request.line === undefined ? {} : { line: request.line }),
         ...(request.title ? { title: request.title } : {}),
       });
+    },
+    openProjectDirectory: async (request) => {
+      assertPluginCapability(entry, "file:read");
+      assertPluginCapability(entry, "panel:open");
+      try {
+        return await openProjectDirectory(request);
+      } catch {
+        return { ok: false, reason: "open-failed" };
+      }
     },
     openPath: (request) => {
       assertPluginCapability(entry, "file:read");

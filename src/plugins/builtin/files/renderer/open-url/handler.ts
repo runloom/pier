@@ -18,8 +18,6 @@ import { createFileEditorSessionId } from "../editor/session-id.ts";
 import { createFilesTranslate } from "../i18n.ts";
 import { createFileFilePanelInstanceId } from "../panel/id.ts";
 import { sourceTitle } from "../panel/source.ts";
-import { openProjectFiles } from "../project/open-project.ts";
-import { revealFilesTreePath } from "../tree/registry.ts";
 import { resolveTerminalLocalPathTargets } from "./resolve.ts";
 
 type SystemOpenFallbackReason = "open-instance-failed" | "open-project-failed";
@@ -161,6 +159,36 @@ function openDiskFile(input: {
   }
 }
 
+async function openProjectDirectoryFromUrl(
+  context: RendererPluginContext,
+  openContext: PanelContext,
+  root: string,
+  path: string,
+  absolutePath: string
+): Promise<DiskOpenResult> {
+  const result = await context.files.openProjectDirectory({
+    context: openContext,
+    path,
+    root,
+  });
+  if (result.ok) {
+    return "opened";
+  }
+  if (
+    result.reason === "files-unregistered" ||
+    result.reason === "invalid-path"
+  ) {
+    const t = createFilesTranslate(context);
+    context.notifications.error(
+      t("filePanel.openDirectory.failed", "Unable to open project directory")
+    );
+    // Already notified; "opened" skips reportUnresolved ("Cannot open this path.").
+    return "opened";
+  }
+  await openAbsoluteWithSystem(context, absolutePath, "open-project-failed");
+  return "opened";
+}
+
 /**
  * Open a disk path in Pier Files.
  *
@@ -185,23 +213,13 @@ async function openDiskTarget(input: {
     if (!openContext) {
       return "failed";
     }
-    const opened = await openProjectFiles(input.context, openContext);
-    if (!opened.ok) {
-      await openAbsoluteWithSystem(
-        input.context,
-        absolutePath,
-        "open-project-failed"
-      );
-      return "opened";
-    }
-    globalThis.setTimeout(() => {
-      revealFilesTreePath({
-        options: { intent: "root" },
-        path: "",
-        root,
-      });
-    }, 80);
-    return "opened";
+    return await openProjectDirectoryFromUrl(
+      input.context,
+      openContext,
+      root,
+      "",
+      absolutePath
+    );
   }
 
   const stat = await input.context.files.stat({
@@ -217,23 +235,13 @@ async function openDiskTarget(input: {
     if (!openContext) {
       return "failed";
     }
-    const opened = await openProjectFiles(input.context, openContext);
-    if (!opened.ok) {
-      await openAbsoluteWithSystem(
-        input.context,
-        absolutePath,
-        "open-project-failed"
-      );
-      return "opened";
-    }
-    globalThis.setTimeout(() => {
-      revealFilesTreePath({
-        options: { intent: "explicit" },
-        path: relativePath,
-        root,
-      });
-    }, 80);
-    return "opened";
+    return await openProjectDirectoryFromUrl(
+      input.context,
+      openContext,
+      root,
+      relativePath,
+      absolutePath
+    );
   }
 
   try {

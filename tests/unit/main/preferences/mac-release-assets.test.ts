@@ -7,9 +7,15 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MAC_HELPER_SUFFIXES } from "../../../../scripts/mac-helper-icons.mjs";
+import {
+  MAC_FOLDER_USAGE_DESCRIPTIONS,
+  MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS,
+  MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS,
+  renderInfoPlistStrings,
+} from "../../../../scripts/mac-privacy-descriptions.mjs";
 import {
   recommendedMacReleaseBlockmapNames,
   requiredMacReleaseAssetNames,
@@ -90,6 +96,9 @@ async function populatePackagedApp(app: string): Promise<void> {
       "<key>CFBundlePackageType</key><string>APPL</string>",
       "<key>CFBundleIconFile</key><string>icon.icns</string>",
       "<key>CFBundleIconName</key><string>app-icon</string>",
+      ...Object.entries(MAC_FOLDER_USAGE_DESCRIPTIONS).map(
+        ([key, value]) => `<key>${key}</key><string>${value}</string>`
+      ),
       "</dict></plist>",
     ].join("\n"),
     "utf8"
@@ -102,6 +111,15 @@ async function populatePackagedApp(app: string): Promise<void> {
     join(process.cwd(), "build/Assets.car"),
     join(resources, "Assets.car")
   );
+  for (const relative of MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS) {
+    const localizedStrings = join(resources, ...relative.split("/"));
+    await mkdir(dirname(localizedStrings), { recursive: true });
+    await writeFile(
+      localizedStrings,
+      renderInfoPlistStrings(MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS),
+      "utf8"
+    );
+  }
   for (const suffix of MAC_HELPER_SUFFIXES) {
     const helperContents = join(
       contents,

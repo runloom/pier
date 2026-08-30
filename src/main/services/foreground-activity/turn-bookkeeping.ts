@@ -16,6 +16,11 @@ import {
   settleNamedWork,
   type TerminalRetiredWork,
 } from "./turn-ledger.ts";
+import {
+  canUnsealTranscriptTurn,
+  unsealTranscriptTurn,
+} from "./turn-unseal.ts";
+import type { AgentEventEvidenceSource } from "./types.ts";
 
 export {
   hookScopeHasActiveInteractions,
@@ -139,6 +144,7 @@ function resetTurn(
   scope.completionObservedAt = undefined;
   scope.turnResetAt = at;
   scope.terminalEvidence = undefined;
+  scope.terminalEvidenceSource = undefined;
   // 默认非权威；只有 explicit-prompt 的 turn-start 才点亮。
   scope.currentTurnAuthoritative = false;
   clearActiveWork(scope);
@@ -210,7 +216,8 @@ export function applyTurnBookkeeping(
   event: AgentHookEventPayload,
   semantics: AgentTurnEventSemantics,
   at: number,
-  subagentWorkId?: string
+  subagentWorkId?: string,
+  evidenceSource: AgentEventEvidenceSource = "hook"
 ): TurnBookkeepingResult {
   const eventName = event.event;
   const eventTurnId = normalizeAgentTurnId(event.turnId);
@@ -221,6 +228,17 @@ export function applyTurnBookkeeping(
   );
   if (semantics.category === "ignored") {
     return reject("stop-without-authority");
+  }
+  if (
+    canUnsealTranscriptTurn({
+      at,
+      event,
+      eventTurnId,
+      evidenceSource,
+      scope,
+    })
+  ) {
+    unsealTranscriptTurn(scope, eventTurnId);
   }
   if (
     eventTurnId &&
@@ -287,6 +305,7 @@ export function applyTurnBookkeeping(
     scope.completionObserved = false;
     scope.completionObservedAt = undefined;
     scope.terminalEvidence = undefined;
+    scope.terminalEvidenceSource = undefined;
     scope.turnEnded = false;
     scope.turnEndedAt = undefined;
   }
@@ -312,6 +331,7 @@ export function applyTurnBookkeeping(
     scope.turnEnded = true;
     scope.turnEndedAt = at;
     scope.terminalEvidence = semantics.terminalEvidence;
+    scope.terminalEvidenceSource = evidenceSource;
     scope.completionObserved = false;
     scope.completionObservedAt = undefined;
     const terminalRetiredWork = clearActiveWork(scope);

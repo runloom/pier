@@ -1,5 +1,3 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { formatAttentionTestNotificationCopy } from "@shared/agent-attention-copy.ts";
 import { AGENT_ATTENTION_TEST_KIND } from "@shared/contracts/agent/attention.ts";
 import type {
@@ -14,9 +12,15 @@ import type {
 import { systemNotificationRequestSchema } from "@shared/contracts/notification.ts";
 import { createLogger } from "@shared/logger.ts";
 import { Notification, shell } from "electron";
+import { openMacWithOpenCommand } from "./macos-open.ts";
 
 const log = createLogger("system-notification");
-const execFileAsync = promisify(execFile);
+
+const MAC_NOTIFICATION_SETTINGS_OPEN_ARGS: readonly (readonly string[])[] = [
+  ["x-apple.systempreferences:com.apple.Notifications-Settings.extension"],
+  ["x-apple.systempreferences:com.apple.preference.notifications"],
+  ["-b", "com.apple.systempreferences"],
+];
 
 /** Keep instances alive so click handlers remain reachable (esp. Windows). */
 const liveByTag = new Map<string, Notification>();
@@ -304,28 +308,21 @@ export async function showTestSystemNotification(
 export async function openSystemNotificationSettings(): Promise<OpenSystemNotificationSettingsResult> {
   try {
     if (process.platform === "darwin") {
-      // 不要用 shell.openExternal 打开 x-apple.systempreferences：
-      // Electron/dev 壳下可能落到 Electron 默认页（空壳），而不是系统设置。
-      // 用系统 open(1) 交给 LaunchServices 更稳。
-      const candidates = [
-        [
-          "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
-        ],
-        ["x-apple.systempreferences:com.apple.preference.notifications"],
-        ["-b", "com.apple.systempreferences"],
-      ];
-      for (const args of candidates) {
-        try {
-          await execFileAsync("open", args);
-          return { opened: true };
-        } catch (err) {
-          log.debug("open notification settings candidate failed", {
-            args,
-            err,
-          });
+      // 不要用 shell.openExternal 打开 x-apple.systempreferences：dev 壳会落到空协议页。
+      const opened = await openMacWithOpenCommand(
+        MAC_NOTIFICATION_SETTINGS_OPEN_ARGS,
+        {
+          onCandidateFailed: (args, err) => {
+            log.debug("open notification settings candidate failed", {
+              args,
+              err,
+            });
+          },
         }
-      }
-      return { opened: false, reason: "open-failed" };
+      );
+      return opened
+        ? { opened: true }
+        : { opened: false, reason: "open-failed" };
     }
     if (process.platform === "win32") {
       await shell.openExternal("ms-settings:notifications");

@@ -69,7 +69,8 @@ export function registerTerminalAgentEscapeCancel(input: {
         sessionId: activity.sessionId,
       });
       const accepted = host.ingestAgentEvent(event, {
-        evidenceSource: "transcript",
+        // 宿主合成终态：硬封。不得复用 transcript（软封会被迟到 ToolComplete 解开）。
+        evidenceSource: "host",
         stopAuthority: "authoritative",
         turnStartAuthority: "none",
       });

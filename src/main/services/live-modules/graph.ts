@@ -1,4 +1,4 @@
-import { type FSWatcher, watch } from "node:fs";
+import { type FSWatcher, watch as fsWatch, statSync } from "node:fs";
 import { dirname } from "node:path";
 import type { LiveModuleEvent } from "@shared/contracts/live-modules.ts";
 
@@ -33,14 +33,46 @@ function normalizePath(file: string): string {
 }
 
 /**
+ * Sibling names that can recover a broken import when they appear in a
+ * watched directory. Data files written via `useCanvasFile` (`board.json`,
+ * `instance.json`, …) must not match — a miss-wake recompiles the canvas
+ * and the preview flashes on every drag persist.
+ */
+const GRAPH_RECOVERY_FILE_RE = /\.(?:[cm]?[jt]sx?|css|vue|svelte)$/iu;
+
+export function isLiveModuleGraphRecoveryFileName(fileName: string): boolean {
+  const leaf = normalizePath(fileName).split("/").at(-1) ?? fileName;
+  return GRAPH_RECOVERY_FILE_RE.test(leaf);
+}
+
+/** Subset of `fs.watch` used to observe a graph directory. */
+export type LiveModuleDirWatch = (
+  dir: string,
+  listener: (event: string, filename: string | Buffer | null) => void
+) => Pick<FSWatcher, "close" | "on">;
+
+function readMtime(file: string): number | null {
+  try {
+    return statSync(file).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Watch parent directories (not individual files) so atomic editor saves
  * (write temp + rename) still fire events and keep hot-reload alive.
  */
-export function createLiveModuleGraphTracker(): LiveModuleGraphTracker {
+export function createLiveModuleGraphTracker(options?: {
+  watch?: LiveModuleDirWatch;
+}): LiveModuleGraphTracker {
+  const watchDir: LiveModuleDirWatch =
+    options?.watch ?? ((dir, listener) => fsWatch(dir, listener));
   const moduleToFiles = new Map<ModuleKey, Set<string>>();
   const fileToModules = new Map<string, Set<ModuleKey>>();
   const dirToFiles = new Map<string, Set<string>>();
-  const dirWatchers = new Map<string, FSWatcher>();
+  const dirWatchers = new Map<string, Pick<FSWatcher, "close" | "on">>();
+  const fileMtimes = new Map<string, number>();
   const pendingKeys = new Set<ModuleKey>();
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let listener:
@@ -83,12 +115,33 @@ export function createLiveModuleGraphTracker(): LiveModuleGraphTracker {
     scheduleKeys(modules);
   }
 
+  function rememberMtime(file: string): void {
+    const mtime = readMtime(file);
+    if (mtime === null) {
+      fileMtimes.delete(file);
+      return;
+    }
+    fileMtimes.set(file, mtime);
+  }
+
+  /** True when a tracked graph file appeared, disappeared, or changed on disk. */
+  function graphFileChanged(file: string): boolean {
+    const mtime = readMtime(file);
+    const previous = fileMtimes.get(file);
+    if (mtime === null) {
+      fileMtimes.delete(file);
+      return previous !== undefined;
+    }
+    fileMtimes.set(file, mtime);
+    return previous === undefined || previous !== mtime;
+  }
+
   function ensureDirWatch(dir: string): void {
     if (dirWatchers.has(dir) || !listener) {
       return;
     }
     try {
-      const watcher = watch(dir, (_eventType, filename) => {
+      const watcher = watchDir(dir, (_eventType, filename) => {
         if (!listener) {
           return;
         }
@@ -106,12 +159,14 @@ export function createLiveModuleGraphTracker(): LiveModuleGraphTracker {
             const fileLeaf = file.split("/").at(-1) ?? file;
             if (fileLeaf === leaf) {
               notifyFile(file);
+              rememberMtime(file);
               hit = true;
             }
           }
-          // Rename / new sibling in a watched dir: fileToModules miss still
-          // wakes every module that watches files here (broken import recovery).
-          if (!hit) {
+          // New sibling source in a watched dir: fileToModules miss still
+          // wakes every module here (broken import recovery). Data siblings
+          // (`board.json`) stay silent — they are not in the compile graph.
+          if (!hit && isLiveModuleGraphRecoveryFileName(leaf)) {
             const keys = new Set<ModuleKey>();
             for (const file of filesInDir) {
               const modules = fileToModules.get(file);
@@ -128,8 +183,13 @@ export function createLiveModuleGraphTracker(): LiveModuleGraphTracker {
           }
           return;
         }
+        // Some platforms omit the name (overflow / coalesced dir events).
+        // Only wake modules whose tracked files actually moved on disk —
+        // a sibling `board.json` write must not remount the canvas.
         for (const file of filesInDir) {
-          notifyFile(file);
+          if (graphFileChanged(file)) {
+            notifyFile(file);
+          }
         }
       });
       watcher.on("error", () => {
@@ -154,6 +214,7 @@ export function createLiveModuleGraphTracker(): LiveModuleGraphTracker {
     modules.delete(key);
     if (modules.size === 0) {
       fileToModules.delete(file);
+      fileMtimes.delete(file);
       const dir = normalizePath(dirname(file));
       const filesInDir = dirToFiles.get(dir);
       if (filesInDir) {
@@ -183,6 +244,7 @@ export function createLiveModuleGraphTracker(): LiveModuleGraphTracker {
       dirToFiles.set(dir, filesInDir);
     }
     filesInDir.add(file);
+    rememberMtime(file);
     ensureDirWatch(dir);
   }
 

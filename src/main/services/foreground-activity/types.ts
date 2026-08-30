@@ -17,7 +17,7 @@ export type AgentStopAuthority =
 
 export type AgentTurnStartAuthority = "authoritative" | "none";
 
-export type AgentEventEvidenceSource = "hook" | "transcript";
+export type AgentEventEvidenceSource = "hook" | "host" | "transcript";
 
 export interface AgentEventIngestOptions {
   evidenceSource: AgentEventEvidenceSource;
@@ -98,6 +98,12 @@ export interface ForegroundActivityAggregator {
 
   /** panel 关闭 → 清 activity + 冷却拦迟到 hook。 */
   panelClosed(panelId: string, windowId?: string): void;
+  /**
+   * OSC 点亮的前台命令层归属 agent；无 → null。供 hook 事件来源甄别
+   * （ctty 门）做「已点亮即收」豁免。**刻意不含 hook 层**：hook 层可能
+   * 正是泄漏事件自立的，认它会把一次 fail-open 变成永久豁免。
+   */
+  panelCommandOwnedAgent(panelId: string, windowId: string): AgentKind | null;
   /**
    * native pty 进程退出（面板可能仍开着）：task 面板保留终态 activity
    * （只清 hook 证据 + hook 冷却）；其余面板等同 panelClosed。

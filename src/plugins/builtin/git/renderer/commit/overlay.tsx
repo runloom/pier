@@ -12,6 +12,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@pier/ui/field.tsx";
+import { Spinner } from "@pier/ui/spinner.tsx";
 import { Textarea } from "@pier/ui/textarea.tsx";
 import type {
   RendererPluginContentDialogRenderProps,
@@ -173,11 +174,13 @@ function GitCommitOverlay({
           {context.i18n.t("ui.cancel", undefined, "Cancel")}
         </Button>
         <Button
+          aria-busy={pending || undefined}
           disabled={!canSubmit}
           form={COMMIT_FORM_ID}
           type="submit"
           variant="default"
         >
+          {pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
           {text("gitCommit", "Commit")}
         </Button>
       </div>
@@ -302,6 +305,7 @@ function GitCommitOverlay({
               "gitCommitMessagePlaceholder",
               "What did you change?"
             )}
+            readOnly={pending}
             ref={messageInputRef}
             value={message}
           />

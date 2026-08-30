@@ -30,7 +30,7 @@ describe("comment navigator layout governance", () => {
     expect(canvas).toContain('data-slot="file-canvas-scroll"');
     expect(canvas).toContain("COMMENT_NAVIGATOR_SCROLL_PAD_CLASS");
     expect(canvas).toMatch(
-      /data-slot="file-canvas-scroll"[\s\S]*?<\/div>\s*\{commentNavigator/
+      /data-slot="file-canvas-scroll"[\s\S]*?<\/div>\s*\{nav\.commentNavigator/
     );
   });
 
@@ -82,15 +82,23 @@ describe("comment navigator layout governance", () => {
     const canvas = read(
       "src/plugins/builtin/files/renderer/preview/canvas.tsx"
     );
+    const navigation = read(
+      "src/plugins/builtin/files/renderer/preview/use-canvas-comment-navigation.ts"
+    );
     const nav = read(
       "src/plugins/builtin/files/renderer/preview/canvas-comment-nav.ts"
     );
     const locate = read(
       "src/plugins/builtin/files/renderer/preview/canvas-comment-locate.ts"
     );
-    expect(canvas).toContain("revealCanvasCommentNavTarget");
+    // The shell wires pins + threads into the navigation hook; the hook owns
+    // the reveal call (hidden tabs get revealed, n/N never shrinks).
+    expect(canvas).toContain("useCanvasCommentNavigation");
     expect(canvas).toContain("hiddenPins");
     expect(canvas).toContain("liveThreads");
+    expect(navigation).toContain("revealCanvasCommentNavTarget");
+    expect(navigation).toContain("hiddenPins");
+    expect(navigation).toContain("liveThreads");
     expect(nav).toContain("revealCanvasTabPanelForTarget");
     expect(nav).toContain("oldest first");
     expect(nav).toContain("same number as the pin");

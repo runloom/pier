@@ -14,6 +14,7 @@ import {
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
 import { ItemGroup } from "@pier/ui/item.tsx";
+import { Kbd } from "@pier/ui/kbd.tsx";
 import {
   Popover,
   PopoverContent,
@@ -350,11 +351,7 @@ export function NotificationCenterControl(): ReactNode {
         </TooltipTrigger>
         <TooltipContent align="end" side="bottom">
           {t("notificationsCenter.header.title")}
-          {openShortcut ? (
-            <span className="text-background/70 tracking-wide">
-              {openShortcut}
-            </span>
-          ) : null}
+          {openShortcut ? <Kbd>{openShortcut}</Kbd> : null}
         </TooltipContent>
       </Tooltip>
       <PopoverContent

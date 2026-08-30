@@ -18,6 +18,7 @@ const NONE_ALLOWLIST = new Set([
   "packages/ui/src/image-preview/canvas.tsx",
   "packages/ui/src/scroll-area.tsx",
   "src/plugins/builtin/files/renderer/markdown/preview-toc.tsx",
+  "src/plugins/builtin/git/renderer/review/scope/commit-picker-list.tsx",
   "src/renderer/components/common/notifications/center-control.tsx",
   "src/renderer/components/primitives/sidebar.tsx",
   "src/renderer/panel-kits/terminal/composer-attachment/rail.tsx",

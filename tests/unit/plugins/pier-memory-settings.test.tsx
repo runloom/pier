@@ -151,6 +151,9 @@ describe("pier.memory project settings", () => {
     await waitFor(() => {
       expect(screen.getByText("use pnpm")).toBeTruthy();
     });
+    expect(
+      screen.getByRole("button", { name: "Clear project memory" }).className
+    ).toContain("self-start");
     fireEvent.click(screen.getByLabelText("Delete this memory"));
     await waitFor(() => {
       expect(deleteObservation).toHaveBeenCalledWith(

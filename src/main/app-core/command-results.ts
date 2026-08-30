@@ -13,10 +13,13 @@ export function commandSuccess(
 export function commandFailure(
   requestId: string,
   code: PierCommandErrorCode,
-  message: string
+  message: string,
+  extras?: { osCode?: string }
 ): PierCommandResult {
   return {
-    error: { code, message },
+    error: extras?.osCode
+      ? { code, message, osCode: extras.osCode }
+      : { code, message },
     ok: false,
     requestId,
   };

@@ -151,6 +151,7 @@ describe("panel transfer recovery matrix", () => {
       closeOpenWindowRecord: vi.fn(async () => undefined),
       createForTransfer: createForTransfer as never,
       destroyForTransfer: vi.fn(async () => undefined),
+      focus: vi.fn(),
       holdRendererShow: vi.fn(),
       list: vi.fn(() => [
         { focused: true, id: "main", recordId: "record-main" },

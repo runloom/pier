@@ -42,9 +42,9 @@ import {
 } from "./canvas-pick-shared.ts";
 
 /**
- * Visual scale applied by ancestors (world-stage CSS `zoom`). Client rects are
- * scaled while offset layout stays in local CSS px, so the ratio recovers the
- * factor; flow mode measures 1 and stays a no-op.
+ * Visual scale applied by ancestors (world-stage camera `transform` scale).
+ * Client rects are scaled while offset layout stays in local CSS px, so the
+ * ratio recovers the factor; flow mode measures 1 and stays a no-op.
  */
 export function canvasShellVisualScale(
   shell: HTMLElement,

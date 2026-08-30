@@ -45,7 +45,11 @@ export function gitReviewTargetTitleSuffix(
     return null;
   }
   if (target.kind === "commit") {
-    return target.oid.slice(0, SHORT_OID_LENGTH);
+    const newest = target.oid.slice(0, SHORT_OID_LENGTH);
+    if (target.fromOid !== undefined && target.fromOid !== target.oid) {
+      return `${target.fromOid.slice(0, SHORT_OID_LENGTH)}–${newest}`;
+    }
+    return newest;
   }
   return shortGitReviewRef(target.ref);
 }
@@ -101,7 +105,11 @@ function targetTooltipValue(
   labels: GitChangesTabChromeLabels
 ): string {
   if (target.kind === "commit") {
-    return `${labels.targetCommitLabel}${TITLE_SEPARATOR}${target.oid.slice(0, SHORT_OID_LENGTH)}`;
+    const newest = target.oid.slice(0, SHORT_OID_LENGTH);
+    if (target.fromOid !== undefined && target.fromOid !== target.oid) {
+      return `${labels.targetCommitLabel}${TITLE_SEPARATOR}${target.fromOid.slice(0, SHORT_OID_LENGTH)}–${newest}`;
+    }
+    return `${labels.targetCommitLabel}${TITLE_SEPARATOR}${newest}`;
   }
   if (target.kind === "branch") {
     return `${labels.targetBranchLabel}${TITLE_SEPARATOR}${shortGitReviewRef(target.ref)}`;

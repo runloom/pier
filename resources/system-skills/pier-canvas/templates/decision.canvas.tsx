@@ -35,11 +35,7 @@ export const canvas = {
 };
 
 function H2({ children }: { children: string }) {
-  return (
-    <Text as="h2" className="text-base font-medium tracking-tight">
-      {children}
-    </Text>
-  );
+  return <Text as="h2">{children}</Text>;
 }
 
 export default function DecisionCanvasTemplate() {
@@ -53,12 +49,8 @@ export default function DecisionCanvasTemplate() {
             <Badge variant="info">Product design</Badge>
             <Badge variant="outline">decision_nav_4</Badge>
           </Row>
-          <Text as="h1" className="text-2xl font-semibold tracking-tight">
-            Proposal title
-          </Text>
-          <Text tone="secondary" className="text-sm leading-relaxed">
-            One sentence: what decision this is.
-          </Text>
+          <Text as="h1">Proposal title</Text>
+          <Text tone="secondary">One sentence: what decision this is.</Text>
         </Stack>
 
         <Tabs onValueChange={setTab} value={tab}>
@@ -71,7 +63,7 @@ export default function DecisionCanvasTemplate() {
 
           <TabsContent className="mt-4" value="overview">
             <Stack gap={14}>
-              <Card className="border-status-info/30 bg-status-info/5">
+              <Card className="border-status-info/40 bg-status-info/10">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Decision (BLUF)</CardTitle>
                   <CardDescription>
@@ -79,7 +71,7 @@ export default function DecisionCanvasTemplate() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Text className="text-sm leading-relaxed">
+                  <Text>
                     Write the conclusion here. Do not put migration phases or
                     acceptance tables on this page.
                   </Text>
@@ -92,7 +84,7 @@ export default function DecisionCanvasTemplate() {
                     <CardTitle className="mt-2 text-base">Pain summary</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Text className="text-sm leading-relaxed">
+                    <Text>
                       Where the user gets stuck.
                     </Text>
                   </CardContent>
@@ -103,7 +95,7 @@ export default function DecisionCanvasTemplate() {
                     <CardTitle className="mt-2 text-base">Key mechanism</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Text className="text-sm leading-relaxed">
+                    <Text>
                       Layers / boundaries in a short phrase each.
                     </Text>
                   </CardContent>
@@ -114,7 +106,7 @@ export default function DecisionCanvasTemplate() {
                     <CardTitle className="mt-2 text-base">Next step</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Text className="text-sm leading-relaxed">
+                    <Text>
                       What to change first (not a command recipe).
                     </Text>
                   </CardContent>
@@ -126,14 +118,14 @@ export default function DecisionCanvasTemplate() {
           <TabsContent className="mt-4" value="problem">
             <Stack gap={14}>
               <H2>Problem</H2>
-              <Text className="text-sm leading-relaxed">
+              <Text>
                 Two to four recognizable failure paths. Do not start with a
                 backlog.
               </Text>
               <Stack gap={4}>
                 <H2>Out of scope</H2>
-                <Text className="text-sm leading-relaxed">· Non-goal one</Text>
-                <Text className="text-sm leading-relaxed">· Non-goal two</Text>
+                <Text>· Non-goal one</Text>
+                <Text>· Non-goal two</Text>
               </Stack>
             </Stack>
           </TabsContent>
@@ -141,7 +133,7 @@ export default function DecisionCanvasTemplate() {
           <TabsContent className="mt-4" value="design">
             <Stack gap={14}>
               <H2>Design</H2>
-              <Text className="text-sm leading-relaxed">
+              <Text>
                 Layers, surfaces, data boundaries. Product frames go here — not
                 Day-1 command tables.
               </Text>
@@ -167,7 +159,7 @@ export default function DecisionCanvasTemplate() {
           <TabsContent className="mt-4" value="landing">
             <Stack gap={14}>
               <H2>Landing</H2>
-              <Text className="text-sm leading-relaxed">
+              <Text>
                 Phases, acceptance, risks, open questions. Implementation DAGs
                 belong only on this page.
               </Text>

@@ -45,6 +45,7 @@ const EMPTY_SNAPSHOT: FilesTreeSnapshot = {
   directoryStatesByPath: new Map(),
   entriesByPath: new Map(),
   rootError: null,
+  rootErrorFolderAccessBlocked: false,
   rootLoaded: false,
   rootLoading: false,
 };

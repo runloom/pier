@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -18,21 +18,35 @@ const ALLOWED_ALERT_DIALOG_IMPORTS = new Set([
 ]);
 
 function sourceFiles(dir: string): string[] {
-  const entries = readdirSync(dir);
+  const entries = readdirSync(dir, { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
-    const filePath = join(dir, entry);
-    const stat = statSync(filePath);
-    if (stat.isDirectory()) {
+    const filePath = join(dir, entry.name);
+    if (entry.isDirectory()) {
       files.push(...sourceFiles(filePath));
       continue;
     }
-    if (SOURCE_FILE_RE.test(entry)) {
+    if (SOURCE_FILE_RE.test(entry.name)) {
       files.push(filePath);
     }
   }
   return files;
 }
+
+/** Both repo-scan tests share one walk + read; re-reading blew 5s under load. */
+let cachedProductionSources: ReadonlyArray<{
+  path: string;
+  source: string;
+}> | null = null;
+
+function productionSources(): ReadonlyArray<{ path: string; source: string }> {
+  cachedProductionSources ??= PRODUCTION_SOURCE_ROOTS.flatMap(sourceFiles).map(
+    (path) => ({ path, source: readFileSync(path, "utf8") })
+  );
+  return cachedProductionSources;
+}
+
+const REPO_SCAN_TIMEOUT_MS = 20_000;
 
 function projectRelative(filePath: string): string {
   return relative(ROOT, filePath);
@@ -62,12 +76,12 @@ describe("app dialog usage governance", () => {
     expect(agentContext).toContain("禁止回退为「每个确认各自传 sm/default」");
   });
 
-  it("keeps shadcn AlertDialog primitive behind AppDialogHost", () => {
-    const offenders = PRODUCTION_SOURCE_ROOTS.flatMap(sourceFiles)
-      .filter((filePath) =>
-        readFileSync(filePath, "utf8").includes("@pier/ui/alert-dialog")
-      )
-      .map(projectRelative)
+  it("keeps shadcn AlertDialog primitive behind AppDialogHost", {
+    timeout: REPO_SCAN_TIMEOUT_MS,
+  }, () => {
+    const offenders = productionSources()
+      .filter(({ source }) => source.includes("@pier/ui/alert-dialog"))
+      .map(({ path }) => projectRelative(path))
       .filter((filePath) => !ALLOWED_ALERT_DIALOG_IMPORTS.has(filePath));
 
     expect(offenders).toEqual([]);
@@ -131,22 +145,21 @@ describe("app dialog usage governance", () => {
     );
   });
 
-  it("forbids size: in production simple-dialog call sites", () => {
+  it("forbids size: in production simple-dialog call sites", {
+    timeout: REPO_SCAN_TIMEOUT_MS,
+  }, () => {
     const callRe =
       /(?:showAppConfirm|showAppChoice|showAppPrompt|dialogs\.confirm|dialogs\.choice|dialogs\.prompt)\(\s*\{([\s\S]*?)\}\s*\)/g;
-    const offenders = PRODUCTION_SOURCE_ROOTS.flatMap(sourceFiles).flatMap(
-      (filePath) => {
-        const source = readFileSync(filePath, "utf8");
-        const hits: string[] = [];
-        for (const match of source.matchAll(callRe)) {
-          const body = match[1] ?? "";
-          if (/\bsize\s*:/.test(body)) {
-            hits.push(projectRelative(filePath));
-          }
+    const offenders = productionSources().flatMap(({ path, source }) => {
+      const hits: string[] = [];
+      for (const match of source.matchAll(callRe)) {
+        const body = match[1] ?? "";
+        if (/\bsize\s*:/.test(body)) {
+          hits.push(projectRelative(path));
         }
-        return hits;
       }
-    );
+      return hits;
+    });
 
     expect(offenders).toEqual([]);
   });

@@ -13,6 +13,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
   grok: {
     integration: "active",
     transport: ["hook-command", "transcript-reconciler"],
+    transcriptTurnIdentity: "native-field",
     evidence: {
       lifecycle: "native",
       ready: "reconciled",
@@ -237,6 +238,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
   cursor: {
     integration: "active",
     transport: ["hook-command", "transcript-reconciler"],
+    transcriptTurnIdentity: "absent",
     evidence: {
       lifecycle: "native",
       ready: "native",

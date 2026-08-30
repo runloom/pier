@@ -4,6 +4,7 @@ import {
   type GitReviewScope,
   type GitReviewTarget,
   gitReviewScopeSchema,
+  gitReviewTargetIdentityKey,
 } from "@shared/contracts/git/review.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { GIT_CHANGES_PANEL_ID } from "../../manifest.ts";
@@ -11,13 +12,7 @@ import { gitChangesPanelTitle } from "../changes-tab-title.ts";
 import { pluginText } from "../plugin-text.ts";
 
 function reviewTargetKey(target: GitReviewTarget): string {
-  if (target.kind === "commit") {
-    return `commit:${target.oid}`;
-  }
-  if (target.kind === "branch") {
-    return `branch:${target.ref}`;
-  }
-  return "uncommitted";
+  return gitReviewTargetIdentityKey(target);
 }
 
 function sameReviewTarget(

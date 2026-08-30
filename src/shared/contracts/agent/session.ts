@@ -107,6 +107,12 @@ const agentEventPayloadV3BaseFields = {
   agentType: z.string().max(128).optional(),
   sessionId: z.string().max(128).optional(),
   spawnGeneration: z.number().int().positive().optional(),
+  /**
+   * emit 进程的控制终端（`ps -o tty=`，如 `ttys012`；无 ctty 时 `??`）。
+   * 用于甄别继承了 PIER_* env 的 GUI 进程树泄漏（`cursor .` 开 IDE 后
+   * IDE 内 agent 触发共享 hook）；缺失（旧脚本 / JS 扩展系）不参与判定。
+   */
+  tty: z.string().min(1).max(64).optional(),
   toolName: z.string().max(256).optional(),
   toolUseId: hookWorkId.optional(),
   transcriptPath: z.string().max(8192).optional(),

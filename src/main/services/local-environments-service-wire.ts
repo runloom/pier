@@ -3,7 +3,10 @@ import type {
   LocalEnvironmentProjectFile,
   LocalEnvironmentProjectKind,
 } from "@shared/contracts/environment.ts";
-import type { LocalEnvironmentIndexEntry } from "./local-environment-store.ts";
+import type {
+  LocalEnvironmentGlobalState,
+  LocalEnvironmentIndexEntry,
+} from "./local-environment-store.ts";
 
 export class LocalEnvironmentServiceError extends Error {
   readonly reason: "project_not_found" | "pier_home_forbidden";
@@ -81,5 +84,56 @@ export function seedProjectFile(
     setupCommand: "",
     updatedAt: now(),
     version: 1,
+  };
+}
+
+/**
+ * Register the git primary checkout. Collapse only the picked worktree (if
+ * it was a first-class project row) and bind that path to main. Sibling
+ * worktrees the user did not pick keep their rows and bindings.
+ */
+export function applyCanonicalProjectRegistration(
+  state: LocalEnvironmentGlobalState,
+  input: {
+    canonicalPath: string;
+    now: number;
+    pickedPath: string;
+  }
+): LocalEnvironmentGlobalState {
+  const pickedIsLinked = input.pickedPath !== input.canonicalPath;
+  const projects = state.projects.filter((entry) => {
+    if (entry.kind === "pier-home") {
+      return true;
+    }
+    if (entry.projectRootPath === input.canonicalPath) {
+      return true;
+    }
+    return !(pickedIsLinked && entry.projectRootPath === input.pickedPath);
+  });
+  const hasCanonical = projects.some(
+    (entry) => entry.projectRootPath === input.canonicalPath
+  );
+  const nextProjects = hasCanonical
+    ? projects
+    : [
+        ...projects,
+        { kind: "project" as const, projectRootPath: input.canonicalPath },
+      ];
+
+  const worktreeBindings = state.worktreeBindings.filter(
+    (binding) => binding.worktreePath !== input.pickedPath
+  );
+  if (pickedIsLinked) {
+    worktreeBindings.push({
+      createdAt: input.now,
+      projectRootPath: input.canonicalPath,
+      worktreePath: input.pickedPath,
+    });
+  }
+
+  return {
+    ...state,
+    projects: nextProjects,
+    worktreeBindings,
   };
 }

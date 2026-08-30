@@ -455,7 +455,13 @@ function EntriesBody({
           </div>
         );
       })}
-      <Button onClick={onClear} type="button" variant="outline">
+      <Button
+        className="self-start"
+        onClick={onClear}
+        type="button"
+        variant="destructive"
+      >
+        <Trash2 data-icon="inline-start" />
         {t("clear.action", undefined, "Clear project memory")}
       </Button>
     </>

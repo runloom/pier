@@ -7,7 +7,6 @@ import type {
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app, type IpcMain } from "electron";
-import { effectsForAcceptedAgentEvent } from "../services/agents/event-effects.ts";
 import {
   eventsJsonlPath,
   pierHooksCurrentDir,
@@ -51,6 +50,7 @@ import {
 } from "../windows/identity.ts";
 import { recordAgentResumeSession } from "./agent-resume-persist.ts";
 import { markAgentSessionExited } from "./agent-session-exit-persist.ts";
+import { handleObservedAgentHookEvent } from "./foreground-activity/hook-pipeline.ts";
 import { materializeForegroundActivityPublications } from "./foreground-activity-publication.ts";
 import { forwardToWindow } from "./terminal/forwarding.ts";
 
@@ -393,55 +393,25 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
       if (!isAgentStatusHooksIngestEnabled()) {
         return;
       }
-      const routed = withResolvedOwner(event);
-      notifyAgentHookEventListeners(routed);
-      const integration = getAgentHookIntegration(routed.agent);
-      const options = resolveAgentEventIngestOptions({
-        evidenceSource: "hook",
-        event: routed,
-        runtime: integration?.runtime,
-      });
-      // Resume index must not depend on FA turn bookkeeping accept: dropped
-      // tool/progress events still carry the only host-side restore key.
-      const effects = effectsForAcceptedAgentEvent(routed);
-      if (effects.persistResume) {
-        recordAgentResumeSession({
-          agentId: routed.agent,
-          panelId: routed.panelId,
-          sessionId: routed.sessionId,
-          windowId: routed.windowId,
-          ...(routed.event === "PromptSubmit" ? { unlockRotation: true } : {}),
-        });
-      }
-      if (effects.observeTranscript) {
-        agentTerminalReconciler?.observe(routed).catch((err) => {
-          log.warn("agent terminal reconciliation failed", { err });
-        });
-      }
-      const accepted = foregroundActivityAggregator.ingestAgentEvent(
-        routed,
-        options
-      );
-      if (!accepted) {
-        return;
-      }
-      if (effects.markPanelExited) {
-        markAgentSessionExited({
-          panelId: routed.panelId,
-          windowId: routed.windowId,
-          ...("spawnGeneration" in routed && routed.spawnGeneration
-            ? { spawnGeneration: routed.spawnGeneration }
-            : {}),
-        });
-      }
-      if (!isSubagentHookEvent(routed)) {
-        applyAgentSessionTitleFromHookEvent({
+      handleObservedAgentHookEvent(
+        {
           aggregator: foregroundActivityAggregator,
-          event: routed,
-        }).catch((err) => {
-          log.warn("agent session title effect failed", { err });
-        });
-      }
+          applySessionTitle: (routed) =>
+            applyAgentSessionTitleFromHookEvent({
+              aggregator: foregroundActivityAggregator,
+              event: routed,
+            }),
+          markPanelExited: markAgentSessionExited,
+          notifyListeners: notifyAgentHookEventListeners,
+          observeTranscript: (routed) =>
+            agentTerminalReconciler?.observe(routed) ?? Promise.resolve(),
+          recordResume: recordAgentResumeSession,
+          resolveRuntime: (agent) => getAgentHookIntegration(agent)?.runtime,
+        },
+        withResolvedOwner(event)
+      ).catch((err) => {
+        log.warn("agent hook event pipeline failed", { err });
+      });
     },
     onCommandFinished: (event) => {
       const routed = withResolvedOwner(event);

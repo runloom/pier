@@ -3,6 +3,8 @@
 状态：评审中 · 2026-08-28
 关联：[`2026-08-26-canvas-dual-stage-and-ui-expansion-design.md`](2026-08-26-canvas-dual-stage-and-ui-expansion-design.md)（canvas 壳与积木底座）
 
+> **2026-08-30 注记**：`FlowGraph` / `layoutFlowGraph` 已从 `pier/canvas` 移除（实现效果不达标；后续 DAG 按具体产品能力重新设计）。本文所有「`FlowGraph` 渲染 DAG」段落在定稿时需替换为新的 DAG 视图方案；`Sortable` / `Droppable`、投影/动作纪律链、信任门等其余底座不受影响。
+
 ## 0. 结论速览
 
 看板 / 任务管理 / DAG 三类管理能力按「**任务权威源外接 tracker + 机器本地绑定不同步 + canvas 做灵活视图 + agent 用原生工具写**」落地：
@@ -11,7 +13,7 @@
 - 新增一个官方 builtin 插件 `pier.tasks` 做适配：凭据、轮询缓存、数据投影、写动作、本机 overlay。
 - canvas 保持唯一组装层：`tracker-board` 新配方读投影渲染；存量 `board` 配方重定位为「分支作用域内容板」并补 CRUD。
 - 体验闭环三锚点：**拖卡改状态 P0 即可用**（`task.setStatus` 前置）；卡片**「开工」复合动作**（建工作树 + 起 agent + 绑定）；发现性走 skill 意图提议 + 空态直达连接 + 生成即打开（§2.5）。
-- DAG：依赖边存 tracker（GitHub issue dependencies GA 2025-08，`blockedBy == 0` 即就绪），`FlowGraph` 渲染，执行推进由 agent 工作循环 + tracker 自动化承担，**调度不进宿主**。
+- DAG：依赖边存 tracker（GitHub issue dependencies GA 2025-08，`blockedBy == 0` 即就绪），DAG 视图渲染原语**待重设计**（原 `FlowGraph` 已移除，见文首注记），执行推进由 agent 工作循环 + tracker 自动化承担，**调度不进宿主**。
 - 现有 canvas 底座（积木、投影/动作纪律链、信任门）验证有效，**不推倒重来**。
 
 ## 1. 背景与问题
@@ -59,7 +61,7 @@
 ### 2.3 用户旅程
 
 - **团队任务看板**：用户在项目设置里连上 repo（凭据自动复用 gh CLI）→ 让 agent 生成 tracker-board canvas，**生成后 agent 立即打开预览面板挂进布局**（随 dockview 布局持久化）→ 板子显示 issues 列/卡、每张卡叠加「绑定的 worktree + agent 活动点」→ **P0 起拖卡即改状态**（`task.setStatus`），其余改数据可找 agent（gh 原生）→ 卡片「开工」一键建 worktree + 起 agent + 自动绑定（P1.5，§4.6）。
-- **任务依赖 DAG**：同一投影的 `dag` 键 → `FlowGraph` 渲染节点（issue）与边（blockedBy）→ 就绪节点高亮（`blockedBy == 0`）→ agent 领就绪任务开 worktree，完成 close issue，下游自动解锁。
+- **任务依赖 DAG**：同一投影的 `dag` 键 → DAG 视图渲染节点（issue）与边（blockedBy）→ 就绪节点高亮（`blockedBy == 0`）→ agent 领就绪任务开 worktree，完成 close issue，下游自动解锁。渲染原语待重设计（见文首注记），投影数据面不受影响。
 - **分支内容板**（存量场景）：发布 checklist、分支内规划——继续走兄弟文件（`useCanvasFile`），数据随分支评审是特性；模板补 CRUD 后可直接使用。
 
 ### 2.4 非目标
@@ -113,7 +115,7 @@ graph TB
     BRIDGE["pier/host 桥<br/>useHostSnapshot / pluginAction.invoke"]
     subgraph Canvas["L3 canvas（.canvas.tsx 组装）"]
       BOARD["tracker-board 模板<br/>Droppable/Sortable 列卡"]
-      DAG["DAG 视图<br/>FlowGraph + layoutFlowGraph"]
+      DAG["DAG 视图<br/>（渲染原语待重设计）"]
     end
   end
 
@@ -288,16 +290,16 @@ sequenceDiagram
 - P0 交互：拖卡改状态可用（`task.setStatus`，乐观更新/失败回滚）；卡片标题点开浏览器原 issue（心智锚：数据在 GitHub）；筛选控件（负责人/label/milestone，`Select`/`Input` 客户端过滤投影数据——卡片带 `milestone`）+ 列溢出「在 GitHub 查看全部」出口；「开工」按钮 P1.5 点亮。
 - 板标题带 repo 名；`staleSince` 显示「数据来自 x 分钟前」。
 
-### 5.2 DAG 视图
+### 5.2 DAG 视图（**阻塞：渲染原语待重设计**）
 
-- 同配方或独立 `tracker-dag` 变体：`FlowGraph` + `layoutFlowGraph`，节点按 state 着色、`blockedByCount === 0` 的就绪节点高亮；节点位置拖拽仍持久化到兄弟 JSON（对齐 dag-viewer 既有模式——位置是本地视图偏好，不是任务数据）。
-- 与 orchestration 配方的分工：**任务依赖 DAG（计划层）读 tracker 投影；运行 DAG（执行层）仍走编排器 loopback / `run.*`**。两张图不混。
+- 原方案（`FlowGraph` + `layoutFlowGraph`，节点按 state 着色、就绪高亮、位置拖拽持久化兄弟 JSON）随 FlowGraph 于 2026-08-30 移除而失效。本节在定稿前须给出新的「具体 DAG 能力」方案（产品决策：不再以通用画图原语形态提供）；投影 `dag` 键的数据面设计不受影响。
+- 计划层 / 执行层分工原则保留：**任务依赖 DAG（计划层）读 tracker 投影；运行图（执行层）走编排器 loopback / `run.*`**。两张图不混。原 orchestration 配方已随 FlowGraph 删除。
 
 ### 5.3 存量配方改造
 
 - `board` 配方重定位：pack.json description/agentPrompt 明确「分支作用域内容板」适用边界；antiPatterns 增加「团队共享任务数据放兄弟 JSON（应走 tracker-board）」。
 - `board` 模板补最小 CRUD 并作为配方金样（2026-08-28 清理已删除旧 kanban 仓库演示）：列底「+ 添加卡片」（`Input` + Enter）、卡片 `Popover` 编辑（`Field`/`Select`）、`DropdownMenu` 删除——全部现有 SDK 积木，写路径复用既有 `persist`/revision 冲突处理；**不**把新演示落回 `.pier/canvases/`（对齐 README 准入；契约测试锁模板）。
-- `orchestration` 配方 agentPrompt 补数据源说明（编排器 loopback | tracker 投影，指向 §5.2 分工）。
+- ~~`orchestration` 配方 agentPrompt 补数据源说明~~——该配方已随 FlowGraph 于 2026-08-30 删除；数据源分工说明并入 §5.2 重设计。
 
 ### 5.4 skill 教学
 
@@ -315,7 +317,7 @@ flowchart TB
   A --> PR["PR 合并 / issue close"]
   AUTO --> PR
   PR --> T
-  T -.->|轮询| V["Pier canvas：FlowGraph 就绪高亮<br/>+ 本机 agent 活动叠加"]
+  T -.->|轮询| V["Pier canvas：DAG 视图就绪高亮（原语待重设计）<br/>+ 本机 agent 活动叠加"]
   V -.->|"「开工」= task.startWork 复合转发<br/>建 worktree+起 agent+绑定（非调度）"| T
 ```
 
@@ -336,7 +338,7 @@ flowchart TB
 |---|---|
 | `packs/recipes/board/pack.json` | 重定位内容板 + antiPatterns 补条 + agentPrompt 补 CRUD 教法 |
 | `templates/kanban.canvas.tsx`（旧金样板已删，P2 重建） | 补最小 CRUD（加/改/删卡） |
-| `packs/recipes/orchestration/pack.json` | agentPrompt 补双源说明 |
+| ~~`packs/recipes/orchestration/pack.json`~~ | 已随 FlowGraph 于 2026-08-30 删除，本行作废 |
 | `resources/system-skills/pier-canvas/SKILL.md` | 作用域判据节 + recipe 表 |
 | `catalog-entries.ts` + `settings-materials` 四语 | 物料登记 |
 | `AGENTS.md` | 「插件数据投影与 Canvas 动作」节补 tasks 域条目 |
@@ -350,7 +352,7 @@ flowchart TB
 
 ### 7.4 明确不动
 
-canvas 壳/信任门/热重载、`Sortable`/`Droppable`/`FlowGraph`/`useCanvasFile`/`canvasCommand`、`pier/host` 允许清单（无需为本设计扩权）、AGENTS.md 01 铁律、smoke 编译夹具、canvas-kit 物料、pier-cli-user-manual。
+canvas 壳/信任门/热重载、`Sortable`/`Droppable`/`useCanvasFile`/`canvasCommand`、`pier/host` 允许清单（无需为本设计扩权）、AGENTS.md 01 铁律、smoke 编译夹具、canvas-kit 物料、pier-cli-user-manual。（原列表中的 `FlowGraph` 已于 2026-08-30 移除。）
 
 ## 8. 里程碑
 
@@ -375,7 +377,7 @@ canvas 壳/信任门/热重载、`Sortable`/`Droppable`/`FlowGraph`/`useCanvasFi
 ## 10. 已决取舍与已否决方案
 
 - **已否决：Pier 自建同步层**（应用级共享 store → 操作日志 CRDT → git-refs 传输的完整推演见对话记录）。技术可行（git-bug 形式规范可对齐、Automerge/Loro 可嫁接 refs 传输），但违反「业界成熟能力直接走原生入口」判定，且共享数据外置 + 本地绑定不同步的分解让需求消失。**作为储备**：仅当「无 tracker、要跨机团队共享、纯本地」三条件同时出现再评估。
-- **已否决：绑定 Orca 等外部编排器作为任务状态所有者**。编排器是同赛道产品；orchestration 配方保留「运行图 viewer」定位，与任务依赖 DAG 分工（§5.2）。
+- **已否决：绑定 Orca 等外部编排器作为任务状态所有者**。编排器是同赛道产品；「运行图 viewer」与任务依赖 DAG 的计划/执行分工原则见 §5.2（原 orchestration 配方已随 FlowGraph 删除）。
 - **已否决：宿主任务台账 / SDK 领域组件 `<Kanban>`**。铁律 + 业界证伪（react-beautiful-dnd 废弃、商业黑盒组件定制墙）。
 - **已决：凭据复用 gh CLI 须显式授权**，不静默读取。
 - **已决：v0 列语义用 state+label 映射**，Projects V2 status 推迟 P3（GraphQL 复杂度与 Project 依赖）。

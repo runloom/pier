@@ -6,10 +6,8 @@ import {
   fingerprintManagedSlice,
   inferMemoryFormat,
   type MemoryConfigFormat,
-  planJsonUpsert,
-  planOpenCodeUpsert,
+  planMemoryUpsert,
   planRemove,
-  planTomlAppend,
 } from "./serializers.ts";
 import type { TargetRow } from "./types.ts";
 
@@ -21,13 +19,7 @@ function planUpsert(
   entry: Record<string, unknown>,
   ownedFingerprint?: string
 ) {
-  if (format === "codex-toml") {
-    return planTomlAppend(raw, entry, ownedFingerprint);
-  }
-  if (format === "opencode-json") {
-    return planOpenCodeUpsert(raw, entry, ownedFingerprint);
-  }
-  return planJsonUpsert(raw, entry, ownedFingerprint);
+  return planMemoryUpsert(format, raw, entry, ownedFingerprint);
 }
 
 async function readOptional(path: string): Promise<string | null> {
@@ -43,9 +35,12 @@ async function readOptional(path: string): Promise<string | null> {
 }
 
 /** 目标文件当前托管切片指纹(文件缺失 = "absent");WAL 恢复与状态核对共用。 */
-export async function fingerprintOnDisk(targetPath: string): Promise<string> {
+export async function fingerprintOnDisk(
+  targetPath: string,
+  format: MemoryConfigFormat = inferMemoryFormat(targetPath)
+): Promise<string> {
   const raw = await readOptional(targetPath);
-  return fingerprintManagedSlice(raw, inferMemoryFormat(targetPath));
+  return fingerprintManagedSlice(raw, format);
 }
 
 async function writeManaged(path: string, content: string): Promise<void> {

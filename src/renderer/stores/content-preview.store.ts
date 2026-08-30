@@ -21,6 +21,13 @@ export type ContentPreviewPayload =
   | {
       alt?: string;
       /**
+       * Pin the whole overlay (backdrop, header chrome, zoom controls) to a
+       * fixed color mode — e.g. a markdown diagram baked against a light
+       * reading paper while the app chrome is dark. Omit to follow the app
+       * theme.
+       */
+      colorMode?: "light" | "dark";
+      /**
        * Already-decoded preview (thumbnail / inline ticket URL). Shown
        * immediately while `absolutePath` issues a dedicated ticket.
        */
@@ -59,6 +66,8 @@ export type ImageLightboxSource = ContentPreviewImageSource;
 /** @deprecated Prefer OpenContentPreviewRequest. */
 export interface ImageLightboxRequest {
   alt?: string;
+  /** Fixed overlay color mode; see ContentPreviewPayload image.colorMode. */
+  colorMode?: "light" | "dark";
   id?: string;
   onClose?: () => void;
   placeholderSrc?: string;
@@ -141,6 +150,7 @@ export function openImagePreview(request: ImageLightboxRequest): void {
       type: "image",
       source: request.source,
       ...(request.alt ? { alt: request.alt } : {}),
+      ...(request.colorMode ? { colorMode: request.colorMode } : {}),
       ...(request.placeholderSrc
         ? { placeholderSrc: request.placeholderSrc }
         : {}),

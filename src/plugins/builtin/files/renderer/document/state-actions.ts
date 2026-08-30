@@ -58,8 +58,14 @@ export function createFilesDocumentStateActions(replace: ReplaceDocument) {
         withDocumentDurabilityError(document, message)
       );
     },
-    markDocumentError(documentId: string, message: string): void {
-      replace(documentId, (document) => withDocumentError(document, message));
+    markDocumentError(
+      documentId: string,
+      message: string,
+      folderAccessBlocked = false
+    ): void {
+      replace(documentId, (document) =>
+        withDocumentError(document, message, folderAccessBlocked)
+      );
     },
     markDocumentLoaded(
       documentId: string,

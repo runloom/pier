@@ -124,4 +124,28 @@ describe("kimi transcript reconciler", () => {
     });
     reconciler.dispose();
   });
+
+  it("PromptSubmit 水位丢弃空 turnId 的旧 TurnEnd", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createKimiTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      sessionsRoots: [root],
+    });
+    await reconciler.observe(hookEvent({ event: "SessionStart" }));
+    appendFileSync(
+      path,
+      `${JSON.stringify({ message: { payload: {}, type: "TurnEnd" } })}\n`
+    );
+    await reconciler.observe(hookEvent());
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(received).toHaveLength(0);
+    appendFileSync(
+      path,
+      `${JSON.stringify({ message: { payload: {}, type: "TurnEnd" } })}\n`
+    );
+    await vi.waitFor(() => {
+      expect(received).toHaveLength(1);
+    });
+    reconciler.dispose();
+  });
 });

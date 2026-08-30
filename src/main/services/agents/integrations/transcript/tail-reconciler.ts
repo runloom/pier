@@ -8,7 +8,12 @@ import type {
   TranscriptTerminalRecord,
 } from "./tail-contracts.ts";
 import { emitTranscriptEvent } from "./tail-event.ts";
-import { processTranscriptTitleLine } from "./title-routing.ts";
+import { processTranscriptLine } from "./tail-process.ts";
+import {
+  dropPromptWatermarks,
+  movePromptWatermark,
+  recordPromptWatermark,
+} from "./tail-watermark.ts";
 
 export type {
   TranscriptTailReconciler,
@@ -24,7 +29,6 @@ const POLL_INTERVAL_MS = 250;
 const MAX_READ_BYTES = 1024 * 1024;
 const MAX_TRANSCRIPTS = 32;
 const MAX_TURN_CONTEXTS = 64;
-const MAX_PENDING_TRANSCRIPT_RECORDS = 64;
 type TranscriptLineClassifier = (
   line: string
 ) => TranscriptTerminalRecord | null;
@@ -40,6 +44,8 @@ interface TranscriptEntry {
   pending: boolean;
   pendingRecords: TranscriptTerminalRecord[];
   processing: boolean;
+  /** PromptSubmit 时的文件 size：空 turnId 终态不得封水位内的旧行。 */
+  promptWatermarkByScope: Map<string, number>;
   seenTerminalEvents: Set<string>;
   seenTranscriptEvents: Set<string>;
   watcher: (curr: Stats, prev: Stats) => void;
@@ -83,6 +89,7 @@ export function createTranscriptTailReconciler(
         entry.offset = Math.max(0, current.size - MAX_READ_BYTES);
         entry.classifyLine = createEntryLineClassifier(path);
         entry.pendingRecords.length = 0;
+        entry.promptWatermarkByScope.clear();
         entry.seenTerminalEvents.clear();
         entry.seenTranscriptEvents.clear();
       }
@@ -117,63 +124,22 @@ export function createTranscriptTailReconciler(
         if (consumed[index] !== 0x0a) continue;
         const line = consumed.subarray(lineStart, index).toString("utf8");
         const lineEnd = chunkStart + index + 1;
-        processLine(entry, line, lineEnd > entry.initialScanEnd);
+        processTranscriptLine({
+          allowOwnerFallback: lineEnd > entry.initialScanEnd,
+          classifyTitleLine: config.classifyTitleLine,
+          disposed,
+          entry,
+          line,
+          lineEnd,
+          onTerminalEvent: config.onTerminalEvent,
+          onTitleRecord: config.onTitleRecord,
+        });
         lineStart = index + 1;
       }
       if (entry.offset < current.size) {
         entry.pending = true;
       }
     } while (!(disposed || entry.disposed) && entry.pending);
-  }
-
-  function processLine(
-    entry: TranscriptEntry,
-    line: string,
-    allowOwnerFallback: boolean
-  ): void {
-    if (disposed || entry.disposed || !line.trim()) {
-      return;
-    }
-    if (allowOwnerFallback) {
-      try {
-        const classifyTitleLine = config.classifyTitleLine;
-        const listener = config.onTitleRecord;
-        if (classifyTitleLine && listener) {
-          processTranscriptTitleLine({
-            classifyLine: classifyTitleLine,
-            lastTitleByScope: entry.lastTitleByScope,
-            line,
-            listener,
-            owners: entry.owners,
-          });
-        }
-      } catch {
-        // 标题是纯装饰通路，坏行不得连带影响终态对账。
-      }
-    }
-    try {
-      const record = entry.classifyLine?.(line);
-      if (!record) {
-        return;
-      }
-      let context: AgentHookEventPayload | undefined;
-      if (record.turnId) context = entry.contextsByTurnId.get(record.turnId);
-      else if (allowOwnerFallback && entry.owners.size === 1) {
-        context = entry.owners.values().next().value;
-      }
-      if (!context) {
-        if (record.turnId) {
-          entry.pendingRecords.push(record);
-          if (entry.pendingRecords.length > MAX_PENDING_TRANSCRIPT_RECORDS) {
-            entry.pendingRecords.shift();
-          }
-        }
-        return;
-      }
-      emitTranscriptEvent(entry, context, record, config.onTerminalEvent);
-    } catch {
-      // transcript 是兼容性对账源；坏行和格式升级不得影响主 hook 通路。
-    }
   }
 
   function scheduleDrain(path: string, entry: TranscriptEntry): void {
@@ -187,6 +153,15 @@ export function createTranscriptTailReconciler(
     entry.processing = true;
     drain(path, entry).finally(() => {
       entry.processing = false;
+      if (
+        disposed ||
+        entry.disposed ||
+        !entry.pending ||
+        entries.get(path) !== entry
+      ) {
+        return;
+      }
+      scheduleDrain(path, entry);
     });
   }
 
@@ -233,6 +208,7 @@ export function createTranscriptTailReconciler(
       for (const key of releasedKeys) {
         entry.lastTitleByScope.delete(key);
       }
+      dropPromptWatermarks(entry.promptWatermarkByScope, releasedKeys);
       if (entry.owners.size === 0) disposeEntry(path, entry);
     }
   }
@@ -266,6 +242,7 @@ export function createTranscriptTailReconciler(
       pending: false,
       pendingRecords: [],
       processing: false,
+      promptWatermarkByScope: new Map(),
       seenTerminalEvents: new Set(),
       seenTranscriptEvents: new Set(),
       watcher,
@@ -356,7 +333,18 @@ export function createTranscriptTailReconciler(
           }
         }
         otherEntry.lastTitleByScope.delete(key);
+        dropPromptWatermarks(otherEntry.promptWatermarkByScope, [key]);
         if (otherEntry.owners.size === 0) disposeEntry(otherPath, otherEntry);
+      }
+      if (event.event === "PromptSubmit") {
+        const current = await stat(canonicalPath).catch(() => null);
+        if (current?.isFile()) {
+          recordPromptWatermark(
+            entry.promptWatermarkByScope,
+            key,
+            current.size
+          );
+        }
       }
       entry.owners.set(key, event);
       const turnId = event.turnId?.trim();
@@ -452,6 +440,7 @@ export function createTranscriptTailReconciler(
           entry.lastTitleByScope.delete(sourceKey);
           entry.lastTitleByScope.set(targetKey, lastTitle);
         }
+        movePromptWatermark(entry.promptWatermarkByScope, sourceKey, targetKey);
         for (const [turnId, context] of entry.contextsByTurnId) {
           if (scopeKey(context) === sourceKey) {
             entry.contextsByTurnId.set(turnId, {
