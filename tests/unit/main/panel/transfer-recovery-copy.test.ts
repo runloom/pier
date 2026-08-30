@@ -62,6 +62,7 @@ describe("panel transfer recovery — copy mode", () => {
           windowId: "w",
         })),
         destroyForTransfer: vi.fn(async () => undefined),
+        focus: vi.fn(),
         holdRendererShow: vi.fn(),
         list: vi.fn(() => [
           { focused: true, id: "main", recordId: "record-main" },

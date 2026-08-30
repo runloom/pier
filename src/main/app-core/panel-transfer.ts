@@ -283,6 +283,7 @@ export function wireAppCoreWindowAndPanelTransfer(input: {
         windowService.createForTransfer(lease, createInput),
       destroyForTransfer: (lease, windowId, transferId) =>
         windowService.destroyForTransfer(lease, windowId, transferId),
+      focus: (windowId) => windowService.focus(windowId),
       holdRendererShow: (windowId, reason) => {
         windowManager.holdRendererShow(windowId, reason);
       },
