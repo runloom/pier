@@ -249,6 +249,49 @@ describe("useCanvasFile", () => {
     expect(watch).not.toHaveBeenCalled();
   });
 
+  it("resolves siblings from the host directory for custom content roots", async () => {
+    const { readDocument, watch, writeDocument } = installFilesApi({});
+    let api: CanvasFileApi | null = null;
+    function Probe() {
+      api = useCanvasFile();
+      return null;
+    }
+    render(
+      <LiveModuleCanvasFileScopeProvider
+        scope={{
+          directory: "resources/system-skills/pier-canvas/templates",
+          path: "resources/system-skills/pier-canvas/templates/kanban.canvas.tsx",
+          root: PROJECT_ROOT,
+        }}
+      >
+        <Probe />
+      </LiveModuleCanvasFileScopeProvider>
+    );
+    if (!api) {
+      throw new Error("useCanvasFile did not produce an API");
+    }
+    const canvasFile = api;
+
+    await expect(canvasFile.read("board.json")).resolves.toEqual({
+      contents: "{}",
+      revision: "rev-1",
+    });
+    expect(readDocument).toHaveBeenCalledWith({
+      path: "resources/system-skills/pier-canvas/templates/board.json",
+      root: PROJECT_ROOT,
+    });
+
+    expect(() => canvasFile.watch("board.json", () => undefined)).not.toThrow();
+    expect(watch).toHaveBeenCalledWith(PROJECT_ROOT, expect.any(Function));
+
+    await canvasFile.write("board.json", "{}\n", null);
+    expect(writeDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "resources/system-skills/pier-canvas/templates/board.json",
+      })
+    );
+  });
+
   it("is a no-op watch without a canvas file scope", () => {
     const { watch } = installFilesApi({});
     const stop = mountHook(false).watch("data.json", () => undefined);

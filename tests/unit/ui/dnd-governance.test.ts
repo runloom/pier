@@ -33,5 +33,7 @@ describe("DnD canvas primitives", () => {
     expect(source).toContain("onDropItem");
     // Cross-container moves are a single callback (no dual-write races).
     expect(source).toContain("publishSortableDrag");
+    // Animating every CSS property on the insertion gap flashes the column.
+    expect(source).not.toContain("transition-all");
   });
 });

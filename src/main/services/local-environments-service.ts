@@ -13,6 +13,11 @@ import type {
   LocalEnvironmentWorktreeBindingSnapshot,
 } from "@shared/contracts/environment.ts";
 import { app } from "electron";
+import { execGit } from "./git/exec.ts";
+import {
+  type GitWorktreeFamily,
+  resolveGitWorktreeFamily,
+} from "./git/worktree/main-path.ts";
 import type { LocalEnvironmentLifecyclePhase } from "./local-environment-scripts.ts";
 import { runLocalEnvironmentLifecycle } from "./local-environment-scripts.ts";
 import {
@@ -24,6 +29,7 @@ import {
   writeProjectFile,
 } from "./local-environment-store.ts";
 import {
+  applyCanonicalProjectRegistration,
   defaultWireProject,
   entryKind,
   findIndexEntry,
@@ -89,6 +95,13 @@ export function createLocalEnvironmentService(options: {
   now?: () => number;
   processEnvironment: ProcessEnvironmentService;
   realpath?: (path: string) => Promise<string>;
+  /**
+   * Resolve git primary checkout + linked worktrees. Tests inject a stub;
+   * production uses `git worktree list`.
+   */
+  resolveGitWorktreeFamily?: (
+    projectRootPath: string
+  ) => Promise<GitWorktreeFamily | null>;
   spawn?: typeof nodeSpawn;
 }): LocalEnvironmentService {
   const filePath =
@@ -150,26 +163,30 @@ export function createLocalEnvironmentService(options: {
     async addProject(
       request: EnvironmentProjectRequest
     ): Promise<LocalEnvironmentState> {
-      const projectRootPath = await realpathFn(request.projectRootPath);
-      await assertNotPierHome(projectRootPath);
-      // 全局注册: 幂等.
-      const global = await mutateState((state) => {
-        const existing = findIndexEntry(state, projectRootPath);
-        if (existing) {
-          return state;
-        }
-        return {
-          ...state,
-          projects: [
-            ...state.projects,
-            { kind: "project" as const, projectRootPath },
-          ],
-        };
-      });
-      // 文件不存在则 seed 默认; 存在则保留用户已有内容 (支持团队 git 里预置文件的场景).
-      const existing = await readProjectFile(projectRootPath);
+      const pickedPath = await realpathFn(request.projectRootPath);
+      await assertNotPierHome(pickedPath);
+      const family = options.resolveGitWorktreeFamily
+        ? await options.resolveGitWorktreeFamily(pickedPath)
+        : await resolveGitWorktreeFamily(pickedPath, {
+            execGit: (args, cwd) => execGit(args, { cwd }),
+            realpath: realpathFn,
+          });
+      const canonicalPath = family
+        ? await safeRealpath(family.mainPath)
+        : pickedPath;
+      await assertNotPierHome(canonicalPath);
+
+      const global = await mutateState((state) =>
+        applyCanonicalProjectRegistration(state, {
+          canonicalPath,
+          now: now(),
+          pickedPath,
+        })
+      );
+      // Seed `.pier/environment.json` on the primary checkout only.
+      const existing = await readProjectFile(canonicalPath);
       if (!existing) {
-        await writeProjectFile(projectRootPath, seedProjectFile(now));
+        await writeProjectFile(canonicalPath, seedProjectFile(now));
       }
       return composeState(global);
     },

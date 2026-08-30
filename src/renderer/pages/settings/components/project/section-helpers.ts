@@ -48,3 +48,45 @@ export function projectBasename(projectRootPath: string): string {
     projectRootPath
   );
 }
+
+export function listedProjectRootForPath(
+  path: string,
+  projects: readonly { projectRootPath: string }[],
+  bindings: readonly {
+    projectRootPath: string;
+    worktreePath: string;
+  }[]
+): string | null {
+  if (projects.some((project) => project.projectRootPath === path)) {
+    return path;
+  }
+  const binding = bindings.find((entry) => entry.worktreePath === path);
+  if (
+    binding &&
+    projects.some(
+      (project) => project.projectRootPath === binding.projectRootPath
+    )
+  ) {
+    return binding.projectRootPath;
+  }
+  return null;
+}
+
+export function registeredRootAfterAdd(
+  snapshot: {
+    projects: readonly { projectRootPath: string }[];
+    worktreeBindings: readonly {
+      projectRootPath: string;
+      worktreePath: string;
+    }[];
+  },
+  pickedPath: string
+): string {
+  return (
+    listedProjectRootForPath(
+      pickedPath,
+      snapshot.projects,
+      snapshot.worktreeBindings
+    ) ?? pickedPath
+  );
+}

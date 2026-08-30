@@ -28,7 +28,10 @@ export const FLOW_CANVAS_STAGE: CanvasStageInfo = {
 /** Walk single-child wrappers so a boundary div cannot hide the root marker. */
 const MAX_ROOT_WALK_DEPTH = 4;
 
-const FLOW_FILL_CLASS = "min-h-full w-full";
+// Fill needs a definite height (not just min-h): percentage heights inside
+// the composition resolve against it, so "single screen, inner scroll"
+// actually holds. Overflowing content still scrolls the outer preview.
+const FLOW_FILL_CLASS = "h-full min-h-full w-full";
 const FLOW_PAD_CLASS = "mx-auto min-h-full w-full px-6 py-5";
 const FLOW_MEASURE_CLASS = "max-w-5xl";
 

@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   loadLiveModulesProjectConfig,
+  rememberLiveModuleConfigConsumer,
   saveLiveModulesProjectConfig,
 } from "../../../../src/plugins/api/live-modules-project-config.ts";
 import {
   applyLiveModulesProjectConfigAfterSave,
+  applyLiveModulesProjectConfigFromDiskContents,
   ensureLiveModulesProjectConfigLoaded,
   resetLiveModulesProjectConfigCacheForTests,
   subscribeLiveModulesProjectConfigChanged,
@@ -37,6 +39,7 @@ function installFilesMock(handlers: {
   exists?: ExistsFn;
   readDocument?: ReadDocumentFn;
   writeDocument?: WriteDocumentFn;
+  worktreeMainPath?: string;
 }): void {
   const pier = {
     files: {
@@ -55,6 +58,20 @@ function installFilesMock(handlers: {
         (async () => {
           throw new Error("writeDocument not mocked");
         }),
+    },
+    worktrees: {
+      check: async ({ path }: { path: string }) =>
+        handlers.worktreeMainPath
+          ? {
+              mainPath: handlers.worktreeMainPath,
+              path,
+              status: "supported" as const,
+            }
+          : {
+              path,
+              reason: "not_git_repo" as const,
+              status: "unsupported" as const,
+            },
     },
   };
   vi.stubGlobal("window", { pier });
@@ -249,6 +266,101 @@ describe("live-modules project config", () => {
     expect(liveModuleProjectContentDirectories("/proj/race")).toEqual([
       "saved-list",
     ]);
+  });
+
+  it("reads and writes live-modules.json on the git primary checkout", async () => {
+    const readRoots: string[] = [];
+    const writeRoots: string[] = [];
+    installFilesMock({
+      worktreeMainPath: "/proj/main",
+      exists: async ({ root }) => {
+        readRoots.push(`exists:${root}`);
+        return root === "/proj/main";
+      },
+      readDocument: async ({ root }) => {
+        readRoots.push(`read:${root}`);
+        return {
+          kind: "text",
+          contents: JSON.stringify({
+            version: 1,
+            contentDirectories: [".pier/canvases", "docs", "resources"],
+          }),
+          revision: "rev-main",
+        };
+      },
+      writeDocument: async ({ root }) => {
+        writeRoots.push(root);
+        return { kind: "written", revision: "rev-2" };
+      },
+    });
+
+    const loaded = await loadLiveModulesProjectConfig("/proj/worktree");
+    expect(loaded.kind).toBe("ok");
+    if (loaded.kind !== "ok") {
+      return;
+    }
+    expect(loaded.configRootPath).toBe("/proj/main");
+    expect(loaded.contentDirectories).toEqual([
+      ".pier/canvases",
+      "docs",
+      "resources",
+    ]);
+    expect(readRoots).toEqual(["exists:/proj/main", "read:/proj/main"]);
+    expect(liveModuleProjectContentDirectories("/proj/worktree")).toEqual([
+      ".pier/canvases",
+      "docs",
+      "resources",
+    ]);
+    expect(liveModuleProjectContentDirectories("/proj/main")).toEqual([
+      ".pier/canvases",
+      "docs",
+      "resources",
+    ]);
+
+    const saved = await saveLiveModulesProjectConfig({
+      projectRootPath: "/proj/worktree",
+      contentDirectories: [".pier/canvases", "docs", "resources"],
+      expectedRevision: "rev-main",
+    });
+    expect(saved).toMatchObject({
+      kind: "written",
+      configRootPath: "/proj/main",
+    });
+    expect(writeRoots).toEqual(["/proj/main"]);
+  });
+
+  it("ignores a worktree-local live-modules.json write", async () => {
+    installFilesMock({ worktreeMainPath: "/proj/main" });
+    rememberLiveModuleConfigConsumer("/proj/worktree", "/proj/main");
+    applyLiveModulesProjectConfigAfterSave("/proj/main", ["designs"]);
+    await applyLiveModulesProjectConfigFromDiskContents(
+      "/proj/worktree",
+      JSON.stringify({
+        version: 1,
+        contentDirectories: ["from-worktree-copy"],
+      })
+    );
+    expect(liveModuleProjectContentDirectories("/proj/main")).toEqual([
+      "designs",
+    ]);
+    expect(liveModuleProjectContentDirectories("/proj/worktree")).toEqual([
+      "designs",
+    ]);
+  });
+
+  it("notifies worktree consumers after saving on the primary checkout", () => {
+    installFilesMock({});
+    const seen: string[] = [];
+    const unsub = subscribeLiveModulesProjectConfigChanged((root) => {
+      seen.push(root);
+    });
+    rememberLiveModuleConfigConsumer("/proj/worktree", "/proj/main");
+    applyLiveModulesProjectConfigAfterSave("/proj/main", ["designs"]);
+    expect(seen.sort()).toEqual(["/proj/main", "/proj/worktree"].sort());
+    expect(liveModuleProjectContentDirectories("/proj/worktree")).toEqual([
+      "designs",
+    ]);
+    unsub();
   });
 
   it("recovers invalid on-disk config so settings can overwrite", async () => {

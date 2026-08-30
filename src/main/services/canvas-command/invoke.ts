@@ -15,6 +15,7 @@ import {
 } from "@shared/live-module-canvas-path.ts";
 import type { CanvasTrustService } from "../canvas-trust/service.ts";
 import { isPathWithinRoot } from "../live-modules/fence.ts";
+import { resolveCanvasContentDirectories } from "./content-directories.ts";
 
 export const CANVAS_COMMAND_CONFIRM_TIMEOUT_MS = 300_000;
 
@@ -49,9 +50,14 @@ export function canvasCommandTaskId(canvasPath: string, key: string): string {
 
 async function readInstanceCommands(
   projectRootPath: string,
-  canvasPath: string
+  canvasPath: string,
+  contentDirectories: readonly string[]
 ): Promise<ReturnType<typeof parseCanvasInstanceCommands>> {
-  const sibling = canvasSiblingProjectPath(canvasPath, "instance.json");
+  const sibling = canvasSiblingProjectPath(
+    canvasPath,
+    "instance.json",
+    contentDirectories
+  );
   if (!sibling) {
     return { message: "canvas path is not a project canvas", ok: false };
   }
@@ -84,6 +90,7 @@ async function readInstanceCommands(
 
 async function resolveCommandCwd(input: {
   canvasPath: string;
+  contentDirectories: readonly string[];
   cwd: "canvasDir" | "projectRoot";
   projectRootPath: string;
 }): Promise<string | null> {
@@ -91,7 +98,10 @@ async function resolveCommandCwd(input: {
   if (input.cwd === "projectRoot") {
     return realProject;
   }
-  const directory = canvasDirectoryFromProjectPath(input.canvasPath);
+  const directory = canvasDirectoryFromProjectPath(
+    input.canvasPath,
+    input.contentDirectories
+  );
   if (directory === null) {
     return null;
   }
@@ -113,7 +123,12 @@ export async function invokeDeclaredCanvasCommand(input: {
   windowId: string;
 }): Promise<CanvasCommandInvokeOutcome> {
   const { canvasPath, deps, key, projectRootPath, windowId } = input;
-  if (!isProjectCanvasPath(canvasPath)) {
+  const isHome = await deps.isHomeRoot(projectRootPath);
+  const contentDirectories = await resolveCanvasContentDirectories(
+    projectRootPath,
+    { isHomeRoot: isHome }
+  );
+  if (!isProjectCanvasPath(canvasPath, contentDirectories)) {
     return {
       code: "invalid_command",
       kind: "error",
@@ -121,14 +136,18 @@ export async function invokeDeclaredCanvasCommand(input: {
     };
   }
   const trusted = (await deps.trust.status(projectRootPath)).trusted;
-  if (!(trusted || (await deps.isHomeRoot(projectRootPath)))) {
+  if (!(trusted || isHome)) {
     return {
       code: "permission_denied",
       kind: "error",
       message: "This project’s canvases aren’t trusted.",
     };
   }
-  const loaded = await readInstanceCommands(projectRootPath, canvasPath);
+  const loaded = await readInstanceCommands(
+    projectRootPath,
+    canvasPath,
+    contentDirectories
+  );
   if (!loaded.ok) {
     return { code: "invalid_command", kind: "error", message: loaded.message };
   }
@@ -166,6 +185,7 @@ export async function invokeDeclaredCanvasCommand(input: {
   }
   const cwd = await resolveCommandCwd({
     canvasPath,
+    contentDirectories,
     cwd: declared.cwd ?? "projectRoot",
     projectRootPath,
   });

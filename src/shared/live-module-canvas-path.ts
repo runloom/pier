@@ -440,7 +440,35 @@ export function isCanvasScopedFileName(fileName: string): boolean {
 }
 
 /**
+ * Join a canvas directory with a scoped sibling name, or null.
+ * Skips the content-root gate — use with a host-supplied canvas directory so
+ * custom preview roots can still address sibling files.
+ */
+export function canvasScopedSiblingPath(
+  canvasDirectory: string,
+  fileName: string
+): string | null {
+  if (!isCanvasScopedFileName(fileName)) {
+    return null;
+  }
+  const directory = normalizeProjectRelativePath(canvasDirectory).replace(
+    /\/+$/u,
+    ""
+  );
+  if (
+    directory.includes("\0") ||
+    directory.split("/").some((part) => part === ".." || part === ".")
+  ) {
+    return null;
+  }
+  return directory.length > 0 ? `${directory}/${fileName}` : fileName;
+}
+
+/**
  * Resolve `fileName` as a file next to a canvas (or one folder down), or null.
+ * Requires the canvas path to sit under a known content root (factory defaults
+ * when `contentDirectories` is omitted). Prefer
+ * {@link canvasScopedSiblingPath} when the host already supplied the directory.
  */
 export function canvasSiblingProjectPath(
   canvasProjectRelativePath: string,
@@ -451,8 +479,8 @@ export function canvasSiblingProjectPath(
     canvasProjectRelativePath,
     contentDirectories
   );
-  if (directory === null || !isCanvasScopedFileName(fileName)) {
+  if (directory === null) {
     return null;
   }
-  return directory.length > 0 ? `${directory}/${fileName}` : fileName;
+  return canvasScopedSiblingPath(directory, fileName);
 }

@@ -42,6 +42,10 @@ import {
   EnvironmentEditor,
   type EnvironmentEditorHandle,
 } from "./environment-editor.tsx";
+import {
+  listedProjectRootForPath,
+  registeredRootAfterAdd,
+} from "./project/section-helpers.ts";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
 function projectBasename(projectRootPath: string): string {
@@ -72,11 +76,21 @@ export function EnvironmentSection() {
     if (!activeProjectRootPath) {
       return;
     }
-    if (projects.some((p) => p.projectRootPath === activeProjectRootPath)) {
-      setSelected(activeProjectRootPath);
+    const listedRoot = listedProjectRootForPath(
+      activeProjectRootPath,
+      projects,
+      worktreeBindings
+    );
+    if (listedRoot) {
+      setSelected(listedRoot);
       setInitializedFromActive(true);
     }
-  }, [activeProjectRootPath, initializedFromActive, projects]);
+  }, [
+    activeProjectRootPath,
+    initializedFromActive,
+    projects,
+    worktreeBindings,
+  ]);
 
   useEffect(() => {
     if (selected && !projects.some((p) => p.projectRootPath === selected)) {
@@ -121,8 +135,8 @@ export function EnvironmentSection() {
       if (!(await guardDirty())) {
         return;
       }
-      await addProject({ projectRootPath: dir });
-      setSelected(dir);
+      const snapshot = await addProject({ projectRootPath: dir });
+      setSelected(registeredRootAfterAdd(snapshot, dir));
     } catch (err) {
       console.error("[environment-section] addEnvironment failed:", err);
       await showAppAlert({

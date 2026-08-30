@@ -5,7 +5,7 @@ import {
 } from "@shared/contracts/canvas-command.ts";
 import type { FileWatchChangeKind } from "@shared/contracts/file/watch.ts";
 import type { FileDocumentExpectedState } from "@shared/contracts/file.ts";
-import { canvasSiblingProjectPath } from "@shared/live-module-canvas-path.ts";
+import { canvasScopedSiblingPath } from "@shared/live-module-canvas-path.ts";
 import i18next from "i18next";
 import { useMemo } from "react";
 
@@ -101,7 +101,7 @@ export function useCanvasFile(): CanvasFileApi {
           )
         );
       }
-      const path = canvasSiblingProjectPath(scope.path, fileName);
+      const path = canvasScopedSiblingPath(scope.directory, fileName);
       if (!path) {
         throw new Error(
           message(

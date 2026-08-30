@@ -4,7 +4,12 @@ import {
   parseLiveModulesProjectConfig,
   setRuntimeLiveModuleContentDirectories,
 } from "@shared/live-module-canvas-path.ts";
-import { loadLiveModulesProjectConfig } from "./live-modules-project-config.ts";
+import {
+  liveModuleConfigFanoutRoots,
+  loadLiveModulesProjectConfig,
+  resetLiveModuleConfigConsumersForTests,
+  resolveLiveModulesConfigRoot,
+} from "./live-modules-project-config.ts";
 
 /**
  * Per-root ensure cache. `generation` is bumped by applyAfterSave / invalidate so
@@ -122,7 +127,9 @@ export function ensureLiveModulesProjectConfigLoaded(
   return task.then(
     (directories) => {
       if (isOwner()) {
-        setRuntimeLiveModuleContentDirectories(projectRootPath, directories);
+        for (const root of liveModuleConfigFanoutRoots(projectRootPath)) {
+          setRuntimeLiveModuleContentDirectories(root, directories);
+        }
       }
     },
     () => {
@@ -140,15 +147,22 @@ export function applyLiveModulesProjectConfigAfterSave(
   projectRootPath: string,
   contentDirectories: readonly string[]
 ): void {
-  const key = normalizeProjectRootKey(projectRootPath);
   const directories = [...contentDirectories];
-  const generation = bumpGeneration(key);
-  setRuntimeLiveModuleContentDirectories(projectRootPath, directories);
-  loadedForRoot.set(key, {
-    generation,
-    promise: Promise.resolve(directories),
-  });
-  notifyLiveModulesProjectConfigChanged(projectRootPath);
+  const roots = liveModuleConfigFanoutRoots(projectRootPath);
+  const notified = new Set<string>();
+  for (const root of roots) {
+    const key = normalizeProjectRootKey(root);
+    const generation = bumpGeneration(key);
+    setRuntimeLiveModuleContentDirectories(root, directories);
+    loadedForRoot.set(key, {
+      generation,
+      promise: Promise.resolve(directories),
+    });
+    if (!notified.has(key)) {
+      notified.add(key);
+      notifyLiveModulesProjectConfigChanged(root);
+    }
+  }
 }
 
 /** Drop cache so the next ensure re-reads disk. Bumps generation. */
@@ -168,14 +182,23 @@ export function invalidateLiveModulesProjectConfigCache(
 /**
  * After the files panel (or any writer) saves `.pier/live-modules.json`, refresh
  * runtime + notify open panels without requiring Settings.
+ * Only the git primary checkout’s copy is authoritative; a worktree-local
+ * save must not fan out into the shared runtime.
  */
-export function applyLiveModulesProjectConfigFromDiskContents(
+export async function applyLiveModulesProjectConfigFromDiskContents(
   projectRootPath: string,
   rawContents: string
-): void {
+): Promise<void> {
   const parsed = parseLiveModulesProjectConfig(rawContents);
+  const configRootPath = await resolveLiveModulesConfigRoot(projectRootPath);
+  if (
+    normalizeProjectRootKey(configRootPath) !==
+    normalizeProjectRootKey(projectRootPath)
+  ) {
+    return;
+  }
   applyLiveModulesProjectConfigAfterSave(
-    projectRootPath,
+    configRootPath,
     parsed.contentDirectories
   );
 }
@@ -184,5 +207,6 @@ export function resetLiveModulesProjectConfigCacheForTests(): void {
   loadedForRoot.clear();
   generationByRoot.clear();
   changeListeners.clear();
+  resetLiveModuleConfigConsumersForTests();
   clearAllRuntimeLiveModuleContentDirectories();
 }

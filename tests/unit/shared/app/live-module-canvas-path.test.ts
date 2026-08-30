@@ -3,6 +3,7 @@ import { projectLiveRootId } from "../../../../src/shared/contracts/live-modules
 import {
   canvasDirectoryFromProjectPath,
   canvasRelPathFromProjectPath,
+  canvasScopedSiblingPath,
   canvasSiblingProjectPath,
   clearAllRuntimeLiveModuleContentDirectories,
   detectProjectCanvasFramework,
@@ -202,6 +203,27 @@ describe("live-module-canvas-path", () => {
   it("refuses sibling resolution for paths that are not project canvases", () => {
     expect(canvasSiblingProjectPath("src/app.tsx", "data.json")).toBeNull();
     expect(canvasDirectoryFromProjectPath("src/app.tsx")).toBeNull();
+  });
+
+  it("needs the custom content list to treat a non-default canvas as in-project", () => {
+    const canvas =
+      "resources/system-skills/pier-canvas/templates/kanban.canvas.tsx";
+    const roots = ["resources/system-skills/pier-canvas/templates"];
+    expect(canvasSiblingProjectPath(canvas, "board.json")).toBeNull();
+    expect(canvasSiblingProjectPath(canvas, "board.json", roots)).toBe(
+      "resources/system-skills/pier-canvas/templates/board.json"
+    );
+  });
+
+  it("joins a host-supplied canvas directory without re-checking content roots", () => {
+    expect(
+      canvasScopedSiblingPath(
+        "resources/system-skills/pier-canvas/templates",
+        "board.json"
+      )
+    ).toBe("resources/system-skills/pier-canvas/templates/board.json");
+    expect(canvasScopedSiblingPath("", "data.json")).toBe("data.json");
+    expect(canvasScopedSiblingPath(".pier/canvases/demo", "../x")).toBeNull();
   });
 
   it("normalizes directory lists", () => {

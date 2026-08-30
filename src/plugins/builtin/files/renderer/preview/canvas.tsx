@@ -313,7 +313,12 @@ export function FileCanvasPreview(props: {
             style={reading.shellStyle}
           >
             <div
-              className="relative min-h-full w-full"
+              className={cn(
+                "relative min-h-full w-full",
+                // Fill mode: hand the definite height down so a composition's
+                // height:100% root fills the viewport (inner scroll owns it).
+                stageInfo.fill && !worldActive && "h-full"
+              )}
               data-slot="file-canvas-host"
               ref={hostRef}
             />
