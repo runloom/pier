@@ -262,6 +262,89 @@ describe("invokeDeclaredCanvasCommand", () => {
     );
   });
 
+  it("runs a command declared next to a canvas under a custom content root", async () => {
+    const { project, userData } = await makeProject();
+    const templates = join(
+      project,
+      "resources/system-skills/pier-canvas/templates"
+    );
+    await mkdir(templates, { recursive: true });
+    await writeFile(
+      join(templates, "kanban.canvas.tsx"),
+      "export default function Board() { return null }\n"
+    );
+    await writeFile(
+      join(templates, "instance.json"),
+      `${JSON.stringify({
+        commands: [{ command: "echo board", key: "refresh" }],
+      })}\n`
+    );
+    await mkdir(join(project, ".pier"), { recursive: true });
+    await writeFile(
+      join(project, ".pier/live-modules.json"),
+      `${JSON.stringify({
+        contentDirectories: ["resources/system-skills/pier-canvas/templates"],
+        version: 1,
+      })}\n`
+    );
+    const trust = createCanvasTrustService({ userDataDir: userData });
+    await trust.grant(project);
+    const spawn = vi.fn(async () => ({ runId: "custom-run" }));
+    const outcome = await invokeDeclaredCanvasCommand({
+      canvasPath:
+        "resources/system-skills/pier-canvas/templates/kanban.canvas.tsx",
+      deps: {
+        confirm: vi.fn(async () => true),
+        isHomeRoot: async () => false,
+        spawn,
+        trust,
+      },
+      key: "refresh",
+      projectRootPath: project,
+      windowId: "win-1",
+    });
+    expect(outcome).toEqual({ kind: "started", runId: "custom-run" });
+    expect(spawn).toHaveBeenCalled();
+  });
+
+  it("accepts a pier-home canvas under canvases/", async () => {
+    const userData = await mkdtemp(join(tmpdir(), "pier-canvas-command-"));
+    dirs.push(userData);
+    const home = join(userData, "home");
+    await mkdir(join(home, "canvases/demo"), { recursive: true });
+    await writeFile(
+      join(home, "canvases/demo/hello.canvas.tsx"),
+      "export default function Demo() { return null }\n"
+    );
+    await writeFile(
+      join(home, "canvases/demo/instance.json"),
+      `${JSON.stringify({
+        commands: [{ command: "echo home", cwd: "canvasDir", key: "refresh" }],
+      })}\n`
+    );
+    const trust = createCanvasTrustService({ userDataDir: userData });
+    const spawn = vi.fn(async () => ({ runId: "home-dir-run" }));
+    const outcome = await invokeDeclaredCanvasCommand({
+      canvasPath: "canvases/demo/hello.canvas.tsx",
+      deps: {
+        confirm: vi.fn(async () => true),
+        isHomeRoot: async () => true,
+        spawn,
+        trust,
+      },
+      key: "refresh",
+      projectRootPath: home,
+      windowId: "win-1",
+    });
+    expect(outcome).toEqual({ kind: "started", runId: "home-dir-run" });
+    const canvasDir = await realpath(join(home, "canvases/demo"));
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        launches: [expect.objectContaining({ cwd: canvasDir })],
+      })
+    );
+  });
+
   it("hashes the canonical command for grant identity", () => {
     expect(
       hashCanvasCommand(canvasCommandCanonical({ command: "echo hello" }))

@@ -25,7 +25,9 @@ import {
   isPierHomeSkillsDirty,
   isTabAllowedForProject,
   leaveAllSkillsTransientState,
+  listedProjectRootForPath,
   projectBasename,
+  registeredRootAfterAdd,
 } from "./section-helpers.ts";
 import { ProjectsSectionList } from "./section-list.tsx";
 
@@ -107,8 +109,13 @@ export function ProjectsSection() {
       return;
     }
     if (projectsFocusPath) {
-      if (projects.some((p) => p.projectRootPath === projectsFocusPath)) {
-        focusProject(projectsFocusPath);
+      const listedRoot = listedProjectRootForPath(
+        projectsFocusPath,
+        projects,
+        worktreeBindings
+      );
+      if (listedRoot) {
+        focusProject(listedRoot);
       }
       clearProjectsFocusPath();
       return;
@@ -116,12 +123,16 @@ export function ProjectsSection() {
     if (initializedFromActive || selected) {
       return;
     }
-    if (
-      activeProjectRootPath &&
-      projects.some((p) => p.projectRootPath === activeProjectRootPath)
-    ) {
-      focusProject(activeProjectRootPath);
-      setInitializedFromActive(true);
+    if (activeProjectRootPath) {
+      const listedRoot = listedProjectRootForPath(
+        activeProjectRootPath,
+        projects,
+        worktreeBindings
+      );
+      if (listedRoot) {
+        focusProject(listedRoot);
+        setInitializedFromActive(true);
+      }
     }
   }, [
     activeProjectRootPath,
@@ -133,6 +144,7 @@ export function ProjectsSection() {
     projectsFocusHome,
     projectsFocusPath,
     selected,
+    worktreeBindings,
   ]);
 
   useEffect(() => {
@@ -255,8 +267,8 @@ export function ProjectsSection() {
     try {
       const dir = await window.pier.environments.pickProjectDirectory();
       if (!dir) return;
-      await addProject({ projectRootPath: dir });
-      focusProject(dir);
+      const snapshot = await addProject({ projectRootPath: dir });
+      focusProject(registeredRootAfterAdd(snapshot, dir));
     } catch (err) {
       await showAppAlert({
         title: t("settings.environment.addFailed"),

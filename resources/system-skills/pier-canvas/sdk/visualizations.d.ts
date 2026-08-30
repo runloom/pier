@@ -36,7 +36,11 @@ export type MermaidTone =
  * Do not reuse `tone` as decoration — `tone` is status only.
  */
 export type MermaidKind = "actor" | "agent" | "artifact" | "external" | "tool";
-/** Live run state for DAG / pipeline nodes (orthogonal to `tone`/`kind`). */
+/**
+ * Run glyph for **static** architecture diagrams (orthogonal to
+ * `tone`/`kind`). Mermaid is a static diagram — do not build a polling
+ * viewer that recolors these from live data.
+ */
 export type MermaidRunStatus =
   | "failed"
   | "queued"
@@ -55,7 +59,7 @@ export interface MermaidNode {
   kind?: MermaidKind;
   meta?: string;
   shape?: MermaidShape;
-  /** Live run state — trailing glyph in the title row (spinner / check / x). */
+  /** Static run glyph in the title row (spinner / check / x). */
   status?: MermaidRunStatus;
   /** Accessible name for the status glyph; defaults to the status word. */
   statusLabel?: string;
@@ -108,76 +112,5 @@ export interface MermaidProps {
   source?: string;
 }
 
-export type FlowGraphDirection = "left-to-right" | "top-to-bottom";
-export type FlowGraphNodeStatus =
-  | "blocked"
-  | "failed"
-  | "queued"
-  | "ready"
-  | "running"
-  | "skipped"
-  | "success";
-
-export interface FlowGraphNode {
-  /** Corner chip. Display only. */
-  badge?: string;
-  /** Reserved height (px) for `renderNodeContent`. */
-  contentHeight?: number;
-  /** Opaque payload for the canvas author; the primitive does not render it. */
-  data?: unknown;
-  id: string;
-  label: string;
-  /** Secondary line under the title. */
-  meta?: string;
-  status?: FlowGraphNodeStatus;
-  statusLabel?: string;
-}
-
-export interface FlowGraphEdge {
-  id?: string;
-  label?: string;
-  source: string;
-  target: string;
-}
-
-export type FlowGraphPositions = Record<string, { x: number; y: number }>;
-
-export interface FlowGraphOverlayLayout {
-  height: number;
-  positions: FlowGraphPositions;
-  width: number;
-}
-
-export interface FlowGraphProps {
-  "aria-label": string;
-  className?: string;
-  direction?: FlowGraphDirection;
-  edges?: readonly FlowGraphEdge[];
-  emptyText?: string;
-  expandable?: boolean;
-  expandLabel?: string;
-  nodes?: readonly FlowGraphNode[];
-  onNodePositionsChange?: (positions: FlowGraphPositions) => void;
-  onSelectNode?: (id: string) => void;
-  positions?: FlowGraphPositions;
-  presentation?: "card" | "plain" | "stage";
-  /**
-   * Display chrome under the title. That node must set `contentHeight`.
-   * Interactive controls belong beside the graph, not inside the node.
-   */
-  renderNodeContent?: (node: FlowGraphNode) => ReactNode;
-  /** Marks anchored to laid-out node positions (gates, captions). */
-  renderOverlay?: (layout: FlowGraphOverlayLayout) => ReactNode;
-  selectedId?: string;
-}
-
 export const DataChart: ComponentType<DataChartProps>;
-export const FlowGraph: ComponentType<FlowGraphProps>;
 export const Mermaid: ComponentType<MermaidProps>;
-/** Layered layout. Pass no `positions` (or `{}`) to recompute ranks. */
-export const layoutFlowGraph: (input: {
-  direction?: FlowGraphDirection;
-  edges: readonly FlowGraphEdge[];
-  nodes: readonly { contentHeight?: number; id: string; meta?: string }[];
-  positions?: FlowGraphPositions;
-}) => FlowGraphOverlayLayout;

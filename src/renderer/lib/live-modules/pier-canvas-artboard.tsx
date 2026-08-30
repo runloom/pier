@@ -12,7 +12,6 @@ import { HtmlWorldCanvas } from "@pier/ui/image-preview/world-canvas.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import {
   Children,
-  createContext,
   isValidElement,
   type ReactElement,
   type ReactNode,
@@ -38,9 +37,6 @@ export const ARTBOARD_PRESETS = {
 } as const;
 
 export type ArtboardPreset = keyof typeof ARTBOARD_PRESETS;
-
-/** WorldStage provides `"world"` so nested FlowGraph can skip the fit-all card. */
-export const CanvasStageContext = createContext<"flow" | "world">("flow");
 
 export interface LayerProps {
   children?: ReactNode;
@@ -348,29 +344,27 @@ export function WorldStage({
       ? Math.max(declared.height ?? 0, envelope?.height ?? 0)
       : undefined;
   return (
-    <CanvasStageContext.Provider value="world">
-      <div
-        className={className}
-        data-canvas-stage="world"
-        ref={planeRef}
-        style={{
-          alignItems: "flex-start",
-          background,
-          boxSizing: "border-box",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: `${gap}px`,
-          height: planeHeight,
-          minHeight: "100%",
-          minWidth: "100%",
-          padding: `${padding}px`,
-          position: "relative",
-          width: planeWidth,
-        }}
-      >
-        {children}
-      </div>
-    </CanvasStageContext.Provider>
+    <div
+      className={className}
+      data-canvas-stage="world"
+      ref={planeRef}
+      style={{
+        alignItems: "flex-start",
+        background,
+        boxSizing: "border-box",
+        display: "flex",
+        flexWrap: "wrap",
+        gap: `${gap}px`,
+        height: planeHeight,
+        minHeight: "100%",
+        minWidth: "100%",
+        padding: `${padding}px`,
+        position: "relative",
+        width: planeWidth,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 

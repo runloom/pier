@@ -30,7 +30,7 @@ export function syncLiveModulesConfigAfterDocumentWrite(input: {
   applyLiveModulesProjectConfigFromDiskContents(
     document.source.root,
     input.savedContents
-  );
+  ).catch(() => undefined);
 }
 
 /** Recompute `language` for open disk docs after contentDirectories change. */

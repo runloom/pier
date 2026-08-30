@@ -14,27 +14,9 @@ import {
   normalizeProjectRootKey,
   projectCanvasLocation,
 } from "@shared/live-module-canvas-path.ts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  useCommentNavigatorController,
-  useCommentNavigatorLabels,
-} from "../comments/use-comment-navigator.ts";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FilesTranslate } from "../i18n.ts";
 import { useCanvasRevealAnchor } from "./canvas-anchor-reveal.ts";
-import {
-  clearCanvasBusy,
-  markCanvasActive,
-  requestCanvasReload,
-  unmarkCanvasActive,
-  useCanvasChrome,
-} from "./canvas-chrome-store.ts";
-import {
-  buildCanvasCommentClearTargets,
-  buildCanvasCommentNavTargets,
-  type CanvasCommentNavTarget,
-  revealCanvasCommentNavTarget,
-} from "./canvas-comment-nav.ts";
-import { primaryCanvasPinThread } from "./canvas-comment-order.ts";
 import { CanvasCommentOverlay } from "./canvas-comment-overlay.tsx";
 import { createCanvasCommentLabels } from "./canvas-comments-button.tsx";
 import {
@@ -53,6 +35,8 @@ import {
   clearMountedCanvas,
 } from "./canvas-states.tsx";
 import { subscribeLiveModulesProjectConfigChanged } from "./load-live-modules-config.ts";
+import { useCanvasChromeReload } from "./use-canvas-chrome-reload.ts";
+import { useCanvasCommentNavigation } from "./use-canvas-comment-navigation.ts";
 import { useCanvasCommentPins } from "./use-canvas-comment-pins.ts";
 import { useCanvasExternalLinks } from "./use-canvas-external-links.ts";
 import {
@@ -136,44 +120,7 @@ export function FileCanvasPreview(props: {
     unmountRef,
   });
 
-  useEffect(() => {
-    if (!relPath) {
-      return;
-    }
-    markCanvasActive(relPath);
-    return () => {
-      unmarkCanvasActive(relPath);
-    };
-  }, [relPath]);
-
-  const chrome = useCanvasChrome(relPath ?? "");
-  const lastReloadRef = useRef<number | null>(null);
-  /** True while a user-triggered Reload is in flight (toolbar busy → spin). */
-  const userReloadPendingRef = useRef(false);
-  useEffect(() => {
-    if (lastReloadRef.current === null) {
-      lastReloadRef.current = chrome.reloadRequest;
-      return;
-    }
-    if (chrome.reloadRequest > lastReloadRef.current) {
-      lastReloadRef.current = chrome.reloadRequest;
-      userReloadPendingRef.current = true;
-      setNonce((value) => value + 1);
-    }
-  }, [chrome.reloadRequest]);
-
-  // Clear the toolbar busy state once the reload-triggered generation settles
-  // on a terminal state. Auto (stale) recompiles never set busy.
-  useEffect(() => {
-    if (!(relPath && userReloadPendingRef.current)) {
-      return;
-    }
-    if (state.kind !== "ready" && state.kind !== "error") {
-      return;
-    }
-    userReloadPendingRef.current = false;
-    clearCanvasBusy(relPath);
-  }, [relPath, state]);
+  const { reload } = useCanvasChromeReload({ relPath, setNonce, state });
 
   // Host element for anchor scan (ready + host mounted after compile).
   // biome-ignore lint/correctness/useExhaustiveDependencies: rebind when canvas remounts
@@ -225,54 +172,16 @@ export function FileCanvasPreview(props: {
     softMarkers: comments.softMarkers,
   });
 
-  const [navOpenPinKey, setNavOpenPinKey] = useState<string | null>(null);
-  const [focusedThreadId, setFocusedThreadId] = useState<string | null>(null);
-  const cancelNavScrollRef = useRef<(() => void) | undefined>(undefined);
-  const navTargets = useMemo(
-    () =>
-      buildCanvasCommentNavTargets({
-        hiddenPins,
-        pins,
-      }),
-    [hiddenPins, pins]
-  );
-  const clearTargets = useMemo(
-    () => buildCanvasCommentClearTargets(comments.liveThreads),
-    [comments.liveThreads]
-  );
-  const firstVisibleThreadId = useMemo(() => {
-    let first = pins[0];
-    for (const pin of pins) {
-      if (first === undefined || pin.index < first.index) {
-        first = pin;
-      }
-    }
-    return primaryCanvasPinThread(first?.threads ?? [])?.threadId ?? null;
-  }, [pins]);
-  const navLabels = useCommentNavigatorLabels(props.t);
-  const onRevealNavTarget = useCallback(
-    (target: CanvasCommentNavTarget) => {
-      comments.setPickMode(false);
-      setFocusedThreadId(target.threadId);
-      cancelNavScrollRef.current?.();
-      cancelNavScrollRef.current = revealCanvasCommentNavTarget({
-        hiddenPins,
-        host: hostEl,
-        onOpenPin: setNavOpenPinKey,
-        pins,
-        shell: canvasShellEl ?? shellRef.current,
-        target,
-      });
-    },
-    [canvasShellEl, comments, hiddenPins, hostEl, pins]
-  );
-  const commentNavigator = useCommentNavigatorController({
-    clearTargets,
+  const nav = useCanvasCommentNavigation({
+    canvasShellEl,
     context: props.context,
-    labels: navLabels,
-    onReveal: onRevealNavTarget,
-    selectedThreadId: focusedThreadId ?? firstVisibleThreadId,
-    targets: navTargets,
+    hiddenPins,
+    hostEl,
+    liveThreads: comments.liveThreads,
+    pins,
+    setPickMode: comments.setPickMode,
+    shellRef,
+    t: props.t,
     worktreeKey,
   });
 
@@ -330,9 +239,6 @@ export function FileCanvasPreview(props: {
     return <CanvasUnavailableEmpty t={props.t} />;
   }
 
-  const reload = () => {
-    requestCanvasReload(relPath);
-  };
   const showHost = state.kind === "pending" || state.kind === "ready";
   const isBusy = state.kind === "pending" || state.kind === "loading";
   const softError = state.kind === "ready" ? state.softError : undefined;
@@ -354,7 +260,7 @@ export function FileCanvasPreview(props: {
         className={cn(
           "min-h-0 flex-1",
           worldActive ? "relative overflow-hidden" : "overflow-auto",
-          commentNavigator.visible && COMMENT_NAVIGATOR_SCROLL_PAD_CLASS
+          nav.commentNavigator.visible && COMMENT_NAVIGATOR_SCROLL_PAD_CLASS
         )}
         data-slot="file-canvas-scroll"
         ref={shellRef}
@@ -407,7 +313,12 @@ export function FileCanvasPreview(props: {
             style={reading.shellStyle}
           >
             <div
-              className="relative min-h-full w-full"
+              className={cn(
+                "relative min-h-full w-full",
+                // Fill mode: hand the definite height down so a composition's
+                // height:100% root fills the viewport (inner scroll owns it).
+                stageInfo.fill && !worldActive && "h-full"
+              )}
               data-slot="file-canvas-host"
               ref={hostRef}
             />
@@ -423,37 +334,30 @@ export function FileCanvasPreview(props: {
                   comments.setPickMode(false);
                 }}
                 onPickElement={comments.openPickDraft}
-                onPinOpen={(pin) => {
-                  const thread = primaryCanvasPinThread(pin.threads);
-                  if (thread) {
-                    setFocusedThreadId(thread.threadId);
-                  }
-                }}
-                onRequestOpenConsumed={() => {
-                  setNavOpenPinKey(null);
-                }}
+                onPinOpen={nav.onPinOpen}
+                onRequestOpenConsumed={nav.onRequestOpenConsumed}
                 pickMode={comments.pickMode}
                 pins={pins}
-                requestOpenKey={navOpenPinKey}
+                requestOpenKey={nav.navOpenPinKey}
                 shell={canvasShellEl}
               />
             ) : null}
           </div>
         </WorldViewportFrame>
       </div>
-      {commentNavigator.visible ? (
+      {nav.commentNavigator.visible ? (
         <CommentNavigator
-          activeIndex={commentNavigator.activeIndex}
-          clearLabel={commentNavigator.clearLabel}
-          nextLabel={commentNavigator.nextLabel}
-          onClear={commentNavigator.onClear}
-          onNext={commentNavigator.onNext}
-          onPrevious={commentNavigator.onPrevious}
-          onRevealCurrent={commentNavigator.onRevealCurrent}
-          positionLabel={commentNavigator.positionLabel}
-          previousLabel={commentNavigator.previousLabel}
-          toolbarLabel={commentNavigator.toolbarLabel}
-          total={commentNavigator.total}
+          activeIndex={nav.commentNavigator.activeIndex}
+          clearLabel={nav.commentNavigator.clearLabel}
+          nextLabel={nav.commentNavigator.nextLabel}
+          onClear={nav.commentNavigator.onClear}
+          onNext={nav.commentNavigator.onNext}
+          onPrevious={nav.commentNavigator.onPrevious}
+          onRevealCurrent={nav.commentNavigator.onRevealCurrent}
+          positionLabel={nav.commentNavigator.positionLabel}
+          previousLabel={nav.commentNavigator.previousLabel}
+          toolbarLabel={nav.commentNavigator.toolbarLabel}
+          total={nav.commentNavigator.total}
         />
       ) : null}
       {worldActive ? (

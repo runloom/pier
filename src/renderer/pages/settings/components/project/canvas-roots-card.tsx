@@ -172,7 +172,7 @@ export function ProjectCanvasRootsCard({
 
     if (result.kind === "written") {
       applyLiveModulesProjectConfigAfterSave(
-        projectRootPath,
+        result.configRootPath,
         result.contentDirectories
       );
       setRevision(result.revision);

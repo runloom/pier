@@ -264,7 +264,6 @@ export const CANVAS_MATERIAL_GROUPS: readonly CanvasMaterialGroup[] = [
     ],
   },
   { family: "viz", id: "DataChart", members: ["DataChart"] },
-  { family: "viz", id: "FlowGraph", members: ["FlowGraph", "layoutFlowGraph"] },
   { family: "viz", id: "Mermaid", members: ["Mermaid"] },
   { family: "data", id: "canvasFile", members: ["useCanvasFile"] },
   {

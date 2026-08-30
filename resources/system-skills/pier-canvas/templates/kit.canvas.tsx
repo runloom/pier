@@ -40,19 +40,15 @@ export default function KitCanvas() {
           <Row gap={8} wrap>
             <Badge variant="success">kit</Badge>
           </Row>
-          <Text as="h1" className="text-2xl font-semibold tracking-tight">
-            Component catalog
-          </Text>
-          <Text tone="secondary" className="text-sm leading-relaxed">
+          <Text as="h1">Component catalog</Text>
+          <Text tone="secondary">
             Group by use. Import real design-system components instead of
             copying host source.
           </Text>
         </Stack>
 
         <Stack gap={10}>
-          <Text as="h2" className="text-base font-semibold">
-            Buttons
-          </Text>
+          <Text as="h2">Buttons</Text>
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Variants</CardTitle>
@@ -83,9 +79,7 @@ export default function KitCanvas() {
         <Separator />
 
         <Stack gap={10}>
-          <Text as="h2" className="text-base font-semibold">
-            Input and toggles
-          </Text>
+          <Text as="h2">Input and toggles</Text>
           <Card>
             <CardContent className="flex flex-col gap-4 pt-4">
               <Row className="items-center" gap={12} wrap>
@@ -113,7 +107,7 @@ export default function KitCanvas() {
                 <ToggleGroupItem value="quiet">Quiet</ToggleGroupItem>
                 <ToggleGroupItem value="emphasis">Emphasis</ToggleGroupItem>
               </ToggleGroup>
-              <Text tone="secondary" className="text-xs">
+              <Text as="span" tone="secondary">
                 Current: {tone}
               </Text>
             </CardContent>
@@ -121,9 +115,7 @@ export default function KitCanvas() {
         </Stack>
 
         <Stack gap={10}>
-          <Text as="h2" className="text-base font-semibold">
-            Status badges
-          </Text>
+          <Text as="h2">Status badges</Text>
           <Row gap={8} wrap>
             <Badge variant="info">Info</Badge>
             <Badge variant="success">Success</Badge>

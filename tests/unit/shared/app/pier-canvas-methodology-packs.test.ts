@@ -107,7 +107,6 @@ describe("pier-canvas methodology packs", () => {
     expect(skill).toContain("Pick the shell from the user's ask");
     expect(skill).toContain("no floating font-scale control");
     expect(skill).toContain("recipe=design");
-    expect(skill).toContain("recipe=orchestration");
     expect(skill).toContain("recipe=board");
     expect(skill).toContain("WorldStage");
     expect(skill).toContain("<Stack fill>");
@@ -252,9 +251,15 @@ describe("pier-canvas methodology packs", () => {
   });
 
   it("ships freeform recipe packs that are not methodology axes", () => {
+    // The recipes directory is a closed set: an unregistered pack must fail
+    // here instead of shipping silently.
+    expect(
+      readdirSync(join(PACKS_ROOT, "recipes"))
+        .filter((name) => !name.startsWith("."))
+        .sort()
+    ).toEqual(["board", "design"]);
     const recipes = [
       { id: "design", stage: "world" },
-      { id: "orchestration", stage: "world" },
       { id: "board", stage: "fill" },
     ] as const;
     for (const recipe of recipes) {
@@ -278,7 +283,6 @@ describe("pier-canvas methodology packs", () => {
     expect(skill).toContain("packs/recipes/design/");
     expect(skill).toContain("packs/recipes/board/");
     expect(skill).toContain("templates/design-mockup.canvas.tsx");
-    expect(skill).toContain("templates/dag-viewer.canvas.tsx");
     expect(skill).toContain("templates/kanban.canvas.tsx");
     expect(skill).toContain("recipe=board");
     const hostData = readFileSync(
@@ -301,13 +305,5 @@ describe("pier-canvas methodology packs", () => {
     expect(hostData).toContain("run.spawn");
     expect(hostData).not.toContain("workbench-examples");
     expect(authoring).not.toContain("workbench-examples");
-    const dagTemplate = readFileSync(
-      join(
-        process.cwd(),
-        "resources/system-skills/pier-canvas/templates/dag-viewer.canvas.tsx"
-      ),
-      "utf8"
-    );
-    expect(dagTemplate).not.toContain(".pier/canvases/dag-viewer");
   });
 });

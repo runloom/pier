@@ -39,11 +39,7 @@ export const canvas = {
 };
 
 function H2({ children }: { children: string }) {
-  return (
-    <Text as="h2" className="text-base font-medium tracking-tight">
-      {children}
-    </Text>
-  );
+  return <Text as="h2">{children}</Text>;
 }
 
 export default function OverviewCanvasTemplate() {
@@ -57,10 +53,8 @@ export default function OverviewCanvasTemplate() {
             <Badge variant="info">Product design</Badge>
             <Badge variant="outline">primary_nav_5</Badge>
           </Row>
-          <Text as="h1" className="text-2xl font-semibold tracking-tight">
-            Proposal title
-          </Text>
-          <Text tone="secondary" className="text-sm leading-relaxed">
+          <Text as="h1">Proposal title</Text>
+          <Text tone="secondary">
             Subtitle: one sentence on which system and which decision.
           </Text>
         </Stack>
@@ -76,7 +70,7 @@ export default function OverviewCanvasTemplate() {
 
           <TabsContent className="mt-4" value="overview">
             <Stack gap={14}>
-              <Card className="border-status-info/30 bg-status-info/5">
+              <Card className="border-status-info/40 bg-status-info/10">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Insight</CardTitle>
                   <CardDescription>
@@ -84,14 +78,14 @@ export default function OverviewCanvasTemplate() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Text className="text-sm leading-relaxed">
+                  <Text>
                     Write the insight: layers, source of truth, default
                     encapsulation — the hidden trade-offs.
                   </Text>
                 </CardContent>
               </Card>
 
-              <Card className="border-status-info/30 bg-status-info/5">
+              <Card className="border-status-info/40 bg-status-info/10">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Decision (BLUF)</CardTitle>
                   <CardDescription>
@@ -99,7 +93,7 @@ export default function OverviewCanvasTemplate() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Text className="text-sm leading-relaxed">
+                  <Text>
                     Write the decision: for example teach only four commands,
                     default wait-until-settled, never treat quiet as done.
                   </Text>
@@ -113,7 +107,7 @@ export default function OverviewCanvasTemplate() {
                     <CardTitle className="mt-2 text-base">Pain summary</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Text className="text-sm leading-relaxed">
+                    <Text>
                       Where the user gets stuck today (one sentence).
                     </Text>
                   </CardContent>
@@ -124,7 +118,7 @@ export default function OverviewCanvasTemplate() {
                     <CardTitle className="mt-2 text-base">Key mechanism</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Text className="text-sm leading-relaxed">
+                    <Text>
                       Layers / state exits / identity — one phrase each.
                     </Text>
                   </CardContent>
@@ -135,7 +129,7 @@ export default function OverviewCanvasTemplate() {
                     <CardTitle className="mt-2 text-base">Default path</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Text className="text-sm leading-relaxed">
+                    <Text>
                       How a user finishes one loop on Day 1.
                     </Text>
                   </CardContent>
@@ -147,7 +141,7 @@ export default function OverviewCanvasTemplate() {
           <TabsContent className="mt-4" value="problem">
             <Stack gap={14}>
               <H2>Problem</H2>
-              <Text className="text-sm leading-relaxed">
+              <Text>
                 Two to four recognizable failure paths. Do not start with a
                 backlog.
               </Text>
@@ -158,7 +152,7 @@ export default function OverviewCanvasTemplate() {
                     <CardTitle className="mt-2 text-base">Pain one</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Text className="text-sm leading-relaxed">
+                    <Text>
                       Symptom + wrong attribution (for example a bad done
                       signal).
                     </Text>
@@ -170,7 +164,7 @@ export default function OverviewCanvasTemplate() {
                     <CardTitle className="mt-2 text-base">Pain two</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Text className="text-sm leading-relaxed">
+                    <Text>
                       Symptom + cost (steep learning, glue scripts).
                     </Text>
                   </CardContent>
@@ -181,7 +175,7 @@ export default function OverviewCanvasTemplate() {
                     <CardTitle className="mt-2 text-base">Pain three</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Text className="text-sm leading-relaxed">
+                    <Text>
                       Symptom + risk (false hits, invisible stalls).
                     </Text>
                   </CardContent>
@@ -189,10 +183,10 @@ export default function OverviewCanvasTemplate() {
               </div>
               <Stack gap={4}>
                 <H2>Out of scope</H2>
-                <Text className="text-sm leading-relaxed">
+                <Text>
                   · Non-goal one (product boundary)
                 </Text>
-                <Text className="text-sm leading-relaxed">· Non-goal two</Text>
+                <Text>· Non-goal two</Text>
               </Stack>
             </Stack>
           </TabsContent>
@@ -223,10 +217,10 @@ export default function OverviewCanvasTemplate() {
                     { id: "X", title: "Misuse", tone: "danger" },
                   ]}
                 />
-                <Text className="text-sm leading-relaxed">
+                <Text>
                   · Day 1 stays on the semantic layer.
                 </Text>
-                <Text className="text-sm leading-relaxed">
+                <Text>
                   · Low-level I/O may exist, but it is not the completion
                   protocol.
                 </Text>
@@ -366,7 +360,7 @@ step2 --json`}
               </Stack>
               <Stack gap={4}>
                 <H2>Do not teach on Day 1</H2>
-                <Text className="text-sm leading-relaxed">
+                <Text>
                   · Advanced-surface details (keep them off the first page)
                 </Text>
               </Stack>
@@ -376,7 +370,7 @@ step2 --json`}
           <TabsContent className="mt-4" value="landing">
             <Stack gap={14}>
               <H2>Landing</H2>
-              <Text tone="secondary" className="text-sm leading-relaxed">
+              <Text tone="secondary">
                 After this page an implementer can change defaults and
                 schedule. Acceptance tables belong here, not on Overview.
               </Text>
@@ -429,7 +423,7 @@ step2 --json`}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Text className="text-sm leading-relaxed">
+                    <Text>
                       · L0 — slice title
                     </Text>
                   </CardContent>
@@ -461,7 +455,7 @@ step2 --json`}
 
               <Stack gap={4}>
                 <H2>Appendix (optional)</H2>
-                <Text tone="secondary" className="text-sm leading-relaxed">
+                <Text tone="secondary">
                   Competitor notes and process archaeology go at the end; they
                   must not become the default first page.
                 </Text>

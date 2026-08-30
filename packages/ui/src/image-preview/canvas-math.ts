@@ -20,22 +20,6 @@ export function pinchZoom(base: number, deltaY: number): number {
   return clampZoom(base * Math.exp(-deltaY * PINCH_ZOOM_SENSITIVITY));
 }
 
-/**
- * Cumulative visual scale applied to an element by ancestor CSS `zoom` /
- * `transform: scale` — the world↔pointer coordinate contract. Primitives that
- * mix model coordinates (saved positions) with pointer deltas read this once
- * per drag session and divide deltas by it. Both `zoom` and transforms show
- * up in getBoundingClientRect; offsetWidth stays in local layout px.
- */
-export function canvasWorldScale(el: HTMLElement): number {
-  const visual = el.getBoundingClientRect().width;
-  const layout = el.offsetWidth;
-  if (!(visual > 0 && layout > 0)) {
-    return 1;
-  }
-  return visual / layout;
-}
-
 /** Contain scale (no upscale), same as max-width/height 100% object-contain. */
 export function measureContainScale(args: {
   naturalHeight: number;
@@ -217,9 +201,7 @@ export function measureWorldContentBounds(
     root.querySelector<HTMLElement>("[data-canvas-stage='world']") ?? root;
   const children = Array.from(stage.children).filter(
     (el): el is HTMLElement =>
-      el instanceof HTMLElement &&
-      el.dataset.slot !== "flow-graph-overlay" &&
-      (el.offsetWidth > 0 || el.offsetHeight > 0)
+      el instanceof HTMLElement && (el.offsetWidth > 0 || el.offsetHeight > 0)
   );
   if (children.length === 0) {
     const width = stage.offsetWidth || root.offsetWidth;

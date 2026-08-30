@@ -264,3 +264,13 @@ W6 配方与 skill ───────▶（收尾，依赖 W1–W5 全部 API
 - 双 arch 可选 native：`package.json` optionalDependencies + `pnpm-workspace.yaml` `supportedArchitectures`（pnpm 11 不读 package.json 的 `pnpm` 字段）。本机 unpack 对两份 `Pier.app` **ok**。
 - Ghostty 原生层是否吃到未聚焦滚轮无法用 Playwright 断言；e2e 锁的是画板侧不改缩放。
 - `electron-builder` 双 arch **并行 dmgbuild** 仍会偶发把 Intel dmg 进程打死（exit null）。本次产出 arm64 dmg + 两份 zip + 两份已签名 app；Intel dmg 未齐，`verify-mac-release-artifacts` 未过。未公证。
+
+## 20. 实施记录（2026-08-30，FlowGraph 移除）
+
+产品决策：`FlowGraph` 实现效果不达标，活图 viewer 撤出 Canvas v1 能力面；后续 DAG 需求按「具体产品能力」重新设计，不再以通用画图原语形态提供。W4-T4.1 逆向下线：
+
+- **删除**：`packages/ui/src/flow-graph/`（含 Sugiyama-lite 布局）、`host-flow-graph.tsx`、`CanvasStageContext`（唯一消费者随删）、`templates/dag-viewer.canvas.tsx`、`packs/recipes/orchestration/`、`flow-graph-*` 三个测试。
+- **四处导出同步收回**：导出名单（`FlowGraph` / `layoutFlowGraph`）、runtime、`sdk/visualizations.d.ts`、物料 catalog + 四语言 locale（孤儿键 `flowGraphPositions` / `flowGraphOverlay` / `onNodePositionsChange` / `onSelectNode` 一并清理；`nodes` / `edges` / `direction` / `expandable` / `renderNodeContent` 仍被 Mermaid 引用保留）。
+- **保留**：DnD（`Sortable` / `Droppable`，治理断言迁至 `tests/unit/ui/dnd-governance.test.ts`）、`useCanvasFile` watch、`canvasCommand.invoke`、loopback CSP——数据通道与 board 配方不受影响。
+- **skill**：`recipe` 收敛为 `design` | `board`；Mermaid 维持静态图示定位（禁做轮询 viewer 的教法保留）。
+- 关联影响：`2026-08-28-canvas-task-management-tracker-adapter-design.md`（评审中）内 DAG 视图依赖 FlowGraph 的段落待该设计定稿时按新原语方案重写。

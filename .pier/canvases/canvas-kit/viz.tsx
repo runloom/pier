@@ -1,6 +1,5 @@
 import {
   DataChart,
-  FlowGraph,
   Mermaid,
   Table,
   TableBody,
@@ -131,27 +130,6 @@ export function VizPage() {
               />
             </TabsContent>
           </Tabs>
-        </MaterialCard>
-        <MaterialCard
-          install='import { FlowGraph } from "pier/canvas"'
-          lead="带状态着色的活图。节点可带次要说明，边会跟跑。"
-          name="FlowGraph"
-        >
-          <FlowGraph
-            aria-label="示例图"
-            edges={[{ label: "ok", source: "compile", target: "publish" }]}
-            expandable={false}
-            nodes={[
-              {
-                badge: "build",
-                id: "compile",
-                label: "编译",
-                meta: "worker-1",
-                status: "running",
-              },
-              { id: "publish", label: "发布", status: "ready" },
-            ]}
-          />
         </MaterialCard>
       </KitGrid>
     </KitSection>

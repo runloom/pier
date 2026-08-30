@@ -1,7 +1,8 @@
 # Canvas 双模式壳与 UI 能力扩展 · 设计
 
 - 日期：2026-08-26
-- 状态：产品闭环已收口（壳、JIT、积木、阅读 13px、DAG `run.output`、金样锚点）。§9 由 Playwright Electron e2e 守门（`tests/e2e/files/canvas-dual-stage-gold.spec.ts`）；打包 native 由 `build:dist` 后 `verify-canvas-tailwind-native-unpack.mjs` 硬校验。Ghostty 原生层是否吃到未聚焦滚轮无法用 Playwright 断言，e2e 锁的是「未聚焦画板不抢缩放」。
+- 状态：产品闭环已收口（壳、JIT、积木、阅读 13px、金样锚点）。§9 由 Playwright Electron e2e 守门（`tests/e2e/files/canvas-dual-stage-gold.spec.ts`）；打包 native 由 `build:dist` 后 `verify-canvas-tailwind-native-unpack.mjs` 硬校验。e2e 锁的是相机契约「普通滚轮只平移、`ctrl+wheel` 才缩放」（无聚焦门控，见 §3.4）。
+- **2026-08-30 移除**：`FlowGraph` / `layoutFlowGraph`、`dag-viewer` 模板与 `orchestration` 配方整体下线（实现效果不达标，活图 viewer 撤出 Canvas v1 能力面；后续 DAG 需求按具体产品能力重新设计，不再以通用画图原语形态提供）。§5.1 保留为历史设计记录；DnD / `useCanvasFile` / `canvasCommand` / loopback 数据通道不受影响。
 - 前置：Live Modules 运行时（编译 / 围栏 / `pier-live://`）；工作台迁入 Canvas 金标准（2026-08-24，已落地）；Canvas 方法论三轴 content / presentation / ui（2026-08-08，归档）
 
 ## 1. 背景与问题
@@ -37,8 +38,8 @@ Canvas = 项目内可版本化的「活文档 + 活面板」。四类目标场�
 | 几何 | 纵向滚动流 + 版心 | viewport 锁定，缩放平移，内容摆在世界坐标 |
 | 根原语 | 任意流式组合 / `DocsShell` | `WorldStage`（新） |
 | 典型内容 | docs、决策稿、组合 overview | 多画板设计稿、DAG、多屏原型、白板布局 |
-| 预览 chrome | 现状 + 阅读偏好 | fit / 100%（`ImagePreviewControls`）；聚焦后捕获滚轮。全屏只在 `ArtboardStage` / FlowGraph 卡片走 ContentPreviewHost，files 预览内联 world **不做全屏** |
-| 滚动条 | 产品统一滑块 | `data-scrollbar="none"`（画布在关闭清单） |
+| 预览 chrome | 现状 + 阅读偏好 | fit / 100%（`ImagePreviewControls`）；滚轮平移、`ctrl+wheel` 光标锚定缩放（无聚焦门控，见 §3.4）。全屏只在 `ArtboardStage` 等 fit-all 卡片走 ContentPreviewHost，files 预览内联 world **不做全屏** |
+| 滚动条 | 产品统一滑块 | `overflow-hidden` 相机视口天然无滚动条（无需 `data-scrollbar`） |
 
 **不加第三个「应用模式」。** 满幅看板 / 仪表盘用 flow 的 fill 挡位（单屏撑满、内部自滚）或 world 单帧 fit 退化表达；三模式会让 skill 教法与治理组合面翻倍。
 
@@ -47,7 +48,7 @@ Canvas = 项目内可版本化的「活文档 + 活面板」。四类目标场�
 ### 2.3 用户旅程
 
 - **设计稿**：agent 用 skill 写 world canvas，多 `Artboard` 挂设备预设摆在世界坐标上；用户滚轮缩放浏览、**双击切换 fit / 100%**（与图片预览同款 `toggleZoom`）；用评论 pin（既有 Design Mode pick）在具体元素上留标注；改稿走 agent 重写文件，热重载即时生效。细看靠滚轮与缩放控件，不是进入单板编辑器。
-- **DAG viewer**：agent 在外部编排系统（Orca 等）建图；canvas 经 localhost fetch 或声明式命令轮询状态，`FlowGraph` 渲染节点着色；节点位置拖拽后经 `useCanvasFile` 持久化到兄弟 JSON；「运行」按钮触发预声明命令，输出经既有 `run.output` 只读链路回流。
+- **DAG viewer（已移除，见文首注记）**：原设计为 agent 在外部编排系统建图、`FlowGraph` 轮询着色渲染；2026-08-30 随 FlowGraph 一并下线。localhost fetch / 声明式命令 / `run.output` 回流等数据通道保留，供后续具体 DAG 能力复用。
 - **看板**：满幅 **fill** 流（不是 world）；列 / 卡数据存兄弟 JSON（或来自插件投影），DnD 原语拖卡，`useCanvasFile` watch 让多窗实例即时同步。
 
 ### 2.4 非目标
@@ -78,7 +79,7 @@ file-canvas-preview（相对根）
    （DocsShell flow 无浮动字号控件；阅读偏好经 CSS 变量被动应用）
 ```
 
-`ArtboardStage` / FlowGraph 的 fit-all **卡片**仍用 `HtmlWorldCanvas`；全屏 zoom/pan 只在 ContentPreviewHost。files 预览内联 world **不得**包 `HtmlWorldCanvas presentation="stage"`。
+`ArtboardStage` 的 fit-all **卡片**仍用 `HtmlWorldCanvas`；全屏 zoom/pan 只在 ContentPreviewHost。files 预览内联 world **不得**包 `HtmlWorldCanvas presentation="stage"`。
 
 ### 3.2 模式判定
 
@@ -100,7 +101,6 @@ file-canvas-preview（相对根）
 - **fit 是相机位不是特殊态**：初始 = `fitCamera(内容包络, 视口, padding)`；用户未动相机（`fit` 模式）时视口 / 包络变化自动跟随,动过（`free`）不再打扰。
 - **壳 chrome 单一来源 `WorldViewportFrame`**（`packages/ui/src/image-preview/world-canvas.tsx`）：section + 相机盒由它渲染，`ZoomPanWorldStage` 与 files 预览共同消费；files 预览传 `active=false` 时两层皆 `display: contents`，flow ↔ world 翻转不重挂命令式 host。
 - **不包 `HtmlWorldCanvas presentation="stage"`。** 该挡位是 ContentPreviewHost 全屏路径；包进 files 预览会重挂 live-module host。治理锁定 `canvas.tsx` 只消费 `WorldViewportFrame`。
-- **世界坐标契约**：混用模型坐标与指针增量的物料（FlowGraph 拖节点等）以 `canvasWorldScale(el)`（gBCR 宽 ÷ offsetWidth，对 transform 与 zoom 同样成立）换算，拖拽开始时读一次。
 - 文本清晰度：交互期挂 `will-change: transform`,静止 200ms 后摘除,合成层按最终 scale 重栅格化。
 - 缩放控件走 stage 内置 `ImagePreviewControls`（不经 `canvas-chrome-store`）。toolbar 仅保留 Reload。
 - 版心 / padding 不适用；overflow-hidden 视口天然无滚动条。
@@ -137,7 +137,9 @@ file-canvas-preview（相对根）
 
 ## 5. 技术设计 C：动态管理积木与数据通道
 
-### 5.1 `FlowGraph` 原语
+### 5.1 `FlowGraph` 原语（已移除，历史记录）
+
+> **2026-08-30**：本节原语已整体删除（见文首注记）。保留原文供后续「具体 DAG 能力」设计参考。
 
 - `pier/canvas` 导出：`nodes`（id / label / status / `meta` / `badge` / `data` / `contentHeight`）+ `edges`（含 `label`）数据驱动；分层布局为 **Sugiyama-lite**（Kahn 层 + 一次 barycenter，不引 dagre / react-flow）；状态着色只走 `status-*` 语义令牌。状态枚举：`queued` / `ready` / `running` / `blocked` / `success` / `failed` / `skipped`。源节点 `running` 时边 `data-status="running"`，短划线 + SVG SMIL `stroke-dashoffset` 流动（禁止 crayon / feTurbulence / hex）。
 - 槽位：`renderNodeContent`（展示 chrome，该节点须设 `contentHeight`；交互控件放图旁，不进节点）+ `renderOverlay({ positions, width, height })`（关口 / 说明；overlay 根 `pointer-events-none`）。`onSelectNode` 配图旁 `Stack`/`Text` 做检视，不是宿主 NodePanel。
@@ -170,7 +172,7 @@ file-canvas-preview（相对根）
 | 期 | 内容 | 解锁 |
 |---|---|---|
 | P0 | 壳 stage 契约（判定 + world 内联 zoom/pan + 评论 pin 坐标系）；Tailwind JIT | 画板空间 + 样式自由度 |
-| P1 | 资产 loader；`WorldStage` / `Layer` / `Artboard` preset；`FlowGraph` + DnD | 设计稿成立；DAG / 看板渲染层成立 |
+| P1 | 资产 loader；`WorldStage` / `Layer` / `Artboard` preset；`FlowGraph`（后移除）+ DnD | 设计稿成立；看板渲染层成立 |
 | P2 | localhost connect-src；`useCanvasFile` watch + 子目录；`canvasCommand.invoke` | 动态 viewer 数据 / 动作闭环 |
 | P3 | 动效白名单；design pack / orchestration pack + skill 更新（含两模式教法） | agent 生成配方 |
 
@@ -180,14 +182,13 @@ P0 两件并行（渲染壳层 ⊥ 编译管线层）；P1 起积木骑在壳上
 
 | 检查点 | 锁定 |
 |---|---|
-| `canvas-stage-governance`（新） | 一个壳、stage 判定单一来源、world 缩放数学复用 image-preview、预览壳不包 `HtmlWorldCanvas`、flow 版心归壳 |
+| `canvas-stage-governance`（新） | 一个壳、stage 判定单一来源、world 缩放数学复用 image-preview（`useWorldCamera` / `canvas-math`）、预览壳不包 `HtmlWorldCanvas`、flow 版心归壳、world 视口 `overflow-hidden` 无滚动条、wheel 平移无聚焦门控 |
 | `chart-focus-governance`（扩） | world 画布 `tabIndex={0}` 白名单登记 |
-| `scrollbar-visual-governance`（扩） | world 模式 `data-scrollbar="none"` |
 | `canvas-tailwind-source-governance`（改） | JIT 产出 scoped、无全局逃逸、宿主 `@source` 过渡态已删 |
 | `canvas-host-readonly`（扩） | `canvasCommand.invoke` 独立能力、key 预声明、无 `*:write`；allowlist 仍无 spawn/stop 直通 |
-| `canvas-materials` catalog（扩） | `WorldStage` / `Layer` / `FlowGraph` / `Sortable` 登记；仍无领域组件行 |
+| `canvas-materials` catalog（扩） | `WorldStage` / `Layer` / `Sortable` 登记；仍无领域组件行 |
 | SDK 导出名 / bundled d.ts 测试（扩） | 新导出三方对齐（runtime / 名单 / d.ts） |
-| 组件测试（新） | 缩放后评论 pin 命中同一锚元素；`FlowGraph` 无编辑拓扑 API |
+| 组件测试（新） | 缩放后评论 pin 命中同一锚元素 |
 
 ## 8. 已决取舍与残留风险
 
@@ -198,12 +199,12 @@ P0 两件并行（渲染壳层 ⊥ 编译管线层）；P1 起积木骑在壳上
 - **world 多实例性能**：超预算时再引入画板级 `content-visibility`。
 - **动效**：项目根默认允许 `framer-motion`；宿主不装箱。项目自装才会编过。
 - **`animate-*`**：`theme(inline reference)` 不吐 `@keyframes`；动画要宿主 `globals.css` 已有同名关键帧。
-- **§9 / 打包 native**：§9 三条由 `tests/e2e/files/canvas-dual-stage-gold.spec.ts` 在真实 Electron 里跑（未聚焦不抢缩放、双窗 world 帧预算、JIT 热重载撕旧 stylesheet）。打包态 oxide / lightningcss / esbuild 由 `scripts/verify-canvas-tailwind-native-unpack.mjs` 在 `build:dist` 后 `require` 解包 `.node`，不再只核对 yml glob。
+- **§9 / 打包 native**：§9 三条由 `tests/e2e/files/canvas-dual-stage-gold.spec.ts` 在真实 Electron 里跑（滚轮只平移 / `ctrl+wheel` 光标缩放、双窗 world 帧预算、JIT 热重载撕旧 stylesheet）。打包态 oxide / lightningcss / esbuild 由 `scripts/verify-canvas-tailwind-native-unpack.mjs` 在 `build:dist` 后 `require` 解包 `.node`，不再只核对 yml glob。
 
 ## 9. 手测清单（Electron e2e 守门）
 
 合入前跑 `pnpm test:e2e:auto tests/e2e/files/canvas-dual-stage-gold.spec.ts`（优先闲置机）。契约：
 
-1. 带终端的分栏布局：world canvas 未聚焦时滚轮不改变缩放；点进画板后滚轮缩放。
+1. 带终端的分栏布局：world canvas 内普通滚轮 = 平移（缩放不变）；`ctrl+wheel`（触控板捏合）= 光标锚定缩放。
 2. 两个 world 预览同时打开（两窗）：各自可缩放，rAF 中位帧间隔 < 40ms。
 3. 改 canvas 任意值 class 后热重载：该模块只剩一份 `style[data-pier-live-css]`，探针计算色跟上新 class。

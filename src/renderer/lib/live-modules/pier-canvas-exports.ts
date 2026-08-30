@@ -81,7 +81,6 @@ import {
   FieldSet,
   FieldTitle,
 } from "@pier/ui/field.tsx";
-import { layoutFlowGraph } from "@pier/ui/flow-graph/index.tsx";
 import {
   formatBytes,
   formatCompactCurrency,
@@ -298,7 +297,6 @@ export const pierCanvasExports = {
   KbdGroup,
   Label,
   Layer,
-  layoutFlowGraph,
   Pagination,
   PaginationContent,
   PaginationEllipsis,

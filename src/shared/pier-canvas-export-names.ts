@@ -82,7 +82,6 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "FieldSeparator",
   "FieldSet",
   "FieldTitle",
-  "FlowGraph",
   "Frame",
   "HoverCard",
   "HoverCardContent",
@@ -172,7 +171,7 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
 ] as const;
 
 /**
- * Non-component exports: hooks, format helpers, and `layoutFlowGraph`.
+ * Non-component exports: hooks and format helpers.
  *
  * `useCanvasFile` is the sibling-file sandbox (not the global `file.*` API).
  * Global commands, events, and snapshots live on `pier/host`.
@@ -186,7 +185,6 @@ export const PIER_CANVAS_VALUE_EXPORT_NAMES = [
   "formatDurationShort",
   "formatPercent",
   "formatRelativeTime",
-  "layoutFlowGraph",
   "useActivityOverview",
   "useCanvasFile",
   "useCostOverview",
