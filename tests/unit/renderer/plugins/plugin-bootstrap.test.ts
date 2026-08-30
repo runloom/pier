@@ -18,6 +18,13 @@ vi.mock("@/lib/plugins/runtime/index.ts", () => ({
   rendererPluginRuntime: runtimeMock,
 }));
 
+// builtin-catalog pulls in every builtin plugin's renderer tree; transforming
+// it blew the first test's 5s budget and is irrelevant here — bootstrap only
+// calls installEditorLanguageModeSync from it.
+vi.mock("@/lib/plugins/builtin-catalog.ts", () => ({
+  installEditorLanguageModeSync: vi.fn(() => () => undefined),
+}));
+
 function entry(id: string, enabled: boolean): PluginRegistryEntry {
   return {
     effectivePermissions: [],
