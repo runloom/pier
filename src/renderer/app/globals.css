@@ -1037,7 +1037,7 @@ body {
    - accent：S3=primary（同选中铬，防变深），S2/S1=muted-foreground
    - 面板 tab 铬（分割短线 / 悬停）见
      docs/superpowers/specs/2026-08-29-panel-tab-chrome-gold-standard.md
-     真实节点 `[data-slot="panel-tab-separator"]`；悬停不藏线；选中两侧才藏
+     真实节点 `[data-slot="panel-tab-separator"]`；选中 / 悬停都藏两侧短线
 
    窗口聚焦位: html[data-window-focused] (installWindowFocusAttribute) */
 
@@ -1145,13 +1145,18 @@ body {
   transition: opacity 80ms;
 }
 
-/* 第一颗没有左邻；选中底已经切开，只藏选中两侧。悬停不藏。 */
+/* 第一颗没有左邻；选中 / 悬停底已经切开，藏该 tab 两侧短线。 */
 .dockview-theme-pier
   .dv-tab:not(.dv-tab ~ .dv-tab)
   [data-slot="panel-tab-separator"],
 .dockview-theme-pier .dv-tab.dv-active-tab [data-slot="panel-tab-separator"],
 .dockview-theme-pier
   .dv-tab.dv-active-tab
+  + .dv-tab
+  [data-slot="panel-tab-separator"],
+.dockview-theme-pier .dv-tab:hover [data-slot="panel-tab-separator"],
+.dockview-theme-pier
+  .dv-tab:hover
   + .dv-tab
   [data-slot="panel-tab-separator"] {
   opacity: 0;
