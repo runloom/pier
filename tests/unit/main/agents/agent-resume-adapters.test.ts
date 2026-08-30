@@ -143,7 +143,7 @@ describe("agent resume adapters", () => {
     expect(resolved.launch.command).toBe(expected);
   });
 
-  it("builds a Kimi resume launch and strips session/continue aliases", () => {
+  it("builds a Kimi resume launch with --session", () => {
     const resolved = resolveAgentResumeLaunch({
       agent: runningAgent({
         agentId: "kimi",
@@ -157,7 +157,24 @@ describe("agent resume adapters", () => {
     });
 
     expect(resolved.resumed).toBe(true);
-    expect(resolved.launch.command).toBe("kimi --yolo --resume session-123");
+    expect(resolved.launch.command).toBe("kimi --yolo --session session-123");
+  });
+
+  it("strips Kimi flags that conflict with --session", () => {
+    const resolved = resolveAgentResumeLaunch({
+      agent: runningAgent({
+        agentId: "kimi",
+        launch: {
+          agentId: "kimi",
+          command: "kimi --yolo --agent reviewer --resume old -C",
+          cwd: "/repo",
+        },
+      }),
+      cwd: "/repo",
+    });
+
+    expect(resolved.resumed).toBe(true);
+    expect(resolved.launch.command).toBe("kimi --yolo --session session-123");
   });
 
   it("builds a Copilot resume launch with equals-form --resume", () => {
@@ -266,6 +283,113 @@ describe("agent resume adapters", () => {
     expect(fromSessionId.launch.command).toBe(
       "goose session -r --session-id session-123"
     );
+  });
+
+  it("builds a pi resume launch with --session-id", () => {
+    const resolved = resolveAgentResumeLaunch({
+      agent: runningAgent({
+        agentId: "pi",
+        launch: { agentId: "pi", command: "pi", cwd: "/repo" },
+      }),
+      cwd: "/repo",
+    });
+
+    expect(resolved.resumed).toBe(true);
+    expect(resolved.launch).toEqual({
+      agentId: "pi",
+      command: "pi --session-id session-123",
+      cwd: "/repo",
+    });
+  });
+
+  it("strips pi flags that conflict with --session-id", () => {
+    const resolved = resolveAgentResumeLaunch({
+      agent: runningAgent({
+        agentId: "pi",
+        launch: {
+          agentId: "pi",
+          command:
+            "pi --thinking high --continue -r --session old --fork base --session-id stale",
+          cwd: "/repo",
+        },
+      }),
+      cwd: "/repo",
+    });
+
+    expect(resolved.resumed).toBe(true);
+    expect(resolved.launch.command).toBe(
+      "pi --thinking high --session-id session-123"
+    );
+  });
+
+  it("does not swallow a flag after a bare optional-value resume token", () => {
+    const kiro = resolveAgentResumeLaunch({
+      agent: runningAgent({
+        agentId: "kiro",
+        launch: {
+          agentId: "kiro",
+          command: "kiro-cli chat -r --tui",
+          cwd: "/repo",
+        },
+      }),
+      cwd: "/repo",
+    });
+    const claude = resolveAgentResumeLaunch({
+      agent: runningAgent({
+        agentId: "claude",
+        launch: {
+          agentId: "claude",
+          command: "claude -r --dangerously-skip-permissions",
+          cwd: "/repo",
+        },
+      }),
+      cwd: "/repo",
+    });
+
+    expect(kiro.resumed).toBe(true);
+    expect(kiro.launch.command).toBe(
+      "kiro-cli chat --tui --resume-id session-123"
+    );
+    expect(claude.resumed).toBe(true);
+    expect(claude.launch.command).toBe(
+      "claude --dangerously-skip-permissions --resume session-123"
+    );
+  });
+
+  it("still strips the value of -r <id> resume tokens", () => {
+    const resolved = resolveAgentResumeLaunch({
+      agent: runningAgent({
+        agentId: "droid",
+        launch: {
+          agentId: "droid",
+          command: "droid -r old-session --auto high",
+          cwd: "/repo",
+        },
+      }),
+      cwd: "/repo",
+    });
+
+    expect(resolved.resumed).toBe(true);
+    expect(resolved.launch.command).toBe(
+      "droid --auto high --resume session-123"
+    );
+  });
+
+  it("strips kilo --cloud-fork alongside --session", () => {
+    const resolved = resolveAgentResumeLaunch({
+      agent: runningAgent({
+        agentId: "kilo",
+        launch: {
+          agentId: "kilo",
+          command: "kilo --cloud-fork --session old",
+          cwd: "/repo",
+        },
+      }),
+      cwd: "/repo",
+    });
+
+    expect(resolved.resumed).toBe(true);
+    expect(resolved.launch.command).toBe("kilo --session session-123");
   });
 
   it("strips equals-form --resume when appending a space-form resume flag", () => {
