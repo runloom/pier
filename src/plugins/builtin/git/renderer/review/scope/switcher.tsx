@@ -10,12 +10,12 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitReviewTarget } from "@shared/contracts/git/review.ts";
 import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
 import { ChevronDown } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { pluginText } from "../plugin-text.ts";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { pluginText } from "../../plugin-text.ts";
 import {
   GitReviewBranchCombobox,
   GitReviewCommitCombobox,
-} from "./scope-comboboxes.tsx";
+} from "./comboboxes.tsx";
 
 /** 与 loomdesk 一致的默认对比分支优先级(排除当前分支)。 */
 const DEFAULT_TARGET_BRANCH_NAMES = [
@@ -56,7 +56,10 @@ export function GitReviewScopeSwitcher({
   readonly context: RendererPluginContext;
   readonly gitRootPath: string;
   readonly onSelectTarget: (target: GitReviewTarget) => void;
-  readonly onTargetSelectionPendingChange?: (pending: boolean) => void;
+  readonly onTargetSelectionPendingChange?: (
+    pending: boolean,
+    scopeKind?: "branch" | "commit"
+  ) => void;
   readonly target: GitReviewTarget;
 }): React.JSX.Element {
   // 切到 commit/branch 后 target 尚未变化(自动/手动选定目标前);pending 驱动 UI。
@@ -67,6 +70,20 @@ export function GitReviewScopeSwitcher({
   // 自动选取效果只应由 pendingKind 驱动;回调经 ref 消费避免随渲染重跑。
   const onSelectTargetRef = useRef(onSelectTarget);
   onSelectTargetRef.current = onSelectTarget;
+  const pendingKindRef = useRef(pendingKind);
+  pendingKindRef.current = pendingKind;
+
+  // 列表勾选走面板 session，不会经过下面 combobox 的 onSelectTarget 包装。
+  // 目标已经落到 pending 的 kind 时立刻清 pending，让自动选取 effect cleanup
+  // 把 cancelled 置位，避免 in-flight 最新提交把用户勾选盖掉。
+  useLayoutEffect(() => {
+    if (pendingKind === null || target.kind !== pendingKind) {
+      return;
+    }
+    pendingKindRef.current = null;
+    setPendingKind(null);
+    onTargetSelectionPendingChange?.(false);
+  }, [onTargetSelectionPendingChange, pendingKind, target.kind]);
   const scopeLabels: Record<GitReviewScopeKind, string> = {
     branch: pluginText(context, "reviewScopeBranch", "Branch"),
     commit: pluginText(context, "reviewScopeCommit", "Commit"),
@@ -92,7 +109,7 @@ export function GitReviewScopeSwitcher({
     context.git
       .searchCommits(gitRootPath, { limit: 1, query: "" })
       .then((result) => {
-        if (cancelled) {
+        if (cancelled || pendingKindRef.current !== "commit") {
           return;
         }
         if (result.status !== "ok") {
@@ -147,7 +164,7 @@ export function GitReviewScopeSwitcher({
         query: "",
       })
       .then((result) => {
-        if (cancelled) {
+        if (cancelled || pendingKindRef.current !== "branch") {
           return;
         }
         if (result.status !== "ok") {
@@ -195,7 +212,11 @@ export function GitReviewScopeSwitcher({
           if (value === "commit" || value === "branch") {
             const nextPendingKind = value === target.kind ? null : value;
             setPendingKind(nextPendingKind);
-            onTargetSelectionPendingChange?.(nextPendingKind !== null);
+            if (nextPendingKind === null) {
+              onTargetSelectionPendingChange?.(false);
+            } else {
+              onTargetSelectionPendingChange?.(true, nextPendingKind);
+            }
           }
         }}
         value={kind}
@@ -234,11 +255,14 @@ export function GitReviewScopeSwitcher({
         <GitReviewCommitCombobox
           context={context}
           gitRootPath={gitRootPath}
-          onPick={(commit) => {
+          onSelectTarget={(next) => {
             setPendingKind(null);
             onTargetSelectionPendingChange?.(false);
-            onSelectTarget({ kind: "commit", oid: commit.hash });
+            onSelectTarget(next);
           }}
+          selectedFromOid={
+            target.kind === "commit" ? (target.fromOid ?? null) : null
+          }
           selectedOid={target.kind === "commit" ? target.oid : null}
         />
       ) : null}

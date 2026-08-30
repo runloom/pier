@@ -1148,6 +1148,129 @@ describe("GitReviewIndexReader", () => {
     });
   });
 
+  it("commit fromOid 返回 oldest^..newest 的净变化", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "note.ts"), "one\n", "utf8");
+    const first = await commitAll(root, "one");
+    await writeFile(join(root, "note.ts"), "two\n", "utf8");
+    await writeFile(join(root, "extra.ts"), "extra\n", "utf8");
+    const second = await commitAll(root, "two");
+    await writeFile(join(root, "note.ts"), "three\n", "utf8");
+    const third = await commitAll(root, "three");
+    await writeFile(join(root, "dirty.ts"), "dirty\n", "utf8");
+    const reader = new GitReviewIndexReader();
+
+    const range = await reader.read({
+      scope: {
+        contextId: "worktree:commit-range",
+        gitRootPath: root,
+        target: { fromOid: second, kind: "commit", oid: third },
+      },
+    });
+    expect(range).toMatchObject({
+      entries: expect.arrayContaining([
+        expect.objectContaining({ path: "extra.ts", status: "added" }),
+        expect.objectContaining({ path: "note.ts", status: "modified" }),
+      ]),
+      groupSummaries: {
+        committed: {
+          changedFiles: 2,
+          deletions: 1,
+          excludedFiles: 0,
+          insertions: 2,
+          kind: "lineDelta",
+        },
+      },
+      kind: "ok",
+    });
+    if (range.kind === "ok") {
+      expect(range.entries.map((entry) => entry.path)).not.toContain(
+        "dirty.ts"
+      );
+    }
+
+    const reversed = await reader.read({
+      scope: {
+        contextId: "worktree:commit-range",
+        gitRootPath: root,
+        target: { fromOid: third, kind: "commit", oid: second },
+      },
+    });
+    expect(reversed).toMatchObject({
+      entries: expect.arrayContaining([
+        expect.objectContaining({ path: "extra.ts", status: "added" }),
+        expect.objectContaining({ path: "note.ts", status: "modified" }),
+      ]),
+      kind: "ok",
+    });
+
+    const onlyThird = await reader.read({
+      scope: {
+        contextId: "worktree:commit-range",
+        gitRootPath: root,
+        target: { kind: "commit", oid: third },
+      },
+    });
+    if (onlyThird.kind === "ok") {
+      expect(onlyThird.entries.map((entry) => entry.path)).toEqual(["note.ts"]);
+    }
+
+    const sameEnds = await reader.read({
+      scope: {
+        contextId: "worktree:commit-range",
+        gitRootPath: root,
+        target: { fromOid: third, kind: "commit", oid: third },
+      },
+    });
+    expect(sameEnds).toMatchObject({ kind: "ok" });
+    if (sameEnds.kind === "ok" && onlyThird.kind === "ok") {
+      expect(sameEnds.entries.map((entry) => entry.path)).toEqual(
+        onlyThird.entries.map((entry) => entry.path)
+      );
+    }
+
+    const spanningRoot = await reader.read({
+      scope: {
+        contextId: "worktree:commit-range",
+        gitRootPath: root,
+        target: { fromOid: first, kind: "commit", oid: third },
+      },
+    });
+    expect(spanningRoot).toMatchObject({
+      entries: expect.arrayContaining([
+        expect.objectContaining({ path: "note.ts", status: "added" }),
+        expect.objectContaining({ path: "extra.ts", status: "added" }),
+      ]),
+      kind: "ok",
+    });
+  });
+
+  it("commit fromOid 无祖先关系时返回不可重试 invalidSource", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "base.ts"), "base\n", "utf8");
+    const base = await commitAll(root, "base");
+    await execGit(["switch", "-c", "left"], { cwd: root });
+    await writeFile(join(root, "left.ts"), "left\n", "utf8");
+    const left = await commitAll(root, "left");
+    await execGit(["switch", "-c", "right", base], { cwd: root });
+    await writeFile(join(root, "right.ts"), "right\n", "utf8");
+    const right = await commitAll(root, "right");
+
+    await expect(
+      new GitReviewIndexReader().read({
+        scope: {
+          contextId: "worktree:commit-range-divergent",
+          gitRootPath: root,
+          target: { fromOid: left, kind: "commit", oid: right },
+        },
+      })
+    ).resolves.toMatchObject({
+      kind: "error",
+      reason: "invalidSource",
+      retryable: false,
+    });
+  });
+
   it("commit 目标 revision 不存在时返回不可重试 invalidSource", async () => {
     const root = await createRepository();
     await writeFile(join(root, "base.ts"), "base\n", "utf8");

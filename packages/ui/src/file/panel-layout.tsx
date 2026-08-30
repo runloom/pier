@@ -184,7 +184,7 @@ export function FilePanelHeader({
       data-slot="file-panel-header"
     >
       {leading ? (
-        <div className="flex shrink-0 items-center">{leading}</div>
+        <div className="flex min-w-0 items-center">{leading}</div>
       ) : null}
       <div className="flex min-w-0 flex-1 items-center overflow-hidden">
         {center}

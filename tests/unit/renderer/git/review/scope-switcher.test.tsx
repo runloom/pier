@@ -1,5 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import { GitReviewScopeSwitcher } from "@plugins/builtin/git/renderer/review/scope-switcher.tsx";
+import { GitReviewScopeSwitcher } from "@plugins/builtin/git/renderer/review/scope/switcher.tsx";
 import type {
   GitCommit,
   GitCommitSearchResult,
@@ -137,7 +137,7 @@ describe("GitReviewScopeSwitcher 自动选取", () => {
         oid: HASH,
       });
     });
-    expect(onTargetSelectionPendingChange).toHaveBeenCalledWith(true);
+    expect(onTargetSelectionPendingChange).toHaveBeenCalledWith(true, "commit");
     expect(onTargetSelectionPendingChange).toHaveBeenLastCalledWith(false);
     expect(notifyError).not.toHaveBeenCalled();
   });
@@ -199,7 +199,7 @@ describe("GitReviewScopeSwitcher 自动选取", () => {
         ref: "main",
       });
     });
-    expect(onTargetSelectionPendingChange).toHaveBeenCalledWith(true);
+    expect(onTargetSelectionPendingChange).toHaveBeenCalledWith(true, "branch");
     expect(onTargetSelectionPendingChange).toHaveBeenLastCalledWith(false);
     expect(notifyError).not.toHaveBeenCalled();
   });
@@ -242,6 +242,49 @@ describe("GitReviewScopeSwitcher 自动选取", () => {
     expect(screen.getByTestId("git-review-scope-switcher")).toHaveTextContent(
       "Uncommitted"
     );
+  });
+
+  it("目标已落到提交时取消自动选取，不覆盖用户勾选", async () => {
+    let resolveSearch: (result: GitCommitSearchResult) => void = () =>
+      undefined;
+    const { context } = switcherContext({
+      searchCommits: () =>
+        new Promise<GitCommitSearchResult>((resolve) => {
+          resolveSearch = resolve;
+        }),
+    });
+    const onSelectTarget = vi.fn();
+    const onTargetSelectionPendingChange = vi.fn();
+    const { rerender } = render(
+      <GitReviewScopeSwitcher
+        context={context}
+        gitRootPath="/repo"
+        onSelectTarget={onSelectTarget}
+        onTargetSelectionPendingChange={onTargetSelectionPendingChange}
+        target={{ kind: "uncommitted" }}
+      />
+    );
+    await selectScope("Commit");
+    expect(screen.getByTestId("git-review-commit-combobox")).toBeVisible();
+    const userOid = "c".repeat(40);
+    rerender(
+      <GitReviewScopeSwitcher
+        context={context}
+        gitRootPath="/repo"
+        onSelectTarget={onSelectTarget}
+        onTargetSelectionPendingChange={onTargetSelectionPendingChange}
+        target={{ kind: "commit", oid: userOid }}
+      />
+    );
+    resolveSearch(
+      commitsResult([
+        { author: "dev", date: "2026-07-20", hash: HASH, message: "feat" },
+      ])
+    );
+    await waitFor(() => {
+      expect(onTargetSelectionPendingChange).toHaveBeenLastCalledWith(false);
+    });
+    expect(onSelectTarget).not.toHaveBeenCalled();
   });
 
   it("手动选取前的等待期不误报(成功路径不触发提示)", async () => {
