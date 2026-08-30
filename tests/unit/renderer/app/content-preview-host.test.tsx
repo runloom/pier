@@ -156,6 +156,53 @@ describe("ContentPreviewHost", () => {
     ).toBeNull();
   });
 
+  it("pins the overlay color mode when the image payload carries one", async () => {
+    render(<ContentPreviewHost />);
+    openImagePreview({
+      alt: "diagram",
+      colorMode: "light",
+      source: { kind: "url", src: "data:image/svg+xml,%3Csvg/%3E" },
+      title: "preview",
+    });
+    // The token scope lives on the overlay root so backdrop, header chrome,
+    // and zoom controls all follow the baked image's paper, not app chrome.
+    expect(await screen.findByTestId("content-preview")).toHaveAttribute(
+      "data-color-mode",
+      "light"
+    );
+  });
+
+  it("follows the app theme when the image payload has no color mode", async () => {
+    render(<ContentPreviewHost />);
+    openImagePreview({
+      alt: "inline",
+      source: { kind: "url", src: "data:image/png;base64,xx" },
+      title: "preview",
+    });
+    expect(await screen.findByTestId("content-preview")).not.toHaveAttribute(
+      "data-color-mode"
+    );
+  });
+
+  it("portals the zoom preset menu into the overlay token scope", async () => {
+    render(<ContentPreviewHost />);
+    openImagePreview({
+      alt: "diagram",
+      colorMode: "light",
+      source: { kind: "url", src: "data:image/svg+xml,%3Csvg/%3E" },
+      title: "preview",
+    });
+    const overlay = await screen.findByTestId("content-preview");
+    // Radix dropdowns open on pointerdown, not click.
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: /fit|适应窗口/i }),
+      { button: 0, pointerType: "mouse" }
+    );
+    const menu = await screen.findByRole("menu");
+    // Inside the overlay root so data-color-mode tokens reach the menu.
+    expect(overlay.contains(menu)).toBe(true);
+  });
+
   it("opens a url source without a loading skeleton", async () => {
     render(<ContentPreviewHost />);
     openImagePreview({

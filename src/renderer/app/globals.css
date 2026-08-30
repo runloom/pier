@@ -541,18 +541,26 @@
 }
 
 /*
- * Markdown preview paper appearance (files plugin).
- * Independent of app chrome: only the preview root sets
- * data-reading-appearance="light"|"dark". "auto" omits the attribute and
- * inherits app tokens. Values mirror :root / :root.light neutral shells AND
+ * Fixed light/dark token scopes, independent of app chrome. Two consumers:
+ * - Markdown preview paper (files plugin): the preview root sets
+ *   data-reading-appearance="light"|"dark"; "auto" omits the attribute and
+ *   inherits app tokens.
+ * - Host fullscreen content preview: image payloads may pin
+ *   data-color-mode="light"|"dark" so the whole overlay (backdrop, header
+ *   chrome, zoom controls) matches a baked image, e.g. a diagram rendered
+ *   against a fixed reading paper.
+ * Values mirror :root / :root.light neutral shells AND
  * status hues so prose, code chrome, TOC, callouts, search marks, Mermaid
  * tones, and scrollbars stay consistent. Root-level composite variables
  * (scrollbar thumb, status-neutral/done, interactive hover, action
  * secondary hover) resolve at declaration and inherit baked — they must
  * be re-declared here with the same formulas. Do not mirror toast tokens
  * (toasts portal outside the paper).
+ * Selector lists keep the markdown selector LAST: governance tests match
+ * `<markdown-selector>\s*{`.
  * Parity lock: tests/unit/renderer/app/color-token-governance.test.ts.
  */
+[data-slot="content-preview"][data-color-mode="light"],
 [data-slot="markdown-preview-root"][data-reading-appearance="light"] {
   color-scheme: light;
   --background: oklch(1 0 0);
@@ -641,6 +649,7 @@
   --status-done-border: color-mix(in oklab, var(--done) 24%, transparent);
 }
 
+[data-slot="content-preview"][data-color-mode="dark"],
 [data-slot="markdown-preview-root"][data-reading-appearance="dark"] {
   color-scheme: dark;
   --background: oklch(0.13 0 0);

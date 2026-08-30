@@ -345,6 +345,8 @@ export interface RendererPluginContext {
     close(): void;
     openImage(request: {
       alt?: string;
+      /** Fixed overlay color mode (e.g. baked reading paper); omit = app theme. */
+      colorMode?: "light" | "dark";
       /** Release media owned by this preview when it closes or is replaced. */
       onClose?: () => void;
       source: { kind: "url"; src: string };

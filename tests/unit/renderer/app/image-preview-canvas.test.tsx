@@ -3,6 +3,10 @@ import {
   ImagePreviewCanvas,
   measureContainScale,
 } from "@pier/ui/image-preview/canvas.tsx";
+import {
+  VIEWPORT_CONTROLS_INSET_PX,
+  VIEWPORT_PADDING_PX,
+} from "@pier/ui/image-preview/canvas-math.ts";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -45,6 +49,32 @@ describe("image preview zoom anchoring helpers", () => {
         viewportWidth: 400,
       })
     ).toBe(1);
+  });
+
+  it("fits into the area above the reserved controls band", () => {
+    // Derived (not hardcoded) so the test diverges loudly if the constants or
+    // the pb-16 pairing ever drift from the hook's fit math.
+    const paddingYPx = VIEWPORT_PADDING_PX / 2 + VIEWPORT_CONTROLS_INSET_PX;
+    // 12 top + 64 controls inset = 76: vertical fit dominates.
+    expect(
+      measureContainScale({
+        naturalHeight: 300,
+        naturalWidth: 300,
+        paddingYPx,
+        viewportHeight: 200,
+        viewportWidth: 200,
+      })
+    ).toBe(0.4133);
+    // Horizontal padding still defaults to the symmetric viewport padding.
+    expect(
+      measureContainScale({
+        naturalHeight: 100,
+        naturalWidth: 300,
+        paddingYPx,
+        viewportHeight: 200,
+        viewportWidth: 200,
+      })
+    ).toBe(0.5867);
   });
 
   it("keeps the viewport center stable across zoom changes", () => {
@@ -103,6 +133,42 @@ describe("ImagePreviewCanvas", () => {
     for (let index = 0; index < 40; index += 1) fireEvent.click(zoomIn);
     expect(screen.getByText("800%")).toBeVisible();
     expect(zoomIn).toBeDisabled();
+  });
+
+  it("portals the zoom preset menu to document.body outside an overlay scope", async () => {
+    // No ImagePreviewPortalContainerContext provider here: the Radix fallback
+    // (container ?? document.body) keeps world-canvas / mermaid stage chrome
+    // outside ContentPreviewHost working.
+    const { container } = render(
+      <ImagePreviewCanvas
+        alt="shot"
+        labels={labels}
+        src="data:image/png;base64,xx"
+        status="ready"
+      />
+    );
+    fireEvent.pointerDown(screen.getByRole("button", { name: /zoom level/i }), {
+      button: 0,
+      pointerType: "mouse",
+    });
+    const menu = await screen.findByRole("menu");
+    expect(container.contains(menu)).toBe(false);
+    expect(document.body.contains(menu)).toBe(true);
+  });
+
+  it("reserves a bottom inset on the viewport for the floating controls", () => {
+    render(
+      <ImagePreviewCanvas
+        alt="shot"
+        labels={labels}
+        src="data:image/png;base64,xx"
+        status="ready"
+      />
+    );
+    const viewport = screen.getByRole("region", { name: "Image viewer" });
+    // pb-16 keeps resting / fit content clear of the zoom pill; the constant
+    // paired with it is VIEWPORT_CONTROLS_INSET_PX in canvas-math.ts.
+    expect(viewport.className).toContain("pb-16");
   });
 
   it("hides scrollbars and uses grab cursor when zoomed for drag-pan", async () => {

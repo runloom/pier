@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "../dropdown-menu.tsx";
 import { MAX_ZOOM, MIN_ZOOM, PRESET_ZOOM_LEVELS } from "./canvas-math.ts";
+import { useImagePreviewPortalContainer } from "./portal-scope.ts";
 
 export interface ImagePreviewCanvasLabels {
   actualSize: string;
@@ -50,6 +51,9 @@ export function ImagePreviewControls({
   zoom: number | "fit";
 }) {
   const [copying, setCopying] = useState(false);
+  // Portal into the pinned color-mode overlay (when hosted inside one) so the
+  // zoom preset menu inherits the scoped tokens instead of the app theme.
+  const portalContainer = useImagePreviewPortalContainer();
   const handleCopy = useCallback(async () => {
     if (copying || !onCopyImage) {
       return;
@@ -101,7 +105,12 @@ export function ImagePreviewControls({
               <ChevronDown data-icon="inline-end" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="center" className="min-w-44" side="top">
+          <DropdownMenuContent
+            align="center"
+            className="min-w-44"
+            container={portalContainer}
+            side="top"
+          >
             <DropdownMenuRadioGroup
               onValueChange={(value) =>
                 onZoomChange(value === "fit" ? "fit" : Number(value))

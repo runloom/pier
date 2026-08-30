@@ -241,7 +241,9 @@ export function ImagePreviewCanvas({
         aria-busy={resolvedStatus === "loading"}
         aria-label={labels.viewerLabel}
         className={cn(
-          "absolute inset-0 flex overflow-auto bg-background p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset",
+          // pb-16 reserves the bottom band for the floating zoom pill
+          // (VIEWPORT_CONTROLS_INSET_PX) so content never rests under it.
+          "absolute inset-0 flex overflow-auto bg-background p-3 pb-16 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset",
           pan.canPan && (pan.panning ? "cursor-grabbing" : "cursor-grab"),
           pan.panning && "select-none"
         )}

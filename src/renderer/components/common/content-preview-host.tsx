@@ -1,8 +1,16 @@
 import { Button } from "@pier/ui/button.tsx";
+import { ImagePreviewPortalContainerContext } from "@pier/ui/image-preview/portal-scope.ts";
 import { HtmlWorldCanvas } from "@pier/ui/image-preview/world-canvas.tsx";
 import { Mermaid } from "@pier/ui/mermaid.tsx";
 import { X } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { acquireTerminalSurfaceSuppression } from "@/panel-kits/terminal/layout-coordinator.ts";
 import {
@@ -168,6 +176,16 @@ export function ContentPreviewHost() {
   const title = useContentPreviewStore((state) => state.title);
   const payload = useContentPreviewStore((state) => state.payload);
   const rootRef = useRef<HTMLDivElement>(null);
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
+  // Stable identity: an inline ref would detach/attach on every host render,
+  // churning the portal-container context (null → node) and double-rendering
+  // consumers.
+  const handleRootRef = useCallback((node: HTMLDivElement | null) => {
+    rootRef.current = node;
+    // Publish as the portal container so floating chrome (zoom preset menu)
+    // stays inside the color-mode token scope.
+    setRootEl(node);
+  }, []);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -216,62 +234,73 @@ export function ContentPreviewHost() {
     return null;
   }
 
+  // Image payloads may pin a fixed color mode (e.g. markdown reading paper);
+  // the token scope on this root recolors backdrop, header chrome, and the
+  // zoom controls in one pass. text-foreground matters: ghost controls only
+  // set hover colors and otherwise inherit currentColor — without it the
+  // subtree keeps the app theme's foreground over the flipped background.
+  const colorMode = payload.type === "image" ? payload.colorMode : undefined;
+
   return (
     <div
       aria-label={title || t("dialog.contentPreview.title")}
       aria-modal="true"
-      className="app-no-drag fixed inset-0 z-40 bg-background outline-none"
+      className="app-no-drag fixed inset-0 z-40 bg-background text-foreground outline-none"
+      data-color-mode={colorMode}
+      data-slot="content-preview"
       data-testid="content-preview"
-      ref={rootRef}
+      ref={handleRootRef}
       role="dialog"
       tabIndex={-1}
     >
-      {/*
+      <ImagePreviewPortalContainerContext.Provider value={rootEl}>
+        {/*
         pt-14 reserves the floating title / close band so images, mermaid, and
         node graphs never layout under the chrome (header is still painted on
         top for legibility over pan/zoom edges).
       */}
-      <div
-        className="absolute inset-0 z-0 flex flex-col pt-14"
-        data-testid="content-preview-stage"
-      >
-        <PreviewBody payload={payload} />
-      </div>
-      {/*
+        <div
+          className="absolute inset-0 z-0 flex flex-col pt-14"
+          data-testid="content-preview-stage"
+        >
+          <PreviewBody payload={payload} />
+        </div>
+        {/*
         Chrome sits above the zoom/pan stage (DOM order + z-index). The preview
         root stays no-drag so pan/zoom does not move the window. The reserved
         title band is the drag handle; close opts out so the click is not
         swallowed, and also stops pointer propagation so canvas pan cannot
         steal it.
       */}
-      <div
-        className="app-drag absolute inset-x-0 top-0 z-50 flex h-14 items-start justify-center px-14 py-3"
-        data-testid="content-preview-header"
-      >
-        <div className="min-w-0 max-w-full select-none truncate text-center text-foreground text-sm">
-          {title}
+        <div
+          className="app-drag absolute inset-x-0 top-0 z-50 flex h-14 items-start justify-center px-14 py-3"
+          data-testid="content-preview-header"
+        >
+          <div className="min-w-0 max-w-full select-none truncate text-center text-foreground text-sm">
+            {title}
+          </div>
+          <div className="app-no-drag pointer-events-auto absolute top-2 right-2">
+            <Button
+              aria-label={t("dialog.close")}
+              className="app-no-drag border-border bg-background shadow-sm hover:bg-muted hover:text-foreground"
+              data-testid="content-preview-close"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                closeContentPreview();
+              }}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              <X data-icon />
+            </Button>
+          </div>
         </div>
-        <div className="app-no-drag pointer-events-auto absolute top-2 right-2">
-          <Button
-            aria-label={t("dialog.close")}
-            className="app-no-drag border-border bg-background shadow-sm hover:bg-muted hover:text-foreground"
-            data-testid="content-preview-close"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              closeContentPreview();
-            }}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-            }}
-            size="icon-sm"
-            type="button"
-            variant="outline"
-          >
-            <X data-icon />
-          </Button>
-        </div>
-      </div>
+      </ImagePreviewPortalContainerContext.Provider>
     </div>
   );
 }

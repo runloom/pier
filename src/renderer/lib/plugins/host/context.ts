@@ -412,6 +412,7 @@ export function createRendererPluginContext(
       openImage: (request) =>
         openImagePreview({
           ...(request.alt ? { alt: request.alt } : {}),
+          ...(request.colorMode ? { colorMode: request.colorMode } : {}),
           ...(request.onClose ? { onClose: request.onClose } : {}),
           source: request.source,
           title: request.title,

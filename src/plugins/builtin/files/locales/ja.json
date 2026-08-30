@@ -58,7 +58,6 @@
     "filePanel.markdown.diagramFailed": "図を描画できません",
     "filePanel.markdown.diagramLabel": "Mermaid 図",
     "filePanel.markdown.diagramPreviewTitle": "図のプレビュー",
-    "filePanel.markdown.diagramScaledHint": "図が縮小表示されています。クリックで全画面表示",
     "filePanel.markdown.imagePreviewFailed": "画像プレビューを開けません",
     "filePanel.markdown.imagePreviewTitle": "画像",
     "filePanel.markdown.openFullscreen": "全画面で表示",

@@ -2,11 +2,9 @@ import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
 import { bakeSvgForStandalonePreview } from "@pier/ui/image-preview/bake-svg-for-standalone-preview.ts";
 import { MediaFullscreenButton } from "@pier/ui/image-preview/media-fullscreen-button.tsx";
 import { isPlainSurfaceClick } from "@pier/ui/media/surface-open.ts";
-import { isDiagramShrunk } from "@pier/ui/mermaid/scene.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import { Maximize2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applySvgDisplaySize,
@@ -22,15 +20,20 @@ import { forwardWheelToMarkdownPreview } from "./scroll-handoff.ts";
 
 export function MarkdownDiagram({
   charts,
+  colorMode,
   contentPreview,
   errorLabel,
   label,
   openFullscreenLabel,
   previewTitle,
-  shrinkHintLabel,
   source,
 }: {
   charts: RendererPluginContext["charts"];
+  /**
+   * Resolved preview color mode (fixed reading paper wins over app chrome).
+   * The fullscreen overlay pins the same mode so chrome and baked SVG agree.
+   */
+  colorMode: "dark" | "light";
   contentPreview:
     | Pick<RendererPluginContext["contentPreview"], "openImage">
     | undefined;
@@ -38,8 +41,6 @@ export function MarkdownDiagram({
   label: string;
   openFullscreenLabel: string;
   previewTitle: string;
-  /** Copy for the scale-down hint chip; omit for icon-only. */
-  shrinkHintLabel?: string | undefined;
   source: string;
 }) {
   const [state, setState] = useState<
@@ -53,7 +54,6 @@ export function MarkdownDiagram({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [shellEl, setShellEl] = useState<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
-  const [scaledDown, setScaledDown] = useState(false);
   const blockHeightLimit = useMarkdownPreviewPrefsStore(
     (state) => state.blockHeightLimit
   );
@@ -136,7 +136,6 @@ export function MarkdownDiagram({
     if (!(slotWidth > 0)) {
       slotWidth = intrinsic.width;
     }
-    setScaledDown(isDiagramShrunk(intrinsic.width, slotWidth));
     const display = computeNaturalCappedSize(intrinsic, slotWidth, 1);
     applySvgDisplaySize(svg, display);
     root.replaceChildren(svg);
@@ -151,6 +150,7 @@ export function MarkdownDiagram({
     const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
     contentPreview.openImage({
       alt: label,
+      colorMode,
       source: { kind: "url", src },
       title: previewTitle,
     });
@@ -212,16 +212,6 @@ export function MarkdownDiagram({
           onClick={openPreview}
         />
       ) : null}
-      {contentPreview && displaySvg && scaledDown ? (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute right-2 bottom-2 z-10 flex items-center gap-1 rounded-full border bg-background/90 px-2 py-0.5 text-muted-foreground text-xs shadow-sm"
-          data-slot="markdown-diagram-shrink-hint"
-        >
-          {shrinkHintLabel ? <span>{shrinkHintLabel}</span> : null}
-          <Maximize2 className="size-3" />
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -269,9 +259,3 @@ function parseSafeSvg(source: string): SVGElement | null {
   }
   return svg as unknown as SVGElement;
 }
-
-/** @deprecated Prefer `@pier/ui/image-preview/bake-svg-for-standalone-preview`. */
-export {
-  bakeMermaidSvgForStandalonePreview,
-  bakeSvgForStandalonePreview,
-} from "@pier/ui/image-preview/bake-svg-for-standalone-preview.ts";
