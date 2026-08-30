@@ -12,6 +12,7 @@ import type {
   GitReviewTarget,
 } from "@shared/contracts/git/review.ts";
 import {
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -29,7 +30,11 @@ import {
   readGitReviewScope,
   readPendingReveal,
 } from "./pending-reveal-params.ts";
-import { createReviewCollidingFileLabel, pluginText } from "./plugin-text.ts";
+import {
+  createReviewCollidingFileLabel,
+  gitReviewEmptyDescription,
+  pluginText,
+} from "./plugin-text.ts";
 import {
   ReviewErrorEmpty,
   ReviewFailureEmpty,
@@ -38,7 +43,8 @@ import {
 } from "./review/feedback.tsx";
 import { GitReviewMutationAuthority } from "./review/mutation-authority.ts";
 import { GitReviewPanelLayout } from "./review/panel-layout.tsx";
-import { GitReviewScopeSwitcher } from "./review/scope-switcher.tsx";
+import { GitReviewCommitPickerSession } from "./review/scope/comboboxes.tsx";
+import { GitReviewScopeSwitcher } from "./review/scope/switcher.tsx";
 import { clearReviewSessionsForScope } from "./review/session-cache.ts";
 import type { PendingCommentReveal } from "./review/surface-types.ts";
 import { ReviewDocuments } from "./review/surfaces.tsx";
@@ -198,6 +204,9 @@ function GitChangesPanelBody({
   const [targetSelectionSourceKey, setTargetSelectionSourceKey] = useState<
     string | null
   >(null);
+  const [pendingScopeKind, setPendingScopeKind] = useState<
+    "branch" | "commit" | null
+  >(null);
   // sourceKey 切走后丢弃挂起标记，避免同一 key 被恢复时误进无限 loading。
   useEffect(() => {
     if (
@@ -205,13 +214,15 @@ function GitChangesPanelBody({
       targetSelectionSourceKey !== sourceKey
     ) {
       setTargetSelectionSourceKey(null);
+      setPendingScopeKind(null);
     }
   }, [sourceKey, targetSelectionSourceKey]);
   const targetSelectionPending =
     sourceKey !== null && targetSelectionSourceKey === sourceKey;
   const onTargetSelectionPendingChange = useCallback(
-    (pending: boolean) => {
+    (pending: boolean, scopeKind?: "branch" | "commit") => {
       setTargetSelectionSourceKey(pending ? sourceKey : null);
+      setPendingScopeKind(pending ? (scopeKind ?? null) : null);
     },
     [sourceKey]
   );
@@ -353,9 +364,10 @@ function GitChangesPanelBody({
       </GitReviewPanelLayout>
     );
   }
+  let panel: ReactNode;
   // index 冷加载：正文 + 侧栏树都走骨架（树条用 foreground 淡色，sidebar 底≠muted）
   if (state.kind === "loading") {
-    return (
+    panel = (
       <GitReviewPanelLayout
         context={context}
         contextId={source.contextId}
@@ -370,10 +382,9 @@ function GitChangesPanelBody({
         <ReviewLoading context={context} />
       </GitReviewPanelLayout>
     );
-  }
-  if (state.kind === "error") {
+  } else if (state.kind === "error") {
     // index 失败时 entries 恒为空：与成功空态一致，不传树 props（无空侧栏）。
-    return (
+    panel = (
       <GitReviewPanelLayout
         context={context}
         contextId={source.contextId}
@@ -394,9 +405,8 @@ function GitChangesPanelBody({
         />
       </GitReviewPanelLayout>
     );
-  }
-  if (entries.length > 0) {
-    return (
+  } else if (entries.length > 0) {
+    panel = (
       <div aria-busy={state.refreshing || undefined} className="h-full min-h-0">
         <ReviewDocuments
           context={context}
@@ -424,64 +434,57 @@ function GitChangesPanelBody({
         />
       </div>
     );
-  }
-  // 无变更：不挂树侧栏（避免空目录树黑区）；主区 Empty 为唯一占位。
-  return (
-    <GitReviewPanelLayout
-      context={context}
-      contextId={source.contextId}
-      gitRootPath={source.gitRootPath}
-      headerLeading={scopeSwitcher}
-      setSidebarCollapsed={setSidebarCollapsed}
-      sidebarCollapsed={sidebarCollapsed}
-    >
-      <div
-        aria-busy={state.refreshing || undefined}
-        className="flex h-full min-h-0 flex-col bg-background"
+  } else {
+    // 无变更：不挂树侧栏（避免空目录树黑区）；主区 Empty 为唯一占位。
+    panel = (
+      <GitReviewPanelLayout
+        context={context}
+        contextId={source.contextId}
+        gitRootPath={source.gitRootPath}
+        headerLeading={scopeSwitcher}
+        setSidebarCollapsed={setSidebarCollapsed}
+        sidebarCollapsed={sidebarCollapsed}
       >
-        <ReviewFeedback
-          context={context}
-          failures={[]}
-          indexFailure={state.refreshFailure}
-          onRetryIndex={retryIndex}
-        />
-        <Empty className="h-full">
-          <EmptyHeader>
-            <EmptyTitle>
-              {pluginText(context, "reviewEmptyTitle", "No changes")}
-            </EmptyTitle>
-            <EmptyDescription>
-              {emptyDescription(context, source.target)}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </div>
-    </GitReviewPanelLayout>
-  );
-}
-
-function emptyDescription(
-  context: RendererPluginContext,
-  target: GitReviewTarget
-): string {
-  if (target.kind === "commit") {
-    return pluginText(
-      context,
-      "reviewEmptyDescriptionCommit",
-      "The selected commit has no file changes."
+        <div
+          aria-busy={state.refreshing || undefined}
+          className="flex h-full min-h-0 flex-col bg-background"
+        >
+          <ReviewFeedback
+            context={context}
+            failures={[]}
+            indexFailure={state.refreshFailure}
+            onRetryIndex={retryIndex}
+          />
+          <Empty className="h-full">
+            <EmptyHeader>
+              <EmptyTitle>
+                {pluginText(context, "reviewEmptyTitle", "No changes")}
+              </EmptyTitle>
+              <EmptyDescription>
+                {gitReviewEmptyDescription(context, source.target)}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </div>
+      </GitReviewPanelLayout>
     );
   }
-  if (target.kind === "branch") {
-    return pluginText(
-      context,
-      "reviewEmptyDescriptionBranch",
-      "The current branch has no changes relative to {{branch}}.",
-      { branch: target.ref }
-    );
-  }
-  return pluginText(
-    context,
-    "reviewEmptyDescription",
-    "The working tree has no staged or unstaged changes."
+  const commitPickerEnabled =
+    pendingScopeKind === "commit" ||
+    (pendingScopeKind === null && source.target.kind === "commit");
+  return (
+    <GitReviewCommitPickerSession
+      context={context}
+      enabled={commitPickerEnabled}
+      gitRootPath={source.gitRootPath}
+      onSelectTarget={onSelectTarget}
+      selectedFromOid={
+        source.target.kind === "commit" ? (source.target.fromOid ?? null) : null
+      }
+      selectedOid={source.target.kind === "commit" ? source.target.oid : null}
+      visible={visible}
+    >
+      {panel}
+    </GitReviewCommitPickerSession>
   );
 }

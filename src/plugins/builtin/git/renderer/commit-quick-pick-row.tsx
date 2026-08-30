@@ -8,17 +8,25 @@ export function shortCommitHash(hash: string): string {
   return hash.slice(0, SHORT_HASH_LENGTH);
 }
 
-export function GitCommitQuickPickRow({ commit }: { commit: GitCommit }) {
+export function GitCommitQuickPickRow({
+  commit,
+  showIcon = true,
+}: {
+  readonly commit: GitCommit;
+  readonly showIcon?: boolean;
+}) {
   const relativeTime = formatRelativeTime(commit.date);
   return (
     <span
       className="flex min-w-0 flex-1 items-center gap-2.5 py-0.5"
       data-commit-picker-row
     >
-      <GitCommitHorizontal
-        aria-hidden="true"
-        className="size-4 shrink-0 text-muted-foreground"
-      />
+      {showIcon ? (
+        <GitCommitHorizontal
+          aria-hidden="true"
+          className="size-4 shrink-0 text-muted-foreground"
+        />
+      ) : null}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span
           className="min-w-0 truncate font-medium text-sm/tight"
