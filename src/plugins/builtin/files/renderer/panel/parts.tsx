@@ -260,8 +260,6 @@ export function EmptyFileState({
   );
 }
 
-const TREE_WIDTH_STORAGE_KEY = "pier.files.filePanel.treeWidthPx";
-
 export function FilePanelShell({
   children,
   header,
@@ -280,7 +278,6 @@ export function FilePanelShell({
       onSidebarAutoCollapse={onSidebarAutoCollapse}
       sidebar={sidebar}
       sidebarPanelId="files-tree"
-      sidebarWidthStorageKey={TREE_WIDTH_STORAGE_KEY}
     >
       {children}
     </FilePanelLayout>
