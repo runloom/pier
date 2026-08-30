@@ -337,11 +337,13 @@ export function withDocumentNormalizedEol(
 
 export function withDocumentError(
   document: FilesDocument,
-  message: string
+  message: string,
+  folderAccessBlocked = false
 ): FilesDocument {
   return {
     ...document,
     error: message,
+    folderAccessBlocked,
     loadState: "error",
   };
 }

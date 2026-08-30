@@ -121,9 +121,22 @@ mac:
   # ICNS-only and removes both CFBundleIconName and Assets.car.
   extendInfo:
     CFBundleIconName: app-icon
+    # TCC 弹窗英文回退；简体中文见 extraResources 的 lproj。来源 scripts/mac-privacy-descriptions.mjs。
+    NSAppleEventsUsageDescription: "Pier needs to control other apps with Apple Events so scripts and commands you run in its terminal (like osascript) work as expected."
+    NSDesktopFolderUsageDescription: "Pier needs access to your Desktop folder so its terminal and file panels can open projects stored there."
+    NSDocumentsFolderUsageDescription: "Pier needs access to your Documents folder so its terminal and file panels can open projects stored there."
+    NSDownloadsFolderUsageDescription: "Pier needs access to your Downloads folder so its terminal and file panels can open projects stored there."
+    NSFileProviderDomainUsageDescription: "Pier needs access to files managed by iCloud Drive or other sync providers so it can open projects stored in those locations."
+    NSNetworkVolumesUsageDescription: "Pier needs access to files on network volumes so it can open projects stored there."
+    NSRemovableVolumesUsageDescription: "Pier needs access to files on removable volumes so it can open projects stored there."
   extraResources:
     - from: build/Assets.car
       to: Assets.car
+    # 简体中文本地化（zh_CN 因 Electron 空目录必须双写）
+    - from: build/zh-Hans.lproj/InfoPlist.strings
+      to: zh-Hans.lproj/InfoPlist.strings
+    - from: build/zh_CN.lproj/InfoPlist.strings
+      to: zh_CN.lproj/InfoPlist.strings
   target:
     - target: dmg
       arch: [arm64, x64]

@@ -36,6 +36,7 @@ import { registerFilePreviewTicketIpc } from "./ipc/file-preview-ticket.ts";
 import { registerFileQueryIpc } from "./ipc/file-query.ts";
 import { registerFileSaveTargetIpc } from "./ipc/file-save-target.ts";
 import { registerFileWatchIpc } from "./ipc/file-watch.ts";
+import { registerFilesFolderPermissionIpc } from "./ipc/files/folder-permission.ts";
 import {
   closeForegroundActivityResources,
   foregroundActivityService,
@@ -334,6 +335,7 @@ if (gotTheLock) {
         windowForSender: (sender) => windowManager.fromWebContents(sender),
       });
       registerFileSaveTargetIpc(ipcMain);
+      registerFilesFolderPermissionIpc(ipcMain);
       registerFilePreviewTicketIpc();
       registerHtmlPreviewTicketIpc();
       registerMediaPreviewIpc();

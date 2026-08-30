@@ -20,6 +20,12 @@ import {
   rootPlistStringValue,
 } from "./mac-helper-icons.mjs";
 import {
+  MAC_FOLDER_USAGE_DESCRIPTIONS,
+  MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS,
+  MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS,
+  renderInfoPlistStrings,
+} from "./mac-privacy-descriptions.mjs";
+import {
   normalizeReleaseVersion,
   recommendedMacReleaseBlockmapNames,
   requiredMacReleaseAssetNames,
@@ -212,6 +218,37 @@ export async function validatePackagedMacApp(appPath, options = {}) {
     errors.push(
       `${appPath}: CFBundleIconName must be ${MAC_ICON_RENDITION_NAME} (received ${iconName ?? "missing"})`
     );
+  }
+
+  // TCC folder prompts show these strings as the only explanation for the
+  // permission request; a bundle without them ships the silent
+  // "Operation not permitted" terminal experience. English lives in the
+  // Info.plist (locale fallback), Simplified Chinese in zh-Hans.lproj.
+  for (const [key, expected] of Object.entries(MAC_FOLDER_USAGE_DESCRIPTIONS)) {
+    const usage = await readPlistValue(plistPath, key);
+    if (usage !== expected) {
+      errors.push(
+        `${appPath}: ${key} must match scripts/mac-privacy-descriptions.mjs (received ${usage ?? "missing"})`
+      );
+    }
+  }
+  for (const relative of MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS) {
+    const localizedStringsPath = join(resources, ...relative.split("/"));
+    try {
+      const localized = await readFile(localizedStringsPath, "utf8");
+      if (
+        localized !==
+        renderInfoPlistStrings(MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS)
+      ) {
+        errors.push(
+          `${appPath}: ${relative} drifted from scripts/mac-privacy-descriptions.mjs (run: node scripts/mac-privacy-descriptions.mjs --write)`
+        );
+      }
+    } catch (error) {
+      errors.push(
+        `${appPath}: missing ${relative} (${error instanceof Error ? error.message : String(error)})`
+      );
+    }
   }
 
   const packagedIcon = join(resources, "icon.icns");

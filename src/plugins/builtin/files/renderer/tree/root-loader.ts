@@ -1,3 +1,4 @@
+import { isFolderAccessBlockedError } from "../editor/errors.ts";
 import {
   type FilesTreeDirectoryLoadDetails,
   type FilesTreeSnapshot,
@@ -51,6 +52,7 @@ export function beginFilesTreeRootLoad(
   session.snapshot = {
     ...session.snapshot,
     rootError: null,
+    rootErrorFolderAccessBlocked: false,
     rootLoading: true,
   };
   emit();
@@ -91,6 +93,7 @@ export function beginFilesTreeRootLoad(
           : new Map(),
         entriesByPath: nextEntriesByPath,
         rootError: null,
+        rootErrorFolderAccessBlocked: false,
         rootLoaded: true,
         rootLoading: false,
       };
@@ -111,6 +114,7 @@ export function beginFilesTreeRootLoad(
           : new Map(),
         entriesByPath: keepPrior ? session.snapshot.entriesByPath : new Map(),
         rootError: toFilesTreeErrorMessage(error, fallbackError),
+        rootErrorFolderAccessBlocked: isFolderAccessBlockedError(error),
         rootLoaded: true,
         rootLoading: false,
       };

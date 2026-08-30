@@ -88,6 +88,10 @@ export function createPluginFilesContext(
       assertPluginCapability(entry, "file:write");
       return window.pier.files.move(request);
     },
+    openFolderPermissionSettings: () => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.files.openFolderPermissionSettings();
+    },
     openInEditor: (request) => {
       assertPluginCapability(entry, "file:read");
       return openFilesDiskPath({

@@ -14,7 +14,23 @@ export interface ClassifiedPath {
 
 export type ClassifyPathResult =
   | ClassifiedPath
-  | { error: { code: PierCommandErrorCode; message: string } };
+  | {
+      error: {
+        code: PierCommandErrorCode;
+        message: string;
+        osCode?: string;
+      };
+    };
+
+function permissionDenied(path: string, osCode: string): ClassifyPathResult {
+  return {
+    error: {
+      code: "permission_denied",
+      message: `permission denied: ${path}`,
+      osCode,
+    },
+  };
+}
 
 function nodeErrorCode(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("code" in error)) {
@@ -47,13 +63,8 @@ export async function classifyPath(
     target = await fsRealpath(entry.path);
   } catch (error) {
     const code = nodeErrorCode(error);
-    if (code === "EACCES") {
-      return {
-        error: {
-          code: "permission_denied",
-          message: `permission denied: ${entry.path}`,
-        },
-      };
+    if (code === "EACCES" || code === "EPERM") {
+      return permissionDenied(entry.path, code);
     }
     if (code !== "ENOENT") {
       target = resolve(entry.path);
@@ -88,13 +99,8 @@ export async function classifyPath(
         },
       };
     }
-    if (code === "EACCES") {
-      return {
-        error: {
-          code: "permission_denied",
-          message: `permission denied: ${entry.path}`,
-        },
-      };
+    if (code === "EACCES" || code === "EPERM") {
+      return permissionDenied(entry.path, code);
     }
     return {
       error: {

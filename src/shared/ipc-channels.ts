@@ -70,6 +70,9 @@ export const PIER = {
   AGENT_RUNTIME_INDEX_LIST: "pier://agent-runtime-index:list",
   AGENT_RUNTIME_INDEX_FOCUS: "pier://agent-runtime-index:focus",
   AGENT_RUNTIME_INDEX_FOCUS_WAITING: "pier://agent-runtime-index:focusWaiting",
+  // macOS：打开系统设置「文件和文件夹」
+  FILES_OPEN_FOLDER_PERMISSION_SETTINGS:
+    "pier://files:open-folder-permission-settings",
   // 系统通知：权限快照 / 测试 / 打开系统设置
   SYSTEM_NOTIFICATION_PERMISSION: "pier://notification:permission",
   SYSTEM_NOTIFICATION_TEST: "pier://notification:test",

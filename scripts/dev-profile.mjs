@@ -32,6 +32,12 @@ import { fileURLToPath } from "node:url";
 import { parseIcns } from "./app-icon-icns.mjs";
 import { macIconFingerprint } from "./app-icon-layered.mjs";
 import { withoutEsbuildBinaryOverride } from "./esbuild-process-env.mjs";
+import {
+  MAC_FOLDER_USAGE_DESCRIPTIONS,
+  MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS,
+  MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS,
+  renderInfoPlistStrings,
+} from "./mac-privacy-descriptions.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -47,8 +53,12 @@ const MAC_DEV_ELECTRON_ICON_FILE = "electron.icns";
 const MAC_DEV_APP_ICON_FILE = "AppIcon.icns";
 const MAC_DEV_APP_ICON_NAME = "AppIcon";
 const MAC_DEV_ELECTRON_ICON_REVISION = 12;
-/** Bump when PierDev helper signing changes so stale copies are rebuilt. */
-export const MAC_DEV_ELECTRON_SIGN_REVISION = 1;
+/**
+ * Bump when the PierDev shell changes outside icon material (signing flags,
+ * Info.plist contents such as the TCC usage descriptions) so stale copies are
+ * rebuilt.
+ */
+export const MAC_DEV_ELECTRON_SIGN_REVISION = 2;
 const MAC_DEV_HELPER_VARIANTS = [
   { id: "helper", suffix: "" },
   { id: "helper.GPU", suffix: " (GPU)" },
@@ -1364,7 +1374,23 @@ function prepareMacDevElectronRuntime(profile, env) {
       CFBundleExecutable: MAC_DEV_ELECTRON_APP_NAME,
       CFBundleIdentifier: "io.pier.dev-electron",
       CFBundleName: MAC_DEV_ELECTRON_APP_NAME,
+      // TCC 弹窗英文回退（与正式包 extendInfo 同源）。
+      ...MAC_FOLDER_USAGE_DESCRIPTIONS,
     });
+    // 简体中文 lproj（签名前写入）。
+    for (const relative of MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS) {
+      const localizedStrings = path.join(
+        targetApp,
+        "Contents",
+        "Resources",
+        ...relative.split("/")
+      );
+      mkdirSync(path.dirname(localizedStrings), { recursive: true });
+      writeFileSync(
+        localizedStrings,
+        renderInfoPlistStrings(MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS)
+      );
+    }
     applyPierDevAppIcon(profile.worktreeRoot, targetApp, {
       bundleVersion: macDevBundleVersion(sourceVersion, iconHash),
     });

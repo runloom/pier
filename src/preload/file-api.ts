@@ -1,8 +1,3 @@
-import type {
-  PierCommand,
-  PierCommandErrorCode,
-  PierCommandResult,
-} from "@shared/contracts/commands.ts";
 import type { FileWatchEvent } from "@shared/contracts/file/watch.ts";
 import type {
   FileConfirmDurabilityRequest,
@@ -59,6 +54,7 @@ import {
   type PierFileSaveTargetAPI,
 } from "./file-save-target-api.ts";
 import { subscribeFileWatch } from "./file-watch-subscription.ts";
+import { invokePierCommand } from "./ipc-envelope.ts";
 
 export interface PierFilesAPI extends PierFileSaveTargetAPI {
   confirmDurability: (
@@ -87,6 +83,7 @@ export interface PierFilesAPI extends PierFileSaveTargetAPI {
   list: (request: FileListRequest) => Promise<FileListResult>;
   mkdir: (request: FileMkdirRequest) => Promise<FileMkdirResult>;
   move: (request: FileMoveRequest) => Promise<FileMoveResult>;
+  openFolderPermissionSettings: () => Promise<{ opened: boolean }>;
   openPath: (request: FileOpenPathRequest) => Promise<FileOpenPathResult>;
   readDocument: (
     request: FileReadDocumentRequest
@@ -106,21 +103,6 @@ export interface PierFilesAPI extends PierFileSaveTargetAPI {
   ) => Promise<FileDocumentWriteResult>;
   /** @deprecated 新代码使用 writeDocument。 */
   writeText: (request: FileWriteTextRequest) => Promise<FileWriteTextResult>;
-}
-
-async function invokePierCommand<T>(command: PierCommand): Promise<T> {
-  const result = (await ipcRenderer.invoke(
-    PIER.COMMAND_EXECUTE,
-    command
-  )) as PierCommandResult;
-  if (result.ok) {
-    return result.data as T;
-  }
-  const error = new Error(result.error.message) as Error & {
-    code?: PierCommandErrorCode;
-  };
-  error.code = result.error.code;
-  throw error;
 }
 
 export const filesApi: PierFilesAPI = {
@@ -212,6 +194,10 @@ export const filesApi: PierFilesAPI = {
       root: request.root,
       type: "file.move",
     }),
+  openFolderPermissionSettings: () =>
+    ipcRenderer.invoke(PIER.FILES_OPEN_FOLDER_PERMISSION_SETTINGS) as Promise<{
+      opened: boolean;
+    }>,
   readDocument: (request) =>
     invokePierCommand<FileDocumentReadResult>({
       path: request.path,

@@ -15,6 +15,23 @@ export function isFileConflictError(error: unknown): boolean {
   );
 }
 
+export function isPermissionDeniedError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "permission_denied"
+  );
+}
+
+/** TCC-style denial: permission_denied with Node EPERM (not unix mode / ACL). */
+export function isFolderAccessBlockedError(error: unknown): boolean {
+  return (
+    isPermissionDeniedError(error) &&
+    (error as { osCode?: unknown }).osCode === "EPERM"
+  );
+}
+
 export function isFileMissingError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;

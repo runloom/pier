@@ -2,6 +2,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   fileEditorErrorMessage,
   isFileMissingError,
+  isFolderAccessBlockedError,
 } from "../editor/errors.ts";
 import { waitForSettledWithAbort } from "./async-drain.ts";
 import {
@@ -172,7 +173,8 @@ export class FileDocumentLoader {
               "filePanel.errors.read.fallback",
               "Unable to read file contents."
             )
-          )
+          ),
+          isFolderAccessBlockedError(error)
         );
       }
     }

@@ -163,6 +163,8 @@ export interface RendererPluginFilesFacade {
    * Filter by `queryId` (and batch `mode`) on the caller side.
    */
   onPathQueryEvent(listener: (event: FileQueryEvent) => void): () => void;
+  /** 打开 macOS「文件和文件夹」权限页；非 macOS 恒 `opened: false`。 */
+  openFolderPermissionSettings(): Promise<{ opened: boolean }>;
   /**
    * 在 files 面板内打开磁盘文件（宿主跨插件入口）。
    * files 插件未启用/未注册时返回 false，不抛。

@@ -22,12 +22,33 @@ export function mapCommandError(
   ) {
     return failure(requestId, "not_found", err.message);
   }
+  // EPERM/EACCES → permission_denied；osCode 区分 TCC（EPERM）与 unix 权限。
+  if (
+    err instanceof Error &&
+    "code" in err &&
+    ((err as NodeJS.ErrnoException).code === "EPERM" ||
+      (err as NodeJS.ErrnoException).code === "EACCES")
+  ) {
+    const osCode = (err as NodeJS.ErrnoException).code;
+    return failure(
+      requestId,
+      "permission_denied",
+      err.message,
+      typeof osCode === "string" ? { osCode } : undefined
+    );
+  }
   if (
     err instanceof Error &&
     "code" in err &&
     (err as Error & { code?: unknown }).code === "permission_denied"
   ) {
-    return failure(requestId, "permission_denied", err.message);
+    const osCode = (err as Error & { osCode?: unknown }).osCode;
+    return failure(
+      requestId,
+      "permission_denied",
+      err.message,
+      typeof osCode === "string" ? { osCode } : undefined
+    );
   }
   if (
     err instanceof Error &&

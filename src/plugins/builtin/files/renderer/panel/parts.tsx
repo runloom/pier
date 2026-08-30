@@ -23,6 +23,7 @@ import {
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FileQuestion, FileX, MousePointerClick } from "lucide-react";
 import { type ReactNode, useCallback } from "react";
+import { FolderAccessErrorEmpty } from "../folder-access/empty.tsx";
 import type { FilesTranslate } from "../i18n.ts";
 
 export {
@@ -108,11 +109,15 @@ export function ReadOnlyErrorState({
 
 /** Full-region Empty when disk read failed and there is no body to show. */
 export function FileReadErrorEmpty({
+  context,
+  folderAccessBlocked = false,
   message,
   onReload,
   t,
   title,
 }: {
+  context?: Pick<RendererPluginContext, "files" | "notifications">;
+  folderAccessBlocked?: boolean;
   message: string | null;
   onReload?: (() => void) | undefined;
   t: FilesTranslate;
@@ -121,7 +126,9 @@ export function FileReadErrorEmpty({
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
       <h1 className="sr-only">{title}</h1>
-      <ErrorEmpty
+      <FolderAccessErrorEmpty
+        blocked={folderAccessBlocked}
+        {...(context ? { context } : {})}
         description={
           message?.trim()
             ? message
@@ -130,14 +137,15 @@ export function FileReadErrorEmpty({
                 "Unable to read file contents."
               )
         }
-        retryAction={
-          onReload
-            ? {
+        {...(onReload
+          ? {
+              retryAction: {
                 label: t("filePanel.errors.reload", "Reload"),
                 onClick: onReload,
-              }
-            : undefined
-        }
+              },
+            }
+          : {})}
+        t={t}
         title={t("filePanel.errors.read.title", "Unable to read file")}
       />
     </div>
