@@ -282,9 +282,7 @@ export function createForegroundActivityAggregator(
         identity,
         semantics
       );
-      if (sessionEndHandled !== null) {
-        return sessionEndHandled;
-      }
+      if (sessionEndHandled !== null) return sessionEndHandled;
       const at = now();
       const hook = acquireHookLayer(
         key,
@@ -302,16 +300,21 @@ export function createForegroundActivityAggregator(
       if (hookScopes.prepareSessionStartScope(hook, identity, semantics)) {
         return true;
       }
-      const canUseScope =
-        hook.scopes.has(identity.key) || semantics.createsSession;
-      if (!canUseScope) {
+      if (!(hook.scopes.has(identity.key) || semantics.createsSession)) {
         logAgentEventDropped("ghost-rejected", key, event.event);
         return false;
       }
       const scope = getOrCreateHookScope(hook, identity, event, at);
       const workId = identity.subagentWorkPlan?.id;
       const overlayBefore = scope.displayQuestionId;
-      const result = bookkeepTurn(scope, event, semantics, at, workId);
+      const result = bookkeepTurn(
+        scope,
+        event,
+        semantics,
+        at,
+        workId,
+        options.evidenceSource
+      );
       applyDisplayQuestionOverlay(scope, event, options.evidenceSource);
       const overlayChanged = scope.displayQuestionId !== overlayBefore;
       if (!(result.accepted || overlayChanged)) {

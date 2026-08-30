@@ -88,7 +88,7 @@ describe("registerTerminalAgentEscapeCancel", () => {
         windowId: "7",
       }),
       {
-        evidenceSource: "transcript",
+        evidenceSource: "host",
         stopAuthority: "authoritative",
         turnStartAuthority: "none",
       }

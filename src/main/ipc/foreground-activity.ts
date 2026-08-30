@@ -409,7 +409,9 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
           resolveRuntime: (agent) => getAgentHookIntegration(agent)?.runtime,
         },
         withResolvedOwner(event)
-      );
+      ).catch((err) => {
+        log.warn("agent hook event pipeline failed", { err });
+      });
     },
     onCommandFinished: (event) => {
       const routed = withResolvedOwner(event);

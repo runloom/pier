@@ -161,10 +161,10 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
     return { sinks, spies };
   }
 
-  it("a rejected leak event produces zero side effects on any branch", () => {
+  it("a rejected leak event produces zero side effects on any branch", async () => {
     const { sinks, spies } = sinksWithSpies();
 
-    handleObservedAgentHookEvent(
+    await handleObservedAgentHookEvent(
       sinks,
       v3Event({ event: "SessionStart", sessionId: "leak-1", tty: "??" })
     );
@@ -177,7 +177,7 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
     expect(spies.applySessionTitle).not.toHaveBeenCalled();
   });
 
-  it("a ctty-less event passes when the OSC command layer owns the agent", () => {
+  it("a ctty-less event passes when the OSC command layer owns the agent", async () => {
     const { sinks, spies } = sinksWithSpies({
       aggregator: {
         ingestAgentEvent: vi.fn(() => true),
@@ -185,7 +185,7 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
       },
     });
 
-    handleObservedAgentHookEvent(
+    await handleObservedAgentHookEvent(
       sinks,
       v3Event({ event: "SessionStart", sessionId: "s1", tty: "??" })
     );
@@ -193,7 +193,7 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
     expect(spies.notifyListeners).toHaveBeenCalledOnce();
   });
 
-  it("an accepted event flows resume persistence before aggregator accept", () => {
+  it("an accepted event flows resume persistence before aggregator accept", async () => {
     const { sinks, spies } = sinksWithSpies({
       aggregator: {
         // Aggregator may drop the event for its own reasons; resume must
@@ -203,7 +203,7 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
       },
     });
 
-    handleObservedAgentHookEvent(
+    await handleObservedAgentHookEvent(
       sinks,
       v3Event({ event: "SessionStart", sessionId: "s2", tty: "ttys012" })
     );
@@ -215,13 +215,50 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
     expect(spies.applySessionTitle).not.toHaveBeenCalled();
   });
 
-  it("legacy events without tty flow through unchanged", () => {
+  it("legacy events without tty flow through unchanged", async () => {
     const { sinks, spies } = sinksWithSpies();
 
-    handleObservedAgentHookEvent(sinks, v3Event({ event: "PromptSubmit" }));
+    await handleObservedAgentHookEvent(
+      sinks,
+      v3Event({ event: "PromptSubmit" })
+    );
 
     expect(spies.notifyListeners).toHaveBeenCalledOnce();
     expect(spies.ingestAgentEvent).toHaveBeenCalledOnce();
+  });
+
+  it("PromptSubmit awaits transcript observe before aggregator ingest", async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const order: string[] = [];
+    const observeTranscript = vi.fn(async () => {
+      order.push("observe");
+      await gate;
+    });
+    const ingestAgentEvent = vi.fn(() => {
+      order.push("ingest");
+      return true;
+    });
+    const { sinks } = sinksWithSpies({
+      aggregator: {
+        ingestAgentEvent,
+        panelCommandOwnedAgent: () => null,
+      },
+      observeTranscript,
+    });
+
+    const done = handleObservedAgentHookEvent(
+      sinks,
+      v3Event({ event: "PromptSubmit" })
+    );
+    await Promise.resolve();
+    expect(order).toEqual(["observe"]);
+    expect(ingestAgentEvent).not.toHaveBeenCalled();
+    release?.();
+    await done;
+    expect(order).toEqual(["observe", "ingest"]);
   });
 });
 

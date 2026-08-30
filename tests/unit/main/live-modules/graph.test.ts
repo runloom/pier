@@ -1,4 +1,5 @@
 // @vitest-environment node
+import type { FSWatcher } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,15 +30,15 @@ function createFakeDirWatch(): {
     },
     watch: (_dir, callback) => {
       listener = callback;
-      return {
+      const watcher: Pick<FSWatcher, "close" | "on"> = {
         close: () => {
           listener = null;
         },
-        on: () => ({
-          close: () => undefined,
-          on: () => ({ close: () => undefined, on: () => undefined }),
-        }),
+        on() {
+          return watcher as FSWatcher;
+        },
       };
+      return watcher;
     },
   };
 }

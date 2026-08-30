@@ -43,7 +43,14 @@ function installFilesApi(overrides: {
 }
 
 /** Render `useCanvasFile()` and hand the API back for direct assertions. */
-function mountHook(withScope: boolean): CanvasFileApi {
+function mountHook(
+  withScope: boolean,
+  scope?: {
+    directory: string;
+    path: string;
+    root: string;
+  }
+): CanvasFileApi {
   let api: CanvasFileApi | null = null;
   function Probe() {
     api = useCanvasFile();
@@ -51,11 +58,13 @@ function mountHook(withScope: boolean): CanvasFileApi {
   }
   const tree: ReactNode = withScope ? (
     <LiveModuleCanvasFileScopeProvider
-      scope={{
-        directory: ".pier/canvases/demo",
-        path: CANVAS_PATH,
-        root: PROJECT_ROOT,
-      }}
+      scope={
+        scope ?? {
+          directory: ".pier/canvases/demo",
+          path: CANVAS_PATH,
+          root: PROJECT_ROOT,
+        }
+      }
     >
       <Probe />
     </LiveModuleCanvasFileScopeProvider>
@@ -251,26 +260,11 @@ describe("useCanvasFile", () => {
 
   it("resolves siblings from the host directory for custom content roots", async () => {
     const { readDocument, watch, writeDocument } = installFilesApi({});
-    let api: CanvasFileApi | null = null;
-    function Probe() {
-      api = useCanvasFile();
-      return null;
-    }
-    render(
-      <LiveModuleCanvasFileScopeProvider
-        scope={{
-          directory: "resources/system-skills/pier-canvas/templates",
-          path: "resources/system-skills/pier-canvas/templates/kanban.canvas.tsx",
-          root: PROJECT_ROOT,
-        }}
-      >
-        <Probe />
-      </LiveModuleCanvasFileScopeProvider>
-    );
-    if (!api) {
-      throw new Error("useCanvasFile did not produce an API");
-    }
-    const canvasFile = api;
+    const canvasFile = mountHook(true, {
+      directory: "resources/system-skills/pier-canvas/templates",
+      path: "resources/system-skills/pier-canvas/templates/kanban.canvas.tsx",
+      root: PROJECT_ROOT,
+    });
 
     await expect(canvasFile.read("board.json")).resolves.toEqual({
       contents: "{}",

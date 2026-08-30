@@ -368,6 +368,7 @@ export function createHookScopeCoordinator({
       sealMatchingTurnPeers({
         at,
         event,
+        evidenceSource: options.evidenceSource,
         hook,
         originScope: scope,
         semantics,

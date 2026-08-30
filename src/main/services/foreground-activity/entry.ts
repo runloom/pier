@@ -10,6 +10,7 @@ import type {
   SubagentWorkAssociation,
   SubagentWorkPlan,
 } from "./subagent-work-associations.ts";
+import type { AgentEventEvidenceSource } from "./types.ts";
 
 /**
  * ForegroundActivity 聚合器的模型层：常量、双层 slot 结构与层工厂。
@@ -169,6 +170,8 @@ export interface HookScope {
   subagentCount: number;
   /** 当前可信终态证据；新回合重置时清空，只允许按强度单调增强。 */
   terminalEvidence: AgentTerminalEvidence | undefined;
+  /** 封账来源：transcript 为软封，hook / host 为硬封。 */
+  terminalEvidenceSource: AgentEventEvidenceSource | undefined;
   toolHistoryIncomplete: boolean;
   turnEnded: boolean;
   /** 可信终态落定时刻（TurnCompleted / 权威 Stop 等）。 */
@@ -344,6 +347,7 @@ export function newHookScope(
     status: undefined,
     subagentCount: 0,
     terminalEvidence: undefined,
+    terminalEvidenceSource: undefined,
     turnEnded: false,
     turnEndedAt: undefined,
     turnResetAt: undefined,

@@ -295,7 +295,8 @@ export function defaultGrokSessionsRoot(
 
 /**
  * 分类 `updates.jsonl` 一行。导出供单测直接覆盖格式契约。
- * turnId 留空：hook 侧常缺 turn 身份，走单 owner + 增量区间回退（对齐 Claude）。
+ * `prompt_id` 是原生回合身份（与 hook 侧 `promptId` 同体系）；必须提取为
+ * turnId，缺席则丢弃该终态行。空 id 会走 owner 回退，把上一回合终态错锚到新 PromptSubmit。
  */
 export function classifyGrokUpdatesLine(
   line: string
@@ -308,6 +309,7 @@ export function classifyGrokUpdatesLine(
     method?: unknown;
     params?: {
       update?: {
+        prompt_id?: unknown;
         sessionUpdate?: unknown;
         stop_reason?: unknown;
       };
@@ -321,17 +323,22 @@ export function classifyGrokUpdatesLine(
   if (update?.sessionUpdate !== "turn_completed") {
     return null;
   }
+  const turnId =
+    typeof update.prompt_id === "string" ? update.prompt_id.trim() : "";
+  if (!turnId) {
+    return null;
+  }
   const reason = update.stop_reason;
   if (reason === "cancelled") {
     return {
       ...GROK_TRANSCRIPT_TERMINAL_EVIDENCE[0],
-      turnId: "",
+      turnId,
     };
   }
   if (reason === "end_turn") {
     return {
       ...GROK_TRANSCRIPT_TERMINAL_EVIDENCE[1],
-      turnId: "",
+      turnId,
     };
   }
   return null;

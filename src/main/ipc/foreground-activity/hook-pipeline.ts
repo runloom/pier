@@ -43,10 +43,10 @@ export interface AgentHookEventSinks {
   resolveRuntime: (agent: AgentKind) => AgentRuntimeSemantics | undefined;
 }
 
-export function handleObservedAgentHookEvent(
+export async function handleObservedAgentHookEvent(
   sinks: AgentHookEventSinks,
   routed: AgentHookEventPayload
-): void {
+): Promise<void> {
   // ctty 门：挡「从 Pier 终端启动的 GUI（cursor . 开 IDE 等）继承
   // PIER_* env 后，IDE 内 agent 经共享 hook 冒充面板事件」。
   const foreignTty = shouldRejectForeignTtyAgentEvent({
@@ -83,8 +83,17 @@ export function handleObservedAgentHookEvent(
       ...(routed.event === "PromptSubmit" ? { unlockRotation: true } : {}),
     });
   }
-  if (effects.observeTranscript) {
-    sinks.observeTranscript?.(routed).catch((err: unknown) => {
+  const observe = effects.observeTranscript
+    ? sinks.observeTranscript?.(routed)
+    : undefined;
+  if (observe && routed.event === "PromptSubmit") {
+    try {
+      await observe;
+    } catch (err) {
+      log.warn("agent terminal reconciliation failed", { err });
+    }
+  } else if (observe) {
+    observe.catch((err: unknown) => {
       log.warn("agent terminal reconciliation failed", { err });
     });
   }

@@ -25,7 +25,15 @@ import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";
 function menuSketch(
   entries: ReturnType<typeof buildMenuEntries>
 ): Array<"|" | string> {
-  return entries.map((entry) => (entry.type === "separator" ? "|" : entry.id));
+  return entries.map((entry) => {
+    if (entry.type === "separator") {
+      return "|";
+    }
+    if (entry.type === "action" || entry.type === "checkbox") {
+      return entry.id;
+    }
+    return entry.type === "role" ? entry.role : entry.label;
+  });
 }
 
 describe("git review diff open actions", () => {

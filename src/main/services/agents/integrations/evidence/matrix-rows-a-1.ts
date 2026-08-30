@@ -12,6 +12,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
   claude: {
     integration: "active",
     transport: ["hook-command", "transcript-reconciler"],
+    transcriptTurnIdentity: "absent",
     evidence: {
       lifecycle: "native",
       ready: "native",
@@ -77,6 +78,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
   codex: {
     integration: "active",
     transport: ["hook-command", "transcript-reconciler"],
+    transcriptTurnIdentity: "native-field",
     evidence: {
       lifecycle: "native",
       ready: "reconciled",
@@ -245,6 +247,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
   copilot: {
     integration: "active",
     transport: ["hook-command", "transcript-reconciler"],
+    transcriptTurnIdentity: "absent",
     evidence: {
       lifecycle: "native",
       ready: "native",
@@ -337,6 +340,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
   kimi: {
     integration: "active",
     transport: ["hook-command", "transcript-reconciler"],
+    transcriptTurnIdentity: "absent",
     evidence: {
       lifecycle: "native",
       ready: "reconciled",

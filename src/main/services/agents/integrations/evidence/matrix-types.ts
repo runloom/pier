@@ -49,6 +49,12 @@ export interface AgentStatusEvidence {
     Record<AgentStatusEvidenceDimension, AgentStatusEvidenceLevel>
   >;
   readonly integration: AgentStatusIntegrationState;
+  /**
+   * transcript 终态行是否带原生回合身份。仅 `transcript-reconciler`
+   * transport 必填：`native-field` 必须提取非空 turnId；`absent` 走
+   * PromptSubmit 文件水位，禁止伪造回合身份。
+   */
+  readonly transcriptTurnIdentity?: "absent" | "native-field";
   readonly transport: readonly AgentStatusTransport[];
   readonly upstream: AgentStatusUpstream;
 }

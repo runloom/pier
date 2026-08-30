@@ -17,7 +17,7 @@ export type AgentStopAuthority =
 
 export type AgentTurnStartAuthority = "authoritative" | "none";
 
-export type AgentEventEvidenceSource = "hook" | "transcript";
+export type AgentEventEvidenceSource = "hook" | "host" | "transcript";
 
 export interface AgentEventIngestOptions {
   evidenceSource: AgentEventEvidenceSource;
