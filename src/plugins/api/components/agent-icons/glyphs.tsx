@@ -171,7 +171,7 @@ export function OmpIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-// Kilocode: brand-colored (yellow on black),
+// Kilo Code: brand-colored (yellow on black),
 // intentionally NOT currentColor — the Google favicon is black-on-black.
 export function KiloIcon({ size = 14 }: { size?: number }) {
   return (

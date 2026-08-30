@@ -183,7 +183,9 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
   },
   {
     id: "kilo",
-    label: "Kilocode",
+    // Official copy is "Kilo Code" / "Kilo CLI"; "kilocode" survives only in
+    // org/npm identifiers and the legacy binary alias below.
+    label: "Kilo Code",
     launchCmd: "kilo",
     detectCmd: "kilo",
     detectCmdAliases: ["kilocode"],
@@ -210,7 +212,9 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     // 实测（v0.86.0，pty 探测）：进入 chat 后编辑器聚焦 → `?25h`，Tab 切走
     // → `?25l`，切回 → `?25h`，等价关系成立，故启用光标探针。
     inputFocusProbe: "cursor",
-    label: "Charm",
+    // Product name is Crush; Charm (charmbracelet) is the vendor, kept only
+    // in faviconDomain / URLs.
+    label: "Crush",
     launchCmd: "crush",
     detectCmd: "crush",
     expectedProcess: "crush",

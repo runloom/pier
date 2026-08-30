@@ -1174,7 +1174,7 @@ describe("WorkspaceHeaderActions", () => {
 
   it("searches every create action, including agent command aliases", async () => {
     useAgentDetectStore.setState({
-      detectedIds: ["claude", "codex", "crush"],
+      detectedIds: ["claude", "codex", "crush", "antigravity"],
       hasDetected: true,
       isDetecting: false,
       isRefreshing: false,
@@ -1193,7 +1193,14 @@ describe("WorkspaceHeaderActions", () => {
 
     fireEvent.change(search, { target: { value: "crush" } });
     await waitFor(() => {
-      expect(visibleCommandItemLabels()).toEqual(["Start Charm"]);
+      expect(visibleCommandItemLabels()).toEqual(["Start Crush"]);
+    });
+
+    // Command alias: "agy" is Antigravity's binary and shares no substring
+    // with the label, so this hit must come from the command-word index.
+    fireEvent.change(search, { target: { value: "agy" } });
+    await waitFor(() => {
+      expect(visibleCommandItemLabels()).toEqual(["Start Antigravity"]);
     });
 
     fireEvent.change(search, { target: { value: "missing-action" } });
