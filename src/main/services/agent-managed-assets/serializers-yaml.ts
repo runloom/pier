@@ -38,8 +38,8 @@ function loadYamlDoc(raw: string | null): Document | PlanFail {
   }
 }
 
-function isFail(doc: Document | PlanFail): doc is PlanFail {
-  return "ok" in doc && doc.ok === false;
+function isFail<T extends object>(value: T | PlanFail): value is PlanFail {
+  return "ok" in value && (value as PlanFail).ok === false;
 }
 
 function sectionMap(doc: Document, sectionKey: string): YAMLMap | PlanFail {
@@ -66,7 +66,7 @@ export function planYamlSectionUpsert(
     return doc;
   }
   const section = sectionMap(doc, sectionKey);
-  if ("ok" in section && section.ok === false) {
+  if (isFail(section)) {
     return section;
   }
   const existing = yamlJson(section.get(SERVER_KEY));
