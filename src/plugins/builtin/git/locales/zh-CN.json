@@ -245,6 +245,12 @@
       "description": "折叠审查目录树中的全部文件夹。",
       "title": "折叠文件夹"
     },
+    "pier.git.review.openDirectory": {
+      "aliases": ["打开目录", "打开项目文件夹"],
+      "category": "git",
+      "description": "在文件目录树中打开此项目。",
+      "title": "git: 打开目录"
+    },
     "pier.git.review.copyPath": {
       "category": "git",
       "description": "复制所选变更的绝对路径。",
@@ -546,6 +552,8 @@
     "ui.reviewTreeNoSearchResultsDescription": "请尝试其他文件名或路径。",
     "ui.reviewOpenFile": "打开文件",
     "ui.reviewOpenInEditor": "跳转到源码",
+    "ui.reviewOpenDirectory": "打开目录",
+    "ui.reviewOpenDirectoryFailed": "无法打开项目目录",
     "ui.reviewDiffContextMenuFailed": "无法打开菜单",
     "ui.reviewTreeStageFile": "暂存",
     "ui.reviewTreeStageFailed": "无法暂存",

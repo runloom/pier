@@ -37,57 +37,77 @@ export async function ensureFilesTreeAncestorsLoaded(target: {
   }
 }
 
+interface FilesTreeRevealWaitTarget {
+  fallbackToRoot?: boolean | undefined;
+  instanceId?: string | undefined;
+  list?: FilesTreeList;
+  options?: PierFileTreeRevealOptions | undefined;
+  path: string;
+  resolveInstanceId?: (() => string) | undefined;
+  root: string;
+}
+
+function resolveRevealWaitTarget(target: FilesTreeRevealWaitTarget): {
+  fallbackToRoot?: boolean | undefined;
+  instanceId?: string | undefined;
+  options?: PierFileTreeRevealOptions | undefined;
+  path: string;
+  root: string;
+} {
+  const instanceId = target.resolveInstanceId?.() ?? target.instanceId;
+  return {
+    ...(target.fallbackToRoot === undefined
+      ? {}
+      : { fallbackToRoot: target.fallbackToRoot }),
+    ...(instanceId === undefined ? {} : { instanceId }),
+    ...(target.options === undefined ? {} : { options: target.options }),
+    path: target.path,
+    root: target.root,
+  };
+}
+
 /**
  * Ensure ancestor entries exist, load real directory listings, then reveal
  * after the tree can observe the updated snapshot. Calling reveal in the same
  * turn as ensure/load races the React items→model sync.
  */
-export function revealFilesTreePathAfterAncestors(target: {
-  instanceId?: string | undefined;
-  list: FilesTreeList;
-  options?: PierFileTreeRevealOptions | undefined;
-  path: string;
-  root: string;
-}): void {
+export function revealFilesTreePathAfterAncestors(
+  target: FilesTreeRevealWaitTarget & { list: FilesTreeList }
+): void {
   revealFilesTreePathAfterAncestorsAsync(target).catch(() => undefined);
 }
 
-async function revealFilesTreePathAfterAncestorsAsync(target: {
-  instanceId?: string | undefined;
-  list: FilesTreeList;
-  options?: PierFileTreeRevealOptions | undefined;
-  path: string;
-  root: string;
-}): Promise<void> {
+async function revealFilesTreePathAfterAncestorsAsync(
+  target: FilesTreeRevealWaitTarget & { list: FilesTreeList }
+): Promise<void> {
   await ensureFilesTreeAncestorsLoaded(target);
   await waitUntilRevealReady(target);
 }
 
-async function waitUntilRevealReady(target: {
-  instanceId?: string | undefined;
-  options?: PierFileTreeRevealOptions | undefined;
-  path: string;
-  root: string;
-}): Promise<void> {
+/** Poll until the tree can reveal, then re-reveal after paint. */
+export async function waitUntilRevealReady(
+  target: FilesTreeRevealWaitTarget
+): Promise<boolean> {
   for (let attempt = 0; attempt < REVEAL_READY_MAX_ATTEMPTS; attempt += 1) {
     // Poll with a single attempt — never schedule registry timeout storms.
-    if (tryRevealFilesTreePathOnce(target)) {
+    const attemptTarget = resolveRevealWaitTarget(target);
+    if (tryRevealFilesTreePathOnce(attemptTarget)) {
       // One paint still races row DOM focus/selection.
       queueMicrotask(() => {
-        tryRevealFilesTreePathOnce(target);
+        tryRevealFilesTreePathOnce(resolveRevealWaitTarget(target));
       });
       if (typeof requestAnimationFrame === "function") {
         requestAnimationFrame(() => {
-          tryRevealFilesTreePathOnce(target);
+          tryRevealFilesTreePathOnce(resolveRevealWaitTarget(target));
         });
       }
-      return;
+      return true;
     }
     const delayMs = REVEAL_READY_BASE_DELAY_MS + attempt * 12;
     await sleep(delayMs);
   }
   // Last chance: allow registry short retries only once.
-  revealFilesTreePath(target);
+  return revealFilesTreePath(resolveRevealWaitTarget(target));
 }
 
 function sleep(ms: number): Promise<void> {

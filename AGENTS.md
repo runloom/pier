@@ -389,6 +389,13 @@ section 根节点下的裸子节点。
 - `contextId` 由 `worktreeKey` 稳定派生，用于面板上下文身份；任务、终端和插件上下文不再依赖额外 `projectId`。
 - 主体不维护 `Project` 注册表，也不把 `projectId` 作为跨模块外键；需要项目粒度能力时优先使用 `projectRootPath` / `gitRoot` / `worktreeRoot`。
 
+### 审查打开项目目录
+
+从 git 审查进入 Files **项目目录标签**（只有树、不打开文档）走宿主 `context.files.openProjectDirectory`，与 `openInEditor` 同构。git 不得 import files 插件；不得抢审查主点击；不得把「打开目录」放进 `GitReviewToolbar` 或审查顶栏芯片。在场入口是树 / diff / 审查 tab 右键「打开目录」：与「打开文件 / 跳转到源码」同组（`1_open`），与复制路径 / 在访达中显示分组（`6_path`）。tab 只在 `pier.git.changes` 上显示，打开该次审查 git 根。
+
+权威规格：[`docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md`](docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md)。  
+检查点：`tests/unit/renderer/git/review/open-directory-governance.test.ts`。
+
 ### LSP Gateway `src/main/services/lsp/session-broker.ts`
 
 语言服务的进程树按 `(workspaceKey, serverId, rootPath)` 全局唯一（`sessionOwnerKey` 不含窗口与

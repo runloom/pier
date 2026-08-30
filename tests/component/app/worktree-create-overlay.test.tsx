@@ -343,6 +343,7 @@ function createMockContext(): RendererPluginContext {
       move: unimplemented("files.move"),
       openInEditor: unimplemented("files.openInEditor"),
       openPath: unimplemented("files.openPath"),
+      openProjectDirectory: unimplemented("files.openProjectDirectory"),
       onPathQueryEvent: unimplemented("files.onPathQueryEvent"),
       queryContents: unimplemented("files.queryContents"),
       queryPaths: unimplemented("files.queryPaths"),

@@ -62,6 +62,7 @@ export type {
   RendererPluginDialogsFacade,
 } from "./renderer-dialogs.ts";
 export type {
+  OpenProjectDirectoryResult,
   RendererPluginCommentsFacade,
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,

@@ -26,6 +26,12 @@ function collectActionIds(
   return ids;
 }
 
+function menuSketch(
+  entries: ReturnType<typeof buildMenuEntries>
+): Array<"|" | string> {
+  return entries.map((entry) => (entry.type === "separator" ? "|" : entry.id));
+}
+
 describe("git review tree actions", () => {
   const openInEditor = vi.fn(() => true);
   const error = vi.fn();
@@ -63,7 +69,14 @@ describe("git review tree actions", () => {
         register: (action: Parameters<typeof actionRegistry.register>[0]) =>
           actionRegistry.register(action),
       },
-      files: { openInEditor },
+      files: {
+        openInEditor,
+        openProjectDirectory: vi.fn(async () => ({
+          ok: true,
+          instanceId: "x",
+          reused: false,
+        })),
+      },
       git: { applyReviewPathMutation, stage, unstage },
       i18n: {
         t: (_key: string, _values: unknown, fallback: string) => fallback,
@@ -138,12 +151,19 @@ describe("git review tree actions", () => {
     expect(ids).toContain("pier.git.review.stageFile");
     expect(ids).toContain("pier.git.review.unstageFile");
     expect(ids).not.toContain(GIT_REVIEW_OPEN_FILE_COMMAND_ID);
-    // 1_review + 2_view + 6_path → separators between groups.
-    expect(directoryMenu.some((entry) => entry.type === "separator")).toBe(
-      true
-    );
-    expect(ids).toContain("pier.git.review.expandAll");
-    expect(ids).toContain("pier.git.review.copyPath");
+    expect(menuSketch(directoryMenu)).toEqual([
+      "pier.git.review.openDirectory",
+      "|",
+      "pier.git.review.stageFile",
+      "pier.git.review.unstageFile",
+      "|",
+      "pier.git.review.expandAll",
+      "pier.git.review.collapseFolders",
+      "|",
+      "pier.git.review.copyPath",
+      "pier.git.review.copyRelativePath",
+      "pier.git.review.revealInFinder",
+    ]);
   });
 
   it("hides copy/reveal on synthetic group roots without repoPath", () => {
@@ -160,11 +180,23 @@ describe("git review tree actions", () => {
       },
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     });
-    const ids = collectActionIds(groupRootMenu);
-    expect(ids).toContain("pier.git.review.expandAll");
-    expect(ids).not.toContain("pier.git.review.copyPath");
-    expect(ids).not.toContain("pier.git.review.copyRelativePath");
-    expect(ids).not.toContain("pier.git.review.revealInFinder");
+    expect(menuSketch(groupRootMenu)).toEqual([
+      "pier.git.review.openDirectory",
+      "|",
+      "pier.git.review.stageFile",
+      "|",
+      "pier.git.review.expandAll",
+      "pier.git.review.collapseFolders",
+    ]);
+    expect(collectActionIds(groupRootMenu)).not.toContain(
+      "pier.git.review.copyPath"
+    );
+    expect(collectActionIds(groupRootMenu)).not.toContain(
+      "pier.git.review.copyRelativePath"
+    );
+    expect(collectActionIds(groupRootMenu)).not.toContain(
+      "pier.git.review.revealInFinder"
+    );
   });
 
   it("orders review / view / path groups for file rows", () => {
@@ -183,12 +215,13 @@ describe("git review tree actions", () => {
       },
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     });
-    // File rows hide expand/collapse; still have path group after review.
-    expect(fileMenu.some((entry) => entry.type === "separator")).toBe(true);
-    expect(collectActionIds(fileMenu)).toEqual([
+    expect(menuSketch(fileMenu)).toEqual([
       GIT_REVIEW_OPEN_FILE_COMMAND_ID,
+      "pier.git.review.openDirectory",
+      "|",
       "pier.git.review.stageFile",
       "pier.git.review.discardFile",
+      "|",
       "pier.git.review.copyPath",
       "pier.git.review.copyRelativePath",
       "pier.git.review.revealInFinder",
@@ -225,6 +258,7 @@ describe("git review tree actions", () => {
     );
 
     expect(enabledById.get(GIT_REVIEW_OPEN_FILE_COMMAND_ID)).toBe(true);
+    expect(enabledById.get("pier.git.review.openDirectory")).toBe(true);
     expect(enabledById.get("pier.git.review.stageFile")).toBe(false);
     expect(enabledById.get("pier.git.review.discardFile")).toBe(false);
   });

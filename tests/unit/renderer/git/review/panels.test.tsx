@@ -747,8 +747,18 @@ function pluginContext(input: {
           return text;
         }),
     },
+    files: {
+      openProjectDirectory: vi.fn(async () => ({
+        instanceId: "pier.files.filePanel:project:x",
+        ok: true,
+        reused: false,
+      })),
+    },
     notifications: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
-    panels: { openInstance: vi.fn(() => ({ kind: "opened" })) },
+    panels: {
+      getActiveContext: vi.fn(() => null),
+      openInstance: vi.fn(() => ({ kind: "opened" })),
+    },
   } as unknown as RendererPluginContext;
 }
 

@@ -6,11 +6,10 @@ import { Folder } from "lucide-react";
 import { FILES_OPEN_DIRECTORY_COMMAND_ID } from "../../manifest.ts";
 import { createFilesTranslate } from "../i18n.ts";
 import { projectAnchor } from "./anchor.ts";
-import { openProjectFiles } from "./open-project.ts";
 
 /**
  * 命令面板「打开目录」：打开当前面板上下文的项目文件树。
- * 与状态栏项目项同路径（openProjectFiles）；无项目锚点时提示下一步。
+ * 与状态栏项目项同路径（openProjectDirectory）；无项目锚点时提示下一步。
  */
 export function createFilesOpenDirectoryAction(
   context: RendererPluginContext
@@ -20,7 +19,8 @@ export function createFilesOpenDirectoryAction(
     category: "file",
     handler: async () => {
       const panelContext = context.panels.getActiveContext();
-      if (!(panelContext && projectAnchor(panelContext))) {
+      const anchor = panelContext ? projectAnchor(panelContext) : null;
+      if (!(panelContext && anchor)) {
         context.notifications.info(
           t(
             "filePanel.openDirectory.noProject",
@@ -29,7 +29,10 @@ export function createFilesOpenDirectoryAction(
         );
         return;
       }
-      const result = await openProjectFiles(context, panelContext);
+      const result = await context.files.openProjectDirectory({
+        context: panelContext,
+        root: anchor,
+      });
       if (!result.ok) {
         context.notifications.error(
           t(

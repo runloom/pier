@@ -17,6 +17,7 @@ function panelContext(partial: Partial<PanelContext> = {}): PanelContext {
 describe("handleFilesTerminalOpenUrl", () => {
   let openInstance: ReturnType<typeof vi.fn>;
   let openPath: ReturnType<typeof vi.fn>;
+  let openProjectDirectory: ReturnType<typeof vi.fn>;
   let readDocument: ReturnType<typeof vi.fn>;
   let listInstances: ReturnType<typeof vi.fn>;
   let stat: ReturnType<typeof vi.fn>;
@@ -26,6 +27,11 @@ describe("handleFilesTerminalOpenUrl", () => {
 
   beforeEach(() => {
     openInstance = vi.fn();
+    openProjectDirectory = vi.fn(async () => ({
+      instanceId: "pier.files.filePanel:project:x",
+      ok: true as const,
+      reused: false,
+    }));
     openPath = vi.fn(async () => ({ opened: true as const }));
     readDocument = vi.fn(async () => ({
       kind: "text",
@@ -45,6 +51,7 @@ describe("handleFilesTerminalOpenUrl", () => {
     context = {
       files: {
         openPath,
+        openProjectDirectory,
         readDocument,
         stat,
       },
@@ -595,6 +602,71 @@ describe("handleFilesTerminalOpenUrl", () => {
     } finally {
       info.mockRestore();
     }
+  });
+
+  it("opens the project directory via the files facade", async () => {
+    stat.mockResolvedValue({
+      exists: true,
+      isDirectory: true,
+      mtimeMs: 1,
+      path: "docs",
+      root: "/repo",
+      size: 0,
+    });
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "text",
+        panelId: "t1",
+        url: "/repo/docs",
+      })
+    ).resolves.toBe(true);
+    expect(openProjectDirectory).toHaveBeenCalledWith({
+      context: expect.objectContaining({ projectRootPath: "/repo" }),
+      path: "docs",
+      root: "/repo",
+    });
+    expect(openPath).not.toHaveBeenCalled();
+  });
+
+  it("does not system-open when directory open is unregistered", async () => {
+    openProjectDirectory.mockResolvedValueOnce({
+      ok: false,
+      reason: "files-unregistered",
+    });
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "text",
+        panelId: "t1",
+        url: "/repo",
+      })
+    ).resolves.toBe(true);
+    expect(openProjectDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "", root: "/repo" })
+    );
+    expect(openPath).not.toHaveBeenCalled();
+    expect(notificationsError).toHaveBeenCalledTimes(1);
+    expect(notificationsError).toHaveBeenCalledWith(
+      "Unable to open project directory"
+    );
+  });
+
+  it("does not system-open or double-toast when directory path is invalid", async () => {
+    openProjectDirectory.mockResolvedValueOnce({
+      ok: false,
+      reason: "invalid-path",
+    });
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "text",
+        panelId: "t1",
+        url: "/repo",
+      })
+    ).resolves.toBe(true);
+    expect(openPath).not.toHaveBeenCalled();
+    expect(notificationsError).toHaveBeenCalledTimes(1);
+    expect(notificationsError).toHaveBeenCalledWith(
+      "Unable to open project directory"
+    );
   });
 
   it("opens TypeScript sources via Files without system open", async () => {

@@ -128,6 +128,17 @@ import type {
   WorktreeRemoveResult,
 } from "@shared/contracts/worktree.ts";
 
+export type OpenProjectDirectoryResult =
+  | { ok: true; instanceId: string; reused: boolean }
+  | {
+      ok: false;
+      reason:
+        | "no-anchor"
+        | "files-unregistered"
+        | "invalid-path"
+        | "open-failed";
+    };
+
 export interface RendererPluginFilesFacade {
   confirmDurability(
     request: FileConfirmDurabilityRequest
@@ -178,6 +189,17 @@ export interface RendererPluginFilesFacade {
     title?: string;
   }): boolean;
   openPath(request: FileOpenPathRequest): Promise<FileOpenPathResult>;
+  /**
+   * 打开 Files 项目目录标签（只有树、没有文档）。
+   * 省略 / 空 path = 根；非空 path 只揭示，不打开编辑器。
+   * files 未注册时返回 `{ ok: false }`，不抛。
+   */
+  openProjectDirectory(request: {
+    context?: PanelContext;
+    /** 仓库相对路径。省略或 "" = 项目根。非空 = 只揭示，不打开文档。 */
+    path?: string;
+    root: string;
+  }): Promise<OpenProjectDirectoryResult>;
   pickSaveTarget(request: FileSaveTargetRequest): Promise<FileSaveTargetResult>;
   /**
    * Start a cancellable content query against the main-process file query service.

@@ -183,6 +183,12 @@
       "description": "검토 트리의 모든 폴더를 접습니다.",
       "title": "폴더 접기"
     },
+    "pier.git.review.openDirectory": {
+      "aliases": ["디렉터리 열기", "프로젝트 폴더 열기"],
+      "category": "git",
+      "description": "Files 디렉터리 트리에서 이 프로젝트를 엽니다.",
+      "title": "git: 디렉터리 열기"
+    },
     "pier.git.review.copyPath": {
       "category": "git",
       "description": "선택한 변경의 절대 경로를 복사합니다.",
@@ -429,6 +435,8 @@
     "ui.reviewOpenFile": "파일 열기",
     "ui.reviewOpenFileFailed": "파일을 열지 못했습니다",
     "ui.reviewOpenInEditor": "소스로 이동",
+    "ui.reviewOpenDirectory": "디렉터리 열기",
+    "ui.reviewOpenDirectoryFailed": "프로젝트 디렉터리를 열 수 없습니다",
     "ui.reviewDiffContextMenuFailed": "메뉴를 열 수 없습니다",
     "ui.reviewTreeStageFile": "스테이지",
     "ui.reviewTreeStageFailed": "스테이징할 수 없음",

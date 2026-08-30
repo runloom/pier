@@ -9,7 +9,6 @@ import type {
 import { Folder } from "lucide-react";
 import { FILES_PROJECT_STATUS_ITEM_ID } from "../../manifest.ts";
 import { formatProjectStatusLabel, projectAnchor } from "./anchor.ts";
-import { openProjectFiles } from "./open-project.ts";
 
 export function isFilesProjectStatusVisible(
   statusContext: RendererTerminalStatusItemContext
@@ -49,9 +48,23 @@ function FilesProjectStatusItem({
             className={cn(STATUS_BAR_ITEM_TRIGGER_CLASS, "max-w-full")}
             data-testid="files-project-status-trigger"
             onClick={() => {
-              openProjectFiles(pluginContext, panelContext)
-                .then((result) => {
-                  if (!result.ok) {
+              pluginContext.files
+                .openProjectDirectory({
+                  context: panelContext,
+                  root: anchor,
+                })
+                .then(
+                  (result) => {
+                    if (!result.ok) {
+                      pluginContext.notifications.error(
+                        t(
+                          "files.projectStatus.openFailed",
+                          "Unable to open project files"
+                        )
+                      );
+                    }
+                  },
+                  () => {
                     pluginContext.notifications.error(
                       t(
                         "files.projectStatus.openFailed",
@@ -59,8 +72,7 @@ function FilesProjectStatusItem({
                       )
                     );
                   }
-                })
-                .catch(() => undefined);
+                );
             }}
             size="status-bar"
             type="button"
