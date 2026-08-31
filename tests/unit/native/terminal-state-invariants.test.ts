@@ -91,6 +91,10 @@ const APPKIT_PASTE_GATED_BY_HOST_RE =
   /@IBAction func paste\(_:\s*Any\?\) \{\s*guard hostKeyboardActive else \{ return \}/;
 const APPKIT_SELECT_ALL_GATED_BY_HOST_RE =
   /@IBAction override open func selectAll\(_:\s*Any\?\) \{\s*guard hostKeyboardActive else \{ return \}/;
+// 2026-08-31 终端剪贴板金标准：copy/paste/selectAll 是单派发 responder 显式
+// 命令，禁止 hostKeyboardActive 门禁（转场帧静默吞键 → 跨窗口粘贴为空）；
+// 环境键事件（doCommand / keyDown / performKeyEquivalent）门禁保留。
+// 正向锁定见 tests/unit/native/terminal-clipboard-routing.test.ts。
 const FORBIDDEN_TERMINAL_OVERLAY_SCROLLBAR_RE =
   /TerminalScrollbarOverlayView|thumbRect|scrollbarPaintedWidth|scroll_page_lines/;
 const SPM_SCROLL_VIEW_CLASS_RE =
@@ -272,7 +276,7 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(SOURCE).not.toMatch(FORBIDDEN_TERMINAL_CURSOR_VISIBILITY_CONFIG_RE);
   });
 
-  it("gates AppKit text commands and menu actions through host keyboard ownership", () => {
+  it("gates ambient AppKit text commands but never responder menu actions", () => {
     const appTerminalInputSource = readFileSync(
       join(
         process.cwd(),
@@ -281,9 +285,11 @@ describe("Swift state invariants (source-level lock)", () => {
       "utf8"
     );
     expect(appTerminalInputSource).toMatch(APPKIT_COMMANDS_GATED_BY_HOST_RE);
-    expect(appTerminalInputSource).toMatch(APPKIT_COPY_GATED_BY_HOST_RE);
-    expect(appTerminalInputSource).toMatch(APPKIT_PASTE_GATED_BY_HOST_RE);
-    expect(appTerminalInputSource).toMatch(APPKIT_SELECT_ALL_GATED_BY_HOST_RE);
+    expect(appTerminalInputSource).not.toMatch(APPKIT_COPY_GATED_BY_HOST_RE);
+    expect(appTerminalInputSource).not.toMatch(APPKIT_PASTE_GATED_BY_HOST_RE);
+    expect(appTerminalInputSource).not.toMatch(
+      APPKIT_SELECT_ALL_GATED_BY_HOST_RE
+    );
   });
 
   it("uses the Ghostty SPM AppKit scroll view instead of a Pier-drawn overlay scrollbar", () => {

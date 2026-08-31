@@ -77,4 +77,64 @@ describe("clipboard-image-suppress", () => {
     endClipboardImageSuppress();
     expect(clipboard.write).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps text copied during the suppress window instead of restoring the snapshot", () => {
+    clipboardState.text = "prior";
+    clipboardState.imageEmpty = false;
+
+    beginClipboardImageSuppress();
+    // 模拟窗口期内其他写入者（用户 ⌘C / 终端 OSC 52）。
+    clipboardState.text = "user-copy";
+    vi.mocked(clipboard.write).mockClear();
+    vi.mocked(clipboard.writeText).mockClear();
+
+    endClipboardImageSuppress();
+    expect(clipboard.write).not.toHaveBeenCalled();
+    expect(clipboard.writeText).not.toHaveBeenCalled();
+    expect(clipboardState.text).toBe("user-copy");
+  });
+
+  it("keeps a raster written during the suppress window", () => {
+    clipboardState.text = "prior";
+    clipboardState.imageEmpty = false;
+
+    beginClipboardImageSuppress();
+    // begin 已剥离旧光栅；窗口期内出现的新光栅属于其他写入者。
+    clipboardState.imageEmpty = false;
+    vi.mocked(clipboard.write).mockClear();
+
+    endClipboardImageSuppress();
+    expect(clipboard.write).not.toHaveBeenCalled();
+  });
+
+  it("does not rewrite an unchanged text-only board on end", () => {
+    clipboardState.text = "prior";
+    clipboardState.imageEmpty = true;
+
+    beginClipboardImageSuppress();
+    vi.mocked(clipboard.write).mockClear();
+    vi.mocked(clipboard.writeText).mockClear();
+    vi.mocked(clipboard.clear).mockClear();
+
+    endClipboardImageSuppress();
+    expect(clipboard.write).not.toHaveBeenCalled();
+    expect(clipboard.writeText).not.toHaveBeenCalled();
+    expect(clipboard.clear).not.toHaveBeenCalled();
+    expect(clipboardState.text).toBe("prior");
+  });
+
+  it("leaves an emptied board empty on end without a redundant clear", () => {
+    clipboardState.text = "";
+    clipboardState.imageEmpty = false;
+
+    beginClipboardImageSuppress();
+    expect(clipboard.clear).toHaveBeenCalledTimes(1);
+    vi.mocked(clipboard.write).mockClear();
+    vi.mocked(clipboard.clear).mockClear();
+
+    endClipboardImageSuppress();
+    // 快照有图：板未被他人写过 → 恢复光栅。
+    expect(clipboard.write).toHaveBeenCalledTimes(1);
+    expect(clipboard.clear).not.toHaveBeenCalled();
+  });
 });

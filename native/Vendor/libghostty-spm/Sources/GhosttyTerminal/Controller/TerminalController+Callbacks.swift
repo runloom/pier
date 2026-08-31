@@ -12,7 +12,9 @@ import GhosttyKit
     import AppKit
 #endif
 
-private enum TerminalCallbacks {
+// Internal (not private) so GhosttyBridgeTests can drive the real clipboard
+// callbacks with fabricated C payloads.
+enum TerminalCallbacks {
     #if canImport(AppKit)
         private static let terminalPasteImageDirectoryName = "pier-terminal-pastes"
         private static let terminalPasteImageRetentionInterval: TimeInterval = 24 * 60 * 60
@@ -165,28 +167,65 @@ private enum TerminalCallbacks {
 
     static func writeClipboard(
         userdata _: UnsafeMutableRawPointer?,
-        clipboard _: ghostty_clipboard_e,
+        clipboard: ghostty_clipboard_e,
         contents: UnsafePointer<ghostty_clipboard_content_s>?,
         contentsLen: Int,
-        confirm _: Bool
+        confirm: Bool
     ) {
+        guard let kind = TerminalClipboardKind(clipboard) else {
+            TerminalDebugLog.log(
+                .input,
+                "clipboard write dropped unsupported kind raw=\(clipboard.rawValue)"
+            )
+            return
+        }
+        // confirm=true means ghostty expects a host write-confirm UI
+        // (clipboard-write = ask). Pier has no authorize-copy UI —
+        // ClipboardConfirmAlert is paste-protection (confirm_read_clipboard)
+        // only and never fires for OSC 52 writes — so fail closed instead of
+        // silently allowing an unconfirmed write. Unreachable with
+        // Pier-generated config (clipboard-write keeps the ghostty default:
+        // allow).
+        guard !confirm else {
+            TerminalDebugLog.log(
+                .input,
+                "clipboard write denied confirm-required kind=\(kind.debugLabel)"
+            )
+            return
+        }
         guard contentsLen > 0 else { return }
         guard let content = contents?.pointee else { return }
         guard let data = content.data else { return }
         let string = String(cString: data)
+        guard TerminalClipboardWritePolicy.shouldWrite(string, to: kind) else {
+            TerminalDebugLog.log(
+                .input,
+                "clipboard write skipped empty kind=\(kind.debugLabel)"
+            )
+            return
+        }
 
         #if canImport(UIKit)
-            UIPasteboard.general.string = string
+            switch kind {
+            case .standard:
+                UIPasteboard.general.string = string
+            case .selection:
+                UIPasteboard.pierTerminalSelection?.string = string
+            }
         #elseif canImport(AppKit)
-            let pasteboard = NSPasteboard.general
+            let pasteboard = NSPasteboard.pierTerminal(for: kind)
             pasteboard.clearContents()
             pasteboard.setString(string, forType: .string)
         #endif
+        TerminalDebugLog.log(
+            .input,
+            "clipboard write kind=\(kind.debugLabel) bytes=\(string.utf8.count) lines=\(TerminalInputText.lineCount(in: string))"
+        )
     }
 
     static func readClipboard(
         userdata: UnsafeMutableRawPointer?,
-        clipboard _: ghostty_clipboard_e,
+        clipboard: ghostty_clipboard_e,
         opaquePtr: UnsafeMutableRawPointer?
     ) -> Bool {
         guard let userdata, let opaquePtr else { return false }
@@ -195,18 +234,46 @@ private enum TerminalCallbacks {
             .fromOpaque(userdata)
             .takeUnretainedValue()
         guard let surface = bridge.rawSurface else { return false }
+        guard let kind = TerminalClipboardKind(clipboard) else {
+            TerminalDebugLog.log(
+                .input,
+                "clipboard read dropped unsupported kind raw=\(clipboard.rawValue)"
+            )
+            return false
+        }
 
         #if canImport(UIKit)
-            let string = UIPasteboard.general.string
+            let string: String?
+            switch kind {
+            case .standard:
+                string = UIPasteboard.general.string
+                    .flatMap { $0.isEmpty ? nil : $0 }
+            case .selection:
+                let raw = UIPasteboard.pierTerminalSelection?.string
+                string = raw.flatMap { $0.isEmpty ? nil : $0 }
+            }
         #elseif canImport(AppKit)
-            let pasteboard = NSPasteboard.general
-            let string =
-                pasteboard.string(forType: .string).flatMap { $0.isEmpty ? nil : $0 }
-                ?? terminalPasteImagePathFromPasteboard(pasteboard)
+            let string: String?
+            switch kind {
+            case .standard:
+                // Image fallback is standard-paste only: screenshots land on
+                // the system pasteboard, never on the private selection one.
+                let pasteboard = NSPasteboard.general
+                string =
+                    pasteboard.string(forType: .string).flatMap { $0.isEmpty ? nil : $0 }
+                    ?? terminalPasteImagePathFromPasteboard(pasteboard)
+            case .selection:
+                string = NSPasteboard.pierTerminalSelection
+                    .string(forType: .string)
+                    .flatMap { $0.isEmpty ? nil : $0 }
+            }
         #endif
 
         guard let string else {
-            TerminalDebugLog.log(.input, "clipboard paste read empty")
+            TerminalDebugLog.log(
+                .input,
+                "clipboard paste read empty kind=\(kind.debugLabel)"
+            )
             return false
         }
         TerminalDebugLog.log(
