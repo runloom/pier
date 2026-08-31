@@ -12,6 +12,7 @@ import {
   setDockviewPanelSize,
 } from "@/components/workspace/dockview-panel-size.ts";
 import { PANEL_TAB_FILE_COMPONENT_ID } from "@/components/workspace/panel-tab-layout.ts";
+import { attachWorkspaceGroupMru } from "@/lib/workspace/group-mru.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import {
   withinGroupPosition,
@@ -111,10 +112,18 @@ interface WorkspaceState {
   toggleActivePanelMaximized: () => void;
 }
 
+let detachWorkspaceGroupMru = (): void => undefined;
+
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   api: null,
   hasMaximizedGroup: false,
-  setApi: (api) => set({ api, hasMaximizedGroup: false }),
+  setApi: (api) => {
+    detachWorkspaceGroupMru();
+    detachWorkspaceGroupMru = api
+      ? attachWorkspaceGroupMru(api)
+      : () => undefined;
+    set({ api, hasMaximizedGroup: false });
+  },
   setHasMaximizedGroup: (hasMaximizedGroup) => set({ hasMaximizedGroup }),
   activateTabInActiveGroup: (index) => {
     const api = get().api;

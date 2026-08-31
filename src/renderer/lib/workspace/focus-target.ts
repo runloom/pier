@@ -16,6 +16,12 @@ export interface GroupCandidate {
 
 export type FocusDirection = "right" | "down" | "left" | "up";
 
+/**
+ * = pierTheme.gap (4) + 1. 改 gap 必须同步此常量.
+ * 组间方向跳转与关组空间兜底共用，避免两套公差。
+ */
+export const GROUP_FOCUS_TOL_PX = 5;
+
 /** 候选 rect 是否在 active 的指定方向"足够远" (容忍 tolPx gap). */
 function isInDirection(
   candidate: DOMRect,
