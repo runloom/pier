@@ -56,14 +56,26 @@ export interface PierMobileClientConnectArgs {
   deviceToken: string;
   host: string;
   port: number;
+  /**
+   * M2 会合传输工厂（Task 9）：提供即走 relay 密封通道（忽略 host/port 的
+   * ws:// 直连）；缺省走 dev direct `ws://host:port/ws`。
+   */
+  transportFactory?: PierWebSocketFactory;
 }
 
 export interface PierMobileClientOptions {
   /** 测试 seam：注入 mock；缺省用原生 WebSocket。 */
   createWebSocket?: PierWebSocketFactory;
   onStatusChange?: (status: MobileConnectionStatus) => void;
+  /** 测试 seam：抖动随机源（默认 Math.random）。 */
+  random?: () => number;
   /** 断线重连退避：initial 起步、每次翻倍、封顶 max。 */
   reconnectInitialMs?: number;
+  /**
+   * 退避抖动系数（默认 0.3）：delay = base × (1 + ratio × random())。
+   * 只加不减——保住「至少等满退避」下限，同时打散同时断线的重拨风暴。
+   */
+  reconnectJitterRatio?: number;
   reconnectMaxMs?: number;
 }
 

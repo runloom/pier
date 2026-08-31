@@ -6,12 +6,20 @@
  */
 import { controlSnapshotPayloadSchema } from "@shared/contracts/local-control/control-snapshot.ts";
 import { PierMobileClient } from "./client.ts";
-import { hostKey, loadHosts, type StoredHost } from "./paired-hosts.ts";
+import {
+  canReachViaRelay,
+  loadHosts,
+  type StoredHost,
+  storedHostKey,
+} from "./paired-hosts.ts";
+import { createRelayWebSocketFactory } from "./relay-transport.ts";
 import { useMobileWebStore } from "./store.ts";
 
 let client: PierMobileClient | null = null;
 /** 当前已连接（或连接中）的宿主键；null = 未选择。 */
 let activeKey: string | null = null;
+/** 当前目标宿主全量记录：回前台恢复重拨用（§9.1）。 */
+let activeHost: StoredHost | null = null;
 
 export function getMobileClient(): PierMobileClient {
   if (client === null) {
@@ -31,7 +39,7 @@ export function activeHostKey(): string | null {
 /** 连接目标宿主并开始 watch（幂等：同机已连接直接复用；换机先 close）。 */
 export async function connectHost(target: StoredHost): Promise<void> {
   const c = getMobileClient();
-  const key = hostKey(target.host, target.port);
+  const key = storedHostKey(target);
   if (activeKey === key && c.status === "connected") {
     return;
   }
@@ -39,11 +47,23 @@ export async function connectHost(target: StoredHost): Promise<void> {
     c.close();
   }
   activeKey = key;
+  activeHost = target;
+  // relay 三要素齐备 → 经会合密封通道（跨网）；否则 dev direct ws://（同网）。
+  const transportFactory = canReachViaRelay(target)
+    ? createRelayWebSocketFactory({
+        deviceId: target.deviceId,
+        deviceToken: target.deviceToken,
+        fingerprint: target.fingerprint,
+        hostId: target.hostId,
+        relayUrl: target.relayUrl,
+      })
+    : undefined;
   await c.connect({
     deviceId: target.deviceId,
     deviceToken: target.deviceToken,
     host: target.host,
     port: target.port,
+    ...(transportFactory ? { transportFactory } : {}),
   });
   c.watch(
     (payload) => {
@@ -60,6 +80,25 @@ export async function autoConnectLatestHost(): Promise<void> {
     return;
   }
   await connectHost(latest);
+}
+
+/**
+ * 回前台恢复（§9.1「回到前台拉最新快照」）：iOS 后台冻结定时器，
+ * 重连退避可能停摆——回前台时已连接则立刻拉全量快照补帧；断线中则
+ * 立即重拨（connect 重入会取消挂起的退避定时器）。closed（令牌吊销/
+ * 用户关闭）不自动复活，横幅引导重新配对。
+ */
+export async function resumeActiveHost(): Promise<void> {
+  const target = activeHost;
+  const c = getMobileClient();
+  if (target === null || c.status === "closed" || c.status === "idle") {
+    return;
+  }
+  if (c.status === "connected") {
+    await refreshSnapshot();
+    return;
+  }
+  await connectHost(target);
 }
 
 /** 按需全量快照刷新（interaction_stale 等场景）。 */

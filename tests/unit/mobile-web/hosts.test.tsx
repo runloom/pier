@@ -13,21 +13,42 @@ import {
   type StoredHost,
   saveHost,
 } from "../../../apps/mobile-web/src/lib/paired-hosts.ts";
+import { useMobileWebStore } from "../../../apps/mobile-web/src/lib/store.ts";
 
-const { connectHostMock } = vi.hoisted(() => ({ connectHostMock: vi.fn() }));
+const { activeKeyRef, connectHostMock, fetchHostsStatusMock, resumeMock } =
+  vi.hoisted(() => ({
+    activeKeyRef: { value: null as string | null },
+    connectHostMock: vi.fn(),
+    fetchHostsStatusMock: vi.fn(),
+    resumeMock: vi.fn(async () => undefined),
+  }));
 
 vi.mock("../../../apps/mobile-web/src/lib/session.ts", () => ({
-  activeHostKey: () => null,
+  activeHostKey: () => activeKeyRef.value,
   connectHost: connectHostMock,
+  resumeActiveHost: resumeMock,
+}));
+
+vi.mock("../../../apps/mobile-web/src/lib/relay-api.ts", () => ({
+  fetchHostsStatus: fetchHostsStatusMock,
 }));
 
 describe("HostsPage（H1 主机列表）", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    activeKeyRef.value = null;
+    fetchHostsStatusMock.mockReset();
+    fetchHostsStatusMock.mockResolvedValue(new Map());
+    useMobileWebStore.getState().setConnection("idle");
   });
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
   });
 
   it("无已配对宿主 → 空态文案 + 去配对入口", async () => {
@@ -87,6 +108,101 @@ describe("HostsPage（H1 主机列表）", () => {
       screen.getByTestId("host-error-192.168.1.10:4455").textContent
     ).toContain("connection refused");
     expect(window.location.hash).not.toBe("#/host");
+  });
+
+  it("活跃台重连中但会合明确离线 → 显示「离线」而非连接中空转", async () => {
+    const relayHost: StoredHost = {
+      deviceId: "dev-1",
+      deviceToken: "tok-1",
+      fingerprint: "abcdef0123456789",
+      host: "relay.pier.codes",
+      hostId: "h1",
+      pairedAt: 0,
+      port: 443,
+      relayUrl: "wss://relay.pier.codes",
+    };
+    saveHost(relayHost);
+    activeKeyRef.value = "h1";
+    fetchHostsStatusMock.mockResolvedValue(new Map([["h1", false]]));
+    useMobileWebStore.getState().setConnection("reconnecting");
+    const { HostsPage } = await import(
+      "../../../apps/mobile-web/src/pages/hosts.tsx"
+    );
+    render(<HostsPage />);
+    await waitFor(() => {
+      expect(screen.getAllByTestId("host-item")[0]?.textContent).toContain(
+        "离线"
+      );
+    });
+    expect(screen.getAllByTestId("host-item")[0]?.textContent).not.toContain(
+      "连接中"
+    );
+  });
+
+  it("页面隐藏时停掉在线态轮询，回前台才再刷", async () => {
+    const relayHost: StoredHost = {
+      deviceId: "dev-1",
+      deviceToken: "tok-1",
+      fingerprint: "abcdef0123456789",
+      host: "relay.pier.codes",
+      hostId: "h1",
+      pairedAt: 0,
+      port: 443,
+      relayUrl: "wss://relay.pier.codes",
+    };
+    saveHost(relayHost);
+    fetchHostsStatusMock.mockResolvedValue(new Map([["h1", true]]));
+    const { HostsPage } = await import(
+      "../../../apps/mobile-web/src/pages/hosts.tsx"
+    );
+    render(<HostsPage />);
+    await waitFor(() => {
+      expect(fetchHostsStatusMock.mock.calls.length).toBeGreaterThan(0);
+    });
+    const afterMount = fetchHostsStatusMock.mock.calls.length;
+    vi.useFakeTimers();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchHostsStatusMock.mock.calls.length).toBe(afterMount);
+    vi.useRealTimers();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => {
+      expect(fetchHostsStatusMock.mock.calls.length).toBeGreaterThan(
+        afterMount
+      );
+    });
+  });
+
+  it("会合报活跃台在线且本机仍断线 → 立即重拨（不等退避周期）", async () => {
+    const relayHost: StoredHost = {
+      deviceId: "dev-1",
+      deviceToken: "tok-1",
+      fingerprint: "abcdef0123456789",
+      host: "relay.pier.codes",
+      hostId: "h1",
+      pairedAt: 0,
+      port: 443,
+      relayUrl: "wss://relay.pier.codes",
+    };
+    saveHost(relayHost);
+    activeKeyRef.value = "h1";
+    fetchHostsStatusMock.mockResolvedValue(new Map([["h1", true]]));
+    useMobileWebStore.getState().setConnection("reconnecting");
+    const { HostsPage } = await import(
+      "../../../apps/mobile-web/src/pages/hosts.tsx"
+    );
+    render(<HostsPage />);
+    await waitFor(() => {
+      expect(resumeMock).toHaveBeenCalled();
+    });
   });
 
   it("connect 成功 → 跳转 H2，无错误提示", async () => {

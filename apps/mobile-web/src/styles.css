@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+/*
+ * standalone PWA 安全区（刘海 / Home indicator）：viewport-fit=cover 后由
+ * body 统一让位；底色与页面 bg-neutral-950 一致，安全区不露白边。
+ */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  background: #0a0a0a;
+}

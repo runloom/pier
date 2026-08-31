@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { createDeliverOs } from "@main/services/notification-center/deliver-os.ts";
 import { createDeliverToast } from "@main/services/notification-center/deliver-toast.ts";
 import { parseAgentRef } from "@shared/contracts/agent/runtime-index.ts";
+import type { AppNotification } from "@shared/contracts/notification-center.ts";
 import {
   DEFAULT_NOTIFICATION_CENTER_PREFS,
   type NotificationCenterPrefs,
@@ -17,6 +18,7 @@ import {
 } from "@shared/contracts/notification-center.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
+import type { RemotePushCandidate } from "@shared/notification-delivery.ts";
 import { app, type IpcMain, type IpcMainInvokeEvent } from "electron";
 import type { PierEventBus } from "../app-core/event-bus.ts";
 import {
@@ -37,6 +39,23 @@ import { windowManager } from "../windows/manager.ts";
 import { isTargetAgentPanelFocused } from "./notification-center-agent-focus.ts";
 import { wireAgentCommandInjectFailedReporter } from "./notification-center-inject-report.ts";
 import { terminalFocusCoordinator } from "./terminal/focus-coordinator.ts";
+
+/**
+ * M2 远程推送桥（late-bound）：NCS 在窗口管理早期装配，remote-control /
+ * remote-push 在 app-core boot 后装配——经模块级桥解耦装配顺序；
+ * 未注入时零候选（remotePushTarget 恒 none），行为与 M1 完全一致。
+ */
+interface NotificationRemotePushBridge {
+  candidates(): RemotePushCandidate[];
+  deliver(notification: AppNotification, deviceIds: string[]): void;
+}
+let remotePushBridge: NotificationRemotePushBridge | null = null;
+
+export function setNotificationRemotePushBridge(
+  bridge: NotificationRemotePushBridge
+): void {
+  remotePushBridge = bridge;
+}
 
 const log = createLogger("notification-center.ipc");
 
@@ -118,6 +137,11 @@ async function init(): Promise<NotificationCenterService> {
       }
     },
     deliverOs: (notification, meta) => deliverOsImpl(notification, meta),
+    // M2 远程推送：经 late-bound 桥（remote-control boot 装配后 set）。
+    deliverRemotePush: (notification, target) => {
+      remotePushBridge?.deliver(notification, target.deviceIds);
+    },
+    readRemotePushCandidates: () => remotePushBridge?.candidates() ?? [],
     history,
     readFocusBase: () => {
       const focused = windowManager.getFocused();

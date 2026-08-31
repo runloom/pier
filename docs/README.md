@@ -25,7 +25,8 @@ Pier 是给命令行 AI 用的桌面工作台。根目录 [`README.md`](../READM
 
 | 文档 | 你会找到什么 |
 | --- | --- |
-| [发布总览](./release.md) | 宿主与官方插件的双通道发布流程 |
+| [发布总览](./release.md) | 宿主、官方插件、会合云与移动端 Web 的发布流程 |
+| [会合云](../apps/relay/README.md) | 本地 `pnpm dev:relay`、环境变量、tag `relay-v*` / `mobile-web-v*` |
 | [桌面端发布](./app-release.md) | CI、secrets 与本地 `build:dist` |
 | [模型定价](./model-pricing.md) | 模型定价目录与更新流程 |
 | [Claude 账号插件](./claude-account-plugin.md) | `pier.claude` 账号能力的维护说明 |

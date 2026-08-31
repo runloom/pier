@@ -53,6 +53,30 @@ describe("pairing QR payload (§17.2)", () => {
       })
     ).toThrow();
   });
+
+  it("M2 additive：hostId 与 pairSecret 可选字段 round-trip（≥43 字符）", () => {
+    const payload = {
+      pairingCode: "123456",
+      fingerprint: "abcdef0123456789",
+      hostId: "a".repeat(64),
+      pairSecret: "s".repeat(43),
+      relayHint: "wss://relay.example.com",
+    };
+    expect(pairingQrPayloadSchema.parse(payload)).toEqual(payload);
+    expect(() =>
+      pairingQrPayloadSchema.parse({ ...payload, pairSecret: "too-short" })
+    ).toThrow();
+  });
+
+  it("relayHint 注释锁定 M2 会合 wss 语义；账号类型锁定为保留位", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/shared/contracts/remote.ts"),
+      "utf8"
+    );
+    expect(source).toMatch(/wss/u);
+    expect(source).toMatch(/保留位（未来可选账号层）/u);
+    expect(source).toMatch(/第十三次修订/u);
+  });
 });
 
 describe("pairing HTTP contract (§17.2)", () => {

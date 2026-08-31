@@ -16,7 +16,8 @@ export const pierCompanionShellSchema = z.enum(["web", "app", "miniprogram"]);
 export type PierCompanionShell = z.infer<typeof pierCompanionShellSchema>;
 
 /**
- * 演进只许 additive 可选字段（M2 加 accountId?）——保持纯 TS interface，
+ * 演进只许 additive 可选字段（未来可选账号层才加 accountId?，M2 无账号交付——
+ * 规格第十三次修订）——保持纯 TS interface，
  * pairing-store 磁盘 schema 逐字段镜像对齐，禁止在此 zod 化。
  */
 export interface PierPairedDevice {
@@ -55,9 +56,17 @@ export const pairingQrPayloadSchema = z
   .object({
     fingerprint: z.string().min(1),
     host: z.string().min(1).optional(),
+    /** M2：宿主身份（公钥哈希）自证明 id，会合路由与赎回定向用（服务端设计 §4）。 */
+    hostId: z.string().min(1).optional(),
     pairingCode: z.string().min(1),
+    /**
+     * M2：高熵配对密钥（32 字节 base64url ≥ 43 字符，仅经 QR 带外传递）。
+     * 赎回往返经其派生的 pairKey 密封，relay 全程不见令牌（服务端设计 §5.3）；
+     * 人工输码（无 pairSecret）仅允许 LAN 直连赎回，relay 路径拒绝。
+     */
+    pairSecret: z.string().min(43).optional(),
     port: z.number().int().positive().optional(),
-    /** M1 恒 null；M2 会合地址。 */
+    /** 未配置会合时恒 null；已配置为会合 wss URL（M2，服务端设计 §5）。 */
     relayHint: z.string().nullable(),
   })
   .strict();
@@ -81,15 +90,21 @@ export const pairingFailureReasonSchema = z.enum([
 ]);
 export type PairingFailureReason = z.infer<typeof pairingFailureReasonSchema>;
 
-// ---- M2 冻结（现在定义、M2 实现；字段语义见规格 §17.3）----
+// ---- M2 冻结与保留位（字段语义见规格 §17.3；账号相关为保留位）----
 
-/** M2 冻结：账号形态开放（D4），所有引用走不透明 accountId。 */
+/**
+ * M2 冻结 · 保留位（未来可选账号层）：M2 无账号交付，不实现（规格第十三次修订）。
+ * 所有引用走不透明 accountId。
+ */
 export const pierAccountRefSchema = z
   .object({ accountId: z.string().min(1) })
   .strict();
 export type PierAccountRef = z.infer<typeof pierAccountRefSchema>;
 
-/** M2 冻结：会合云注册表条目；宿主出站拨号后置 online。 */
+/**
+ * M2 冻结 · 保留位（未来可选账号层）：M2 会合零持久化，
+ * 在线态与设备名册为内存担保（服务端设计 §3），本类型不实现。
+ */
 export const pierHostRegistrationSchema = z
   .object({
     hostId: z.string().min(1),
@@ -121,6 +136,19 @@ export const pierPushHandleSchema = z
   })
   .strict();
 export type PierPushHandle = z.infer<typeof pierPushHandleSchema>;
+
+/** M2：Web Push 载荷（宿主直发 → Service Worker 展示；additive 契约）。 */
+export const pierRemotePushPayloadSchema = z
+  .object({
+    title: z.string().min(1).max(300),
+    body: z.string().max(1000).optional(),
+    /** PWA 内路由深链（notificationclick 打开）。 */
+    path: z.string().max(500).optional(),
+    /** 与消息中心合并去重的键（toast 副本按此标已读的同源语义）。 */
+    dedupeKey: z.string().max(300).optional(),
+  })
+  .strict();
+export type PierRemotePushPayload = z.infer<typeof pierRemotePushPayloadSchema>;
 
 /** M2 冻结：会合转发信封；frame 透传 v2 帧，relay 不解读、不授权。 */
 export const pierRelayEnvelopeSchema = z

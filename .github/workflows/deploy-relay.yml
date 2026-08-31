@@ -1,0 +1,29 @@
+# 会合云（relay）发布：tag relay-v* 触发；先构建校验（dry-run），
+# 接入部署密钥后再启用推镜像 + SSH compose up（服务端设计 §10.3）。
+name: deploy-relay
+
+on:
+  push:
+    tags:
+      - "relay-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # 校验：relay 类型检查 + 治理与转发全套单测（in-process，无需部署）。
+      - run: pnpm exec tsc -p apps/relay/tsconfig.json --noEmit
+      - run: pnpm vitest run tests/unit/relay
+      # Docker 构建校验（不推送）；接入 GHCR 密钥后加 login + push + SSH。
+      - run: docker build -f apps/relay/Dockerfile -t pier-relay:ci .

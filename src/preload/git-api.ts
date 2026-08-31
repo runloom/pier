@@ -31,6 +31,8 @@ import { invokePierCommand } from "./ipc-envelope.ts";
 // 注意:branch 单独增删(git.createBranch/git.deleteBranch)仍保留在 main 命令表,
 // 服务 CLI 与未来表面,但不经 preload 暴露。preload 只暴露当前 UI/插件已
 // 消费的方法,避免闲置入口扩大攻击面。
+// git.openReviewPanel 同理保留:消费方是配对移动端(S2 变更入口与桌面同步
+// show-or-focus 审查面板);桌面 renderer 自有直接打开路径,不需经 main 往返。
 
 /** diff 范围/路径选项(IPC 层用值类型;详细 zod 在 contracts/git.ts) */
 export interface GitDiffOptionsValue {

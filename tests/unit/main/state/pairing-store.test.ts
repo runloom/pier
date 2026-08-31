@@ -100,6 +100,40 @@ describe("pairing store", () => {
     expect(reloaded.pendingPairing).toBeNull();
   });
 
+  it("M2 清扫：磁盘存量设备（无 lanTokenSweepAt 标记）init 时一次性吊销", async () => {
+    const filePath = await pairingFile();
+    // 切片期磁盘态：有设备、无清扫标记（规格 §9 第 6 条的升级场景）。
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        devices: [makeDevice()],
+        instanceSecret: "s".repeat(43),
+        pendingPairing: null,
+      })
+    );
+
+    const store = createPairingStore(filePath);
+    const state = await store.init();
+    expect(state.devices).toEqual([]);
+    expect(typeof state.lanTokenSweepAt).toBe("number");
+
+    // 标记随 init 落盘：崩溃重启不得重复吊销之后新配对的设备。
+    const onDisk = await readStored(filePath);
+    expect(onDisk.lanTokenSweepAt).toBe(state.lanTokenSweepAt);
+
+    store.mutate((current) => ({
+      ...current,
+      devices: [makeDevice({ deviceId: "dev-official" })],
+    }));
+    await store.flush();
+
+    const reopened = createPairingStore(filePath);
+    const reloaded = await reopened.init();
+    expect(reloaded.devices.map((device) => device.deviceId)).toEqual([
+      "dev-official",
+    ]);
+  });
+
   it("reuses the persisted instanceSecret instead of regenerating it", async () => {
     const filePath = await pairingFile();
 

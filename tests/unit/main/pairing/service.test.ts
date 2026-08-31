@@ -58,7 +58,12 @@ async function makeService(): Promise<{
   const filePath = join(dir, "pairing.json");
   const store = createPairingStore(filePath);
   await store.init();
-  const service = createPairingService({ now, store });
+  // resolveRelay 注入 null：本文件锁 M1 纯 LAN 语义，不随官方会合常量漂移。
+  const service = createPairingService({
+    now,
+    resolveRelay: () => null,
+    store,
+  });
   return { filePath, service, store };
 }
 
@@ -158,7 +163,7 @@ describe("pairing service", () => {
     const first = service.beginPairing({ host: "h", port: 1 });
     service.beginPairing({ host: "h", port: 1 });
     expect(
-      service.redeemPairingCode(redeemRequest({ code: first.code }))
+      await service.redeemPairingCode(redeemRequest({ code: first.code }))
     ).toEqual({
       ok: false,
       reason: "pairing_invalid",
@@ -168,10 +173,10 @@ describe("pairing service", () => {
   it("redeems a valid code exactly once and clears the pending pairing", async () => {
     const { service, store } = await makeService();
     const { code } = service.beginPairing({ host: "h", port: 1 });
-    const redeemed = service.redeemPairingCode(redeemRequest({ code }));
+    const redeemed = await service.redeemPairingCode(redeemRequest({ code }));
     expect(redeemed).toMatchObject({ ok: true, tokenEpoch: 0 });
     expect(store.get().pendingPairing).toBeNull();
-    expect(service.redeemPairingCode(redeemRequest({ code }))).toEqual({
+    expect(await service.redeemPairingCode(redeemRequest({ code }))).toEqual({
       ok: false,
       reason: "pairing_invalid",
     });
@@ -179,7 +184,7 @@ describe("pairing service", () => {
 
   it("rejects redemption without a pending pairing", async () => {
     const { service } = await makeService();
-    expect(service.redeemPairingCode(redeemRequest())).toEqual({
+    expect(await service.redeemPairingCode(redeemRequest())).toEqual({
       ok: false,
       reason: "pairing_invalid",
     });
@@ -189,11 +194,15 @@ describe("pairing service", () => {
     const { service } = await makeService();
     const { code } = service.beginPairing({ host: "h", port: 1 });
     const wrong = code === "000000" ? "000001" : "000000";
-    expect(service.redeemPairingCode(redeemRequest({ code: wrong }))).toEqual({
+    expect(
+      await service.redeemPairingCode(redeemRequest({ code: wrong }))
+    ).toEqual({
       ok: false,
       reason: "pairing_invalid",
     });
-    expect(service.redeemPairingCode(redeemRequest({ code }))).toMatchObject({
+    expect(
+      await service.redeemPairingCode(redeemRequest({ code }))
+    ).toMatchObject({
       ok: true,
     });
   });
@@ -202,7 +211,9 @@ describe("pairing service", () => {
     const { service, store } = await makeService();
     const { code, expiresAt } = service.beginPairing({ host: "h", port: 1 });
     currentTime = expiresAt - 1;
-    expect(service.redeemPairingCode(redeemRequest({ code }))).toMatchObject({
+    expect(
+      await service.redeemPairingCode(redeemRequest({ code }))
+    ).toMatchObject({
       ok: true,
     });
 
@@ -210,7 +221,7 @@ describe("pairing service", () => {
     const second = service.beginPairing({ host: "h", port: 1 });
     currentTime = second.expiresAt;
     expect(
-      service.redeemPairingCode(redeemRequest({ code: second.code }))
+      await service.redeemPairingCode(redeemRequest({ code: second.code }))
     ).toEqual({
       ok: false,
       reason: "pairing_expired",
@@ -222,7 +233,7 @@ describe("pairing service", () => {
     const { service } = await makeService();
     const { code } = service.beginPairing({ host: "h", port: 1 });
     service.cancelPairing();
-    expect(service.redeemPairingCode(redeemRequest({ code }))).toEqual({
+    expect(await service.redeemPairingCode(redeemRequest({ code }))).toEqual({
       ok: false,
       reason: "pairing_invalid",
     });
@@ -231,7 +242,7 @@ describe("pairing service", () => {
   it("grants only the intersection with mobile-paired defaults", async () => {
     const { service } = await makeService();
     const { code } = service.beginPairing({ host: "h", port: 1 });
-    const redeemed = service.redeemPairingCode(
+    const redeemed = await service.redeemPairingCode(
       redeemRequest({
         code,
         requestedCapabilities: [
@@ -258,7 +269,7 @@ describe("pairing service", () => {
   it("uses the provided name for the persisted device", async () => {
     const { service } = await makeService();
     const { code } = service.beginPairing({ host: "h", port: 1 });
-    const redeemed = service.redeemPairingCode(
+    const redeemed = await service.redeemPairingCode(
       redeemRequest({ code, name: "小明的手机" })
     );
     if (!redeemed.ok) {
@@ -273,14 +284,14 @@ describe("pairing service", () => {
   it("defaults shell to web and records an explicit shell", async () => {
     const { service } = await makeService();
     const first = service.beginPairing({ host: "h", port: 1 });
-    const webRedeemed = service.redeemPairingCode(
+    const webRedeemed = await service.redeemPairingCode(
       redeemRequest({ code: first.code })
     );
     if (!webRedeemed.ok) {
       throw new Error("expected redeem to succeed");
     }
     const second = service.beginPairing({ host: "h", port: 1 });
-    const appRedeemed = service.redeemPairingCode(
+    const appRedeemed = await service.redeemPairingCode(
       redeemRequest({ code: second.code, shell: "app" })
     );
     if (!appRedeemed.ok) {
@@ -298,7 +309,7 @@ describe("pairing service", () => {
   it("persists only the token hash, never the raw token", async () => {
     const { filePath, service, store } = await makeService();
     const { code } = service.beginPairing({ host: "h", port: 1 });
-    const redeemed = service.redeemPairingCode(redeemRequest({ code }));
+    const redeemed = await service.redeemPairingCode(redeemRequest({ code }));
     if (!redeemed.ok) {
       throw new Error("expected redeem to succeed");
     }
@@ -316,7 +327,7 @@ describe("pairing service", () => {
   it("authenticates with a constant-time token comparison", async () => {
     const { service } = await makeService();
     const { code } = service.beginPairing({ host: "h", port: 1 });
-    const redeemed = service.redeemPairingCode(redeemRequest({ code }));
+    const redeemed = await service.redeemPairingCode(redeemRequest({ code }));
     if (!redeemed.ok) {
       throw new Error("expected redeem to succeed");
     }
@@ -348,7 +359,7 @@ describe("pairing service", () => {
   it("revokeDevice removes the device and notifies onRevoke listeners", async () => {
     const { service } = await makeService();
     const { code } = service.beginPairing({ host: "h", port: 1 });
-    const redeemed = service.redeemPairingCode(redeemRequest({ code }));
+    const redeemed = await service.redeemPairingCode(redeemRequest({ code }));
     if (!redeemed.ok) {
       throw new Error("expected redeem to succeed");
     }
@@ -369,7 +380,7 @@ describe("pairing service", () => {
 
     unsubscribe();
     const second = service.beginPairing({ host: "h", port: 1 });
-    const secondRedeemed = service.redeemPairingCode(
+    const secondRedeemed = await service.redeemPairingCode(
       redeemRequest({ code: second.code })
     );
     if (!secondRedeemed.ok) {
@@ -379,10 +390,34 @@ describe("pairing service", () => {
     expect(revoked).toEqual([redeemed.deviceId]);
   });
 
+  it("revokeDevice 同时清掉该设备的 Web Push 句柄", async () => {
+    const { service, store } = await makeService();
+    const { code } = service.beginPairing({ host: "h", port: 1 });
+    const redeemed = await service.redeemPairingCode(redeemRequest({ code }));
+    if (!redeemed.ok) {
+      throw new Error("expected redeem to succeed");
+    }
+    store.mutate((current) => ({
+      ...current,
+      pushHandles: [
+        {
+          deviceId: redeemed.deviceId,
+          shell: "web",
+          webPush: {
+            endpoint: "https://web.push.example/sub",
+            keys: { auth: "auth", p256dh: "pub" },
+          },
+        },
+      ],
+    }));
+    expect(service.revokeDevice(redeemed.deviceId)).toEqual({ revoked: true });
+    expect(store.get().pushHandles).toEqual([]);
+  });
+
   it("checks token epochs against live devices only", async () => {
     const { service } = await makeService();
     const { code } = service.beginPairing({ host: "h", port: 1 });
-    const redeemed = service.redeemPairingCode(redeemRequest({ code }));
+    const redeemed = await service.redeemPairingCode(redeemRequest({ code }));
     if (!redeemed.ok) {
       throw new Error("expected redeem to succeed");
     }
@@ -395,7 +430,7 @@ describe("pairing service", () => {
     expect(service.assertEpochCurrent(redeemed.deviceId, 0)).toBe(false);
 
     const second = service.beginPairing({ host: "h", port: 1 });
-    const rebuilt = service.redeemPairingCode(
+    const rebuilt = await service.redeemPairingCode(
       redeemRequest({ code: second.code })
     );
     if (!rebuilt.ok) {
@@ -408,7 +443,7 @@ describe("pairing service", () => {
   it("touchLastSeen stamps the device with the injected clock", async () => {
     const { service } = await makeService();
     const { code } = service.beginPairing({ host: "h", port: 1 });
-    const redeemed = service.redeemPairingCode(redeemRequest({ code }));
+    const redeemed = await service.redeemPairingCode(redeemRequest({ code }));
     if (!redeemed.ok) {
       throw new Error("expected redeem to succeed");
     }

@@ -57,6 +57,7 @@ export async function executeRemoteAccessCommand(
   switch (command.type) {
     case "remoteAccess.getState": {
       const state = remoteControl.server.state();
+      const uplink = remoteControl.uplink ?? null;
       return success(requestId, {
         boundaryNote: true,
         devices: pairing.listDevices().map(
@@ -74,14 +75,25 @@ export async function executeRemoteAccessCommand(
         host: state.host,
         pendingPairing: pairing.pendingPairing(),
         port: state.port,
+        // M2 跨网远程：会合未配置（纯 LAN 形态）时 configured=false，
+        // 设置卡据此隐藏「跨网远程」区（uplink 为 null）。
+        remote: {
+          configured: uplink !== null,
+          connectionState: uplink?.state() ?? "stopped",
+        },
       });
     }
     case "remoteAccess.setEnabled": {
       if (command.enabled) {
         await remoteControl.owner.start();
+        // 会合拨号与 LAN 监听同门启停（配置了 relay 地址才存在）。
+        remoteControl.uplink?.start();
       } else {
+        remoteControl.uplink?.stop();
         await remoteControl.owner.stop();
       }
+      // 显式选择写盘：重启后 restoreRemoteAccessOnBoot 按此恢复（默认关不变）。
+      pairing.setRemoteAccessEnabled(command.enabled);
       return success(requestId, {
         enabled: remoteControl.server.state().enabled,
       });

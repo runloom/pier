@@ -1,14 +1,16 @@
 /**
- * H2 工作台：connect + control.watch 快照驱动。agents/activity 投影为
- * 会话列表，附 ready/processing/tool/waiting/error 状态过滤。
+ * H2 工作台：可投影面板统一列表（终端 / 变更 / 文档）。
+ * 状态过滤只作用于终端组；waiting 置顶。无投影协议的面板类型不列。
  */
-import type { ControlSnapshotPayload } from "@shared/contracts/local-control/control-snapshot.ts";
 import { type ReactNode, useMemo, useState } from "react";
 import { TopBar } from "../components/top-bar.tsx";
+import { openChangesSynced } from "../lib/open-changes.ts";
+import {
+  buildProjectableGroups,
+  type ProjectablePanelRow,
+} from "../lib/projectable-panels.ts";
 import { navigate } from "../lib/routes.ts";
 import { useMobileWebStore } from "../lib/store.ts";
-
-type ControlSnapshot = ControlSnapshotPayload | null;
 
 const STATUS_FILTERS = [
   "ready",
@@ -26,32 +28,77 @@ const STATUS_FILTER_LABEL: Record<(typeof STATUS_FILTERS)[number], string> = {
   waiting: "需要你处理",
 };
 
-export interface AgentRow {
-  activityStatus: string | null;
-  agentId: string;
-  cwd: string | null;
-  pendingInteractionId: string | null;
-  worktreeKey: string | null;
+function statusText(row: ProjectablePanelRow): string {
+  if (row.group !== "terminal") {
+    return row.statusLabel;
+  }
+  if (row.agentId === null) {
+    return "终端";
+  }
+  if (row.activityStatus === null) {
+    return "未知";
+  }
+  return (
+    STATUS_FILTER_LABEL[
+      row.activityStatus as (typeof STATUS_FILTERS)[number]
+    ] ?? row.activityStatus
+  );
 }
 
-/** agent 条目按 panelId+windowId 关联 activity 摘要（status/pendingInteractionId）。 */
-export function buildAgentRows(snapshot: ControlSnapshot): AgentRow[] {
-  if (snapshot === null) {
-    return [];
+function openRow(row: ProjectablePanelRow): void {
+  if (row.group === "changes") {
+    // PC 同步：show-or-focus 桌面审查面板后进入投影。
+    openChangesSynced(row.cwd);
+    return;
   }
-  return snapshot.agents.map((agent) => {
-    const activity = snapshot.activity.find(
-      (entry) =>
-        entry.panelId === agent.panelId && entry.windowId === agent.windowId
-    );
-    return {
-      activityStatus: activity?.status ?? null,
-      agentId: agent.agentId,
-      cwd: agent.cwd ?? null,
-      pendingInteractionId: activity?.pendingInteractionId ?? null,
-      worktreeKey: agent.worktreeKey ?? null,
-    };
-  });
+  if (row.group === "docs") {
+    const root = row.sourceRoot ?? row.cwd;
+    navigate({
+      page: "files",
+      ...(root === null ? {} : { root }),
+      ...(row.sourcePath === null ? {} : { path: row.sourcePath }),
+    });
+    return;
+  }
+  navigate({ page: "session", panelId: row.panelId });
+}
+
+function PanelList(props: { rows: ProjectablePanelRow[]; testId: string }) {
+  return (
+    <ul className="flex flex-col gap-2" data-testid={props.testId}>
+      {props.rows.map((row) => (
+        <li key={row.panelId}>
+          <button
+            className="w-full rounded border border-neutral-800 bg-neutral-900/60 p-3 text-left"
+            data-testid={`panel-${row.panelId}`}
+            onClick={() => {
+              openRow(row);
+            }}
+            type="button"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-sm">{row.label}</span>
+              <span
+                className={`text-xs ${
+                  row.activityStatus === "waiting"
+                    ? "text-amber-400"
+                    : "text-neutral-400"
+                }`}
+              >
+                {statusText(row)}
+              </span>
+            </div>
+            <p className="mt-0.5 text-[10px] text-neutral-500">
+              {row.worktreeKey ?? row.cwd ?? "—"}
+              {row.activityStatus === "waiting" &&
+                row.pendingInteractionId !== null &&
+                " · 去处理"}
+            </p>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export function HostPage() {
@@ -61,64 +108,58 @@ export function HostPage() {
     "all"
   );
 
-  const rows = useMemo(() => buildAgentRows(snapshot), [snapshot]);
-  const visible =
+  const groups = useMemo(() => buildProjectableGroups(snapshot), [snapshot]);
+  const visibleTerminals =
     filter === "all"
-      ? rows
-      : rows.filter((row) => row.activityStatus === filter);
+      ? groups.terminals
+      : groups.terminals.filter((row) => row.activityStatus === filter);
 
-  let agentList: ReactNode;
+  let body: ReactNode;
   if (snapshot === null) {
-    agentList = (
+    body = (
       <p className="mt-8 text-center text-neutral-500 text-sm">
         等待快照…（未连接时请先在主机列表进入）
       </p>
     );
-  } else if (visible.length === 0) {
-    agentList = (
+  } else if (
+    visibleTerminals.length === 0 &&
+    groups.changes.length === 0 &&
+    groups.docs.length === 0
+  ) {
+    body = (
       <p className="mt-8 text-center text-neutral-500 text-sm">
-        没有该状态的会话
+        {filter === "all" ? "没有可投影的面板" : "没有该状态的会话"}
       </p>
     );
   } else {
-    agentList = (
-      <ul className="flex flex-col gap-2">
-        {visible.map((row) => (
-          <li key={row.agentId}>
-            <button
-              className="w-full rounded border border-neutral-800 bg-neutral-900/60 p-3 text-left"
-              data-testid={`agent-${row.agentId}`}
-              onClick={() => {
-                navigate({ agentId: row.agentId, page: "session" });
-              }}
-              type="button"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-sm">{row.agentId}</span>
-                <span
-                  className={`text-xs ${
-                    row.activityStatus === "waiting"
-                      ? "text-amber-400"
-                      : "text-neutral-400"
-                  }`}
-                >
-                  {row.activityStatus === null
-                    ? "未知"
-                    : (STATUS_FILTER_LABEL[
-                        row.activityStatus as (typeof STATUS_FILTERS)[number]
-                      ] ?? row.activityStatus)}
-                </span>
-              </div>
-              <p className="mt-0.5 text-[10px] text-neutral-500">
-                {row.worktreeKey ?? row.cwd ?? "—"}
-                {row.activityStatus === "waiting" &&
-                  row.pendingInteractionId !== null &&
-                  " · 去处理"}
-              </p>
-            </button>
-          </li>
-        ))}
-      </ul>
+    body = (
+      <div className="flex flex-col gap-6">
+        {(visibleTerminals.length > 0 || groups.terminals.length > 0) && (
+          <section>
+            <h2 className="mb-2 text-neutral-400 text-xs">终端</h2>
+            {visibleTerminals.length === 0 ? (
+              <p className="text-neutral-500 text-sm">没有该状态的会话</p>
+            ) : (
+              <PanelList
+                rows={visibleTerminals}
+                testId="host-group-terminals"
+              />
+            )}
+          </section>
+        )}
+        {groups.changes.length > 0 && (
+          <section>
+            <h2 className="mb-2 text-neutral-400 text-xs">变更</h2>
+            <PanelList rows={groups.changes} testId="host-group-changes" />
+          </section>
+        )}
+        {groups.docs.length > 0 && (
+          <section>
+            <h2 className="mb-2 text-neutral-400 text-xs">文档</h2>
+            <PanelList rows={groups.docs} testId="host-group-docs" />
+          </section>
+        )}
+      </div>
     );
   }
 
@@ -144,10 +185,10 @@ export function HostPage() {
             }}
             type="button"
           >
-            全部 {rows.length}
+            全部 {groups.terminals.length}
           </button>
           {STATUS_FILTERS.map((status) => {
-            const count = rows.filter(
+            const count = groups.terminals.filter(
               (row) => row.activityStatus === status
             ).length;
             return (
@@ -168,28 +209,8 @@ export function HostPage() {
             );
           })}
         </div>
-        {agentList}
+        {body}
         <nav className="mt-4 flex gap-3 border-neutral-800 border-t pt-3 text-xs">
-          <button
-            className="text-neutral-300 underline"
-            data-testid="host-nav-changes"
-            onClick={() => {
-              navigate({ page: "changes" });
-            }}
-            type="button"
-          >
-            变更
-          </button>
-          <button
-            className="text-neutral-300 underline"
-            data-testid="host-nav-files"
-            onClick={() => {
-              navigate({ page: "files" });
-            }}
-            type="button"
-          >
-            文件
-          </button>
           <button
             className="text-neutral-300 underline"
             data-testid="host-nav-notifications"

@@ -27,6 +27,8 @@ const PRELOAD_FILES = [
 const DELIBERATELY_UNEXPOSED = new Set([
   "git.createBranch",
   "git.deleteBranch",
+  // 消费方是配对移动端（S2 同步开面板）；桌面 renderer 自有直接打开路径。
+  "git.openReviewPanel",
 ]);
 
 const HANDLER_CASE_RE = /(?:case|===)\s+"(git\.[^"]+)"/gu;

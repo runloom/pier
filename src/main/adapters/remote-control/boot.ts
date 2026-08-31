@@ -23,9 +23,13 @@ import type {
   CommandRouter,
   PierCoreServices,
 } from "../../app-core/command-router.ts";
+import { setNotificationRemotePushBridge } from "../../ipc/notification-center.ts";
+import { resolveRelayUrl } from "../../services/pairing/relay-url.ts";
 import type { PairingService } from "../../services/pairing/service.ts";
 import { createPairingService } from "../../services/pairing/service.ts";
+import { createRemotePushService } from "../../services/remote-push/service.ts";
 import { getSharedPairingStore } from "../../state/pairing-store.ts";
+import { createSecretsStore } from "../../state/secrets-store.ts";
 import type { CreateLocalControlSessionArgs } from "../cli/local-control/session.ts";
 import type { RemoteControlRegistrationOwner } from "./registration.ts";
 import { createRemoteControlRegistrationOwner } from "./registration.ts";
@@ -38,6 +42,7 @@ import {
   createMobileSessionTracker,
 } from "./session-bridge.ts";
 import { resolveMobileWebSpaDistDir } from "./static-spa.ts";
+import { createUplinkDialer, type UplinkDialer } from "./uplink/dialer.ts";
 
 const log = createLogger("remote-control");
 
@@ -45,10 +50,12 @@ export interface RemoteControlBoot {
   owner: RemoteControlRegistrationOwner;
   pairing: PairingService;
   server: RemoteControlServer;
-  /** 直接摊入 PierCoreServices 的键（remoteAccess.* 命令面消费）。 */
-  services: Pick<PierCoreServices, "pairing" | "remoteControl">;
+  /** 直接摊入 PierCoreServices 的键（remoteAccess.* / 推送命令面消费）。 */
+  services: Pick<PierCoreServices, "pairing" | "remoteControl" | "remotePush">;
   /** executeCommand 桥的延迟绑定（见文件头注释）。 */
   setCommandRouter(router: CommandRouter): void;
+  /** M2 会合出站拨号；未配置 relay 地址（resolveRelayUrl → null）时为 null。 */
+  uplink: UplinkDialer | null;
 }
 
 export function bootAppCoreRemoteControl(args: {
@@ -62,7 +69,22 @@ export function bootAppCoreRemoteControl(args: {
   const store = getSharedPairingStore();
   // 默认关：构造期不 init / 不写 pairing.json。首次 remoteAccess.* 或
   // owner.start 才加载；否则 FIFO 启动关窗会与 userData 写盘竞态挂死。
-  const pairing = createPairingService({ store });
+  // secrets（safeStorage）注入启用 M2 会合能力：身份密钥 / E2E 派生 / 名册。
+  const secrets = createSecretsStore();
+  const pairing = createPairingService({ secrets, store });
+  // M2 Web Push 直发（规格 §12）：构造期零副作用（VAPID 密钥惰性生成）。
+  const remotePush = createRemotePushService({ secrets, store });
+  setNotificationRemotePushBridge({
+    candidates: () =>
+      remotePush.candidates(
+        (deviceId) => args.clients.get(`mobile:${deviceId}`) !== null
+      ),
+    deliver: (notification, deviceIds) => {
+      remotePush.send(notification, deviceIds).catch((error: unknown) => {
+        log.warn("remote push send failed", { error });
+      });
+    },
+  });
   const sessionTracker = createMobileSessionTracker();
   const { getServices } = args;
   // receipts：boot 级内存幂等层——选「跨适配器共享」：直接复用 CLI 轨的
@@ -133,16 +155,43 @@ export function bootAppCoreRemoteControl(args: {
     },
     server,
   });
+  // M2 会合拨号：默认不 start（与 LAN listener 同门——remoteAccess.setEnabled）。
+  const relayUrl = resolveRelayUrl();
+  const uplink: UplinkDialer | null =
+    relayUrl === null
+      ? null
+      : createUplinkDialer({
+          attachSession: (socket, deviceId) => {
+            attachMobileSession(socket, {
+              clients: args.clients,
+              executeCommand,
+              pairing,
+              recordFailure: () => undefined,
+              recordSuccess: () => undefined,
+              remoteAddress: `relay:${deviceId}`,
+              sessionDeps,
+              sessionTracker,
+            });
+          },
+          log: (event, fields) => {
+            log.info(event, fields ?? {});
+          },
+          pairing,
+          relayUrl,
+        });
   return {
     owner: registration,
     pairing,
     server,
+    uplink,
     services: {
       pairing,
       remoteControl: {
         owner: registration,
         server,
+        uplink,
       },
+      remotePush,
     },
     setCommandRouter(router) {
       commandRouter = router;

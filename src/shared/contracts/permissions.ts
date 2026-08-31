@@ -188,6 +188,9 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "preferences:read",
     "terminal:read",
     "window:read",
+    // S2 变更入口与 PC 同步打开审查面板（git.openReviewPanel）；
+    // 与 panel.open/terminal.open 同档，非破坏可见动作，不属 *:control。
+    "workspace:open",
     "workspace:read",
     "worktree:read",
   ],

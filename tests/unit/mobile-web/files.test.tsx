@@ -48,6 +48,7 @@ async function openNotes(): Promise<void> {
 
 describe("FilesPage 预览（file.readText 裸 string 契约）", () => {
   beforeEach(() => {
+    window.location.hash = "#/files";
     useMobileWebStore.setState({ snapshot: SNAPSHOT });
     stubCommands(() => Promise.resolve("default"));
   });
@@ -55,6 +56,7 @@ describe("FilesPage 预览（file.readText 裸 string 契约）", () => {
   afterEach(() => {
     cleanup();
     useMobileWebStore.setState({ snapshot: null });
+    window.location.hash = "";
   });
 
   it("readText 返回 string → 渲染预览并按 8192 字符截断", async () => {
@@ -92,5 +94,28 @@ describe("FilesPage 预览（file.readText 裸 string 契约）", () => {
       "二进制"
     );
     expect(screen.queryByTestId("file-preview")).toBeNull();
+  });
+
+  it("路由 root 优先于快照启发式；path 直开预览", async () => {
+    window.location.hash = "#/files?root=/session-root&path=notes.txt";
+    stubCommands(() => Promise.resolve("hello from route"));
+    render(<FilesPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId("files-root").textContent).toContain(
+        "/session-root"
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("file-preview").textContent).toBe(
+        "hello from route"
+      );
+    });
+    expect(
+      commandMock.mock.calls.some(
+        (call: unknown[]) =>
+          (call[0] as { root?: string; type: string }).type === "file.list" &&
+          (call[0] as { root?: string }).root === "/session-root"
+      )
+    ).toBe(true);
   });
 });

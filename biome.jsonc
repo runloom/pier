@@ -48,7 +48,8 @@
         "vitest.config.ts",
         "tailwind.config.ts",
         "scripts/**",
-        "apps/mobile-web/**"
+        "apps/mobile-web/**",
+        "apps/relay/**"
       ],
       "linter": {
         "rules": {

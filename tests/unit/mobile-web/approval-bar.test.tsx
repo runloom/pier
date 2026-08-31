@@ -29,7 +29,7 @@ describe("ApprovalBar（M1 审批条）", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("waiting 且带 pendingInteractionId 时渲染 13 键", () => {
+  it("waiting 且带 pendingInteractionId 时渲染 13 键（数字键折叠后展开）", () => {
     render(
       <ApprovalBar interactionId="hook-42" onRespond={() => {}} waiting />
     );
@@ -50,6 +50,12 @@ describe("ApprovalBar（M1 审批条）", () => {
       "9",
     ];
     expect([...APPROVAL_KEYS]).toEqual(expected);
+    // 工效分层：Enter/Esc/y/n 直出，数字键默认折叠
+    for (const key of ["enter", "escape", "y", "n"]) {
+      expect(screen.getByTestId(`approval-key-${key}`)).toBeDefined();
+    }
+    expect(screen.queryByTestId("approval-key-1")).toBeNull();
+    fireEvent.click(screen.getByTestId("approval-digits-toggle"));
     for (const key of expected) {
       expect(screen.getByTestId(`approval-key-${key}`)).toBeDefined();
     }
@@ -63,6 +69,7 @@ describe("ApprovalBar（M1 审批条）", () => {
     );
     fireEvent.click(screen.getByTestId("approval-key-y"));
     fireEvent.click(screen.getByTestId("approval-key-escape"));
+    fireEvent.click(screen.getByTestId("approval-digits-toggle"));
     fireEvent.click(screen.getByTestId("approval-key-7"));
     expect(onRespond).toHaveBeenCalledTimes(3);
     expect(onRespond).toHaveBeenNthCalledWith(1, "y");

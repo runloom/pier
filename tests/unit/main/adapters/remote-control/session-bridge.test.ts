@@ -106,13 +106,13 @@ async function makePairing(): Promise<{
   return { pairing: createPairingService({ now, store }), store };
 }
 
-function pairDevice(pairing: PairingService): PairedDevice {
+async function pairDevice(pairing: PairingService): Promise<PairedDevice> {
   const { code } = pairing.beginPairing({ host: "192.168.1.2", port: 47_000 });
   const request: PierPairingRequest = {
     code,
     requestedCapabilities: ["git:read"],
   };
-  const redeemed = pairing.redeemPairingCode(request);
+  const redeemed = await pairing.redeemPairingCode(request);
   if (!redeemed.ok) {
     throw new Error("redeem failed");
   }
@@ -130,7 +130,7 @@ async function makeFixture(
   } = {}
 ): Promise<Fixture> {
   const { pairing, store } = await makePairing();
-  const device = pairDevice(pairing);
+  const device = await pairDevice(pairing);
   const clients = createClientRegistry(now);
   const executeCommand =
     overrides.executeCommand ??
@@ -408,7 +408,7 @@ describe("attachMobileSession / 吊销与清理", () => {
 
   it("吊销其它设备不影响本会话", async () => {
     const fx = await makeFixture();
-    const other = pairDevice(fx.pairing);
+    const other = await pairDevice(fx.pairing);
     establishSession(fx);
     const sentBefore = fx.ws.sent.length;
 
