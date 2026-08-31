@@ -1,3 +1,13 @@
+<p align="center">
+  <strong>简体中文</strong>
+  ·
+  <a href="README.en.md">English</a>
+  ·
+  <a href="README.ja.md">日本語</a>
+  ·
+  <a href="README.ko.md">한국어</a>
+</p>
+
 # Pier 本机 CLI 使用手册
 
 `pier` 用于控制本机 Pier：打开项目、定位窗口和面板、操作终端、查看智能体状态，以及管理 Git 工作树。它不是远程 API，也不替代 Claude Code、Codex、OpenCode 等工具自己的命令行。

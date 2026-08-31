@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- **根 README 支持中英日韩。** GitHub 默认仍是简体中文；顶部可切换 English、日本語、한국어。
+- **CLI 使用手册支持中英日韩。** GitHub 入口 `.pier/canvases/pier-cli-user-manual/README.md` 默认仍是简体中文；顶部可切换 English、日本語、한국어。应用内 Canvas 仍为中文。
+
 ## [0.1.35] - 2026-08-31
 
 ### Added

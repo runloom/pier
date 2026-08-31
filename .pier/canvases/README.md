@@ -23,7 +23,7 @@ start from `resources/system-skills/pier-canvas/templates/` instead.
 |--------|------|
 | **smoke/** | Compile → protocol → mount fixtures (four frameworks); live-modules unit tests read and write here |
 | **canvas-kit/** | Primitive catalog referenced by SKILL + settings 物料 page |
-| **pier-cli-user-manual/** | End-user CLI manual rendered as a canvas |
+| **pier-cli-user-manual/** | End-user CLI manual rendered as a canvas. GitHub README is four-locale (`README.md` zh-CN source, plus `README.en.md` / `README.ja.md` / `README.ko.md`). `data.json` stays the command SSOT (Chinese); do not copy it per locale. |
 
 ## Conventions
 

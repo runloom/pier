@@ -88,7 +88,7 @@ docs(readme): restructure project front door
 2. 保持 PR 聚焦：一个问题 / 一个能力
 3. 描述里写清：动机、行为变化、如何验证
 4. 关联 Issue（若有）
-5. 用户可见文案走 i18n（中英 locale 同步），禁止业务代码内联中英文用户串
+5. 用户可见文案走 i18n（`zh-CN` / `en` / `ja` / `ko` 同步），禁止业务代码内联用户串。改根 `README.md` 或 CLI 手册 `.pier/canvases/pier-cli-user-manual/README.md` 时，同步同目录 `README.en.md` / `README.ja.md` / `README.ko.md`
 6. 不要 `git add .` 顺手带走无关文件；不要提交密钥、`electron-builder.env`、本机路径
 
 维护者可能要求补测试、补治理单测（governance test）或拆 PR。
