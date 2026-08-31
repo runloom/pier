@@ -429,6 +429,16 @@ section 根节点下的裸子节点。
 - 检查点：`tests/unit/main/terminal/scrollback-governance.test.ts`、
  `native/Tests/GhosttyBridgeTests/TerminalScrollbackLimitTests.swift`
 
+### 终端剪贴板 — 金标准
+
+权威规格：[`docs/superpowers/specs/2026-08-31-terminal-clipboard-gold-standard.md`](docs/superpowers/specs/2026-08-31-terminal-clipboard-gold-standard.md)。
+
+- **种类路由**（`GhosttyTerminal/Host/ClipboardRouting.swift` 单一来源，对齐 Ghostty.app）：只有 standard 触碰 `NSPasteboard.general`；selection（copy-on-select / 中键粘贴 / OSC 52 `s`）住私有 `io.pier.app.terminal.selection`；**未知种类（zig `primary = 2` / OSC 52 `p`）fail-closed 拒绝**（failable init，禁止「非 selection 即 standard」fail-open）。`supports_selection_clipboard = true` 不得改 false（ghostty 会 fallback 直写 standard）。
+- **写入防御**：confirm=true（clipboard-write=ask，Pier 无 authorize-copy UI）fail-closed；**空串拒绝仅限 standard**（空 flavor 读侧等价「无内容」，空白选区 / OSC 52 空载荷不得清系统剪贴板；私有 selection 板接受空写以清陈旧中键内容）。
+- **抑制恢复**：`endClipboardImageSuppress` 还原前必须验证窗口期无其他写入者（文本变化或新光栅 → 保留新内容放弃还原）；禁止无条件回写 begin 快照。
+- **不吞键**：`copy(_:)` / `paste(_:)` / `selectAll(_:)` responder 动作（单派发显式命令）禁止 `hostKeyboardActive` 门禁；环境键事件（`keyDown` / `performKeyEquivalent` 等）门禁必须保留。
+- 检查点：`tests/unit/native/terminal-clipboard-routing.test.ts`、`native/Tests/GhosttyBridgeTests/TerminalClipboardRoutingTests.swift`、`tests/unit/main/preferences/clipboard-image-suppress.test.ts`。
+
 ### 账号域模块迁移：`src/main/services/agent-accounts/` → `pier.codex`
 
 迁移前，宿主 `src/main/services/agent-accounts/` 仍负责多 AI agent 账号的 CRUD、凭据托管与用量轮询：
