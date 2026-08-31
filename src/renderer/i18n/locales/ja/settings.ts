@@ -373,7 +373,7 @@ export const settings = {
       },
       agents: {
         focusWaiting: "次の対応が必要なエージェントへ移動します。",
-        list: "エージェント一覧を開きます。編集中でも使えます。",
+        list: "エージェント一覧を開きます。",
       },
       commandPalette: {
         clearRecent: "コマンドパレットの履歴を消します。",

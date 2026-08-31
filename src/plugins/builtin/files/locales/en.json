@@ -18,6 +18,18 @@
     "pier.files.editor.showHover": {
       "title": "Show Symbol Information"
     },
+    "pier.files.editor.selectNextOccurrence": {
+      "title": "Select Next Occurrence"
+    },
+    "pier.files.editor.selectAllOccurrences": {
+      "title": "Select All Occurrences"
+    },
+    "pier.files.editor.addCursorAbove": {
+      "title": "Add Cursor Above"
+    },
+    "pier.files.editor.addCursorBelow": {
+      "title": "Add Cursor Below"
+    },
     "pier.files.revealActiveFileInTree": {
       "title": "Reveal Active File in File Tree"
     }
@@ -395,6 +407,10 @@
     "filePanel.editor.action.copy": "Copy",
     "filePanel.editor.action.paste": "Paste",
     "filePanel.editor.action.selectAll": "Select All",
+    "filePanel.editor.action.selectNextOccurrence": "Select Next Occurrence",
+    "filePanel.editor.action.selectAllOccurrences": "Select All Occurrences",
+    "filePanel.editor.action.addCursorAbove": "Add Cursor Above",
+    "filePanel.editor.action.addCursorBelow": "Add Cursor Below",
     "filePanel.editor.action.wordWrap.on": "Word Wrap: On",
     "filePanel.editor.action.wordWrap.off": "Word Wrap: Off",
     "filePanel.editor.clipboardFailed": "Couldn't use clipboard",

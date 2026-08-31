@@ -18,6 +18,18 @@
     "pier.files.editor.showHover": {
       "title": "심볼 정보 표시"
     },
+    "pier.files.editor.selectNextOccurrence": {
+      "title": "다음 일치 항목 선택"
+    },
+    "pier.files.editor.selectAllOccurrences": {
+      "title": "일치 항목 모두 선택"
+    },
+    "pier.files.editor.addCursorAbove": {
+      "title": "위 줄에 커서 추가"
+    },
+    "pier.files.editor.addCursorBelow": {
+      "title": "아래 줄에 커서 추가"
+    },
     "pier.files.revealActiveFileInTree": {
       "title": "파일 트리에서 현재 파일 표시"
     }
@@ -395,6 +407,10 @@
     "filePanel.editor.action.copy": "복사",
     "filePanel.editor.action.paste": "붙여넣기",
     "filePanel.editor.action.selectAll": "모두 선택",
+    "filePanel.editor.action.selectNextOccurrence": "다음 일치 항목 선택",
+    "filePanel.editor.action.selectAllOccurrences": "일치 항목 모두 선택",
+    "filePanel.editor.action.addCursorAbove": "위 줄에 커서 추가",
+    "filePanel.editor.action.addCursorBelow": "아래 줄에 커서 추가",
     "filePanel.editor.action.wordWrap.on": "줄 바꿈: 켜짐",
     "filePanel.editor.action.wordWrap.off": "줄 바꿈: 꺼짐",
     "filePanel.editor.clipboardFailed": "클립보드를 쓰지 못했습니다",

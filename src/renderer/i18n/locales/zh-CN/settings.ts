@@ -355,7 +355,7 @@ export const settings = {
       },
       agents: {
         focusWaiting: "跳到下一个需要你处理的智能体。",
-        list: "打开智能体列表。编辑时同样有效。",
+        list: "打开智能体列表。",
       },
       commandPalette: {
         clearRecent: "清空命令面板的使用记录。",

@@ -18,6 +18,18 @@
     "pier.files.editor.showHover": {
       "title": "シンボル情報を表示"
     },
+    "pier.files.editor.selectNextOccurrence": {
+      "title": "次の一致を選択"
+    },
+    "pier.files.editor.selectAllOccurrences": {
+      "title": "一致をすべて選択"
+    },
+    "pier.files.editor.addCursorAbove": {
+      "title": "上の行にカーソルを追加"
+    },
+    "pier.files.editor.addCursorBelow": {
+      "title": "下の行にカーソルを追加"
+    },
     "pier.files.revealActiveFileInTree": {
       "title": "ファイルツリーで現在のファイルを表示"
     }
@@ -395,6 +407,10 @@
     "filePanel.editor.action.copy": "コピー",
     "filePanel.editor.action.paste": "ペースト",
     "filePanel.editor.action.selectAll": "すべてを選択",
+    "filePanel.editor.action.selectNextOccurrence": "次の一致を選択",
+    "filePanel.editor.action.selectAllOccurrences": "一致をすべて選択",
+    "filePanel.editor.action.addCursorAbove": "上の行にカーソルを追加",
+    "filePanel.editor.action.addCursorBelow": "下の行にカーソルを追加",
     "filePanel.editor.action.wordWrap.on": "折り返し：オン",
     "filePanel.editor.action.wordWrap.off": "折り返し：オフ",
     "filePanel.editor.clipboardFailed": "クリップボードを使えませんでした",

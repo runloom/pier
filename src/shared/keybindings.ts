@@ -1,5 +1,11 @@
 import type { UserKeymapEntry } from "./contracts/preferences.ts";
 
+/**
+ * Default chords follow the focused surface:
+ * - Terminal: Ghostty / iTerm (split, new tab; do not steal Cmd+C/V/K).
+ * - Code editor: VS Code Mac (next occurrence, multi-cursor, find).
+ * - Workbench-only actions stay global (palette, quick open, close, zoom).
+ */
 export type SharedKeybindingScope =
   | "global"
   | `overlay:${string}`
@@ -117,7 +123,7 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
   {
     commandId: "pier.terminal.openAgentComposer",
     keys: "Mod+Shift+KeyI",
-    scope: "global",
+    scope: "panel:terminal",
   },
   // composerAttach shares ⌘⇧A with pier.agent.new: when Rich Input is focused,
   // use-keybindings steals the chord for attach; otherwise agent.new runs.
@@ -173,12 +179,12 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
   {
     commandId: "pier.panel.splitRight",
     keys: "Mod+KeyD",
-    scope: "global",
+    scope: "panel:terminal",
   },
   {
     commandId: "pier.panel.splitDown",
     keys: "Mod+Shift+KeyD",
-    scope: "global",
+    scope: "panel:terminal",
   },
   {
     commandId: "pier.panel.focusNextTab",
@@ -270,6 +276,26 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     keys: "Mod+KeyI",
     scope: "panel:pier.files.filePanel",
   },
+  {
+    commandId: "pier.files.editor.selectNextOccurrence",
+    keys: "Mod+KeyD",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.files.editor.selectAllOccurrences",
+    keys: "Mod+Shift+KeyL",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.files.editor.addCursorAbove",
+    keys: "Mod+Alt+ArrowUp",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.files.editor.addCursorBelow",
+    keys: "Mod+Alt+ArrowDown",
+    scope: "panel:pier.files.filePanel",
+  },
 ];
 
 const CODE_TO_ELECTRON: Readonly<Record<string, string>> = {
@@ -326,22 +352,61 @@ export function keybindingToElectronAccelerator(keys: string): string {
   return result.join("+");
 }
 
-export function firstAcceleratorForCommand(
+export function isNativeTerminalRoutedScope(
+  scope: SharedKeybindingScope | undefined
+): boolean {
+  const resolved = scope ?? "global";
+  return resolved === "global" || resolved === "panel:terminal";
+}
+
+export function chordHasNonGlobalBinding(
+  keys: string,
+  userKeymap: readonly UserKeymapEntry[] = []
+): boolean {
+  const unbound = new Set(
+    userKeymap
+      .filter((entry) => entry.commandId.startsWith("-"))
+      .map((entry) => entry.commandId.slice(1))
+  );
+  for (const entry of userKeymap) {
+    if (entry.commandId.startsWith("-") || entry.keys !== keys) {
+      continue;
+    }
+    if ((entry.scope ?? "global") !== "global") {
+      return true;
+    }
+  }
+  return DEFAULT_KEYMAP.some(
+    (binding) =>
+      binding.keys === keys &&
+      (binding.scope ?? "global") !== "global" &&
+      !unbound.has(binding.commandId)
+  );
+}
+
+export function firstBindingForCommand(
   commandId: string,
   userKeymap: readonly UserKeymapEntry[] = []
-): string | undefined {
+): SharedKeybindingInput | undefined {
   const unbindId = `-${commandId}`;
   const userBinding = userKeymap.find((entry) => entry.commandId === commandId);
   if (userBinding?.keys) {
-    return keybindingToElectronAccelerator(userBinding.keys);
+    return {
+      commandId,
+      keys: userBinding.keys,
+      scope: (userBinding.scope ?? "global") as SharedKeybindingScope,
+    };
   }
   if (userKeymap.some((entry) => entry.commandId === unbindId)) {
     return;
   }
-  const defaultBinding = DEFAULT_KEYMAP.find(
-    (entry) => entry.commandId === commandId
-  );
-  return defaultBinding
-    ? keybindingToElectronAccelerator(defaultBinding.keys)
-    : undefined;
+  return DEFAULT_KEYMAP.find((entry) => entry.commandId === commandId);
+}
+
+export function firstAcceleratorForCommand(
+  commandId: string,
+  userKeymap: readonly UserKeymapEntry[] = []
+): string | undefined {
+  const binding = firstBindingForCommand(commandId, userKeymap);
+  return binding ? keybindingToElectronAccelerator(binding.keys) : undefined;
 }

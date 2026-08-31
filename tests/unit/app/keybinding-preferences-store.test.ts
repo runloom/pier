@@ -506,7 +506,7 @@ describe("keybinding-preferences.store", () => {
     await initKeybindingPreferences();
     const result = await useKeybindingPreferencesStore
       .getState()
-      .setBinding("pier.panel.splitRight", "Mod+KeyS");
+      .setBinding("pier.panel.closeActive", "Mod+KeyS");
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain("pier.files.save");

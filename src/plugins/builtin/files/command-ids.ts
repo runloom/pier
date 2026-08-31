@@ -48,6 +48,14 @@ export const FILES_EDITOR_PASTE_COMMAND_ID = "pier.files.editor.paste";
 export const FILES_EDITOR_SELECT_ALL_COMMAND_ID = "pier.files.editor.selectAll";
 export const FILES_EDITOR_GO_TO_LINE_COMMAND_ID = "pier.files.editor.goToLine";
 export const FILES_EDITOR_SHOW_HOVER_COMMAND_ID = "pier.files.editor.showHover";
+export const FILES_EDITOR_SELECT_NEXT_OCCURRENCE_COMMAND_ID =
+  "pier.files.editor.selectNextOccurrence";
+export const FILES_EDITOR_SELECT_ALL_OCCURRENCES_COMMAND_ID =
+  "pier.files.editor.selectAllOccurrences";
+export const FILES_EDITOR_ADD_CURSOR_ABOVE_COMMAND_ID =
+  "pier.files.editor.addCursorAbove";
+export const FILES_EDITOR_ADD_CURSOR_BELOW_COMMAND_ID =
+  "pier.files.editor.addCursorBelow";
 export const FILES_EDITOR_TOGGLE_WORD_WRAP_COMMAND_ID =
   "pier.files.editor.toggleWordWrap";
 

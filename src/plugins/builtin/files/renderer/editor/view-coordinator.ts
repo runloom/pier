@@ -7,8 +7,11 @@ import {
   EMPTY_EDITOR_SEARCH_STATE,
 } from "./cm-search-state.ts";
 import type { FilesEditorPrefs } from "./prefs.ts";
+import type {
+  FileEditorCommand,
+  FileEditorViewCommand,
+} from "./view-operations.ts";
 import {
-  type FileEditorCommand,
   type FileEditorLspHoverResult,
   type FileEditorViewPresentation,
   FileEditorViewSession,
@@ -183,6 +186,15 @@ export class FileEditorViewCoordinator {
       return;
     }
     await session.execute(command);
+  }
+
+  runViewCommand(
+    editorSessionId: string,
+    command: FileEditorViewCommand
+  ): boolean {
+    return (
+      this.#sessions.get(editorSessionId)?.runViewCommand(command) ?? false
+    );
   }
 
   syncDocuments(): void {

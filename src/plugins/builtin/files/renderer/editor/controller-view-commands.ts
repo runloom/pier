@@ -10,6 +10,9 @@ import { parseFileEditorSessionOwnerId } from "./session-id.ts";
 import { FileEditorViewCoordinator } from "./view-coordinator.ts";
 import type {
   FileEditorCommand,
+  FileEditorViewCommand,
+} from "./view-operations.ts";
+import type {
   FileEditorLspHoverResult,
   FileEditorViewPresentation,
 } from "./view-session.ts";
@@ -387,5 +390,12 @@ export abstract class FileEditorControllerViewFacade {
     command: FileEditorCommand
   ): Promise<void> {
     await this.views.execute(documentId, editorSessionId, command);
+  }
+
+  runViewCommand(
+    editorSessionId: string,
+    command: FileEditorViewCommand
+  ): boolean {
+    return this.views.runViewCommand(editorSessionId, command);
   }
 }

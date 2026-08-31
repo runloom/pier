@@ -369,7 +369,7 @@ export const settings = {
       },
       agents: {
         focusWaiting: "다음으로 처리가 필요한 에이전트로 이동합니다.",
-        list: "에이전트 목록을 엽니다. 편집 중에도 사용할 수 있습니다.",
+        list: "에이전트 목록을 엽니다.",
       },
       commandPalette: {
         clearRecent: "명령 팔레트 기록을 지웁니다.",

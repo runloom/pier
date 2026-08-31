@@ -18,6 +18,18 @@ function isCurrentScrollIntent(view: EditorView, intent: number): boolean {
   return scrollIntentByView.get(view) === intent;
 }
 
+export function applyFileEditorScrollTop(view: EditorView, top: number): void {
+  const intent = nextScrollIntent(view);
+  const apply = (): void => {
+    if (!isCurrentScrollIntent(view, intent)) {
+      return;
+    }
+    view.scrollDOM.scrollTop = top;
+  };
+  apply();
+  view.requestMeasure({ read: () => undefined, write: apply });
+}
+
 export function restoreFileEditorScroll(
   view: EditorView,
   scroll: { left: number; top: number }

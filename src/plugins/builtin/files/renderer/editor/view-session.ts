@@ -42,9 +42,11 @@ import {
   editorStateSelectionLines,
   executeEditorViewCommand,
   type FileEditorCommand,
+  type FileEditorViewCommand,
   navigateEditorSearch,
   replaceEditorSearch,
   resetEditorSearch,
+  runEditorViewCommand,
   selectAllEditorMatches,
 } from "./view-operations.ts";
 import {
@@ -66,7 +68,7 @@ export type {
   FileEditorLspHoverResult,
   FileEditorViewPresentation,
 } from "./adapter-types.ts";
-export type { FileEditorCommand } from "./view-operations.ts";
+
 export class FileEditorViewSession {
   readonly documentId: string;
   readonly editorSessionId: string;
@@ -184,9 +186,7 @@ export class FileEditorViewSession {
     }
   }
   setHostReadOnly(readOnly: boolean): void {
-    if (this.#hostReadOnly === readOnly) {
-      return;
-    }
+    if (this.#hostReadOnly === readOnly) return;
     this.#hostReadOnly = readOnly;
     const view = this.#view;
     if (view) {
@@ -408,6 +408,9 @@ export class FileEditorViewSession {
   }
   async execute(command: FileEditorCommand): Promise<void> {
     await executeEditorViewCommand(this.#view, command);
+  }
+  runViewCommand(command: FileEditorViewCommand): boolean {
+    return runEditorViewCommand(this.#view, command);
   }
   setGitGutterMarkers(markers: ReadonlyMap<number, GitGutterLineMarker>): void {
     if (this.#view) setGitGutterMarkers(this.#view, markers);

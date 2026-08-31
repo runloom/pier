@@ -18,6 +18,18 @@
     "pier.files.editor.showHover": {
       "title": "显示符号信息"
     },
+    "pier.files.editor.selectNextOccurrence": {
+      "title": "选中下一个相同词"
+    },
+    "pier.files.editor.selectAllOccurrences": {
+      "title": "选中全部相同词"
+    },
+    "pier.files.editor.addCursorAbove": {
+      "title": "在上一行添加光标"
+    },
+    "pier.files.editor.addCursorBelow": {
+      "title": "在下一行添加光标"
+    },
     "pier.files.revealActiveFileInTree": {
       "title": "在目录树中显示当前文件"
     }
@@ -395,6 +407,10 @@
     "filePanel.editor.action.copy": "复制",
     "filePanel.editor.action.paste": "粘贴",
     "filePanel.editor.action.selectAll": "全选",
+    "filePanel.editor.action.selectNextOccurrence": "选中下一个相同词",
+    "filePanel.editor.action.selectAllOccurrences": "选中全部相同词",
+    "filePanel.editor.action.addCursorAbove": "在上一行添加光标",
+    "filePanel.editor.action.addCursorBelow": "在下一行添加光标",
     "filePanel.editor.action.wordWrap.on": "自动换行：开",
     "filePanel.editor.action.wordWrap.off": "自动换行：关",
     "filePanel.editor.clipboardFailed": "无法使用剪贴板",

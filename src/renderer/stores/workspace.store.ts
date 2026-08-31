@@ -11,6 +11,7 @@ import {
   type PanelSizeMutationResult,
   setDockviewPanelSize,
 } from "@/components/workspace/dockview-panel-size.ts";
+import { PANEL_TAB_FILE_COMPONENT_ID } from "@/components/workspace/panel-tab-layout.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import {
   withinGroupPosition,
@@ -297,15 +298,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
     const component = panel.view.contentComponent;
     const newId = uniquePanelId(api, component);
-    const params =
-      component === "terminal" &&
-      useTerminalPreferencesStore.getState().terminalNewCwdPolicy ===
-        "activeTerminal"
-        ? (() => {
-            const context = terminalPanelContext(panel.id);
-            return context ? { context } : undefined;
-          })()
-        : undefined;
+    const params = resolveSplitPanelParams(component, panel);
     if (component === "terminal") {
       markFreshTerminalPanel(newId);
     }
@@ -422,3 +415,32 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     scheduleRevealDockviewTabByPanelId("terminal-1");
   },
 }));
+
+function resolveSplitPanelParams(
+  component: string,
+  panel: { id: string; params?: object | undefined }
+): Record<string, unknown> | undefined {
+  if (component === "terminal") {
+    if (
+      useTerminalPreferencesStore.getState().terminalNewCwdPolicy !==
+      "activeTerminal"
+    ) {
+      return;
+    }
+    const context = terminalPanelContext(panel.id);
+    return context ? { context } : undefined;
+  }
+  if (component === PANEL_TAB_FILE_COMPONENT_ID) {
+    const existing = (panel.params ?? {}) as Record<string, unknown>;
+    return {
+      ...(existing.context === undefined ? {} : { context: existing.context }),
+      pinned: true,
+      ...(existing.source === undefined ? {} : { source: existing.source }),
+    };
+  }
+  const existing = panel.params;
+  if (!existing) {
+    return;
+  }
+  return { ...existing };
+}

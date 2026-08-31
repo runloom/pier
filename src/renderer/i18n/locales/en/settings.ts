@@ -371,7 +371,7 @@ export const settings = {
       },
       agents: {
         focusWaiting: "Jump to the next agent that needs attention.",
-        list: "Open the agent list. Works while editing.",
+        list: "Open the agent list.",
       },
       commandPalette: {
         clearRecent: "Clear command palette history.",

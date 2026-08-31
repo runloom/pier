@@ -50,6 +50,23 @@ describe("shouldSuppressKeybindingForTextInput", () => {
     ).toBe(true);
   });
 
+  it("lets Ctrl and Alt chords through so editor commands still dispatch", () => {
+    const editor = document.createElement("div");
+    editor.setAttribute("contenteditable", "true");
+    expect(
+      shouldSuppressKeybindingForTextInput(
+        chord({ code: "KeyG", ctrl: true }),
+        editor
+      )
+    ).toBe(false);
+    expect(
+      shouldSuppressKeybindingForTextInput(
+        chord({ code: "ArrowUp", alt: true }),
+        editor
+      )
+    ).toBe(false);
+  });
+
   it("does not suppress Enter chords outside text inputs", () => {
     const button = document.createElement("button");
     expect(
