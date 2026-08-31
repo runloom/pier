@@ -345,8 +345,8 @@ export const filesRendererPlugin: RendererPluginModule = {
       ...createFilesEditorPrefsActions(context).map((action) =>
         context.actions.register(action)
       ),
-      ...createFilesMarkdownPreviewActions(context).map((action) =>
-        context.actions.register(action)
+      ...createFilesMarkdownPreviewActions(context, editorController).map(
+        (action) => context.actions.register(action)
       ),
       bindMarkdownSettingsFromConfiguration(context.configuration),
       bindMarkdownCodeWrapFromConfiguration(context.configuration),

@@ -25,7 +25,8 @@ export const DEFAULT_RENDERER_LABELS: MarkdownRendererLabels = {
   imagePreviewTitle: "Image",
   incompleteTask: "Incomplete task",
   openFullscreen: "View fullscreen",
-  resizeColumn: "Resize column",
+  columnWidthAuto: "Automatic width",
+  resizeColumn: "Resize column. Double-click to restore automatic sizing.",
 };
 
 export const DEFAULT_TOC_LABELS: MarkdownPreviewTocLabels = {

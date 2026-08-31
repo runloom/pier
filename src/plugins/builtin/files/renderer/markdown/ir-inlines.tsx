@@ -35,6 +35,8 @@ import type { TaskToggleInput } from "./task-patch.ts";
 
 export interface MarkdownRendererLabels extends MarkdownCodeBlockLabels {
   anchorCopied: string;
+  /** aria-valuetext for auto-width columns (no stored width yet). */
+  columnWidthAuto: string;
   completedTask: string;
   /** Heading hover button aria-label. */
   copyAnchor: string;

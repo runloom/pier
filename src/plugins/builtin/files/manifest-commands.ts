@@ -22,6 +22,7 @@ import {
   FILES_MARKDOWN_APPEARANCE_AUTO_COMMAND_ID,
   FILES_MARKDOWN_APPEARANCE_DARK_COMMAND_ID,
   FILES_MARKDOWN_APPEARANCE_LIGHT_COMMAND_ID,
+  FILES_MARKDOWN_JUMP_TO_SOURCE_COMMAND_ID,
   FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID,
   FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID,
   FILES_NEW_FILE_COMMAND_ID,
@@ -289,6 +290,12 @@ export const FILES_PLUGIN_COMMANDS: PluginManifest["commands"] = [
     id: FILES_EDITOR_TOGGLE_WORD_WRAP_COMMAND_ID,
     permissions: [],
     title: "Toggle Word Wrap",
+  },
+  {
+    category: "file",
+    id: FILES_MARKDOWN_JUMP_TO_SOURCE_COMMAND_ID,
+    permissions: [],
+    title: "Jump to source",
   },
   {
     category: "file",

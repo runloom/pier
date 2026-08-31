@@ -59,6 +59,8 @@ export const FILES_EDITOR_ADD_CURSOR_BELOW_COMMAND_ID =
 export const FILES_EDITOR_TOGGLE_WORD_WRAP_COMMAND_ID =
   "pier.files.editor.toggleWordWrap";
 
+export const FILES_MARKDOWN_JUMP_TO_SOURCE_COMMAND_ID =
+  "pier.files.markdown.jumpToSource";
 export const FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID =
   "pier.files.markdown.measureComfortable";
 export const FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID =

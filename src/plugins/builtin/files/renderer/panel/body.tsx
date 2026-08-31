@@ -430,7 +430,8 @@ export function ResolvedFilePanel({
           onJumpToSource={
             onModeChange
               ? (offset) => {
-                  // Bypass viewport capture: double-click means this block start.
+                  // Bypass viewport capture: ⌥+double-click / context-menu
+                  // jump targets this block's start.
                   onModeChange("source");
                   controller.revealOffset(editorSessionId, offset, document.id);
                 }

@@ -46,6 +46,17 @@ export function useFilePanelMarkdownChrome({
       const hasHeadings = Boolean(
         event.currentTarget.querySelector('[data-slot="markdown-preview-toc"]')
       );
+      // 「跳转到源码」目标：被右键的最内层块的源码起始 offset。
+      const sourceOffsetRaw =
+        event.target instanceof Element
+          ? event.target
+              .closest("[data-source-offset]")
+              ?.getAttribute("data-source-offset")
+          : undefined;
+      const sourceOffset =
+        sourceOffsetRaw === undefined || sourceOffsetRaw === null
+          ? undefined
+          : Number(sourceOffsetRaw);
       context.contextMenu
         .popup(
           FILES_MARKDOWN_PREVIEW_SURFACE,
@@ -55,6 +66,9 @@ export function useFilePanelMarkdownChrome({
               documentId: document.id,
               editorSessionId,
               hasHeadings,
+              ...(sourceOffset !== undefined && Number.isFinite(sourceOffset)
+                ? { sourceOffset }
+                : {}),
               ...(document.source.kind === "disk"
                 ? {
                     path: document.source.path,

@@ -15,9 +15,13 @@ export function sourceBlockProps(
     "data-source-end-offset": range.endOffset,
     onDoubleClick: context.onJumpToSource
       ? (event: {
+          altKey: boolean;
           stopPropagation: () => void;
           target: EventTarget | null;
         }) => {
+          // 裸双击归还给原生选词（Zed #60817 同款取舍）；⌥+双击才跳源码，
+          // 常规路径走右键菜单「跳转到源码」与工具栏切换。
+          if (!event.altKey) return;
           const target = event.target;
           if (
             target instanceof Element &&
@@ -26,6 +30,8 @@ export function sourceBlockProps(
             return;
           }
           event.stopPropagation();
+          // 双击在 mousedown 阶段已产生选词，跳转前清掉，避免闪一下残留。
+          window.getSelection?.()?.removeAllRanges();
           context.onJumpToSource?.(range.startOffset);
         }
       : undefined,

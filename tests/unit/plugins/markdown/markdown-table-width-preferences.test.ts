@@ -2,6 +2,7 @@ import {
   clampColumnWidth,
   readTableWidths,
   resetTableWidths,
+  TABLE_MAX_COLUMN_WIDTH_PX,
   TABLE_MIN_COLUMN_WIDTH_PX,
   TABLE_WIDTHS_CHANGED_EVENT,
   writeTableColumnWidth,
@@ -13,10 +14,10 @@ describe("table width preferences", () => {
     localStorage.clear();
   });
 
-  it("round-trips a column width per file+hash", () => {
+  it("round-trips a column width per file+structure key", () => {
     writeTableColumnWidth({
       sourcePath: "/a.md",
-      contentHash: "h1",
+      widthsKey: "h1",
       columnIndex: 2,
       widthPx: 120,
     });
@@ -25,21 +26,23 @@ describe("table width preferences", () => {
     expect(readTableWidths("/b.md", "h1")).toBeNull();
   });
 
-  it("clamps below minimum", () => {
+  it("clamps below minimum and above the ARIA-aligned maximum", () => {
     expect(clampColumnWidth(10)).toBe(TABLE_MIN_COLUMN_WIDTH_PX);
     expect(clampColumnWidth(300)).toBe(300);
+    // 硬顶与 aria-valuemax 同源，valuenow 不得越过声明上限。
+    expect(clampColumnWidth(99_999)).toBe(TABLE_MAX_COLUMN_WIDTH_PX);
   });
 
-  it("reset removes hash entry and keeps others", () => {
+  it("reset removes key entry and keeps others", () => {
     writeTableColumnWidth({
       sourcePath: "/a.md",
-      contentHash: "h1",
+      widthsKey: "h1",
       columnIndex: 0,
       widthPx: 80,
     });
     writeTableColumnWidth({
       sourcePath: "/a.md",
-      contentHash: "h2",
+      widthsKey: "h2",
       columnIndex: 0,
       widthPx: 90,
     });
@@ -53,7 +56,7 @@ describe("table width preferences", () => {
     window.addEventListener(TABLE_WIDTHS_CHANGED_EVENT, spy);
     writeTableColumnWidth({
       sourcePath: "/a.md",
-      contentHash: "h1",
+      widthsKey: "h1",
       columnIndex: 0,
       widthPx: 80,
     });

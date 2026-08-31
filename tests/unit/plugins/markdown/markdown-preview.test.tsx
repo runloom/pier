@@ -53,6 +53,7 @@ describe("MarkdownPreview", () => {
       <MarkdownPreview
         labels={{
           anchorCopied: "Anchor copied",
+          columnWidthAuto: "Automatic width",
           copiedCode: "Copied",
           copyAnchor: "Copy heading anchor",
           copyCode: "Copy code",
@@ -423,6 +424,7 @@ describe("MarkdownPreview", () => {
         codeTheme="github-dark"
         copyCode={copyCode}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -770,6 +772,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument: vi.fn() },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -844,6 +847,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument: vi.fn() },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -916,6 +920,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument: vi.fn() },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -967,6 +972,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument: vi.fn() },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -997,7 +1003,7 @@ describe("MarkdownPreview", () => {
       expect(svg?.style.width).toBe("640px");
     });
   });
-  it("stops nested double-click source jumps at the nearest block", async () => {
+  it("keeps plain double-click for text selection and jumps only with Alt", async () => {
     const onJumpToSource = vi.fn();
     render(
       <MarkdownPreview
@@ -1011,7 +1017,11 @@ describe("MarkdownPreview", () => {
     );
 
     const paragraph = await screen.findByText("inner paragraph");
+    // 裸双击 = 原生选词（Zed #60817 同款取舍），不得跳源码。
     fireEvent.doubleClick(paragraph);
+    expect(onJumpToSource).not.toHaveBeenCalled();
+    // ⌥+双击跳源码，且嵌套块停在最近块。
+    fireEvent.doubleClick(paragraph, { altKey: true });
     expect(onJumpToSource).toHaveBeenCalledTimes(1);
     const jumpedOffset = onJumpToSource.mock.calls[0]?.[0] as number;
     expect(jumpedOffset).toBeGreaterThan(0);
@@ -1095,6 +1105,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument: vi.fn() },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -1379,6 +1390,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",

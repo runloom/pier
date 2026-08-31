@@ -106,9 +106,10 @@ export function createMarkdownRendererLabels(
     openFullscreen: t("filePanel.markdown.openFullscreen", "View fullscreen"),
     completedTask: t("filePanel.markdown.completedTask", "Completed task"),
     incompleteTask: t("filePanel.markdown.incompleteTask", "Incomplete task"),
+    columnWidthAuto: t("filePanel.markdown.columnWidthAuto", "Automatic width"),
     resizeColumn: t(
       "filePanel.markdown.resizeColumn",
-      "Drag to adjust column display width. Double-click to reset."
+      "Drag to adjust column display width. Double-click to restore automatic sizing for the whole table."
     ),
   };
 }

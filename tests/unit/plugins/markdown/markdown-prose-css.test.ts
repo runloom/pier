@@ -135,4 +135,43 @@ describe("markdown prose table reading proportions", () => {
     expect(line).toContain("width: 1px");
     expect(line).toContain("pointer-events: none");
   });
+
+  it("uses GitHub max-content width language without display:block", () => {
+    const tableBody = ruleBody(".md-table-wrap table");
+    expect(tableBody).toContain("width: max-content");
+    expect(tableBody).toContain("max-width: 100%");
+    expect(tableBody).not.toContain("display: block");
+  });
+
+  it("keeps wrap as the only horizontal scroll owner", () => {
+    expect(ruleBody(".md-table-wrap")).toContain("overflow-x: auto");
+    expect(ruleBody('[data-slot="table-container"]')).toContain(
+      "overflow-x: visible"
+    );
+  });
+});
+
+describe("markdown prose heading anchor affordance", () => {
+  it("keeps the copy-anchor icon small, muted, and fade-revealed", () => {
+    const body = ruleBody(".md-anchor-copy {");
+    expect(body).toContain("color: var(--muted-foreground)");
+    expect(body).toContain("user-select: none");
+    expect(body).toContain("cursor: pointer");
+    expect(body).toContain("outline: none");
+    expect(body).toMatch(/transition:[\s\S]*opacity/);
+    // 固定 16px：不随标题字号膨胀（GitHub 同款）。
+    expect(css).toMatch(/\.md-anchor-copy svg \{[^}]*width: 1rem/s);
+    // 垂直居中：FontAwesome 配方（1em 弹性盒 + -0.125em 基线偏移），
+    // 禁止回退 vertical-align: middle（CJK 标题会偏低）。
+    expect(body).toContain("display: inline-flex");
+    expect(body).toContain("height: 1em");
+    expect(body).toContain("vertical-align: -0.125em");
+    expect(body).not.toContain("vertical-align: middle");
+  });
+
+  it("uses the product focus ring instead of the UA outline", () => {
+    expect(css).toMatch(
+      /\.md-anchor-copy:focus-visible \{[^}]*box-shadow:[^}]*var\(--ring\)/s
+    );
+  });
 });

@@ -231,6 +231,17 @@ Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 `DocsShell` 继承同一变量，composition / kit 不得套用。大纲固定右侧细轨 + hover 淡入浮层，
 不提供左右切换或持久收起偏好。
 
+### Markdown 预览表格列宽
+
+权威规格：[`docs/superpowers/specs/2026-08-31-markdown-table-column-width-gold-standard.md`](docs/superpowers/specs/2026-08-31-markdown-table-column-width-gold-standard.md)。
+
+- 静止：`width: max-content; max-width: 100%`。禁止给预览 `<table>` 设 `display: block`。横向滚动只由 `.md-table-wrap` 承担。
+- 拖拽：加法物理（只动被拖列），首次 dirty 必须冻结全列；表宽 = Σ。松手才落盘；Escape 取消。
+- 偏好键：结构键（列数 + 表头），不是全表正文哈希。`(path, key)` 变化须重读并中止拖拽。
+- 禁止：版心磁吸、拖拽中逐帧写盘、百分比随面板缩放。
+
+检查点在 `tests/unit/plugins/markdown/markdown-table-column-width-governance.test.ts`。
+
 ### 交互控件密度规范
 
 Pier 桌面端的单行交互控件统一使用 28px 高度：
