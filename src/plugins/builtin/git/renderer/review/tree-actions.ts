@@ -71,7 +71,7 @@ export function registerGitReviewTreeActions(
       id: GIT_REVIEW_OPEN_FILE_COMMAND_ID,
       metadata: {
         categoryKey: "git",
-        group: "1_open",
+        group: "5_open",
         iconComponent: FileText,
         menuHidden: (invocation) => {
           const item = parseGitReviewTreeItemMetadata(invocation);

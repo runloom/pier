@@ -157,9 +157,10 @@ export function registerGitReviewOpenDirectoryAction(
     id: GIT_REVIEW_OPEN_DIRECTORY_COMMAND_ID,
     metadata: {
       categoryKey: "git",
-      group: "1_open",
+      group: "5_open",
       iconComponent: Folder,
       menuHidden: (invocation) => resolveTarget(invocation) == null,
+      // Hide-promotion: directory/group rows have no Open File sibling.
       sortOrder: 1,
     },
     surfaces: [

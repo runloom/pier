@@ -263,15 +263,18 @@ describe("terminal content context menu actions", () => {
       "pier.terminal.copy",
       "pier.terminal.paste",
       "pier.terminal.selectAll",
+      "pier.terminal.runSelection",
       "pier.terminal.search",
-      "pier.terminal.clearScreen",
     ]);
+    expect(ids.indexOf("pier.terminal.clearScreen")).toBeGreaterThan(
+      ids.indexOf("pier.terminal.search")
+    );
     expect(topLevelActionLabels(entries).slice(0, 5)).toEqual([
       "复制",
       "粘贴",
       "全选",
+      "运行选中内容",
       "查找",
-      "清屏",
     ]);
   });
 
@@ -644,15 +647,14 @@ describe("terminal content context menu actions", () => {
     expect(ids).not.toContain("pier.terminal.composerAttach");
     const search = actionRegistry.get("pier.terminal.search");
     const clear = actionRegistry.get("pier.terminal.clearScreen");
-    // Find(4) → Clear(5) in 0_edit; Rich Input in 2_agent (sortOrder 2).
-    expect(search?.metadata?.sortOrder).toBe(4);
-    expect(clear?.metadata?.sortOrder).toBe(5);
+    expect(search?.metadata?.group).toBe("1_find");
+    expect(clear?.metadata?.group).toBe("8_clear");
     expect(action.metadata?.group).toBe("2_agent");
     expect(action.metadata?.sortOrder).toBe(2);
-    expect(ids.indexOf("pier.terminal.clearScreen")).toBe(
-      ids.indexOf("pier.terminal.search") + 1
+    expect(ids.indexOf("pier.terminal.search")).toBeLessThan(
+      ids.indexOf("pier.terminal.openAgentComposer")
     );
-    expect(ids.indexOf("pier.terminal.openAgentComposer")).toBeGreaterThan(
+    expect(ids.indexOf("pier.terminal.openAgentComposer")).toBeLessThan(
       ids.indexOf("pier.terminal.clearScreen")
     );
     expect(findAction(entries, "pier.terminal.openAgentComposer")?.label).toBe(

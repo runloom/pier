@@ -52,6 +52,7 @@ describe("review open-directory gold standard", () => {
     expect(spec).toContain("FilesDiskPathOpenedEvent");
     expect(spec).toMatch(/禁止/);
     expect(spec).toContain("GitReviewToolbar");
+    expect(spec).toContain("5_open");
   });
 
   it("keeps git from importing files plugin internals", () => {
@@ -67,7 +68,8 @@ describe("review open-directory gold standard", () => {
     expect(action).toContain("pier.git.review.openDirectory");
     expect(action).toContain("dockview-tab");
     expect(action).not.toContain("command-palette");
-    expect(action).toMatch(/group:\s*"1_open"/);
+    expect(action).toMatch(/group:\s*"5_open"/);
+    expect(action).not.toMatch(/group:\s*"1_open"/);
     expect(action).not.toMatch(/group:\s*"6_path"/);
     const toolbar = readFileSync(TOOLBAR, "utf8");
     expect(toolbar).not.toContain("openProjectDirectory");

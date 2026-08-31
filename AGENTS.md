@@ -392,9 +392,16 @@ section 根节点下的裸子节点。
 - `contextId` 由 `worktreeKey` 稳定派生，用于面板上下文身份；任务、终端和插件上下文不再依赖额外 `projectId`。
 - 主体不维护 `Project` 注册表，也不把 `projectId` 作为跨模块外键；需要项目粒度能力时优先使用 `projectRootPath` / `gitRoot` / `worktreeRoot`。
 
+### 右键菜单顺序
+
+右键第一项必须是该表面该目标的主工作，且不把人带离当前工作。同组 `menuHidden` 之后禁止让「打开目录 / 在访达中显示」继承第一名（面包屑这种只有路径动作的表面除外）。按表面家族排：审查树 = 暂存优先；Files 树 = 新建优先；文档/终端 = 复制粘贴优先；标签关闭在最后。菜单位置稳定，不用 MRU。
+
+权威规格：[`docs/superpowers/specs/2026-08-31-context-menu-order-gold-standard.md`](docs/superpowers/specs/2026-08-31-context-menu-order-gold-standard.md)。  
+检查点：`tests/unit/renderer/context-menu/order-governance.test.ts`、`tests/unit/renderer/context-menu/order-sketches.test.ts`、`tests/unit/renderer/context-menu/order-sketches-composed.test.ts`。
+
 ### 审查打开项目目录
 
-从 git 审查进入 Files **项目目录标签**（只有树、不打开文档）走宿主 `context.files.openProjectDirectory`，与 `openInEditor` 同构。git 不得 import files 插件；不得抢审查主点击；不得把「打开目录」放进 `GitReviewToolbar` 或审查顶栏芯片。在场入口是树 / diff / 审查 tab 右键「打开目录」：与「打开文件 / 跳转到源码」同组（`1_open`），与复制路径 / 在访达中显示分组（`6_path`）。tab 只在 `pier.git.changes` 上显示，打开该次审查 git 根。
+从 git 审查进入 Files **项目目录标签**（只有树、不打开文档）走宿主 `context.files.openProjectDirectory`，与 `openInEditor` 同构。git 不得 import files 插件；不得抢审查主点击；不得把「打开目录」放进 `GitReviewToolbar` 或审查顶栏芯片。在场入口是树 / diff / 审查 tab 右键「打开目录」。审查树「打开文件」与「打开目录」同在 `5_open`（暂存 / 展开之后、复制路径 / 在访达中显示之前）；diff「跳转到源码」仍在 `1_open`。tab 只在 `pier.git.changes` 上显示，打开该次审查 git 根。组序以「右键菜单顺序」金标准为准。
 
 权威规格：[`docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md`](docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md)。  
 检查点：`tests/unit/renderer/git/review/open-directory-governance.test.ts`。
