@@ -165,6 +165,8 @@ describe("SessionPage", () => {
     );
     render(<SessionPage />);
     expect(screen.getByTestId("approval-bar")).toBeDefined();
+    expect(screen.getByText("agent")).toBeDefined();
+    expect(screen.queryByText("codex")).toBeNull();
     fireEvent.click(screen.getByTestId("session-nav-files"));
     expect(decodeURIComponent(window.location.hash)).toBe(
       "#/files?root=/repo/agent"

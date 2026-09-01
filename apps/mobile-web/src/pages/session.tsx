@@ -10,11 +10,14 @@ import { TopBar } from "../components/top-bar.tsx";
 import { PierMobileClientError } from "../lib/client-types.ts";
 import { openChangesSynced } from "../lib/open-changes.ts";
 import { findUniqueScoped } from "../lib/panel-scope.ts";
-import { isTerminalComponent } from "../lib/projectable-panels.ts";
+import {
+  isTerminalComponent,
+  terminalProjectionLabel,
+} from "../lib/projectable-panels.ts";
 import { navigate, useHashRoute } from "../lib/routes.ts";
 import { getMobileClient, refreshSnapshot } from "../lib/session.ts";
 import { useMobileWebStore } from "../lib/store.ts";
-import { pathLeaf, pickWorktreeCwd } from "../lib/worktree-scope.ts";
+import { pickWorktreeCwd } from "../lib/worktree-scope.ts";
 
 export function SessionPage() {
   const route = useHashRoute();
@@ -71,11 +74,11 @@ export function SessionPage() {
     pickWorktreeCwd(snapshot);
   // 与 PC 一致：变更入口只在会话目录属于 git 仓库时出现（快照 gitRoot 门控）。
   const sessionGitRoot = panel?.gitRoot ?? null;
-  const title =
-    agent?.agentId ??
-    panel?.title ??
-    (sessionCwd === null ? null : pathLeaf(sessionCwd)) ??
-    "会话";
+  const title = terminalProjectionLabel({
+    agentId: agent?.agentId ?? null,
+    cwd: sessionCwd,
+    tabShort: panel?.title,
+  });
 
   if (!sessionOk || panelId === null) {
     return (

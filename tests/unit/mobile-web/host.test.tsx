@@ -131,6 +131,12 @@ describe("HostPage（H2 可投影面板列表）", () => {
       "panel-w1-p-wait"
     );
     expect(screen.getByTestId("panel-w1-p-shell").textContent).toContain("zsh");
+    expect(screen.getByTestId("panel-w1-p-ready").textContent).toContain(
+      "repo"
+    );
+    expect(screen.getByTestId("panel-w1-p-ready").textContent).not.toContain(
+      "codex"
+    );
     expect(screen.getByTestId("host-group-changes").textContent).toContain(
       "变更 · wt-b"
     );
