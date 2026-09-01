@@ -111,6 +111,7 @@ function viewCommandAction(action: {
 }
 
 function editorAction(action: {
+  displayChord?: string;
   handler: RendererPluginAction["handler"];
   id: string;
   sortOrder: number;
@@ -120,7 +121,11 @@ function editorAction(action: {
     category: "file",
     handler: action.handler,
     id: action.id,
-    metadata: { group: "0_edit", sortOrder: action.sortOrder },
+    metadata: {
+      group: "0_edit",
+      sortOrder: action.sortOrder,
+      ...(action.displayChord ? { displayChord: action.displayChord } : {}),
+    },
     surfaces: ["files/editor"],
     title: action.title,
   };
@@ -139,6 +144,7 @@ export function createFilesEditorActions(
 
   return [
     editorAction({
+      displayChord: "Mod+KeyX",
       id: FILES_EDITOR_CUT_COMMAND_ID,
       sortOrder: 1,
       title: () => t("filePanel.editor.action.cut", "Cut"),
@@ -162,6 +168,7 @@ export function createFilesEditorActions(
       },
     }),
     editorAction({
+      displayChord: "Mod+KeyC",
       id: FILES_EDITOR_COPY_COMMAND_ID,
       sortOrder: 2,
       title: () => t("filePanel.editor.action.copy", "Copy"),
@@ -185,6 +192,7 @@ export function createFilesEditorActions(
       },
     }),
     editorAction({
+      displayChord: "Mod+KeyV",
       id: FILES_EDITOR_PASTE_COMMAND_ID,
       sortOrder: 3,
       title: () => t("filePanel.editor.action.paste", "Paste"),
@@ -208,6 +216,7 @@ export function createFilesEditorActions(
       },
     }),
     editorAction({
+      displayChord: "Mod+KeyA",
       id: FILES_EDITOR_SELECT_ALL_COMMAND_ID,
       sortOrder: 4,
       title: () => t("filePanel.editor.action.selectAll", "Select All"),

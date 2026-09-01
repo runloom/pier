@@ -1,5 +1,9 @@
 import type { LucideIcon } from "lucide-react";
-import type { ActionCategoryKey, ActionInvocation } from "./types.ts";
+import type {
+  ActionCategoryKey,
+  ActionInvocation,
+  ActionShortcutSourceId,
+} from "./types.ts";
 
 export type WorkspaceWhenField =
   | "activeGroupPanelCount"
@@ -30,6 +34,11 @@ export interface ActionContribution {
    * 快捷键路径见 use-keybindings：有 reason 时 toast，无 reason 静默跳过。
    */
   disabledReason?: (invocation?: ActionInvocation) => string | null | undefined;
+  /**
+   * 仅菜单/命令面板展示用的和弦（"Mod+KeyC"）。不注册进 keymap。
+   * 终端原生复制粘贴必须走这条，禁止写进 DEFAULT_KEYMAP 的 panel:terminal。
+   */
+  displayChord?: string;
   enabled?: (invocation?: ActionInvocation) => boolean;
   excludeFromMru?: boolean;
   group?: string;
@@ -42,7 +51,7 @@ export interface ActionContribution {
    * surface;命令面板/快捷键不受影响 (那两处仍走 when → enabled 置灰/拦截)。
    */
   menuHiddenWhen?: ActionWhenExpression;
-  shortcutSourceId?: string;
+  shortcutSourceId?: ActionShortcutSourceId;
   sortOrder?: number;
   submenuKey?: string;
   surfaces: readonly (string & {})[];

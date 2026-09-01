@@ -17,7 +17,6 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
   useCallback,
-  useEffect,
   useMemo,
   useRef,
 } from "react";
@@ -36,7 +35,6 @@ import { ignoredStatusFor } from "./git-decorations.ts";
 import {
   hasPendingCreatePath,
   peekPendingCreate,
-  registerFilesTreeInstance,
   rollbackFilesTreeModelMove,
 } from "./registry.ts";
 import { handleFilesTreeSearchKeyDown } from "./search-keydown.ts";
@@ -45,6 +43,7 @@ import {
   type FileTreeSidebarProps,
   toTreeItem,
   useFilesTreeSnapshot,
+  useRegisterFilesTreeInstance,
 } from "./sidebar-helpers.ts";
 import {
   loadFilesTreeDirectory,
@@ -117,6 +116,10 @@ export function FileTreeSidebar({
   );
 
   const treeApiRef = useRef<PierFileTreeApi | null>(null);
+  const selectedPathsRef = useRef<readonly string[]>([]);
+  const handleSelectPaths = useCallback((paths: string[]) => {
+    selectedPathsRef.current = paths;
+  }, []);
   const treeSearch = useFilesTreeSearch({
     context,
     fallbackError: t("panel.loadError.fallback", "Failed to load files"),
@@ -130,26 +133,15 @@ export function FileTreeSidebar({
     treeApiRef,
   });
 
-  useEffect(() => {
-    const entry = {
-      collapseAll: () => {
-        treeApiRef.current?.collapseAll();
-      },
-      expandKnownDirectories: () => {
-        treeApiRef.current?.expandAll();
-      },
-      getApi: () => treeApiRef.current,
-      openSearch: treeSearch.openSearch,
-      root,
-      toggleSearch: treeSearch.toggleSearch,
-    };
-    return registerFilesTreeInstance(instanceId, entry);
-  }, [instanceId, root, treeSearch.openSearch, treeSearch.toggleSearch]);
-
-  const selectedPathsRef = useRef<readonly string[]>([]);
-  const handleSelectPaths = useCallback((paths: string[]) => {
-    selectedPathsRef.current = paths;
-  }, []);
+  useRegisterFilesTreeInstance({
+    instanceId,
+    openSearch: treeSearch.openSearch,
+    projectRoot,
+    root,
+    selectedPathsRef,
+    toggleSearch: treeSearch.toggleSearch,
+    treeApiRef,
+  });
 
   const loadDirectory = useCallback(
     async (path: string) => {

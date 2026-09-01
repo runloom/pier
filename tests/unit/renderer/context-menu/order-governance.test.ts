@@ -74,6 +74,8 @@ describe("context-menu order gold standard", () => {
     expect(spec).toContain("5_open");
     expect(spec).toContain("8_clear");
     expect(spec).toContain("必须字典序小于 `1_new`");
+    expect(spec).toContain("菜单加速键");
+    expect(spec).toContain("只显示提示");
   });
 
   it("keeps find lexicographically before other 1_* primary groups", () => {

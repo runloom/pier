@@ -124,6 +124,32 @@ describe("menu popup IPC", () => {
     });
   });
 
+  it("shows accelerators on popup actions without registering them", async () => {
+    const result = harness()(
+      { sender: {} },
+      [
+        {
+          accelerator: "CmdOrCtrl+C",
+          enabled: true,
+          id: "pier.terminal.copy",
+          label: "Copy",
+          type: "action",
+        },
+      ],
+      { x: 10, y: 20 }
+    );
+
+    expect(electronMock.item()).toEqual(
+      expect.objectContaining({
+        accelerator: "CmdOrCtrl+C",
+        registerAccelerator: false,
+      })
+    );
+
+    electronMock.close();
+    await expect(result).resolves.toEqual({ actionId: null });
+  });
+
   it("writes clipboardText on action click before resolving", async () => {
     const { clipboard } = await import("electron");
     const handler = harness();

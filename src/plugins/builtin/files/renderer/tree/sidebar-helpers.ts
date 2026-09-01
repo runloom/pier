@@ -1,10 +1,17 @@
-import type { PierFileTreeItem } from "@pier/ui/file/tree.tsx";
+import type { PierFileTreeApi, PierFileTreeItem } from "@pier/ui/file/tree.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useSyncExternalStore,
+} from "react";
 import type { FileEditorController } from "../editor/controller.ts";
 import { createFilesTranslate } from "../i18n.ts";
 import type { FilesWatchHub } from "../watch-hub.ts";
+import { registerFilesTreeInstance } from "./registry.ts";
 import {
   getFilesTreeSnapshot,
   loadFilesTreeRoot,
@@ -12,6 +19,48 @@ import {
 } from "./store.ts";
 import type { FilesTreeList } from "./visibility.ts";
 import { ensureFilesTreeWatch } from "./watch.ts";
+
+export function useRegisterFilesTreeInstance(options: {
+  instanceId: string;
+  openSearch: () => void;
+  projectRoot?: string | null;
+  root: string;
+  selectedPathsRef: { readonly current: readonly string[] };
+  toggleSearch: () => void;
+  treeApiRef: RefObject<PierFileTreeApi | null>;
+}): void {
+  const {
+    instanceId,
+    openSearch,
+    projectRoot,
+    root,
+    selectedPathsRef,
+    toggleSearch,
+    treeApiRef,
+  } = options;
+  useEffect(
+    () =>
+      registerFilesTreeInstance(instanceId, {
+        collapseAll: () => treeApiRef.current?.collapseAll(),
+        expandKnownDirectories: () => treeApiRef.current?.expandAll(),
+        getApi: () => treeApiRef.current,
+        getSelectedPaths: () => selectedPathsRef.current,
+        openSearch,
+        ...(projectRoot ? { projectRoot } : {}),
+        root,
+        toggleSearch,
+      }),
+    [
+      instanceId,
+      openSearch,
+      projectRoot,
+      root,
+      selectedPathsRef,
+      toggleSearch,
+      treeApiRef,
+    ]
+  );
+}
 
 export function extractItemPathFromEvent(event: MouseEvent): string | null {
   const path = event.composedPath();

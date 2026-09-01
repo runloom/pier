@@ -80,6 +80,7 @@ describe("action contributions", () => {
       "pier.panel.moveToWindow",
       "pier.panel.copyToWindow",
       "pier.panel.copyPath",
+      "pier.panel.copyRelativePath",
       "pier.panel.keepOpen",
       "pier.panel.close",
       "pier.panel.closeOthers",
@@ -91,6 +92,16 @@ describe("action contributions", () => {
       "pier.panel.splitUp",
     ]);
     expect(closeAction?.shortcutSourceId).toBe("pier.panel.closeActive");
+    expect(
+      PANEL_LAYOUT_ACTION_CONTRIBUTIONS.find(
+        (action) => action.id === "pier.panel.copySelection"
+      )?.displayChord
+    ).toBe("Mod+KeyC");
+    expect(
+      PANEL_LAYOUT_ACTION_CONTRIBUTIONS.find(
+        (action) => action.id === "pier.panel.selectAll"
+      )?.displayChord
+    ).toBe("Mod+KeyA");
     expect(editActions.map((action) => action.id)).toEqual([
       "pier.panel.copySelection",
       "pier.panel.selectAll",

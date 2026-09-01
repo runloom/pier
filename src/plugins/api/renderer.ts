@@ -98,18 +98,17 @@ export type RendererPluginActionCategoryKey =
 
 export interface RendererPluginActionMetadata {
   categoryKey?: RendererPluginActionCategoryKey;
+  /** 仅展示用和弦（"Mod+KeyC"）。不进 keymap；原生剪贴板键必须走这条。 */
+  displayChord?: string;
   excludeFromMru?: boolean;
   group?: string;
   iconComponent?: LucideIcon;
-  /**
-   * 返回 true 时该 action 从右键菜单整行移除（非置灰）。
-   * 仅 context menu 投影读取；命令面板/快捷键路径不读此字段。
-   */
+  /** true 时从右键菜单整行移除；命令面板/快捷键不读此字段。 */
   menuHidden?: (invocation?: RendererPluginActionInvocation) => boolean;
-  /**
-   * 自身没有生效的 keybinding 时，菜单和命令面板展示可借用另一条 command。
-   */
-  shortcutSourceId?: string;
+  /** 无自身绑定时借用另一条 command；可按 invocation 变化。 */
+  shortcutSourceId?:
+    | string
+    | ((invocation?: RendererPluginActionInvocation) => string | undefined);
   sortOrder?: number;
   submenu?: () => string;
 }

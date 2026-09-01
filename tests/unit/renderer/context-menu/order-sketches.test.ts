@@ -413,8 +413,6 @@ describe("context-menu order sketches", () => {
       "|",
       FILES_EDITOR_TOGGLE_WORD_WRAP_COMMAND_ID,
       "|",
-      FILES_COPY_PATH_COMMAND_ID,
-      FILES_COPY_RELATIVE_PATH_COMMAND_ID,
       FILES_COPY_PATH_WITH_RANGE_COMMAND_ID,
       FILES_REVEAL_COMMAND_ID,
     ]);
@@ -432,6 +430,21 @@ describe("context-menu order sketches", () => {
       FILES_MARKDOWN_APPEARANCE_DARK_COMMAND_ID,
       "|",
     ]);
+    expect(
+      menuSketch("files/markdown-preview", {
+        metadata: { path: "a.md", root: "/repo" },
+      })
+    ).not.toContain(FILES_COPY_PATH_COMMAND_ID);
+    expect(
+      menuSketch("files/editor", {
+        metadata: {
+          documentId: "doc",
+          editorSessionId: "s",
+          path: "a.ts",
+          root: "/repo",
+        },
+      })
+    ).not.toContain(FILES_COPY_PATH_COMMAND_ID);
   });
 
   it("leads a preview file tab with keep open before copy path", () => {

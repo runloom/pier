@@ -257,6 +257,9 @@ export function documentContent(options: {
               {...(options.presentation === undefined
                 ? {}
                 : { presentation: options.presentation })}
+              {...(options.selectedSectionKey
+                ? { selectedSectionKey: options.selectedSectionKey }
+                : {})}
               {...(options.sourcePanelId === undefined
                 ? {}
                 : { sourcePanelId: options.sourcePanelId })}

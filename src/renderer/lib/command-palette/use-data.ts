@@ -4,11 +4,11 @@ import {
   getActionRegistryVersion,
   subscribeActionRegistry,
 } from "@/lib/actions/registry.ts";
+import { resolveActionShortcutChord } from "@/lib/actions/shortcut-hint.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import {
   getKeybindingRegistryVersion,
-  keybindingRegistry,
   subscribeKeybindingRegistry,
 } from "@/lib/keybindings/registry.ts";
 import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
@@ -51,12 +51,9 @@ export function useCommandPaletteKeybindingLabels(): ReadonlyMap<
       readVersionedSnapshot(actionVersion + keybindingVersion, () => {
         const map = new Map<string, string>();
         for (const action of actionRegistry.list("command-palette")) {
-          const first = keybindingRegistry.getFirstBindingFor(
-            action.id,
-            action.metadata?.shortcutSourceId
-          );
-          if (first) {
-            map.set(action.id, formatChord(first.chord));
+          const chord = resolveActionShortcutChord(action);
+          if (chord) {
+            map.set(action.id, formatChord(chord));
           }
         }
         return map;

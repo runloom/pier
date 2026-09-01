@@ -381,15 +381,36 @@ export const settings = {
         theme: "인터페이스 색 모드를 고릅니다.",
       },
       files: {
+        copyPath: "현재 파일의 절대 경로를 복사합니다.",
+        copyRelativePath: "현재 파일의 프로젝트 상대 경로를 복사합니다.",
         copyPathWithRange: "현재 파일 경로와 선택한 줄 번호를 복사합니다.",
         editor: {
+          addCursorAbove: "위 줄에 커서를 추가합니다.",
+          addCursorBelow: "아래 줄에 커서를 추가합니다.",
           goToLine: "현재 파일의 지정한 줄로 이동합니다.",
+          selectAllOccurrences: "현재 단어가 나온 위치를 모두 선택합니다.",
+          selectNextOccurrence: "현재 단어의 다음 위치를 선택합니다.",
+          showHover: "커서 위치 기호의 설명을 보여 줍니다.",
+        },
+        search: {
+          copyPath: "검색 결과에서 현재 파일의 절대 경로를 복사합니다.",
+          copyRelativePath:
+            "검색 결과에서 현재 파일의 프로젝트 상대 경로를 복사합니다.",
+        },
+      },
+      git: {
+        review: {
+          copyPath: "선택한 변경의 절대 경로를 복사합니다.",
+          copyRelativePath: "선택한 변경의 저장소 상대 경로를 복사합니다.",
+          copyPathWithRange:
+            "선택한 변경의 경로와 선택한 줄 번호를 복사합니다.",
         },
       },
       find: "현재 터미널, 파일 또는 변경 목록에서 찾습니다.",
       findNext: "현재 패널에서 다음 일치를 찾습니다.",
       findPrev: "현재 패널에서 이전 일치를 찾습니다.",
       panel: {
+        copyRelativePath: "현재 파일의 프로젝트 상대 경로를 복사합니다.",
         close: "현재 패널을 닫습니다.",
         closeActive: "활성 패널을 닫습니다.",
         closeAll: "모든 패널을 닫습니다.",

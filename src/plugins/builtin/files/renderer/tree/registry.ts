@@ -7,7 +7,11 @@ export interface FilesTreeRegistryEntry {
   collapseAll: () => void;
   expandKnownDirectories: () => void;
   getApi: () => PierFileTreeApi | null;
+  /** 当前树选中路径；快捷键复制路径在无菜单载荷时读取。 */
+  getSelectedPaths?: () => readonly string[];
   openSearch: () => void;
+  /** 与 root 不同时用于「复制相对路径」。 */
+  projectRoot?: string;
   root: string;
   toggleSearch: () => void;
 }
@@ -58,6 +62,26 @@ function findTreeEntry(target: {
     return lastMatch;
   }
   return null;
+}
+
+export function getFilesTreeSelectedPaths(target: {
+  instanceId?: string | undefined;
+  root?: string | undefined;
+}): {
+  paths: readonly string[];
+  projectRoot?: string;
+  root: string;
+} | null {
+  const entry = findTreeEntry(target);
+  const paths = entry?.getSelectedPaths?.() ?? [];
+  if (!entry || paths.length === 0) {
+    return null;
+  }
+  return {
+    paths,
+    root: entry.root,
+    ...(entry.projectRoot ? { projectRoot: entry.projectRoot } : {}),
+  };
 }
 
 export function registerFilesTreeInstance(

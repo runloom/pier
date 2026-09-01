@@ -1,7 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
-  FILES_COPY_PATH_COMMAND_ID,
-  FILES_COPY_RELATIVE_PATH_COMMAND_ID,
   FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID,
   FILES_REVEAL_COMMAND_ID,
 } from "@plugins/builtin/files/manifest.ts";
@@ -225,8 +223,6 @@ describe("context-menu composed sketches", () => {
       "|",
       "pier.git.review.openDirectory",
       "|",
-      "pier.git.review.copyPath",
-      "pier.git.review.copyRelativePath",
       "pier.git.review.copyPathWithRange",
       "pier.git.review.revealInFinder",
     ]);
@@ -249,8 +245,6 @@ describe("context-menu composed sketches", () => {
       "|",
       "pier.git.review.openDirectory",
       "|",
-      "pier.git.review.copyPath",
-      "pier.git.review.copyRelativePath",
       "pier.git.review.copyPathWithRange",
       "pier.git.review.revealInFinder",
     ]);
@@ -308,8 +302,6 @@ describe("context-menu composed sketches", () => {
       "|",
       FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID,
       "|",
-      FILES_COPY_PATH_COMMAND_ID,
-      FILES_COPY_RELATIVE_PATH_COMMAND_ID,
       FILES_REVEAL_COMMAND_ID,
     ]);
   });
@@ -353,9 +345,10 @@ describe("context-menu composed sketches", () => {
       },
     });
     const sketch = menuSketch("dockview-tab", { sourcePanelId: "file-1" });
-    expect(sketch.slice(0, 4)).toEqual([
+    expect(sketch.slice(0, 5)).toEqual([
       "pier.panel.keepOpen",
       "pier.panel.copyPath",
+      "pier.panel.copyRelativePath",
       "|",
       "pier.panel.newTerminal",
     ]);

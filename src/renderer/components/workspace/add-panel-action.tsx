@@ -53,6 +53,7 @@ import {
   getActionRegistryVersion,
   subscribeActionRegistry,
 } from "@/lib/actions/registry.ts";
+import { resolveActionShortcutChord } from "@/lib/actions/shortcut-hint.ts";
 import type { Action, ActionInvocation } from "@/lib/actions/types.ts";
 import { rankActionsForPalette } from "@/lib/command-palette/action-search.ts";
 import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
@@ -60,7 +61,6 @@ import { useCommandPointerSelectionGate } from "@/lib/command-palette/use-comman
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import {
   getKeybindingRegistryVersion,
-  keybindingRegistry,
   subscribeKeybindingRegistry,
 } from "@/lib/keybindings/registry.ts";
 import { useActionKeybindingLabel } from "@/lib/keybindings/use-action-label.ts";
@@ -96,12 +96,9 @@ function useKeybindingLabels(
       readVersionedSnapshot(keybindingVersion, () => {
         const map = new Map<string, string>();
         for (const action of actions) {
-          const first = keybindingRegistry.getFirstBindingFor(
-            action.id,
-            action.metadata?.shortcutSourceId
-          );
-          if (first) {
-            map.set(action.id, formatChord(first.chord));
+          const chord = resolveActionShortcutChord(action);
+          if (chord) {
+            map.set(action.id, formatChord(chord));
           }
         }
         return map;

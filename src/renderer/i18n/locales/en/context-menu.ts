@@ -11,6 +11,8 @@ export const contextMenu = {
     terminalOperationFailed: "Terminal action failed — try again",
     copy: "Copy",
     copyPath: "Copy Path",
+    copyFilePath: "Copy Path",
+    copyRelativePath: "Copy Relative Path",
     keepOpen: "Keep Open",
     copyToNewWindow: "Copy into New Window",
     copyToTheOtherWindow: "Copy to the Other Window",

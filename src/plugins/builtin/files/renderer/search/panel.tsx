@@ -31,7 +31,10 @@ import {
   type ContentQuerySnapshot,
   createFilesContentQueryClient,
 } from "./client.ts";
-import { popupSearchResultContextMenu } from "./context-actions.ts";
+import {
+  popupSearchResultContextMenu,
+  registerFilesSearchLiveHit,
+} from "./context-actions.ts";
 import { openContentSearchHit } from "./open.ts";
 import {
   conditionsFromPanelParams,
@@ -179,6 +182,27 @@ export function createFilesContentSearchPanel(
         setActiveIndex(0);
       }
     }, [activeIndex, snapshot.items.length]);
+
+    useEffect(
+      () =>
+        registerFilesSearchLiveHit(props.api.id, () => {
+          const hit = snapshot.items[activeIndex];
+          if (!(hit && conditions.root)) {
+            return null;
+          }
+          const panelContext =
+            panelContextFromParams(props.params) ??
+            contextRef.current.panels.getActiveContext();
+          return {
+            ...hit,
+            root: conditions.root,
+            ...(panelContext?.projectRootPath
+              ? { projectRoot: panelContext.projectRootPath }
+              : {}),
+          };
+        }),
+      [activeIndex, conditions.root, props.api.id, props.params, snapshot.items]
+    );
 
     const groups = useMemo(
       () => groupHitsByPath(snapshot.items),

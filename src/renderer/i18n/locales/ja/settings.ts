@@ -385,15 +385,37 @@ export const settings = {
         theme: "インターフェースの色モードを選びます。",
       },
       files: {
+        copyPath: "現在のファイルの絶対パスをコピーします。",
+        copyRelativePath:
+          "現在のファイルのプロジェクト相対パスをコピーします。",
         copyPathWithRange: "現在のファイルパスと選択中の行番号をコピーします。",
         editor: {
+          addCursorAbove: "上の行にカーソルを追加します。",
+          addCursorBelow: "下の行にカーソルを追加します。",
           goToLine: "現在のファイルの指定行へ移動します。",
+          selectAllOccurrences: "現在の語の出現箇所をすべて選びます。",
+          selectNextOccurrence: "現在の語の次の出現箇所を選びます。",
+          showHover: "カーソル位置の記号の説明を表示します。",
+        },
+        search: {
+          copyPath: "検索結果の現在のファイルの絶対パスをコピーします。",
+          copyRelativePath:
+            "検索結果の現在のファイルのプロジェクト相対パスをコピーします。",
+        },
+      },
+      git: {
+        review: {
+          copyPath: "選んだ変更の絶対パスをコピーします。",
+          copyRelativePath: "選んだ変更のリポジトリ相対パスをコピーします。",
+          copyPathWithRange: "選んだ変更のパスと選択中の行番号をコピーします。",
         },
       },
       find: "現在のターミナル、ファイル、または変更一覧で検索します。",
       findNext: "現在のパネルで次の一致を検索します。",
       findPrev: "現在のパネルで前の一致を検索します。",
       panel: {
+        copyRelativePath:
+          "現在のファイルのプロジェクト相対パスをコピーします。",
         close: "現在のパネルを閉じます。",
         closeActive: "アクティブなパネルを閉じます。",
         closeAll: "すべてのパネルを閉じます。",

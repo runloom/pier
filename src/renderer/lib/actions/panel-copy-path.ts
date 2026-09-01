@@ -1,7 +1,7 @@
 /**
- * Tab 右键「复制地址」路径解析：
- * - files 磁盘文件 panel → 文件绝对路径
- * - 其它持有 PanelContext 的 panel → 持有的目录路径
+ * Tab 右键路径解析：
+ * - files 磁盘文件 panel → 文件绝对 / 相对路径
+ * - 其它持有 PanelContext 的 panel → 持有的目录路径（仅绝对）
  * - 无路径 → null（菜单项不展示）
  */
 
@@ -12,6 +12,11 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const LEADING_SLASHES = /^\/+/;
 const TRAILING_SLASHES = /\/+$/;
+
+interface FilesDiskSource {
+  path: string;
+  root: string;
+}
 
 function joinAbsolutePath(root: string, relativePath: string): string {
   const rootTrimmed = root.replace(TRAILING_SLASHES, "") || "/";
@@ -27,8 +32,29 @@ function joinAbsolutePath(root: string, relativePath: string): string {
   return `${rootTrimmed}/${pathTrimmed}`;
 }
 
+function relativeToProjectRoot(
+  root: string,
+  path: string,
+  projectRoot: string | undefined
+): string {
+  if (!projectRoot || projectRoot === root) {
+    return path;
+  }
+  const rootPrefix = root.endsWith("/") ? root : `${root}/`;
+  const projectPrefix = projectRoot.endsWith("/")
+    ? projectRoot
+    : `${projectRoot}/`;
+  if (rootPrefix.startsWith(projectPrefix)) {
+    const subRoot = rootPrefix.slice(projectPrefix.length);
+    return `${subRoot}${path}`;
+  }
+  return path;
+}
+
 /** files 磁盘文档：params.source = { kind: "disk", root, path }。 */
-function absolutePathFromFilesPanelParams(params: unknown): string | undefined {
+export function filesDiskSourceFromPanelParams(
+  params: unknown
+): FilesDiskSource | undefined {
   if (!params || typeof params !== "object" || !("source" in params)) {
     return;
   }
@@ -50,7 +76,15 @@ function absolutePathFromFilesPanelParams(params: unknown): string | undefined {
   ) {
     return;
   }
-  return joinAbsolutePath(record.root, record.path);
+  return { path: record.path, root: record.root };
+}
+
+function absolutePathFromFilesPanelParams(params: unknown): string | undefined {
+  const disk = filesDiskSourceFromPanelParams(params);
+  if (!disk) {
+    return;
+  }
+  return joinAbsolutePath(disk.root, disk.path);
 }
 
 /** panel 持有的目录：cwd 最贴近运行态，其次工作树/项目根。 */
@@ -81,34 +115,66 @@ function panelRecord(panelId: string | undefined):
     | undefined;
 }
 
+function panelIdForInvocation(
+  invocation?: ActionInvocation
+): string | undefined {
+  return (
+    invocation?.sourcePanelId ??
+    useWorkspaceStore.getState().api?.activePanel?.id ??
+    undefined
+  );
+}
+
 function panelContextForInvocation(
   invocation?: ActionInvocation
 ): PanelContext | undefined {
   if (invocation?.sourcePanelContext) {
     return invocation.sourcePanelContext;
   }
-  const panelId =
-    invocation?.sourcePanelId ??
-    useWorkspaceStore.getState().api?.activePanel?.id;
+  const panelId = panelIdForInvocation(invocation);
   if (!panelId) {
     return;
   }
   return usePanelDescriptorStore.getState().descriptors[panelId]?.context;
 }
 
+export function isFilesDiskTab(invocation?: ActionInvocation): boolean {
+  return (
+    filesDiskSourceFromPanelParams(
+      panelRecord(panelIdForInvocation(invocation))?.params
+    ) != null
+  );
+}
+
 /**
- * 解析 tab 右键可复制的地址。无地址返回 undefined。
+ * 解析 tab 右键可复制的绝对路径。无地址返回 undefined。
  */
 export function resolvePanelCopyPath(
   invocation?: ActionInvocation
 ): string | undefined {
-  const panelId =
-    invocation?.sourcePanelId ??
-    useWorkspaceStore.getState().api?.activePanel?.id;
-  const panel = panelRecord(panelId);
+  const panel = panelRecord(panelIdForInvocation(invocation));
   const filePath = absolutePathFromFilesPanelParams(panel?.params);
   if (filePath) {
     return filePath;
   }
   return directoryPathFromContext(panelContextForInvocation(invocation));
+}
+
+/**
+ * 文件 tab 的项目相对路径。非磁盘文件 tab 返回 undefined。
+ */
+export function resolvePanelCopyRelativePath(
+  invocation?: ActionInvocation
+): string | undefined {
+  const disk = filesDiskSourceFromPanelParams(
+    panelRecord(panelIdForInvocation(invocation))?.params
+  );
+  if (!disk) {
+    return;
+  }
+  return relativeToProjectRoot(
+    disk.root,
+    disk.path,
+    panelContextForInvocation(invocation)?.projectRootPath
+  );
 }

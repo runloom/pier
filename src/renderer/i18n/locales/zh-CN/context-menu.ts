@@ -11,6 +11,8 @@ export const contextMenu = {
     terminalOperationFailed: "终端操作失败，请重试",
     copy: "复制",
     copyPath: "复制地址",
+    copyFilePath: "复制路径",
+    copyRelativePath: "复制相对路径",
     keepOpen: "固定标签",
     copyToNewWindow: "复制到新窗口",
     copyToTheOtherWindow: "复制到另一窗口",

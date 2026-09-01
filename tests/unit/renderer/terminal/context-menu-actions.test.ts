@@ -578,6 +578,15 @@ describe("terminal content context menu actions", () => {
       throw new Error("missing pier.terminal.search action");
     }
     expect(action.metadata?.shortcutSourceId).toBe("pier.find");
+    expect(
+      actionRegistry.get("pier.terminal.copy")?.metadata?.displayChord
+    ).toBe("Mod+KeyC");
+    expect(
+      actionRegistry.get("pier.terminal.paste")?.metadata?.displayChord
+    ).toBe("Mod+KeyV");
+    expect(
+      actionRegistry.get("pier.terminal.selectAll")?.metadata?.displayChord
+    ).toBe("Mod+KeyA");
 
     await action.handler();
 

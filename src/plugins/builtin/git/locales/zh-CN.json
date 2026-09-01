@@ -918,6 +918,7 @@
     "ui.reviewCopyPathWithRange": "复制路径和所选行",
     "ui.reviewTreeCopyRelativePath": "复制相对路径",
     "ui.reviewTreePathCopied": "已复制路径",
+    "ui.reviewTreeNoPathToCopy": "请先打开或选中要复制路径的文件。",
     "ui.reviewTreeCopyPathFailed": "无法复制路径",
     "ui.reviewTreeRevealInFinder": "在访达中显示",
     "ui.reviewTreeRevealFailed": "无法显示该项目",

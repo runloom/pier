@@ -180,7 +180,7 @@ describe("git review diff open actions", () => {
     ).toEqual({ contextId: "ctx", gitRootPath: "/repo", path: "a.ts" });
   });
 
-  it("shows path actions and path-with-range on the diff surface", () => {
+  it("shows path-with-range on the diff surface", () => {
     const menu = buildMenuEntries(GIT_REVIEW_DIFF_SURFACE, {
       metadata: {
         contextId: "ctx",
@@ -197,8 +197,6 @@ describe("git review diff open actions", () => {
       "|",
       GIT_REVIEW_OPEN_DIRECTORY_COMMAND_ID,
       "|",
-      GIT_REVIEW_COPY_PATH_COMMAND_ID,
-      GIT_REVIEW_COPY_RELATIVE_PATH_COMMAND_ID,
       GIT_REVIEW_COPY_PATH_WITH_RANGE_COMMAND_ID,
       GIT_REVIEW_REVEAL_COMMAND_ID,
     ]);
@@ -218,8 +216,6 @@ describe("git review diff open actions", () => {
       "|",
       GIT_REVIEW_OPEN_DIRECTORY_COMMAND_ID,
       "|",
-      GIT_REVIEW_COPY_PATH_COMMAND_ID,
-      GIT_REVIEW_COPY_RELATIVE_PATH_COMMAND_ID,
       GIT_REVIEW_COPY_PATH_WITH_RANGE_COMMAND_ID,
       GIT_REVIEW_REVEAL_COMMAND_ID,
     ]);

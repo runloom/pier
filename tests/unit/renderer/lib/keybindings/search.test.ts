@@ -7,9 +7,9 @@ import {
 describe("keybinding search", () => {
   it("matches when every token appears in the haystack", () => {
     const haystack = keybindingSearchHaystack([
-      "复制路径和所选行",
-      "Copy Path and Selected Lines",
-      "pier.files.copyPathWithRange",
+      "复制路径",
+      "Copy Path",
+      "pier.files.copyPath",
       "⌥⌘C",
       "Mod+Alt+KeyC",
     ]);
@@ -19,13 +19,13 @@ describe("keybinding search", () => {
     expect(matchKeybindingQuery(haystack, "复制 路径")).toBe(true);
     expect(matchKeybindingQuery(haystack, "copy path")).toBe(true);
     expect(matchKeybindingQuery(haystack, "Alt")).toBe(true);
-    expect(matchKeybindingQuery(haystack, "所选行 终端")).toBe(false);
+    expect(matchKeybindingQuery(haystack, "相对路径 终端")).toBe(false);
   });
 
   it("matches modifier aliases and compact chords", () => {
     const haystack = keybindingSearchHaystack([
-      "复制路径和所选行",
-      "pier.files.copyPathWithRange",
+      "复制路径",
+      "pier.files.copyPath",
       "⌥⌘C",
       "Mod+Alt+KeyC",
     ]);

@@ -68,6 +68,7 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
+    // Files 编辑器「选中全部出现」在 panel 作用域使用同一和弦，文件面板聚焦时优先。
     commandId: "pier.agents.list",
     keys: "Mod+Shift+KeyL",
     scope: "global",
@@ -257,14 +258,46 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "panel:pier.files.filePanel",
   },
   {
-    commandId: "pier.files.copyPathWithRange",
+    // VS Code Mac: copyFilePath ⌥⌘C / copyRelativeFilePath ⇧⌥⌘C.
+    // 「复制路径和所选行」不能再用 ⌥⌘C：同一 panel scope 下和弦只能命中一条命令。
+    commandId: "pier.files.copyPath",
     keys: "Mod+Alt+KeyC",
     scope: "panel:pier.files.filePanel",
   },
   {
-    commandId: "pier.git.review.copyPathWithRange",
+    commandId: "pier.files.copyRelativePath",
+    keys: "Mod+Alt+Shift+KeyC",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.files.copyPathWithRange",
+    keys: "Mod+Alt+KeyL",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.git.review.copyPath",
     keys: "Mod+Alt+KeyC",
     scope: "panel:pier.git.changes",
+  },
+  {
+    commandId: "pier.git.review.copyRelativePath",
+    keys: "Mod+Alt+Shift+KeyC",
+    scope: "panel:pier.git.changes",
+  },
+  {
+    commandId: "pier.git.review.copyPathWithRange",
+    keys: "Mod+Alt+KeyL",
+    scope: "panel:pier.git.changes",
+  },
+  {
+    commandId: "pier.files.search.copyPath",
+    keys: "Mod+Alt+KeyC",
+    scope: "panel:pier.files.searchPanel",
+  },
+  {
+    commandId: "pier.files.search.copyRelativePath",
+    keys: "Mod+Alt+Shift+KeyC",
+    scope: "panel:pier.files.searchPanel",
   },
   {
     commandId: "pier.files.editor.goToLine",
@@ -282,6 +315,7 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "panel:pier.files.filePanel",
   },
   {
+    // 文件面板覆盖全局 pier.agents.list 的同一和弦（VS Code 习惯：⌘⇧L 多光标）。
     commandId: "pier.files.editor.selectAllOccurrences",
     keys: "Mod+Shift+KeyL",
     scope: "panel:pier.files.filePanel",

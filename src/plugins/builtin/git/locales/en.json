@@ -851,6 +851,7 @@
     "ui.reviewCopyPathWithRange": "Copy Path and Selected Lines",
     "ui.reviewTreeCopyRelativePath": "Copy Relative Path",
     "ui.reviewTreePathCopied": "Path copied",
+    "ui.reviewTreeNoPathToCopy": "Open or select a file first.",
     "ui.reviewTreeCopyPathFailed": "Couldn't copy path",
     "ui.reviewTreeRevealInFinder": "Reveal in Finder",
     "ui.reviewTreeRevealFailed": "Couldn't reveal item",

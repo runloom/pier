@@ -846,6 +846,7 @@
     "ui.reviewCopyPathWithRange": "パスと選択行をコピー",
     "ui.reviewTreeCopyRelativePath": "相対パスをコピー",
     "ui.reviewTreePathCopied": "パスをコピーしました",
+    "ui.reviewTreeNoPathToCopy": "先にファイルを開くか、変更一覧で選んでください。",
     "ui.reviewTreeCopyPathFailed": "パスをコピーできませんでした",
     "ui.reviewTreeRevealInFinder": "Finder で表示",
     "ui.reviewTreeRevealFailed": "項目を表示できませんでした",

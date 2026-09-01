@@ -26,6 +26,10 @@ import type {
 } from "@plugins/builtin/files/renderer/panel/name-prompt.tsx";
 import { createFilesTreeActions } from "@plugins/builtin/files/renderer/tree/actions.ts";
 import {
+  clearFileTreeSidebarCache,
+  registerFilesTreeInstance,
+} from "@plugins/builtin/files/renderer/tree/registry.ts";
+import {
   addFilesTreeEntry,
   clearFilesTreeStore,
   getFilesTreeSnapshot,
@@ -94,6 +98,7 @@ function treeActions(
     preserveDocumentsAsUntitled: vi.fn(async () => []),
     removeDocumentsAfterPathMutation,
     removeDiskDocumentForPath: vi.fn(),
+    getPanelSource: vi.fn(() => null),
     saveDocument: vi.fn(async () => "saved" as const),
     settleDocument: vi.fn(async (documentId: string) => ({
       documentId,
@@ -285,6 +290,7 @@ function installClipboard() {
 
 afterEach(() => {
   clearFilesTreeStore();
+  clearFileTreeSidebarCache();
   clearFilesDocumentStore();
   showFilesNamePromptMock.mockReset();
   if (ORIGINAL_CLIPBOARD_DESCRIPTOR) {
@@ -954,8 +960,12 @@ describe("file-tree-actions", () => {
 
     expect(absolute.surfaces).toContain("files/breadcrumb");
     expect(relative.surfaces).toContain("files/breadcrumb");
-    expect(absolute.surfaces).toContain("files/canvas-preview");
-    expect(relative.surfaces).toContain("files/canvas-preview");
+    expect(absolute.surfaces).toContain("command-palette");
+    expect(relative.surfaces).toContain("command-palette");
+    expect(absolute.surfaces).not.toContain("files/editor");
+    expect(relative.surfaces).not.toContain("files/editor");
+    expect(absolute.surfaces).not.toContain("files/canvas-preview");
+    expect(relative.surfaces).not.toContain("files/canvas-preview");
 
     await absolute.handler({
       metadata: {
@@ -992,8 +1002,17 @@ describe("file-tree-actions", () => {
 
     expect(reveal.surfaces).toContain("files/canvas-preview");
     expect(
+      actionById(actions, FILES_COPY_PATH_COMMAND_ID).surfaces
+    ).not.toContain("files/canvas-preview");
+    expect(
+      actionById(actions, FILES_COPY_RELATIVE_PATH_COMMAND_ID).surfaces
+    ).not.toContain("files/canvas-preview");
+    expect(
       actionById(actions, FILES_COPY_PATH_WITH_RANGE_COMMAND_ID).surfaces
     ).not.toContain("files/canvas-preview");
+    expect(
+      actionById(actions, FILES_COPY_PATH_WITH_RANGE_COMMAND_ID).surfaces
+    ).toContain("command-palette");
 
     await actionById(actions, FILES_COPY_PATH_COMMAND_ID).handler({
       metadata: {
@@ -1001,7 +1020,7 @@ describe("file-tree-actions", () => {
         projectRoot: ROOT,
         root: ROOT,
       },
-      surface: "files/canvas-preview",
+      surface: "files/breadcrumb",
     });
     await actionById(actions, FILES_COPY_RELATIVE_PATH_COMMAND_ID).handler({
       metadata: {
@@ -1009,7 +1028,7 @@ describe("file-tree-actions", () => {
         projectRoot: ROOT,
         root: ROOT,
       },
-      surface: "files/canvas-preview",
+      surface: "files/breadcrumb",
     });
 
     expect(writeClipboardText).toHaveBeenNthCalledWith(
@@ -1043,6 +1062,82 @@ describe("file-tree-actions", () => {
     expect(writeClipboardText).toHaveBeenCalledWith(
       "packages/app/src/index.ts:42-58"
     );
+  });
+
+  it("copies the active editor path when invoked without menu metadata", async () => {
+    const { context } = makeContext();
+    const writeClipboardText = installClipboard();
+    vi.mocked(context.panels.getActiveInstanceId).mockReturnValue("panel-1");
+    const actions = treeActions(context, {
+      getPanelSource: vi.fn(() => ({
+        kind: "disk" as const,
+        path: "src/index.ts",
+        root: "/repo/packages/app",
+      })),
+    });
+
+    await actionById(actions, FILES_COPY_PATH_COMMAND_ID).handler();
+    await actionById(actions, FILES_COPY_RELATIVE_PATH_COMMAND_ID).handler();
+
+    expect(writeClipboardText).toHaveBeenNthCalledWith(
+      1,
+      "/repo/packages/app/src/index.ts"
+    );
+    expect(writeClipboardText).toHaveBeenNthCalledWith(
+      2,
+      "packages/app/src/index.ts"
+    );
+  });
+
+  it("prefers the active editor over tree selection when copying without menu metadata", async () => {
+    const { context } = makeContext();
+    const writeClipboardText = installClipboard();
+    vi.mocked(context.panels.getActiveInstanceId).mockReturnValue("panel-1");
+    registerFilesTreeInstance("panel-1", {
+      collapseAll: () => undefined,
+      expandKnownDirectories: () => undefined,
+      getApi: () => null,
+      getSelectedPaths: () => ["src/tree.ts"],
+      openSearch: () => undefined,
+      root: ROOT,
+      toggleSearch: () => undefined,
+    });
+    const actions = treeActions(context, {
+      getPanelSource: vi.fn(() => ({
+        kind: "disk" as const,
+        path: "src/editor.ts",
+        root: ROOT,
+      })),
+    });
+
+    await actionById(actions, FILES_COPY_PATH_COMMAND_ID).handler();
+
+    expect(writeClipboardText).toHaveBeenCalledWith("/repo/src/editor.ts");
+  });
+
+  it("copies the tree selection when there is no open disk file", async () => {
+    const { context } = makeContext();
+    const writeClipboardText = installClipboard();
+    registerFilesTreeInstance("tree-1", {
+      collapseAll: () => undefined,
+      expandKnownDirectories: () => undefined,
+      getApi: () => null,
+      getSelectedPaths: () => ["src/a.ts", "src/b.ts"],
+      openSearch: () => undefined,
+      projectRoot: ROOT,
+      root: ROOT,
+      toggleSearch: () => undefined,
+    });
+    const actions = treeActions(context);
+
+    await actionById(actions, FILES_COPY_PATH_COMMAND_ID).handler();
+    await actionById(actions, FILES_COPY_RELATIVE_PATH_COMMAND_ID).handler();
+
+    expect(writeClipboardText).toHaveBeenNthCalledWith(
+      1,
+      "/repo/src/a.ts\n/repo/src/b.ts"
+    );
+    expect(writeClipboardText).toHaveBeenNthCalledWith(2, "src/a.ts\nsrc/b.ts");
   });
 
   it("copies the active editor path and selection when invoked without menu metadata", async () => {
@@ -1094,6 +1189,32 @@ describe("file-tree-actions", () => {
 
     expect(writeClipboardText).not.toHaveBeenCalled();
     expect(context.notifications.success).not.toHaveBeenCalled();
+    expect(context.notifications.info).toHaveBeenCalledWith(
+      "Open or select a file first."
+    );
+  });
+
+  it("copies from sourcePanelId when the shortcut has no menu metadata", async () => {
+    const { context } = makeContext();
+    const writeClipboardText = installClipboard();
+    vi.mocked(context.panels.getActiveInstanceId).mockReturnValue(null);
+    const actions = treeActions(context, {
+      getPanelSource: vi.fn((panelId: string) =>
+        panelId === "panel-from-scope"
+          ? {
+              kind: "disk" as const,
+              path: "src/from-scope.ts",
+              root: ROOT,
+            }
+          : null
+      ),
+    });
+
+    await actionById(actions, FILES_COPY_PATH_COMMAND_ID).handler({
+      sourcePanelId: "panel-from-scope",
+    });
+
+    expect(writeClipboardText).toHaveBeenCalledWith("/repo/src/from-scope.ts");
   });
 
   it("does not expose a manual tree refresh action", () => {

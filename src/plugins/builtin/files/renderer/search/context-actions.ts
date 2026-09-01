@@ -25,6 +25,27 @@ import { openContentSearchHit } from "./open.ts";
 
 export const FILES_SEARCH_RESULT_SURFACE = "files/search-result";
 
+type FilesSearchLiveHit = FileContentQueryItem & {
+  projectRoot?: string;
+  root: string;
+};
+
+type FilesSearchLiveHitProvider = () => FilesSearchLiveHit | null;
+
+const liveSearchHitProviders = new Map<string, FilesSearchLiveHitProvider>();
+
+export function registerFilesSearchLiveHit(
+  panelId: string,
+  provider: FilesSearchLiveHitProvider
+): () => void {
+  liveSearchHitProviders.set(panelId, provider);
+  return () => {
+    if (liveSearchHitProviders.get(panelId) === provider) {
+      liveSearchHitProviders.delete(panelId);
+    }
+  };
+}
+
 const searchHitMetadataSchema = z.object({
   line: z.number().int().positive(),
   matchByteEnd: z.number().int().min(0),
@@ -41,7 +62,7 @@ const searchHitMetadataSchema = z.object({
 
 function parseSearchHit(
   invocation: { metadata?: unknown } | undefined
-): (FileContentQueryItem & { root: string; projectRoot?: string }) | null {
+): FilesSearchLiveHit | null {
   const parsed = searchHitMetadataSchema.safeParse(invocation?.metadata);
   if (!parsed.success) {
     return null;
@@ -62,6 +83,23 @@ function parseSearchHit(
   };
 }
 
+function resolveSearchHit(
+  context: RendererPluginContext,
+  invocation: { metadata?: unknown; sourcePanelId?: string } | undefined
+): FilesSearchLiveHit | null {
+  const fromMetadata = parseSearchHit(invocation);
+  if (fromMetadata) {
+    return fromMetadata;
+  }
+  const panelId =
+    invocation?.sourcePanelId ??
+    context.panels.getActiveInstanceId(FILES_SEARCH_PANEL_ID);
+  if (!panelId) {
+    return null;
+  }
+  return liveSearchHitProviders.get(panelId)?.() ?? null;
+}
+
 export function createFilesSearchResultActions(
   context: RendererPluginContext,
   controller: FileEditorController
@@ -75,7 +113,7 @@ export function createFilesSearchResultActions(
       surfaces: [FILES_SEARCH_RESULT_SURFACE],
       title: () => t("filePanel.contentSearch.action.open", "Open"),
       handler: (invocation) => {
-        const hit = parseSearchHit(invocation);
+        const hit = resolveSearchHit(context, invocation);
         if (!hit) {
           return;
         }
@@ -100,8 +138,14 @@ export function createFilesSearchResultActions(
       surfaces: [FILES_SEARCH_RESULT_SURFACE],
       title: () => t("filePanel.tree.action.copyPath", "Copy Path"),
       handler: async (invocation) => {
-        const hit = parseSearchHit(invocation);
+        const hit = resolveSearchHit(context, invocation);
         if (!hit) {
+          context.notifications.info(
+            t(
+              "filePanel.contentSearch.noHitToCopy",
+              "Select a search result first."
+            )
+          );
           return;
         }
         try {
@@ -125,8 +169,14 @@ export function createFilesSearchResultActions(
       title: () =>
         t("filePanel.tree.action.copyRelativePath", "Copy Relative Path"),
       handler: async (invocation) => {
-        const hit = parseSearchHit(invocation);
+        const hit = resolveSearchHit(context, invocation);
         if (!hit) {
+          context.notifications.info(
+            t(
+              "filePanel.contentSearch.noHitToCopy",
+              "Select a search result first."
+            )
+          );
           return;
         }
         try {
@@ -152,8 +202,14 @@ export function createFilesSearchResultActions(
       title: () =>
         t("filePanel.contentSearch.action.copyMatch", "Copy Match Line"),
       handler: async (invocation) => {
-        const hit = parseSearchHit(invocation);
+        const hit = resolveSearchHit(context, invocation);
         if (!hit) {
+          context.notifications.info(
+            t(
+              "filePanel.contentSearch.noHitToCopy",
+              "Select a search result first."
+            )
+          );
           return;
         }
         try {
@@ -176,7 +232,7 @@ export function createFilesSearchResultActions(
       surfaces: [FILES_SEARCH_RESULT_SURFACE],
       title: () => t("filePanel.tree.action.reveal", "Reveal in Finder"),
       handler: async (invocation) => {
-        const hit = parseSearchHit(invocation);
+        const hit = resolveSearchHit(context, invocation);
         if (!hit) {
           return;
         }

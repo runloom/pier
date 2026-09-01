@@ -39,7 +39,7 @@
 | 命中 | `files/search-result` | 打开 |
 | 路径对象 | `files/breadcrumb` | 复制路径 |
 | 文档 | `files/editor`、`files/markdown-preview`、`files/canvas-preview`、`terminal/content`、`terminal/restored`、`panel/content` | 视觉第一项是复制（终端无选区禁用仍显示）。终端无选区时第一个可用项 = 粘贴 |
-| 标签 | `dockview-tab` | 预览文件 → 固定标签；普通文件 → 复制地址；任务（新建终端已藏）→ 重新运行。关闭在最后 |
+| 标签 | `dockview-tab` | 预览文件 → 固定标签；普通文件 → 复制路径；任务（新建终端已藏）→ 重新运行。关闭在最后 |
 
 ---
 
@@ -73,7 +73,7 @@
 
 ### `git/review-diff`（并入 `panel/edit`；多组时并入 `panel/layout`）
 
-复制 → 全选 | 跳转到源码 | （多组：聚焦 / 均分） | 打开目录 | 复制路径… → 访达
+复制 → 全选 | 跳转到源码 | （多组：聚焦 / 均分） | 打开目录 | 复制路径和所选行 → 访达
 
 无选区时复制禁用仍显示。git 插件单测只锁打开/路径段；组合草图锁宿主剪贴板与布局。
 
@@ -90,11 +90,11 @@
 
 - `files/search-result`：打开 | 复制路径 → 复制相对路径 → 复制匹配行 → 访达
 - `files/breadcrumb`：复制路径 → 复制相对路径
-- `files/editor`：剪切 → 复制 → 粘贴 → 全选 | 转到行 → 符号信息 → 选出现 / 加光标 | 自动换行 | 复制路径… → 访达
-- Markdown / Canvas 预览：复制 → 全选 | 舒适 / 宽屏（当前档隐藏） | 外观（当前档隐藏；Canvas 仅自己声明的项） | 复制路径 → 访达
+- `files/editor`：剪切 → 复制 → 粘贴 → 全选 | 转到行 → 符号信息 → 选出现 / 加光标 | 自动换行 | 复制路径和所选行 → 访达
+- Markdown / Canvas 预览：复制 → 全选 | 舒适 / 宽屏（当前档隐藏） | 外观（当前档隐藏；Canvas 仅自己声明的项） | 访达
 - `terminal/content`：复制 → 粘贴 → 全选 → 运行选中内容 | 查找 | 新建终端或重跑 / 停止 | 智能体输入 | 拆分 | 聚焦 / 均分 | 清屏 | 关闭终端
 - `terminal/restored`：复制 → 全选 | 重跑 / 停止 | 均分 / 聚焦 | 关闭终端
-- `dockview-tab` 预览文件：固定标签 → 复制地址 | 新建 / 拆分 / 窗口 | （审查标签）打开目录 | 关闭…
+- `dockview-tab` 文件：固定标签（预览）→ 复制路径 → 复制相对路径 | 新建 / 拆分 / 窗口 | （审查标签）打开目录 | 关闭…。复制路径 / 复制相对路径在标签上，不在编辑器 / diff 正文。终端标签仍是复制地址（目录）
 - `panel/content`：复制 → 全选 | 均分 / 聚焦（多组时）
 
 ---
@@ -109,6 +109,17 @@
 | `pier.terminal.search` | `1_find` / 0 |
 | `pier.terminal.clearScreen` | `8_clear` / 0 |
 | `pier.panel.keepOpen` | `0_edit` / 1（`copyPath` 为 2） |
+
+---
+
+## 菜单加速键
+
+右键上的快捷键提示只负责显示，不经过原生菜单绑定。
+
+1. **已注册的快捷键。** 先反查命令自身，没有时再借用另一条命令。文件标签「复制路径」只在磁盘文件标签借用 Files 的复制路径（⌥⌘C）；终端标签「复制地址」不挂这条。
+2. **系统级编辑键。** 剪切 / 复制 / 粘贴 / 全选在编辑器、终端和通用正文菜单只显示提示。禁止把 ⌘X / ⌘C / ⌘V / ⌘A / ⌘K 写进终端面板默认快捷键表（会抢走终端原生处理）。
+3. **搜索结果。** 「复制路径 / 复制相对路径」与 Files、审查使用同一组默认和弦（⌥⌘C / ⇧⌥⌘C），作用域是搜索面板。
+4. **复制路径和所选行。** 编辑器 / diff 正文菜单展示 ⌥⌘L；转到行仍是 Ctrl+G。文件面板聚焦时 ⌘⇧L 是选中全部出现，智能体列表让路。
 
 ---
 
@@ -134,3 +145,5 @@
 - `tests/unit/renderer/git/review/diff/actions.test.ts`
 - `tests/unit/renderer/terminal/context-menu-actions.test.ts`
 - `tests/unit/renderer/git/review/open-directory-governance.test.ts`（打开目录仍 `5_open`）
+- `tests/unit/app/default-keymap.test.ts`（搜索复制路径和弦；终端不抢原生剪贴板键）
+- `tests/unit/renderer/lib/context-menu/build-entries.test.ts`（只显示的编辑键；文件标签按需借用）

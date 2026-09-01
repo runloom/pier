@@ -367,15 +367,35 @@ export const settings = {
         theme: "选择界面颜色模式。",
       },
       files: {
+        copyPath: "把当前文件的绝对路径复制到剪贴板。",
+        copyRelativePath: "把当前文件相对于项目的路径复制到剪贴板。",
         copyPathWithRange: "把当前文件路径和所选行号复制到剪贴板。",
         editor: {
+          addCursorAbove: "在上一行添加光标。",
+          addCursorBelow: "在下一行添加光标。",
           goToLine: "跳到当前文件的指定行。",
+          selectAllOccurrences: "选中当前词的全部出现位置。",
+          selectNextOccurrence: "再选中当前词的下一处。",
+          showHover: "显示当前符号的说明。",
+        },
+        search: {
+          copyPath: "把搜索结果中当前文件的绝对路径复制到剪贴板。",
+          copyRelativePath:
+            "把搜索结果中当前文件相对于项目的路径复制到剪贴板。",
+        },
+      },
+      git: {
+        review: {
+          copyPath: "把所选变更的绝对路径复制到剪贴板。",
+          copyRelativePath: "把所选变更在仓库内的相对路径复制到剪贴板。",
+          copyPathWithRange: "把所选变更的路径和所选行号复制到剪贴板。",
         },
       },
       find: "在当前终端、文件或变更列表中查找。",
       findNext: "查找当前面板中的下一个匹配。",
       findPrev: "查找当前面板中的上一个匹配。",
       panel: {
+        copyRelativePath: "把当前文件相对于项目的路径复制到剪贴板。",
         close: "关闭当前面板。",
         closeActive: "关闭当前活动面板。",
         closeAll: "关闭所有面板。",

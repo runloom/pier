@@ -383,16 +383,38 @@ export const settings = {
         theme: "Choose the interface color mode.",
       },
       files: {
-        copyPathWithRange:
-          "Copy the current file path and selected line numbers.",
+        copyPath: "Copy the current file's absolute path.",
+        copyRelativePath: "Copy the current file's project-relative path.",
+        copyPathWithRange: "Copy the file path and selected line numbers.",
         editor: {
+          addCursorAbove: "Add a cursor on the line above.",
+          addCursorBelow: "Add a cursor on the line below.",
           goToLine: "Jump to a line in the current file.",
+          selectAllOccurrences: "Select every occurrence of the current word.",
+          selectNextOccurrence: "Select the next match of the current word.",
+          showHover: "Show information about the symbol at the cursor.",
+        },
+        search: {
+          copyPath: "Copy the absolute path of the current search result.",
+          copyRelativePath:
+            "Copy the current search result's project-relative path.",
+        },
+      },
+      git: {
+        review: {
+          copyPath: "Copy the absolute path of the selected change.",
+          copyRelativePath:
+            "Copy the repository-relative path of the selected change.",
+          copyPathWithRange:
+            "Copy the selected change's path and selected line numbers.",
         },
       },
       find: "Find in the current terminal, file, or change list.",
       findNext: "Find the next match in the current panel.",
       findPrev: "Find the previous match in the current panel.",
       panel: {
+        copyRelativePath:
+          "Copy the current file's path relative to the project.",
         close: "Close the current panel.",
         closeActive: "Close the active panel.",
         closeAll: "Close all panels.",

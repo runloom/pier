@@ -189,6 +189,9 @@ function createMetadata(
         : false) ||
       (menuHidden?.(invocation) ?? false);
   }
+  if (contribution.displayChord) {
+    metadata.displayChord = contribution.displayChord;
+  }
   if (contribution.shortcutSourceId) {
     metadata.shortcutSourceId = contribution.shortcutSourceId;
   }

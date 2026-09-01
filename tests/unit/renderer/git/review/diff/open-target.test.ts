@@ -21,8 +21,12 @@ function item(path: string, id = "item-a"): PierDiffViewItem {
 function handle(partial: {
   selection?: ReturnType<PierDiffViewHandle["getSelectedLines"]>;
   hit?: ReturnType<PierDiffViewHandle["resolvePointerLineHit"]>;
+  topAnchorId?: string;
 }): PierDiffViewHandle {
   return {
+    captureTopAnchor: vi.fn(() =>
+      partial.topAnchorId ? { id: partial.topAnchorId, offset: 0 } : null
+    ),
     resolvePointerLineHit: vi.fn(() => partial.hit ?? null),
     getSelectedLines: vi.fn(() => partial.selection ?? null),
     getSelectedText: vi.fn(() => ""),
@@ -297,6 +301,51 @@ describe("resolveGitReviewLiveCopyTarget", () => {
       resolveGitReviewLiveCopyTarget({
         gitRootPath: "/repo",
         handle: handle({}),
+        items: [item("src/a.ts", "item-a"), item("src/b.ts", "item-b")],
+      })
+    ).toBeNull();
+  });
+
+  it("keeps a diff line selection over the tree-selected file", () => {
+    expect(
+      resolveGitReviewLiveCopyTarget({
+        gitRootPath: "/repo",
+        handle: handle({
+          selection: {
+            id: "item-b",
+            range: { start: 2, end: 2, side: "additions" },
+          },
+        }),
+        items: [item("src/a.ts", "item-a"), item("src/b.ts", "item-b")],
+        preferredItemId: "item-a",
+      })
+    ).toEqual({
+      endLine: 2,
+      gitRootPath: "/repo",
+      path: "src/b.ts",
+      startLine: 2,
+    });
+  });
+
+  it("prefers the tree-selected item over the viewport-top file", () => {
+    expect(
+      resolveGitReviewLiveCopyTarget({
+        gitRootPath: "/repo",
+        handle: handle({ topAnchorId: "item-b" }),
+        items: [item("src/a.ts", "item-a"), item("src/b.ts", "item-b")],
+        preferredItemId: "item-a",
+      })
+    ).toEqual({
+      gitRootPath: "/repo",
+      path: "src/a.ts",
+    });
+  });
+
+  it("does not copy the viewport-top file when nothing is selected", () => {
+    expect(
+      resolveGitReviewLiveCopyTarget({
+        gitRootPath: "/repo",
+        handle: handle({ topAnchorId: "item-b" }),
         items: [item("src/a.ts", "item-a"), item("src/b.ts", "item-b")],
       })
     ).toBeNull();

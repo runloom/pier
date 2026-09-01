@@ -13,6 +13,8 @@ export const contextMenu = {
       "ターミナル操作に失敗しました。もう一度お試しください",
     copy: "コピー",
     copyPath: "パスをコピー",
+    copyFilePath: "パスをコピー",
+    copyRelativePath: "相対パスをコピー",
     keepOpen: "開いたままにする",
     copyToNewWindow: "新しいウインドウへコピー",
     copyToTheOtherWindow: "もう一方のウインドウへコピー",

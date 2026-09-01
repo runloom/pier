@@ -276,26 +276,77 @@ describe("DEFAULT_KEYMAP", () => {
     });
   });
 
-  it("copies path and selected lines with Mod+Alt+C in Files and Git review panels", () => {
+  it("copies path, relative path, and path-with-range on distinct chords in Files, search, and Git review panels", () => {
     expect(
       DEFAULT_KEYMAP.filter(
         (binding) =>
+          binding.commandId === "pier.files.copyPath" ||
+          binding.commandId === "pier.files.copyRelativePath" ||
           binding.commandId === "pier.files.copyPathWithRange" ||
+          binding.commandId === "pier.files.search.copyPath" ||
+          binding.commandId === "pier.files.search.copyRelativePath" ||
+          binding.commandId === "pier.git.review.copyPath" ||
+          binding.commandId === "pier.git.review.copyRelativePath" ||
           binding.commandId === "pier.git.review.copyPathWithRange" ||
-          binding.keys === "Mod+Alt+KeyC"
+          binding.keys === "Mod+Alt+KeyC" ||
+          binding.keys === "Mod+Alt+Shift+KeyC" ||
+          binding.keys === "Mod+Alt+KeyL"
       )
     ).toEqual([
       {
-        commandId: "pier.files.copyPathWithRange",
+        commandId: "pier.files.copyPath",
         keys: "Mod+Alt+KeyC",
         scope: "panel:pier.files.filePanel",
       },
       {
-        commandId: "pier.git.review.copyPathWithRange",
+        commandId: "pier.files.copyRelativePath",
+        keys: "Mod+Alt+Shift+KeyC",
+        scope: "panel:pier.files.filePanel",
+      },
+      {
+        commandId: "pier.files.copyPathWithRange",
+        keys: "Mod+Alt+KeyL",
+        scope: "panel:pier.files.filePanel",
+      },
+      {
+        commandId: "pier.git.review.copyPath",
         keys: "Mod+Alt+KeyC",
         scope: "panel:pier.git.changes",
       },
+      {
+        commandId: "pier.git.review.copyRelativePath",
+        keys: "Mod+Alt+Shift+KeyC",
+        scope: "panel:pier.git.changes",
+      },
+      {
+        commandId: "pier.git.review.copyPathWithRange",
+        keys: "Mod+Alt+KeyL",
+        scope: "panel:pier.git.changes",
+      },
+      {
+        commandId: "pier.files.search.copyPath",
+        keys: "Mod+Alt+KeyC",
+        scope: "panel:pier.files.searchPanel",
+      },
+      {
+        commandId: "pier.files.search.copyRelativePath",
+        keys: "Mod+Alt+Shift+KeyC",
+        scope: "panel:pier.files.searchPanel",
+      },
     ]);
+  });
+
+  it("does not steal native terminal clipboard chords", () => {
+    const stolen = DEFAULT_KEYMAP.filter(
+      (binding) =>
+        binding.scope === "panel:terminal" &&
+        (binding.keys === "Mod+KeyA" ||
+          binding.keys === "Mod+KeyC" ||
+          binding.keys === "Mod+KeyK" ||
+          binding.keys === "Mod+KeyV" ||
+          binding.keys === "Mod+KeyX")
+    );
+    expect(stolen).toEqual([]);
   });
 
   it("shows symbol information with Mod+I only in Files panels", () => {

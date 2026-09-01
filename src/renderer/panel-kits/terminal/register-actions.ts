@@ -56,6 +56,7 @@ async function runTerminalOperation(
 }
 
 function terminalOperationContribution(opts: {
+  displayChord?: string;
   enabled?: (invocation?: ActionInvocation) => boolean;
   group?: string;
   id: string;
@@ -65,6 +66,7 @@ function terminalOperationContribution(opts: {
 }): ActionContribution {
   return {
     categoryKey: "terminal",
+    ...(opts.displayChord ? { displayChord: opts.displayChord } : {}),
     ...(opts.enabled ? { enabled: opts.enabled } : {}),
     group: opts.group ?? "0_edit",
     handler: async (invocation) => {
@@ -89,6 +91,8 @@ function hasPinnedTerminalSelection(invocation?: ActionInvocation): boolean {
 export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   terminalOperationContribution({
     // 无选区禁用；打开菜单时由 panel 钉 selectedText。
+    // 显示 ⌘C/V/A，但不进 keymap（Ghostty 原生处理，禁止抢走）。
+    displayChord: "Mod+KeyC",
     enabled: hasPinnedTerminalSelection,
     id: "pier.terminal.copy",
     operation: "copy",
@@ -96,12 +100,14 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     titleKey: "contextMenu.action.copy",
   }),
   terminalOperationContribution({
+    displayChord: "Mod+KeyV",
     id: "pier.terminal.paste",
     operation: "paste",
     sortOrder: 2,
     titleKey: "contextMenu.action.paste",
   }),
   terminalOperationContribution({
+    displayChord: "Mod+KeyA",
     id: "pier.terminal.selectAll",
     operation: "selectAll",
     sortOrder: 3,

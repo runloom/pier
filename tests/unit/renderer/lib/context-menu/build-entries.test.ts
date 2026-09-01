@@ -176,6 +176,59 @@ describe("buildMenuEntries", () => {
     expect(accelerator).toBe("CmdOrCtrl+W");
   });
 
+  it("displayChord 在没有真实绑定时只作为菜单提示", () => {
+    actionRegistry.register({
+      id: "t.native-copy",
+      category: "T",
+      title: () => "Copy",
+      surfaces: ["test/display-chord"],
+      metadata: { displayChord: "Mod+KeyC" },
+      handler: () => undefined,
+    });
+
+    const entries = buildMenuEntries("test/display-chord");
+    const first = entries[0];
+    const accelerator =
+      first?.type === "action" ? first.accelerator : undefined;
+    expect(accelerator).toBe("CmdOrCtrl+C");
+  });
+
+  it("shortcutSourceId 可按 invocation 决定是否借用", () => {
+    actionRegistry.register({
+      id: "t.tab-copy-path",
+      category: "T",
+      title: () => "Copy Path",
+      surfaces: ["test/dynamic-source"],
+      metadata: {
+        shortcutSourceId: (invocation) =>
+          invocation?.metadata?.disk === true ? "t.files-copy-path" : undefined,
+      },
+      handler: () => undefined,
+    });
+    keybindingRegistry.registerDefaults([
+      {
+        commandId: "t.files-copy-path",
+        keys: "Mod+Alt+KeyC",
+        scope: "global",
+      },
+    ]);
+
+    const withDisk = buildMenuEntries("test/dynamic-source", {
+      metadata: { disk: true },
+    });
+    const withoutDisk = buildMenuEntries("test/dynamic-source", {
+      metadata: { disk: false },
+    });
+    const diskItem = withDisk[0];
+    const otherItem = withoutDisk[0];
+    expect(diskItem?.type === "action" ? diskItem.accelerator : undefined).toBe(
+      "CmdOrCtrl+Alt+C"
+    );
+    expect(
+      otherItem?.type === "action" ? otherItem.accelerator : undefined
+    ).toBeUndefined();
+  });
+
   it("viewport surface 按能力表并入 panel/edit 与 panel/layout", () => {
     actionRegistry.register({
       category: "T",

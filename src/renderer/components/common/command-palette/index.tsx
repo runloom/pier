@@ -45,6 +45,7 @@ import {
 } from "@/lib/command-palette/use-data.ts";
 import { useQuickPickQueryChange } from "@/lib/command-palette/use-quick-pick-query-change.ts";
 import { useCommandPaletteScroll } from "@/lib/command-palette/use-scroll.ts";
+import { invocationFromKeybindingScope } from "@/lib/keybindings/use-registry.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
@@ -344,13 +345,14 @@ export function CommandPalette() {
   };
 
   const handleExecuteAction = async (action: Action) => {
-    if (action.enabled?.() === false) {
+    const invocation = invocationFromKeybindingScope();
+    if (action.enabled?.(invocation) === false) {
       return;
     }
     const controller = useCommandPaletteController.getState();
     const before = controller.requestId;
     try {
-      await action.handler();
+      await action.handler(invocation);
       if (!action.metadata?.excludeFromMru) {
         useCommandPaletteMru.getState().recordUse(action.id);
       }
