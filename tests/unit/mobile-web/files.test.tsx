@@ -118,4 +118,20 @@ describe("FilesPage 预览（file.readText 裸 string 契约）", () => {
       )
     ).toBe(true);
   });
+
+  it("从会话进入时顶栏返回会话，而不是工作台", async () => {
+    window.location.hash =
+      "#/files?root=/session-root&fromPanel=p-shell&fromWindow=w1";
+    stubCommands(() => Promise.resolve("ok"));
+    render(<FilesPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId("files-root").textContent).toContain(
+        "/session-root"
+      );
+    });
+    fireEvent.click(screen.getByTestId("topbar-back"));
+    expect(decodeURIComponent(window.location.hash)).toBe(
+      "#/session?panel=p-shell&window=w1"
+    );
+  });
 });

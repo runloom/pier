@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   parseHash,
+  projectionBack,
   routeToHash,
 } from "../../../apps/mobile-web/src/lib/routes.ts";
 
@@ -61,5 +62,43 @@ describe("session 路由（面板 + 窗口寻址）", () => {
     expect(
       parseHash(routeToHash({ page: "files", path: "README.md", root: "/wt" }))
     ).toEqual({ page: "files", path: "README.md", root: "/wt" });
+  });
+
+  it("S2/S3 带回跳会话，无来源则回工作台", () => {
+    const from = { panelId: "p-1", windowId: "w2" };
+    expect(
+      parseHash(
+        routeToHash({
+          page: "changes",
+          cwd: "/repo",
+          from,
+        })
+      )
+    ).toEqual({
+      cwd: "/repo",
+      from,
+      page: "changes",
+    });
+    expect(
+      parseHash(
+        routeToHash({
+          page: "files",
+          from: { panelId: "p-1" },
+          root: "/wt",
+        })
+      )
+    ).toEqual({
+      from: { panelId: "p-1" },
+      page: "files",
+      root: "/wt",
+    });
+    expect(projectionBack({ page: "changes", cwd: "/repo", from })).toEqual({
+      page: "session",
+      panelId: "p-1",
+      windowId: "w2",
+    });
+    expect(projectionBack({ page: "files", root: "/wt" })).toEqual({
+      page: "host",
+    });
   });
 });

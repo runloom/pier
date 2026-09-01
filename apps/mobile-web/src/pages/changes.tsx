@@ -11,7 +11,7 @@ import { gitDiffPatchSchema, gitStatusSchema } from "@shared/contracts/git.ts";
 import { useEffect, useRef, useState } from "react";
 import { TopBar } from "../components/top-bar.tsx";
 import { hunkLineDelta, UnifiedDiff } from "../components/unified-diff.tsx";
-import { useHashRoute } from "../lib/routes.ts";
+import { projectionBack, useHashRoute } from "../lib/routes.ts";
 import { getMobileClient } from "../lib/session.ts";
 import { useMobileWebStore } from "../lib/store.ts";
 import { pickWorktreeCwd } from "../lib/worktree-scope.ts";
@@ -148,7 +148,12 @@ export function ChangesPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-neutral-950 text-neutral-100">
-      <TopBar back={{ page: "host" }} title="变更 · 只读" />
+      <TopBar
+        back={
+          route.page === "changes" ? projectionBack(route) : { page: "host" }
+        }
+        title="变更 · 只读"
+      />
       <main className="flex-1 px-4 py-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <p
