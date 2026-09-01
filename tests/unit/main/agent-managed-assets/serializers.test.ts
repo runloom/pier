@@ -1,4 +1,5 @@
 import {
+  buildLauncherEntry,
   buildOpenCodeEntry,
   buildOpenCodeLauncherEntry,
   buildServerEntry,
@@ -63,6 +64,68 @@ describe("owned-entry rewrite (store move / engine bump)", () => {
     expect(moved.next).not.toContain(STORE);
     expect(moved.next).toContain("# user comment");
     expect(moved.next.match(/pier-managed:pier-memory begin/g)).toHaveLength(1);
+  });
+
+  it("toml: adopts an equivalent unmarked table and wraps it in markers", () => {
+    const launcher = "/abs/.pier/memory/launcher/current/memory-mcp.mjs";
+    const existing = [
+      "[cli]",
+      'installer = "internal"',
+      "",
+      "[mcp_servers.pier-memory]",
+      'command = "node"',
+      `args = [${JSON.stringify(launcher)}]`,
+      "",
+    ].join("\n");
+    const plan = planTomlAppend(existing, buildLauncherEntry(launcher));
+    expect(plan.ok).toBe(true);
+    if (!(plan.ok && typeof plan.next === "string")) {
+      return;
+    }
+    expect(plan.next).toContain("[cli]");
+    expect(plan.next).toContain("# pier-managed:pier-memory begin");
+    expect(plan.next.match(/\[mcp_servers\.pier-memory\]/g)).toHaveLength(1);
+    expect(plan.next).toContain(launcher);
+  });
+
+  it("toml: adopts an equivalent table sitting between other tables", () => {
+    const launcher = "/abs/.pier/memory/launcher/current/memory-mcp.mjs";
+    const existing = [
+      "[cli]",
+      'installer = "internal"',
+      "",
+      "[mcp_servers.pier-memory]",
+      'command = "node"',
+      `args = [${JSON.stringify(launcher)}]`,
+      "",
+      "[ui]",
+      'theme = "auto"',
+      "",
+    ].join("\n");
+    const plan = planTomlAppend(existing, buildLauncherEntry(launcher));
+    expect(plan.ok).toBe(true);
+    if (!(plan.ok && typeof plan.next === "string")) {
+      return;
+    }
+    expect(plan.next).toContain("[cli]");
+    expect(plan.next).toContain("[ui]");
+    expect(plan.next).toContain('theme = "auto"');
+    expect(plan.next.match(/\[mcp_servers\.pier-memory\]/g)).toHaveLength(1);
+    expect(plan.next).toContain("# pier-managed:pier-memory begin");
+  });
+
+  it("toml: refuses extra keys on an otherwise equivalent table", () => {
+    const launcher = "/abs/.pier/memory/launcher/current/memory-mcp.mjs";
+    const existing = [
+      "[mcp_servers.pier-memory]",
+      'command = "node"',
+      `args = [${JSON.stringify(launcher)}]`,
+      "timeout = 60",
+      "",
+    ].join("\n");
+    expect(planTomlAppend(existing, buildLauncherEntry(launcher)).ok).toBe(
+      false
+    );
   });
 
   it("toml: keeps refusing foreign definitions", () => {

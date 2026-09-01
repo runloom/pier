@@ -36,19 +36,10 @@ import {
 } from "@shared/contracts/agent/memory.ts";
 import { FileText, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-
-function connectedAgentCount(snapshot: MemoryStatusSnapshot): number {
-  const names = new Set<string>();
-  for (const row of snapshot.targets) {
-    if (row.outcome !== "written") {
-      continue;
-    }
-    for (const consumer of row.consumers) {
-      names.add(consumer);
-    }
-  }
-  return names.size;
-}
+import {
+  connectedMemoryAgentCount,
+  formatMemoryDegradedDetails,
+} from "./format-degraded-details.ts";
 
 function entityLabel(
   t: RendererPluginContext["i18n"]["t"],
@@ -230,18 +221,16 @@ export function MemorySettingsDetail({
                   action: {
                     label: t("degraded.details", undefined, "View details"),
                     onClick: () => {
+                      if (snapshot === null) {
+                        return;
+                      }
                       Promise.resolve(
                         context.dialogs.alert({
-                          body: (snapshot?.targets ?? [])
-                            .map(
-                              (row) =>
-                                `${row.configPath}: ${row.outcome}${row.detail ? ` (${row.detail})` : ""}`
-                            )
-                            .join("\n"),
+                          body: formatMemoryDegradedDetails(snapshot, t),
                           title: t(
                             "degraded.detailsTitle",
                             undefined,
-                            "Agent connection details"
+                            "Connection details"
                           ),
                         })
                       ).catch(() => undefined);
@@ -267,7 +256,9 @@ export function MemorySettingsDetail({
                 <FieldDescription>
                   {enabled
                     ? t("summary.connected", {
-                        count: snapshot ? connectedAgentCount(snapshot) : 0,
+                        count: snapshot
+                          ? connectedMemoryAgentCount(snapshot.targets)
+                          : 0,
                       })
                     : t(
                         "summary.disabledHint",
@@ -428,7 +419,7 @@ function EntriesBody({
                 >
                   <ItemContent>
                     <ItemTitle>{item.observation}</ItemTitle>
-                    <ItemDescription>
+                    <ItemDescription className="text-xs">
                       {item.entityName} · {entityLabel(t, item.entityType)}
                     </ItemDescription>
                   </ItemContent>

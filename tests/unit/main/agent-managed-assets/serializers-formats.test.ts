@@ -141,6 +141,44 @@ extensions:
     );
   });
 
+  it("adopts an equivalent unmarked vibe [[mcp_servers]] item", () => {
+    const prior = [
+      'active_model = "codestral-latest"',
+      "",
+      "[[mcp_servers]]",
+      'name = "pier-memory"',
+      'command = "node"',
+      `args = [${JSON.stringify(LAUNCHER)}]`,
+      "",
+    ].join("\n");
+    const plan = planMemoryUpsert(
+      "vibe-toml",
+      prior,
+      buildLauncherEntry(LAUNCHER)
+    );
+    expect(plan.ok).toBe(true);
+    if (!(plan.ok && typeof plan.next === "string")) {
+      return;
+    }
+    expect(plan.next).toContain("codestral-latest");
+    expect(plan.next).toContain("# pier-managed:pier-memory begin");
+    expect(plan.next.match(/\[\[mcp_servers\]\]/g)).toHaveLength(1);
+  });
+
+  it("refuses extra keys on an otherwise equivalent vibe item", () => {
+    const prior = [
+      "[[mcp_servers]]",
+      'name = "pier-memory"',
+      'command = "node"',
+      `args = [${JSON.stringify(LAUNCHER)}]`,
+      'url = "http://example"',
+      "",
+    ].join("\n");
+    expect(
+      planMemoryUpsert("vibe-toml", prior, buildLauncherEntry(LAUNCHER)).ok
+    ).toBe(false);
+  });
+
   it("infers extra formats from path", () => {
     expect(inferMemoryFormat("/home/u/.vibe/config.toml")).toBe("vibe-toml");
     expect(inferMemoryFormat("/home/u/.grok/config.toml")).toBe("codex-toml");

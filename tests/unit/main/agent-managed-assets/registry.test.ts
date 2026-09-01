@@ -443,6 +443,34 @@ describe("memory global registry", () => {
     ).toBe("/xdg/opencode/opencode.json");
   });
 
+  it("adopts an equivalent unmarked grok pier-memory table", async () => {
+    const h = home();
+    mkdirSync(join(h, ".grok"), { recursive: true });
+    writeFileSync(
+      join(h, ".grok", "config.toml"),
+      [
+        "[cli]",
+        'installer = "internal"',
+        "",
+        "[mcp_servers.pier-memory]",
+        'command = "node"',
+        `args = [${JSON.stringify(LAUNCHER)}]`,
+        "",
+      ].join("\n")
+    );
+    const rows = await convergeMemoryRegistry({
+      env: {},
+      home: h,
+      installedAgents: ["grok"],
+      launcherPath: LAUNCHER,
+    });
+    expect(rows.every((row) => row.outcome === "written")).toBe(true);
+    const grok = readFileSync(join(h, ".grok", "config.toml"), "utf8");
+    expect(grok).toContain("# pier-managed:pier-memory begin");
+    expect(grok.match(/\[mcp_servers\.pier-memory\]/g)).toHaveLength(1);
+    expect(grok).toContain("[cli]");
+  });
+
   it("registers grok and omp native user configs when installed", async () => {
     const h = home();
     const rows = await convergeMemoryRegistry({
