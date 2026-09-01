@@ -45,6 +45,10 @@ import {
   resetPanelTransferRuntimeForTests,
   setWorkspaceBootstrapGate,
 } from "@/components/workspace/transfer/runtime.ts";
+import {
+  PANEL_TRANSFER_IN_TRANSIT_ATTR,
+  resetPanelTransferTearOffForTests,
+} from "@/components/workspace/transfer/tear-off.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const TRANSFER_ID = "9af45a46-24f2-4ac0-9371-fbe78ca295dc";
@@ -181,6 +185,8 @@ describe("workspace panel transfer", () => {
     __panelTransferInternals.clearFrozenOfferParamsForTests();
     useWorkspaceStore.getState().setApi(null);
     Reflect.deleteProperty(window, "pier");
+    resetPanelTransferTearOffForTests();
+    document.body.replaceChildren();
   });
 
   describe("onWillDragPanel MIME stamping", () => {
@@ -432,6 +438,30 @@ describe("workspace panel transfer", () => {
         expect(pier.finishDrag).toHaveBeenCalledWith(TRANSFER_ID)
       );
       expect(__panelTransferInternals.getActiveDrag()).toBeNull();
+    });
+
+    it("onDragEnd outside hides the source tab before finishDrag", async () => {
+      installPier();
+      const tab = document.createElement("div");
+      tab.className = "dv-tab";
+      const inner = document.createElement("div");
+      inner.dataset.panelTabId = "welcome-1";
+      tab.append(inner);
+      document.body.append(tab);
+      const handlers = createWorkspacePanelTransferHandlers(() => null);
+      __panelTransferInternals.setActiveDrag({
+        capability: "movable",
+        componentId: "welcome",
+        params: {},
+        panelId: "welcome-1",
+        transferId: TRANSFER_ID,
+      });
+      const native = new FakeDragEvent("dragend", {
+        clientX: -40,
+        clientY: 10,
+      });
+      handlers.onDragEnd(TRANSFER_ID, native as unknown as DragEvent);
+      expect(tab.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)).toBe(true);
     });
 
     it("onWillDrop suppresses dockview's stale dragend commit only for outside releases", () => {

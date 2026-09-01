@@ -124,8 +124,8 @@ export async function relocatePanelTransfer(
         windowRecordId: `pending:${live.transferId}`,
       },
       input.placement ?? { kind: "root" },
-      // Menu-initiated relocate: raise the new window once it commits
-      // (it is created showInactive + show-held, so nothing else focuses it).
+      // Menu-initiated relocate into an existing window: raise it on commit.
+      // New windows are focused at runtime-moved (tear-off show).
       { focusOnCommit: true }
     );
   }

@@ -13,7 +13,9 @@
  *   `finishDrag`; main classifies the cursor against window bounds and
  *   claims managed/internal targets itself, resolving placement in the
  *   target renderer via `resolvePlacementFromClientPoint` (a mirror of
- *   Dockview's overlay activation model).
+ *   Dockview's overlay activation model). Live overlay for this channel is
+ *   the overlay-preview broadcast driving Dockview `showOverlay` (HTML5
+ *   dragover does not cross WebContentsView windows).
  * - `tryClaim` in main is single-claimant: whichever channel arrives first
  *   wins. The losing peer gets `already_claimed` (HTML5 drop or finishDrag)
  *   so the source keeps drag-start freeze params for prepareSource.
@@ -38,10 +40,16 @@ import {
   type UnhandledDragOverEventLike,
   type WillDropEventLike,
 } from "./shared.ts";
+import {
+  armPanelTransferTearOffClaim,
+  hidePanelTransferTearOff,
+  isDragReleaseOutsideThisWindow,
+  settlePanelTransferTearOffClaim,
+} from "./tear-off.ts";
 
 export interface WorkspacePanelTransferHandlers {
   onDidDrop(event: DidDropEventLike): void;
-  onDragEnd(transferId: string | null): void;
+  onDragEnd(transferId: string | null, event?: DragEvent): void;
   onUnhandledDragOver(event: UnhandledDragOverEventLike): void;
   onWillDragPanel(event: TabDragEventLike): string | null;
   onWillDrop(event: WillDropEventLike): void;
@@ -333,20 +341,24 @@ export function createWorkspacePanelTransferHandlers(
       if (!(native instanceof DragEvent) || native.type !== "dragend") {
         return;
       }
-      const { clientX, clientY } = native;
-      const inside =
-        clientX >= 0 &&
-        clientY >= 0 &&
-        clientX <= window.innerWidth &&
-        clientY <= window.innerHeight;
-      if (inside) {
+      if (!isDragReleaseOutsideThisWindow(native)) {
         return;
       }
       event.preventDefault();
+      const panelId = getActiveDrag()?.panelId;
+      if (panelId) {
+        hidePanelTransferTearOff(panelId, getApi());
+        armPanelTransferTearOffClaim();
+      }
     },
 
-    onDragEnd(transferId) {
-      const id = transferId ?? getActiveDrag()?.transferId ?? null;
+    onDragEnd(transferId, event) {
+      const drag = getActiveDrag();
+      const id = transferId ?? drag?.transferId ?? null;
+      if (drag && event && isDragReleaseOutsideThisWindow(event)) {
+        hidePanelTransferTearOff(drag.panelId, getApi());
+      }
+      armPanelTransferTearOffClaim();
       setActiveDrag(null);
       if (!id) {
         return;
@@ -361,6 +373,9 @@ export function createWorkspacePanelTransferHandlers(
           // already_claimed / ok: claim path owns takeFrozenOfferParams —
           // peer HTML5 wins return already_claimed only after prepareSource
           // has consumed the freeze (or is guaranteed to).
+          const keepTearOff =
+            result?.ok === true || result?.code === "already_claimed";
+          settlePanelTransferTearOffClaim(keepTearOff);
           if (
             result == null ||
             (result && !result.ok && result.code !== "already_claimed")
@@ -383,6 +398,7 @@ export function createWorkspacePanelTransferHandlers(
           }
         })
         .catch((err) => {
+          settlePanelTransferTearOffClaim(false);
           discardFrozenOfferParams(id);
           console.error("[panelTransfer] finishDrag failed:", err);
         });

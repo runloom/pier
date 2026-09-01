@@ -98,6 +98,20 @@ describe("tab strip scroll ownership governance", () => {
     expect(patch).toContain("-            this._scrollOffset = 0;");
   });
 
+  it("clears the absolute drop overlay when HTML5 drag leaves the document", () => {
+    const patch = readFileSync(
+      join(ROOT, "patches/dockview-core@7.0.2.patch"),
+      "utf8"
+    );
+    expect(patch).toContain("dndOverlayMounting: absolute");
+    expect(patch).toContain("onDocumentDragLeave");
+    expect(patch).toContain("document.addEventListener('dragleave'");
+    expect(patch).toContain("document.documentElement.contains(related)");
+    expect(patch).toContain(
+      "this.model) === null || _a === void 0 ? void 0 : _a.clear()"
+    );
+  });
+
   it("applies the R2 patch in the installed dockview-core tree", () => {
     // package dir includes patch hash — discover via readdir.
     const pnpmDir = join(ROOT, "node_modules/.pnpm");
@@ -122,6 +136,34 @@ describe("tab strip scroll ownership governance", () => {
       }
     }
     expect(foundPierComment).toBe(true);
+  });
+
+  it("applies the document-dragleave overlay clear in installed dockview-core", () => {
+    const pnpmDir = join(ROOT, "node_modules/.pnpm");
+    const entries = readdirSync(pnpmDir).filter((name) =>
+      name.startsWith("dockview-core@7.0.2")
+    );
+    expect(entries.length).toBeGreaterThan(0);
+    let foundLeaveClear = false;
+    for (const entry of entries) {
+      const bundled = join(
+        pnpmDir,
+        entry,
+        "node_modules/dockview-core/dist/package/main.esm.mjs"
+      );
+      if (!statSync(bundled, { throwIfNoEntry: false })?.isFile()) {
+        continue;
+      }
+      const source = readFileSync(bundled, "utf8");
+      if (
+        source.includes("onDocumentDragLeave") &&
+        source.includes("document.addEventListener('dragleave'")
+      ) {
+        foundLeaveClear = true;
+        break;
+      }
+    }
+    expect(foundLeaveClear).toBe(true);
   });
 
   it("forbids workspace product code from assigning scrollLeft outside owner modules", () => {

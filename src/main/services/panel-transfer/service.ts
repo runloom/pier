@@ -1,5 +1,6 @@
 import type {
   PanelTransferOffer,
+  PanelTransferOverlayPreview,
   PanelTransferPlacement,
   PanelTransferResult,
 } from "@shared/contracts/panel-transfer.ts";
@@ -8,7 +9,6 @@ import { PanelTransferJournal } from "../../state/panel-transfer-journal.ts";
 import type { RendererCommandService } from "../renderer-command-service.ts";
 import { finishPanelTransferDrag } from "./finish-drag.ts";
 import {
-  computeTransferNewWindowBounds,
   createNoopPanelTransferFilesPort,
   createNoopPanelTransferTerminalPort,
   createPanelTransferRendererPort,
@@ -16,25 +16,27 @@ import {
   samePanelTransferCaller,
 } from "./helpers.ts";
 import { createPanelTransferLifecycleMethods } from "./lifecycle.ts";
+import { createBoundOverlayPreview } from "./overlay-preview.ts";
 import {
   createResolveDefaultPlacement,
   type RelocateLiveOffer,
   relocatePanelTransfer,
 } from "./relocate.ts";
+import { materializeInternalTransferWindow } from "./speculative-window.ts";
 import {
   type PanelTransferTransactionDeps,
   runClaimedTransfer,
 } from "./transaction.ts";
 import {
+  type OverlayPreviewScheduler,
   PANEL_TRANSFER_CLAIM_TOTAL_MS,
   PANEL_TRANSFER_DROP_WAIT_MS,
   PANEL_TRANSFER_OFFER_TTL_MS,
-  PANEL_TRANSFER_SHOW_HOLD_REASON,
   PANEL_TRANSFER_TOMBSTONE_TTL_MS,
-  type PanelTransferCaller,
   type PanelTransferFilesPort,
   type PanelTransferGeometryPort,
   type PanelTransferJournalRecord,
+  type PanelTransferLiveOffer,
   type PanelTransferService,
   type PanelTransferTargetRef,
   type PanelTransferTerminalPort,
@@ -47,31 +49,16 @@ export {
   createNoopPanelTransferTerminalPort,
 } from "./helpers.ts";
 
-interface LiveOffer {
-  abort: AbortController;
-  accepted: boolean;
-  capability: PanelTransferOffer["capability"];
-  claim?: {
-    deferred: PromiseWithResolvers<PanelTransferResult>;
-    /** Menu-initiated relocate focuses the target window after commit. */
-    focusOnCommit: boolean;
-    kind: "internal" | "managed";
-    placement: PanelTransferPlacement;
-    runnerStarted: boolean;
-    target: PanelTransferTargetRef;
-  };
-  expiresAt: number;
-  offer: PanelTransferOffer;
-  source: PanelTransferCaller;
-  transferId: string;
-  unsupported?: true;
-}
+type LiveOffer = PanelTransferLiveOffer;
 
 export interface CreatePanelTransferServiceArgs {
+  /** Omit in tests that do not exercise overlay so no cursor poll starts. */
+  broadcastOverlayPreview?: (preview: PanelTransferOverlayPreview) => void;
   files?: PanelTransferFilesPort;
   geometry: PanelTransferGeometryPort;
   journal?: PanelTransferJournal;
   now?: () => number;
+  overlayPreviewSchedule?: OverlayPreviewScheduler;
   pluginMutation: <T>(operation: () => Promise<T>) => Promise<T>;
   rendererCommand: RendererCommandService;
   reportJournalParseFailure?:
@@ -91,6 +78,16 @@ export function createPanelTransferService(
   const files = args.files ?? createNoopPanelTransferFilesPort();
   const terminal = args.terminal ?? createNoopPanelTransferTerminalPort();
   const renderer = createPanelTransferRendererPort(args.rendererCommand);
+  const { overlayPreview, speculative } = createBoundOverlayPreview({
+    geometry: args.geometry,
+    windows: args.windows,
+    ...(args.broadcastOverlayPreview === undefined
+      ? {}
+      : { broadcast: args.broadcastOverlayPreview }),
+    ...(args.overlayPreviewSchedule === undefined
+      ? {}
+      : { schedule: args.overlayPreviewSchedule }),
+  });
   const deps: PanelTransferTransactionDeps = {
     files,
     journal,
@@ -169,6 +166,8 @@ export function createPanelTransferService(
   };
 
   const clearOffer = (transferId: string) => {
+    overlayPreview?.stop(transferId);
+    speculative.discard(transferId);
     const live = offers.get(transferId);
     if (!live) return;
     offers.delete(transferId);
@@ -205,6 +204,7 @@ export function createPanelTransferService(
     if (now() > live.expiresAt) {
       return panelTransferFailure("expired", "offer expired");
     }
+    overlayPreview?.stop(live.transferId);
     const deferred = Promise.withResolvers<PanelTransferResult>();
     live.claim = {
       deferred,
@@ -244,6 +244,12 @@ export function createPanelTransferService(
     }, PANEL_TRANSFER_CLAIM_TOTAL_MS);
 
     try {
+      if (
+        claim.kind === "internal" &&
+        claim.target.runtimeWindowId.startsWith("pending:")
+      ) {
+        await speculative.awaitReady(live.transferId);
+      }
       const result = await args.pluginMutation(() =>
         args.windows.runExclusive(async (lease) => {
           let target = claim.target;
@@ -259,9 +265,6 @@ export function createPanelTransferService(
             placement: claim.placement,
             source: live.source,
             target,
-            // Copy allocates a fresh panel id in runClaimedTransfer; seed a
-            // distinct placeholder here so journal mid-flight recovery does
-            // not treat the source id as the target identity.
             targetPanelId:
               transferMode === "copy"
                 ? crypto.randomUUID()
@@ -274,13 +277,13 @@ export function createPanelTransferService(
             claim.kind === "internal" &&
             target.runtimeWindowId.startsWith("pending:")
           ) {
-            const bounds = computeTransferNewWindowBounds(
-              args.geometry,
-              live.source.runtimeWindowId
-            );
-            const created = await args.windows.createForTransfer(lease, {
-              bounds,
+            const created = await materializeInternalTransferWindow({
+              geometry: args.geometry,
+              lease,
+              sourceWindowId: live.source.runtimeWindowId,
+              speculative,
               transferId: live.transferId,
+              windows: args.windows,
             });
             target = {
               kind: "internal",
@@ -289,10 +292,6 @@ export function createPanelTransferService(
             };
             claim.target = target;
             record = { ...record, target };
-            args.windows.holdRendererShow(
-              created.windowId,
-              PANEL_TRANSFER_SHOW_HOLD_REASON
-            );
           }
 
           return await runClaimedTransfer({
@@ -306,11 +305,9 @@ export function createPanelTransferService(
           });
         })
       );
-      // Intentional (menu) relocate: raise + focus the target once the
-      // transfer fully committed and the empty source window was closed.
-      // The window port is synchronous best-effort; focus failure must not
-      // retroactively fail a committed transfer.
-      if (result.ok && claim.focusOnCommit) {
+      // Menu relocate: focus after commit. Drag-created windows already
+      // revealHost'd; do not steal focus from a managed drop target.
+      if (result.ok && claim.focusOnCommit && claim.kind !== "internal") {
         try {
           args.windows.focus(claim.target.runtimeWindowId);
         } catch (focusError) {
@@ -328,8 +325,6 @@ export function createPanelTransferService(
       claim.deferred.resolve(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      // Production packages rarely have DevTools open — main log is the
-      // durable trail for cross-window transfer failures (console + crash logs).
       console.error(
         "[panelTransfer] claim failed",
         `transferId=${live.transferId}`,
@@ -406,6 +401,7 @@ export function createPanelTransferService(
       offers.set(offer.transferId, live);
       offersBySourceWindow.set(caller.runtimeWindowId, offer.transferId);
       notifyOffer(offer.transferId, live);
+      overlayPreview?.start(offer.transferId, caller.runtimeWindowId);
       setTimeout(() => {
         const current = offers.get(offer.transferId);
         if (current === live && !current.claim) {
@@ -462,6 +458,7 @@ export function createPanelTransferService(
           clearOffer,
           geometry: args.geometry,
           getOffer: (id) => offers.get(id),
+          ignoreWindowIds: () => speculative.hiddenIds(),
           pruneTombstones,
           rememberTombstone,
           renderer,

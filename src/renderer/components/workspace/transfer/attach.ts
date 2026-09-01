@@ -5,20 +5,45 @@
  * finishes via dragend (bounds channel); the same window also acts as a
  * TARGET for foreign Pier drags via unhandled-dragover accept + didDrop
  * (HTML5 channel). Main's tryClaim arbitrates whichever fires first.
+ *
+ * Live overlay: main broadcasts cursor classification. Source overlay
+ * hide is the dockview-core document-dragleave patch. This window drives
+ * Dockview `contentDropTarget.showOverlay` when it is the hovered foreign
+ * target (HTML5 dragover never arrives).
  */
 
 import type { DockviewApi } from "dockview-react";
+import { getWindowContext } from "@/lib/ipc/window-ipc.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { createWorkspacePanelTransferHandlers } from "./index.ts";
+import { createPanelTransferOverlayPreviewSession } from "./overlay-preview.ts";
 
 /**
  * Subscribe to Dockview drag events + window dragend for panel transfer.
  * Returns a disposer that removes all listeners.
  */
 export function attachWorkspacePanelTransfer(api: DockviewApi): () => void {
-  const transferHandlers = createWorkspacePanelTransferHandlers(
-    () => useWorkspaceStore.getState().api
-  );
+  const getApi = () => useWorkspaceStore.getState().api;
+  const transferHandlers = createWorkspacePanelTransferHandlers(getApi);
+  let windowId: string | null = null;
+  const overlaySession = createPanelTransferOverlayPreviewSession({
+    getApi,
+    getWindowId: () => windowId,
+  });
+  getWindowContext()
+    .then((context) => {
+      windowId = context.windowId;
+      overlaySession.refresh();
+    })
+    .catch(() => undefined);
+  const onOverlayPreview =
+    globalThis.window?.pier?.panelTransfer?.onOverlayPreview;
+  const overlayPreviewDispose =
+    typeof onOverlayPreview === "function"
+      ? onOverlayPreview((preview) => {
+          overlaySession.apply(preview);
+        })
+      : undefined;
   let activeTransferId: string | null = null;
   const willDragPanelDispose = api.onWillDragPanel((e) => {
     // Stamp MIME first, then capture the returned transferId for dragend.
@@ -36,8 +61,8 @@ export function attachWorkspacePanelTransfer(api: DockviewApi): () => void {
   const willDropDispose = api.onWillDrop((e) => {
     transferHandlers.onWillDrop(e as never);
   });
-  const handleDragEnd = (): void => {
-    transferHandlers.onDragEnd(activeTransferId);
+  const handleDragEnd = (event: DragEvent): void => {
+    transferHandlers.onDragEnd(activeTransferId, event);
     activeTransferId = null;
   };
   const handleWindowDrop = (event: DragEvent): void => {
@@ -51,6 +76,8 @@ export function attachWorkspacePanelTransfer(api: DockviewApi): () => void {
   window.addEventListener("dragend", handleDragEnd, { capture: true });
 
   return () => {
+    overlayPreviewDispose?.();
+    overlaySession.dispose();
     willDragPanelDispose?.dispose();
     unhandledDragOverDispose?.dispose();
     didDropDispose?.dispose();

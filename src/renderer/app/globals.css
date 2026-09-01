@@ -1685,6 +1685,14 @@ body {
     color-mix(in oklab, var(--primary) 35%, transparent);
 }
 
+/*
+ * Tear-off: hide the source tab while the cursor is outside this window so
+ * dragend cannot snap it back onto the strip before the new window shows.
+ */
+.dockview-theme-pier .dv-tab[data-pier-panel-transfer-in-transit] {
+  display: none !important;
+}
+
 /* — 选中 tab 与内容区连成同一层, 避免 tab 栏底线切断层级 — */
 .dockview-theme-pier
   .dv-groupview
