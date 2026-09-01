@@ -27,7 +27,7 @@ export function TopBar(props: { title: string; back?: Route }) {
     <header className="flex items-center gap-3 border-neutral-800 border-b px-4 py-3">
       {back !== undefined && (
         <button
-          className="text-neutral-300 text-sm"
+          className="-my-2 -ml-2 rounded-md px-2 py-2 text-neutral-300 text-sm active:bg-neutral-800"
           data-testid="topbar-back"
           onClick={() => {
             navigate(back);

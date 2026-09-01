@@ -46,10 +46,14 @@ export interface ControlSnapshotSources {
       active?: boolean | undefined;
       context?:
         | {
+            cwd?: string | undefined;
+            gitRoot?: string | undefined;
             projectRootPath?: string | undefined;
             worktreeKey?: string | undefined;
+            worktreeRoot?: string | undefined;
           }
         | undefined;
+      display?: { short?: string | undefined } | undefined;
       params?: Record<string, unknown> | undefined;
     }>
   >;
@@ -116,6 +120,13 @@ export interface ControlSnapshotService {
   snapshot(): Promise<ControlSnapshotPayload>;
 }
 
+const GIT_CHANGES_PANEL_COMPONENT = "pier.git.changes";
+const FILES_FILE_PANEL_COMPONENT = "pier.files.filePanel";
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 function agentIdFromParams(
   params: Record<string, unknown> | undefined
 ): string | undefined {
@@ -134,6 +145,101 @@ function agentIdFromParams(
     }
   }
   return;
+}
+
+/** files 文档面板：params.source.{kind:disk,root,path}；tab 标题只是叶子名。 */
+function filesDiskSourceFromParams(
+  params: Record<string, unknown> | undefined
+): { sourcePath: string; sourceRoot: string } | undefined {
+  if (!params) {
+    return;
+  }
+  const source = params.source;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return;
+  }
+  const record = source as Record<string, unknown>;
+  if (record.kind !== undefined && record.kind !== "disk") {
+    return;
+  }
+  const rawPath = nonEmptyString(record.path);
+  const rawRoot = nonEmptyString(record.root);
+  if (!(rawPath && rawRoot)) {
+    return;
+  }
+  const sourcePath = rawPath
+    .replaceAll("\\", "/")
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
+  const sourceRoot = rawRoot.replaceAll("\\", "/").replace(/\/+$/, "") || "/";
+  if (sourcePath.length === 0) {
+    return;
+  }
+  return { sourcePath, sourceRoot };
+}
+
+function gitRootFromReviewParams(
+  params: Record<string, unknown> | undefined
+): string | undefined {
+  if (!params) {
+    return;
+  }
+  const source = params.source;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return;
+  }
+  if (!("gitRootPath" in source)) {
+    return;
+  }
+  return nonEmptyString(source.gitRootPath);
+}
+
+function panelPathFields(p: {
+  component?: string | undefined;
+  context?:
+    | {
+        cwd?: string | undefined;
+        gitRoot?: string | undefined;
+        projectRootPath?: string | undefined;
+        worktreeKey?: string | undefined;
+        worktreeRoot?: string | undefined;
+      }
+    | undefined;
+  params?: Record<string, unknown> | undefined;
+}): {
+  canonicalPath?: string;
+  cwd?: string;
+  gitRoot?: string;
+  sourcePath?: string;
+  sourceRoot?: string;
+  worktreeKey?: string;
+} {
+  const reviewRoot = gitRootFromReviewParams(p.params);
+  const gitRoot = reviewRoot ?? p.context?.gitRoot ?? p.context?.worktreeRoot;
+  const filesSource =
+    p.component === FILES_FILE_PANEL_COMPONENT
+      ? filesDiskSourceFromParams(p.params)
+      : undefined;
+  const shellCwd = p.context?.cwd;
+  const cwd =
+    p.component === GIT_CHANGES_PANEL_COMPONENT
+      ? (gitRoot ?? shellCwd)
+      : (filesSource?.sourceRoot ?? shellCwd);
+  const canonicalPath =
+    cwd ?? gitRoot ?? p.context?.projectRootPath ?? p.context?.worktreeKey;
+  const worktreeKey = p.context?.worktreeKey ?? gitRoot;
+  return {
+    ...(cwd ? { cwd } : {}),
+    ...(canonicalPath ? { canonicalPath } : {}),
+    ...(gitRoot ? { gitRoot } : {}),
+    ...(worktreeKey ? { worktreeKey } : {}),
+    ...(filesSource
+      ? {
+          sourcePath: filesSource.sourcePath,
+          sourceRoot: filesSource.sourceRoot,
+        }
+      : {}),
+  };
 }
 
 function digestBody(
@@ -167,18 +273,15 @@ export function createControlSnapshotService(
     }));
     const rawPanels = await sources.listPanels();
     const panels = rawPanels.map((p) => {
-      const path =
-        p.context?.projectRootPath ?? p.context?.worktreeKey ?? undefined;
       const agentId = agentIdFromParams(p.params);
+      const title = p.display?.short;
       return {
         panelId: p.id,
         windowId: p.windowId,
         ...(p.component ? { component: p.component } : {}),
         ...(p.active === undefined ? {} : { active: p.active }),
-        ...(path ? { canonicalPath: path } : {}),
-        ...(p.context?.worktreeKey
-          ? { worktreeKey: p.context.worktreeKey }
-          : {}),
+        ...(title ? { title } : {}),
+        ...panelPathFields(p),
         ...(agentId ? { agentId } : {}),
       };
     });

@@ -4,9 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const closeCurrentWindowMock = vi.hoisted(() => vi.fn(async () => undefined));
 const showAppConfirmMock = vi.hoisted(() => vi.fn(async () => true));
 const openFilesDiskPathForCommandMock = vi.hoisted(() => vi.fn());
+const openGitChangesPanelHostMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/ipc/window-ipc.ts", () => ({
   closeCurrentWindow: closeCurrentWindowMock,
+}));
+
+vi.mock("@/lib/comments/open-git-changes.ts", () => ({
+  openGitChangesPanelHost: openGitChangesPanelHostMock,
 }));
 
 vi.mock("@/stores/app-dialog.store.ts", () => ({
@@ -71,6 +76,7 @@ describe("workspace renderer commands", () => {
     showAppConfirmMock.mockReset();
     showAppConfirmMock.mockResolvedValue(true);
     openFilesDiskPathForCommandMock.mockReset();
+    openGitChangesPanelHostMock.mockReset();
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -164,6 +170,57 @@ describe("workspace renderer commands", () => {
       },
       ok: false,
       requestId: "renderer-close-missing",
+    });
+  });
+
+  it("git.openReviewPanel opens the changes panel and resolves its panelId", async () => {
+    const context = {
+      contextId: "ctx-1",
+      cwd: "/repo",
+      gitRoot: "/repo",
+      projectRootPath: "/repo",
+      updatedAt: 1,
+      worktreeKey: "/repo",
+    };
+    openGitChangesPanelHostMock.mockReturnValue({
+      ok: true,
+      panelId: "pier.git.changes:ctx-1:uncommitted",
+    });
+
+    await runWorkspaceRendererCommand({
+      command: { context, type: "git.openReviewPanel" },
+      requestId: "renderer-open-review",
+    });
+
+    expect(openGitChangesPanelHostMock).toHaveBeenCalledWith({ context });
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      data: { panelId: "pier.git.changes:ctx-1:uncommitted" },
+      ok: true,
+      requestId: "renderer-open-review",
+    });
+  });
+
+  it("git.openReviewPanel fails when the changes panel is unavailable", async () => {
+    const context = {
+      contextId: "ctx-1",
+      cwd: "/repo",
+      projectRootPath: "/repo",
+      updatedAt: 1,
+    };
+    openGitChangesPanelHostMock.mockReturnValue({ ok: false, panelId: null });
+
+    await runWorkspaceRendererCommand({
+      command: { context, type: "git.openReviewPanel" },
+      requestId: "renderer-open-review-unavailable",
+    });
+
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      error: {
+        code: "platform_unavailable",
+        message: "git changes panel is unavailable in this window",
+      },
+      ok: false,
+      requestId: "renderer-open-review-unavailable",
     });
   });
 

@@ -2,6 +2,8 @@
  * H0 配对页：解析失败、pair 失败路径（pairing_expired / pairing_invalid）
  * 与网络失败文案；成功路径写入 localStorage 并跳主机列表。
  */
+
+import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
 import {
   cleanup,
   fireEvent,
@@ -96,7 +98,7 @@ describe("PairPage（H0 配对）", () => {
     });
   });
 
-  it("成功配对：请求体带十一能力/shell=web/name≤64，凭据入库并跳主机列表", async () => {
+  it("成功配对：请求体带默认能力集全列/shell=web/name≤64，凭据入库并跳主机列表", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       json: () =>
         Promise.resolve({
@@ -125,7 +127,10 @@ describe("PairPage（H0 配对）", () => {
     expect(body.shell).toBe("web");
     expect(String(body.name).length).toBeLessThanOrEqual(64);
     expect(Array.isArray(body.requestedCapabilities)).toBe(true);
-    expect(body.requestedCapabilities).toHaveLength(11);
+    // 单一来源：请求体 = mobile-paired 默认能力集全列（含 panel:open）。
+    expect([...(body.requestedCapabilities as string[])].sort()).toEqual(
+      [...DEFAULT_CAPABILITIES_BY_CLIENT_KIND["mobile-paired"]].sort()
+    );
     const stored = JSON.parse(
       window.localStorage.getItem("pier.mobile.hosts") ?? "[]"
     ) as Array<{ deviceId: string; deviceToken: string }>;

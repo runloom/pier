@@ -13,9 +13,10 @@ import type {
   RemoteAccessPairingChallenge,
   RemoteAccessState,
 } from "@preload/remote-access/api.ts";
-import { QrCode, Trash2 } from "lucide-react";
+import { Copy, QrCode, Trash2 } from "lucide-react";
 import { toCanvas } from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
 import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
@@ -216,7 +217,7 @@ export function RemoteAccessSection() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {enabled ? (
-            <Alert variant="warning">
+            <Alert variant="info">
               <AlertTitle>
                 {t("settings.remoteAccess.boundaryTitle")}
               </AlertTitle>
@@ -279,10 +280,64 @@ export function RemoteAccessSection() {
                     <div className="text-muted-foreground text-xs">
                       {t("settings.remoteAccess.pairingHint")}
                     </div>
+                    <div className="mt-1">
+                      <Button
+                        data-testid="remote-access-copy-payload"
+                        onClick={() => {
+                          navigator.clipboard
+                            .writeText(challenge.qrPayload)
+                            .then(() => {
+                              toast.success(
+                                t("settings.remoteAccess.copyPayloadDone")
+                              );
+                            })
+                            .catch(() => {
+                              toast.error(
+                                t(
+                                  "settings.remoteAccess.copyPayloadFailedTitle"
+                                )
+                              );
+                            });
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        <Copy aria-hidden data-icon="inline-start" />
+                        {t("settings.remoteAccess.copyPayload")}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
+          ) : null}
+          {enabled && (state?.remote.configured ?? false) ? (
+            <>
+              <FieldSeparator />
+              <div className="flex flex-col gap-2">
+                <div className="font-medium text-sm">
+                  {t("settings.remoteAccess.remoteTitle")}
+                </div>
+                <p className="text-muted-foreground text-sm">
+                  {t("settings.remoteAccess.remoteDesc")}
+                </p>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span>{t("settings.remoteAccess.remoteStatusLabel")}</span>
+                  <span
+                    className="text-muted-foreground"
+                    data-testid="remote-access-remote-state"
+                  >
+                    {t(
+                      `settings.remoteAccess.remoteState.${state?.remote.connectionState ?? "stopped"}`
+                    )}
+                  </span>
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {t("settings.remoteAccess.keepAwakeHint")}
+                </p>
+              </div>
+            </>
           ) : null}
           <FieldSeparator />
           <div className="flex flex-col gap-2">

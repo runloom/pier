@@ -43,7 +43,9 @@ export class PierMobileClient {
   private readonly onStatusChange:
     | ((status: MobileConnectionStatus) => void)
     | undefined;
+  private readonly random: () => number;
   private readonly reconnectInitialMs: number;
+  private readonly reconnectJitterRatio: number;
   private readonly reconnectMaxMs: number;
 
   private ws: PierWebSocketLike | null = null;
@@ -64,8 +66,10 @@ export class PierMobileClient {
   constructor(options: PierMobileClientOptions = {}) {
     this.createWebSocket =
       options.createWebSocket ?? ((url) => new WebSocket(url));
+    this.random = options.random ?? Math.random;
     this.reconnectInitialMs =
       options.reconnectInitialMs ?? DEFAULT_RECONNECT_INITIAL_MS;
+    this.reconnectJitterRatio = options.reconnectJitterRatio ?? 0.3;
     this.reconnectMaxMs = options.reconnectMaxMs ?? DEFAULT_RECONNECT_MAX_MS;
     this.onStatusChange = options.onStatusChange;
   }
@@ -193,7 +197,9 @@ export class PierMobileClient {
     }
     let ws: PierWebSocketLike;
     try {
-      ws = this.createWebSocket(`ws://${args.host}:${args.port}/ws`);
+      // relay 传输工厂（M2）优先；缺省 dev direct ws://。
+      const factory = args.transportFactory ?? this.createWebSocket;
+      ws = factory(`ws://${args.host}:${args.port}/ws`);
     } catch (error) {
       return Promise.reject(
         new PierMobileTransportError(
@@ -399,11 +405,14 @@ export class PierMobileClient {
       this.setStatus("closed");
       return;
     }
-    // 指数退避重连：initial × 2^n，封顶 max
+    // 指数退避重连：initial × 2^n，封顶 max；加性抖动打散重拨风暴
     this.setStatus("reconnecting");
-    const delay = Math.min(
+    const base = Math.min(
       this.reconnectInitialMs * 2 ** this.reconnectAttempt,
       this.reconnectMaxMs
+    );
+    const delay = Math.round(
+      base * (1 + this.reconnectJitterRatio * this.random())
     );
     this.reconnectAttempt += 1;
     const timer = setTimeout(() => {

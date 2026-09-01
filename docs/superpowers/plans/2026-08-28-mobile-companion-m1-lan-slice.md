@@ -1,6 +1,8 @@
 # Pier 移动端 M1 · 同网切片实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **状态（2026-08-31）**：本计划已全量交付并合入 main（0.1.33，主提交 `8c177fa40`）；任务清单未逐项回勾，以代码与治理测试为准。后续切片见 [M2 计划](2026-08-31-mobile-companion-m2-remote-wake.md)。
 
 **Goal:** 落地规格 `docs/superpowers/specs/2026-08-26-mobile-companion-design.md` 的 M1 同网切片：LAN 适配器 + 配对/令牌生命周期 + Web 壳先主机后投影（T1 终端 + 审批 + 只读变更/文件）。
 

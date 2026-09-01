@@ -539,6 +539,8 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`；覆盖率：`pnpm test:coverage`
 - E2E 测试：优先 `pnpm test:e2e:auto`（见下节）；强制本机仍可用 `pnpm test:e2e`
 - 构建：`pnpm build`（electron-vite build）
+- 会合云本地：`pnpm dev:relay`（默认 `:8787`）；桌面联调 `PIER_RELAY_URL=ws://127.0.0.1:8787 pnpm dev`。操作说明 [`apps/relay/README.md`](apps/relay/README.md)
+- 会合云 / Web 壳发布：tag `relay-v*` / `mobile-web-v*`（与宿主 `v*` 解耦；见 [`docs/release.md`](docs/release.md)）
 - 图标重建：`pnpm build:icons`（修改唯一母版 `build/app-icon-source.svg` 后跑一次；产出 `build/icon.{icns,ico,png}`、`build/icons/*.png` 与正式发布使用的 macOS 26 `build/Assets.car`，并同步更新 `build/Assets.car.inputs`；标准尺寸统一由锁定的 electron-builder 图标工具从 SVG 直接降采样，`sips` 只封装 legacy ICNS，原生资源需 Xcode 26+ `actool`；PierDev 与四类 Helper 仅安装 ICNS，必须移除 `Assets.car` 与 `CFBundleIconName`）
 
 ### E2E 执行优先级（编码助手硬约定）

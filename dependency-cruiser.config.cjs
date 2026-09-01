@@ -154,14 +154,32 @@ module.exports = {
       name: "apps-mobile-web-narrow-imports",
       severity: "error",
       comment:
-        "apps/mobile-web 独立 SPA：只允许 react/react-dom/zod/zustand 与 @shared/contracts/**（帧契约单一来源）；不 import 宿主 src/(main|renderer) 或 dockview 运行时",
+        "apps/mobile-web 独立 SPA：只允许 react/react-dom/zod/zustand 与 @shared/contracts/** + @shared/crypto/**（帧契约与 M2 密封层单一来源）；不 import 宿主 src/(main|renderer) 或 dockview 运行时",
       from: { path: "^apps/mobile-web/src" },
       to: {
         pathNot: [
           "^apps/mobile-web",
           "^src/shared/contracts",
           "^@shared/contracts",
+          "^src/shared/crypto",
+          "^@shared/crypto",
           "node_modules/(react|react-dom|zod|zustand)(/|$)",
+        ],
+      },
+    },
+    {
+      name: "apps-relay-narrow-imports",
+      severity: "error",
+      comment:
+        "apps/relay 无账号零持久化盲转发：只允许 ws/zod、node 内置与 @shared/contracts/**（帧契约单一来源）；禁 import 宿主 src/(main|renderer)、密封层 @shared/crypto（relay 盲，服务端设计 §13）与任何数据库",
+      from: { path: "^apps/relay/src" },
+      to: {
+        dependencyTypesNot: ["core"],
+        pathNot: [
+          "^apps/relay",
+          "^src/shared/contracts",
+          "^@shared/contracts",
+          "node_modules/(ws|zod)(/|$)",
         ],
       },
     },

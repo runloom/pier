@@ -56,27 +56,38 @@ function registryWith(id: string | undefined = INTERACTION_ID) {
   return registry;
 }
 
+interface ActivityFixture {
+  panelId: string;
+  status: ActivityStatus;
+  windowId: string;
+}
+
 function services(opts: {
   registry?: PendingInteractionRegistry;
   status?: ActivityStatus;
+  /** 覆盖默认单活动快照（面板寻址歧义用例）。 */
+  activities?: ActivityFixture[];
 }): PierCoreServices {
+  const activities =
+    opts.activities ??
+    (opts.status
+      ? [{ panelId: PANEL_ID, status: opts.status, windowId: WINDOW_ID }]
+      : null);
   return {
     ...(opts.registry ? { pendingInteractions: opts.registry } : {}),
-    ...(opts.status
+    ...(activities
       ? {
           foregroundActivity: {
             snapshot: () => ({
-              activities: [
-                {
-                  agentId: "claude",
-                  kind: "agent",
-                  panelId: PANEL_ID,
-                  source: "hook",
-                  status: opts.status,
-                  subagentCount: 0,
-                  windowId: WINDOW_ID,
-                },
-              ],
+              activities: activities.map((activity) => ({
+                agentId: "claude",
+                kind: "agent",
+                panelId: activity.panelId,
+                source: "hook",
+                status: activity.status,
+                subagentCount: 0,
+                windowId: activity.windowId,
+              })),
               ts: 1,
             }),
           },
@@ -203,6 +214,59 @@ describe("agent.attention.respond 双重门", () => {
       error: { code: "platform_unavailable" },
       ok: false,
     });
+  });
+});
+
+describe("agent.attention.respond 面板寻址（移动端：裸 panelId）", () => {
+  beforeEach(() => {
+    sendText.mockClear();
+    sendText.mockReturnValue(true);
+  });
+
+  it("裸 panelId → FA 快照解析当前窗口 → success", async () => {
+    const result = await executeAgentAttentionRespondCommand(
+      "p1",
+      { ...cmd("enter"), agentRef: PANEL_ID },
+      services({ registry: registryWith(), status: "waiting" })
+    );
+    expect(result).toEqual({
+      data: { accepted: true },
+      ok: true,
+      requestId: "p1",
+    });
+    expect(sendText).toHaveBeenCalledTimes(1);
+  });
+
+  it("裸 panelId 跨窗歧义（两窗同面板 id）→ interaction_stale，不写终端", async () => {
+    const result = await executeAgentAttentionRespondCommand(
+      "p2",
+      { ...cmd(), agentRef: PANEL_ID },
+      services({
+        activities: [
+          { panelId: PANEL_ID, status: "waiting", windowId: WINDOW_ID },
+          { panelId: PANEL_ID, status: "waiting", windowId: "w2" },
+        ],
+        registry: registryWith(),
+      })
+    );
+    expect(result).toMatchObject({
+      error: { code: "interaction_stale" },
+      ok: false,
+    });
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it("裸 panelId 无 FA 快照 → interaction_stale（fail closed）", async () => {
+    const result = await executeAgentAttentionRespondCommand(
+      "p3",
+      { ...cmd(), agentRef: PANEL_ID },
+      services({ registry: registryWith() })
+    );
+    expect(result).toMatchObject({
+      error: { code: "interaction_stale" },
+      ok: false,
+    });
+    expect(sendText).not.toHaveBeenCalled();
   });
 });
 

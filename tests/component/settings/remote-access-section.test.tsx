@@ -62,6 +62,7 @@ const remoteAccess = {
 function makeState(overrides?: Partial<RemoteAccessState>): RemoteAccessState {
   return {
     boundaryNote: true,
+    remote: { configured: false, connectionState: "stopped" },
     devices: [],
     enabled: false,
     host: null,

@@ -43,9 +43,22 @@ export const controlSnapshotPanelEntrySchema = z
     windowId: nonEmpty,
     component: nonEmpty.optional(),
     active: z.boolean().optional(),
+    /** tab 短标题（与桌面 display.short 同口径）。 */
+    title: nonEmpty.optional(),
+    /** 面板工作目录；缺省时 canonicalPath 回退 projectRootPath / worktreeKey。 */
+    cwd: nonEmpty.optional(),
     canonicalPath: nonEmpty.optional(),
     worktreeKey: nonEmpty.optional(),
+    /**
+     * git 仓库根（审查面板取审查源 gitRootPath；其余取上下文 gitRoot）。
+     * 缺省 = 非 git 仓库；是移动端「变更」入口门控与作用域的唯一事实源。
+     */
+    gitRoot: nonEmpty.optional(),
     agentId: nonEmpty.optional(),
+    /** files 面板：工作树根（params.source.root），不是 tab 标题。 */
+    sourceRoot: nonEmpty.optional(),
+    /** files 面板：根相对路径（params.source.path），供 file.readText。 */
+    sourcePath: nonEmpty.optional(),
   })
   .strict();
 

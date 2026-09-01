@@ -1,6 +1,7 @@
 import type { PierCommandErrorCode } from "@shared/contracts/commands.ts";
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
 import i18next from "i18next";
+import { openGitChangesPanelHost } from "@/lib/comments/open-git-changes.ts";
 import { openFilesDiskPathForCommand } from "@/lib/files/open-disk-file-panel.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import {
@@ -328,6 +329,24 @@ async function runWorkspaceRendererCommandAsync(
         await closePanelForCommand(envelope.command.panelId);
         window.pier.rendererCommand.resolve({
           data: null,
+          ok: true,
+          requestId: envelope.requestId,
+        });
+        return;
+      }
+      case "git.openReviewPanel": {
+        assertUserMutationAllowed();
+        const opened = openGitChangesPanelHost({
+          context: envelope.command.context,
+        });
+        if (!opened.ok) {
+          throw new RendererCommandExecutionError(
+            "platform_unavailable",
+            "git changes panel is unavailable in this window"
+          );
+        }
+        window.pier.rendererCommand.resolve({
+          data: { panelId: opened.panelId },
           ok: true,
           requestId: envelope.requestId,
         });

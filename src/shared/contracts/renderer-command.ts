@@ -65,6 +65,12 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     windowId: z.string().min(1).optional(),
   }),
   z.object({
+    /** 打开（或聚焦）git 审查面板；context 由 main 的路径锚点解析器提供。 */
+    type: z.literal("git.openReviewPanel"),
+    context: panelContextSchema,
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
     type: z.literal("files.openDisk"),
     column: z.number().int().positive().optional(),
     context: panelContextSchema.optional(),

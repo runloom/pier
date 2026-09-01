@@ -1,0 +1,30 @@
+# 官方会合前置：Caddy 自动 HTTPS（Let's Encrypt HTTP-01）。
+# 放到 /etc/caddy/Caddyfile 后 `systemctl reload caddy`。
+# PWA 在独立 origin；浏览器 fetch 会合 HTTP 需要 CORS。
+
+m.pier.codes {
+	root * /srv/mobile-web
+	encode gzip
+	try_files {path} /index.html
+	file_server
+	header /sw.js Cache-Control "no-cache"
+}
+
+relay.pier.codes {
+	@preflight method OPTIONS
+	handle @preflight {
+		header Access-Control-Allow-Origin "https://m.pier.codes"
+		header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		header Access-Control-Allow-Headers "content-type"
+		header Access-Control-Max-Age "86400"
+		respond "" 204
+	}
+
+	header Access-Control-Allow-Origin "https://m.pier.codes"
+	header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+	header Access-Control-Allow-Headers "content-type"
+	header Vary Origin
+
+	reverse_proxy 127.0.0.1:8787
+	# relay 只在对端为 loopback 时采信 X-Forwarded-For；Caddy 默认会写入。
+}

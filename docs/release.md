@@ -108,6 +108,29 @@ pnpm plugin:codex:pack
 
 ---
 
+## 会合云与移动端 Web
+
+与宿主 / 插件解耦：协议帧版本化，过旧一侧收 `protocol_too_old`。权威设计 [`superpowers/specs/2026-08-31-mobile-relay-server-design.md`](./superpowers/specs/2026-08-31-mobile-relay-server-design.md) §10.3；操作说明 [`apps/relay/README.md`](../apps/relay/README.md)。
+
+```bash
+# 会合云（当前 workflow 为构建校验 dry-run；接入 GHCR / VM 后同一 tag 才部署）
+git tag relay-v0.1.0 && git push origin relay-v0.1.0
+
+# 移动端 Web 壳静态产物
+git tag mobile-web-v0.1.0 && git push origin mobile-web-v0.1.0
+```
+
+本地先验证服务再打 tag：
+
+```bash
+pnpm dev:relay
+curl -sS http://127.0.0.1:8787/healthz   # {"ok":true}
+pnpm vitest run tests/unit/relay
+pnpm build:mobile-web
+```
+
+---
+
 ## 速查
 
 | 意图 | 动作 |
@@ -118,5 +141,8 @@ pnpm plugin:codex:pack
 | 发插件 | bump 插件两处 version → pack → 合入 `main` |
 | 本地应急宿主 | `GH_TOKEN=… pnpm build:dist --publish=always`（候选加 `--prerelease`；见 app-release） |
 | 本地验插件索引 | `pnpm plugins:pack && pnpm plugins:index && pnpm check:plugin-index` |
+| 发会合云 | `git tag relay-v*`（dry-run 构建；部署密钥接入后才上 VM） |
+| 发移动端 Web 壳 | `git tag mobile-web-v*`（`pnpm build:mobile-web` 产物） |
+| 本地会合 | `pnpm dev:relay`；桌面加 `PIER_RELAY_URL=ws://127.0.0.1:8787` |
 
 同 version 不改已发布二进制语义；修 bug 必须 bump。

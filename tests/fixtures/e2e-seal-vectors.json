@@ -1,0 +1,13 @@
+{
+  "comment": "M2 密封层跨端 KAT：期望值由 node:crypto hkdfSync 独立实现计算（非被测 WebCrypto 路径），双端实现必须逐字节一致。权威：服务端设计 §6。",
+  "fingerprint": "abcdef0123456789",
+  "deviceToken": "vector-device-token-0000000000000000000000",
+  "pairSecret": "vector-pair-secret-00000000000000000000000",
+  "e2eKeyHex": "f279ce415b93c01bfe84da4d2feda61b753deec04f209c988560c5e6bdedde2e",
+  "pairKeyHex": "1dbc371fe6c11c701114141b51069e563fd165faa3dd12e09674f8f5b83266c8",
+  "relayPass": "k6yt3s01LV0py2Hr-2FY_TfOdJA_YXaH0pEoU8W83xc",
+  "ecdhSecretHex": "4242424242424242424242424242424242424242424242424242424242424242",
+  "clientNonceHex": "0102030405060708090a0b0c0d0e0f10",
+  "hostNonceHex": "1112131415161718191a1b1c1d1e1f20",
+  "channelKeyHex": "678463d7fc6c23d3a06a53b6279cd2ea36097f32bcdc13cba5098623ce100a91"
+}

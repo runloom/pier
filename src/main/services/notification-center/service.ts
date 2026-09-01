@@ -16,6 +16,7 @@ import {
   type DeliveryAgentAttentionPrefs,
   type DeliveryFocus,
   type OsTarget,
+  type RemotePushCandidate,
   resolveDeliveryPlan,
   type ToastTarget,
 } from "@shared/notification-delivery.ts";
@@ -38,6 +39,14 @@ export interface NotificationCenterServiceDeps {
     notification: AppNotification,
     meta: { cooldownKey?: string }
   ) => boolean | Promise<boolean>;
+  /**
+   * M2 远程推送（第三条正交通道，规格 §12）；target.mode=none 时不调。
+   * 冷却与失效句柄清理由 remote-push 服务内部承担。
+   */
+  deliverRemotePush?: (
+    notification: AppNotification,
+    target: { deviceIds: string[] }
+  ) => void;
   /** 形态 B toast 单投；target.mode=none 时不调。 */
   deliverToast?: (notification: AppNotification, target: ToastTarget) => void;
   history: NotificationHistoryStore;
@@ -49,6 +58,8 @@ export interface NotificationCenterServiceDeps {
   /** 投递瞬间 key-window 是否存在。缺省 true（兼容旧单测 / 无窗管理注入）。 */
   readFocusBase?: () => Pick<DeliveryFocus, "hasFocusedPierWindow">;
   readPrefs: () => Promise<NotificationCenterPrefs>;
+  /** M2 远程推送候选（已配对 + 持句柄设备；无前台会话判定在读取侧）。 */
+  readRemotePushCandidates?: () => RemotePushCandidate[];
   /**
    * agent 细粒度聚焦。NCS 不解析 agent 域；由 ipc 注入。
    * 缺省：无 panel/owner 静音。
@@ -152,14 +163,31 @@ export async function createNotificationCenterService(
         dndEnabled: prefs.dndEnabled,
         mutedKinds: prefs.mutedKinds,
       },
-      buildFocus(notification)
+      buildFocus(notification),
+      resolveRemoteCandidates()
     );
 
     if (plan.toastTarget.mode !== "none" && deps.deliverToast) {
       deps.deliverToast(notification, plan.toastTarget);
     }
+    if (plan.remotePushTarget.mode === "devices" && deps.deliverRemotePush) {
+      try {
+        deps.deliverRemotePush(notification, {
+          deviceIds: plan.remotePushTarget.deviceIds,
+        });
+      } catch (err) {
+        console.warn("[notification-center] deliverRemotePush failed:", err);
+      }
+    }
 
     scheduleOs(notification, plan.osTarget, plan.osCooldownKey, agentAttention);
+  }
+
+  function resolveRemoteCandidates():
+    | { candidates: RemotePushCandidate[] }
+    | undefined {
+    const candidates = deps.readRemotePushCandidates?.();
+    return candidates && candidates.length > 0 ? { candidates } : undefined;
   }
 
   function scheduleOs(

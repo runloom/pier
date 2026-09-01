@@ -1,5 +1,11 @@
 /**
- * SPA 静态托管：同端口 Web 壳分发（M1 内部切片，规格 §9）。
+ * SPA 静态托管：同端口 Web 壳分发。
+ *
+ * **M2 起降级为 dev-only 分发**（服务端设计 §10.2）：生产 Web 壳发布到官方
+ * 唯一 HTTPS origin（令牌与 Web Push 订阅绑死 origin），生产 QR 的 relayHint
+ * 指向官方会合、深链指向官方 origin。此处的 LAN 同端口托管仅供 dev 切片与
+ * 人工输码路径；生产不把设备令牌写入 LAN origin。
+ *
  * 路径 normalize 后必须仍在 distDir 内（防 .. 穿越），否则 404；
  * 缓存：html no-cache，/assets/** immutable。
  */

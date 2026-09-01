@@ -44,6 +44,7 @@ import {
   executeNotificationsMarkReadCommand,
   executeNotificationsWatchCommand,
 } from "./commands/notifications.ts";
+import { executePushHandleCommand } from "./commands/notifications-push-handle.ts";
 import {
   executePanelFocusCommand,
   executePanelListCommand,
@@ -370,6 +371,8 @@ async function executeCommandByDomain(
     (cmd: PierCommand) =>
       executeAgentAttentionRespondCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeRemoteAccessCommand(requestId, cmd, services),
+    (cmd: PierCommand) =>
+      executePushHandleCommand(requestId, cmd, services, context),
     (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeAiCommand(requestId, cmd, services),
     (cmd: PierCommand) =>

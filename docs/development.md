@@ -79,6 +79,9 @@ pnpm test:e2e
 pnpm build               # electron-vite → out/
 pnpm build:dist          # 双架构 dmg/zip（签名 / 公证）
 pnpm build:icons         # 从唯一 SVG 母版重建全部平台图标
+pnpm dev:relay           # 本地会合云（默认 :8787；内部验证先起这个）
+pnpm build:relay         # relay 类型检查（运行时不走编译产物）
+pnpm build:mobile-web    # 移动端 Web 壳 → out/mobile-web
 ```
 
 应用图标只有一个可编辑视觉来源：`build/app-icon-source.svg`，其 `viewBox` 固定为
@@ -159,6 +162,18 @@ pnpm plugins:index       # 生成 plugins/index.v1.json
 **release**：即使用 electron-vite 开发，也可模拟生产官方索引 / HTTP 安装。
 
 自定义插件本地联调步骤见 [`plugins.md`](./plugins.md)。生产包仍禁止任意第三方加载。
+
+## 移动端会合（本地）
+
+会合云与 Web 壳的启动、环境变量与 tag 发布以 [`apps/relay/README.md`](../apps/relay/README.md) 为准。最短路径：
+
+```bash
+pnpm dev:relay
+# 另开终端
+PIER_RELAY_URL=ws://127.0.0.1:8787 pnpm dev
+```
+
+官方会合地址已内置（`wss://relay.pier.codes`，单一来源 `src/main/services/pairing/relay-url.ts`）：桌面开启远程访问即出站拨号官方会合，`PIER_RELAY_URL` 仅用于本地 / 预发实例覆盖。发布 tag：`relay-v*`、`mobile-web-v*`，总览见 [`release.md`](./release.md)。
 
 ## 打包分发
 

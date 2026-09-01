@@ -96,6 +96,7 @@ export function controlSnapshotSourcesFromCore(
           active: p.active,
           context: p.context,
           params: agentId ? { ...params, agentId } : params,
+          ...(p.display ? { display: p.display } : {}),
         };
       });
     },
