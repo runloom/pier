@@ -1,8 +1,9 @@
 # Project Live Modules (`.pier/canvases`)
 
-In-repo canvases for Pier Live Modules. Only three folders live here on
-purpose — demos and per-recipe golds were removed (2026-08-28 cleanup); agents
-start from `resources/system-skills/pier-canvas/templates/` instead.
+In-repo canvases for Pier Live Modules. Demos and per-recipe golds were
+removed (2026-08-28 cleanup); agents start from
+`resources/system-skills/pier-canvas/templates/` instead. Product canvases
+may land here when a test or catalog consumer exists.
 
 ## Layout
 
@@ -17,6 +18,7 @@ start from `resources/system-skills/pier-canvas/templates/` instead.
   canvas-kit/            materials catalog（物料）— canvas discovery surface
   pier-cli-user-manual/  CLI user manual; data.json is the CLI docs source
                          of truth (tests/unit/cli locks coverage)
+  mobile-web-shell/      visual mockup for the mobile Web shell (not the IA source)
 ```
 
 | Folder | Role |
@@ -24,6 +26,7 @@ start from `resources/system-skills/pier-canvas/templates/` instead.
 | **smoke/** | Compile → protocol → mount fixtures (four frameworks); live-modules unit tests read and write here |
 | **canvas-kit/** | Primitive catalog referenced by SKILL + settings 物料 page |
 | **pier-cli-user-manual/** | End-user CLI manual rendered as a canvas. GitHub README is four-locale (`README.md` zh-CN source, plus `README.en.md` / `README.ja.md` / `README.ko.md`). `data.json` stays the command SSOT (Chinese); do not copy it per locale. |
+| **mobile-web-shell/** | Phone artboards for the Web shell visual language. IA stays in `docs/superpowers/specs/2026-08-26-mobile-companion-design.md` §11. |
 
 ## Conventions
 
