@@ -213,7 +213,7 @@ async function buildGitCommandSearchDocuments(
             (locale) => locale.commands?.[command.id]?.aliases ?? []
           )
         ),
-        { categoryLabel: "git" }
+        { categoryLabel: "GIT" }
       )
     );
 }
@@ -346,7 +346,7 @@ describe("action search", () => {
   ])("matches git merge action like loomdesk: %s", (query) => {
     const docs = [
       buildActionSearchDocument(
-        action("pier.git.merge", "git: Merge Branch...", [
+        action("pier.git.merge", "GIT: Merge Branch...", [
           "git merge",
           "merge branch",
           "合并",
@@ -354,7 +354,7 @@ describe("action search", () => {
         ]),
         { categoryLabel: "git" }
       ),
-      buildActionSearchDocument(action("pier.git.stash", "git: Stash"), {
+      buildActionSearchDocument(action("pier.git.stash", "GIT: Stash"), {
         categoryLabel: "git",
       }),
     ];
@@ -403,14 +403,14 @@ describe("action search", () => {
   it("prefers shorter matched alias over shorter display title at same tier", () => {
     const docs = [
       buildActionSearchDocument(
-        action("pier.git.mergeAbort", "git: 中止合并", [
+        action("pier.git.mergeAbort", "GIT: 中止合并", [
           "中止合并",
           "git merge abort",
         ]),
         { categoryLabel: "git" }
       ),
       buildActionSearchDocument(
-        action("pier.git.merge", "git: 合并分支...", ["合并分支", "git merge"]),
+        action("pier.git.merge", "GIT: 合并分支...", ["合并分支", "git merge"]),
         { categoryLabel: "git" }
       ),
     ];
@@ -478,7 +478,7 @@ describe("action search", () => {
     for (const docs of [gitCommandDocs, gitCommandDocsZh]) {
       expect(docs).toHaveLength(LOOMDESK_GIT_ACTION_IDS.length);
       for (const doc of docs) {
-        expect(doc.title.startsWith("git: ")).toBe(true);
+        expect(doc.title.startsWith("GIT: ")).toBe(true);
       }
     }
   });
@@ -499,22 +499,22 @@ describe("action search", () => {
   // Stash (Include Untracked) 之间同 tier 同 matchIndex，头名由 fuzzyOrder
   // 决定，属合法平局——断言收敛到家族内即可，不赌 fuzzy 排序。
   it.each([
-    ["en", "git: merge", ["pier.git.merge"]],
+    ["en", "GIT: merge", ["pier.git.merge"]],
     ["en", "git merge branch", ["pier.git.merge"]],
-    ["en", "git: Stash", ["pier.git.stash"]],
+    ["en", "GIT: Stash", ["pier.git.stash"]],
     ["en", "git stash pop", ["pier.git.stashPop"]],
-    ["en", "git: undo", ["pier.git.undoLastCommit"]],
-    ["en", "git: commit", ["pier.git.commit"]],
-    ["zh-CN", "git: 合并", ["pier.git.merge"]],
+    ["en", "GIT: undo", ["pier.git.undoLastCommit"]],
+    ["en", "GIT: commit", ["pier.git.commit"]],
+    ["zh-CN", "GIT: 合并", ["pier.git.merge"]],
     ["zh-CN", "git 合并", ["pier.git.merge"]],
     [
       "zh-CN",
-      "git: 储藏",
+      "GIT: 储藏",
       ["pier.git.stash", "pier.git.stashIncludeUntracked"],
     ],
-    ["zh-CN", "git: 变基", ["pier.git.rebase"]],
-    ["zh-CN", "git: 撤销", ["pier.git.undoLastCommit"]],
-    ["zh-CN", "git: 提交", ["pier.git.commit"]],
+    ["zh-CN", "GIT: 变基", ["pier.git.rebase"]],
+    ["zh-CN", "GIT: 撤销", ["pier.git.undoLastCommit"]],
+    ["zh-CN", "GIT: 提交", ["pier.git.commit"]],
   ])("matches prefixed git queries against %s titles: %s", (titleLocale, query, expectedIds) => {
     const docs = titleLocale === "zh-CN" ? gitCommandDocsZh : gitCommandDocs;
     expect(expectedIds).toContain(
@@ -539,11 +539,11 @@ describe("action search", () => {
   it("ranks a prefixed-title match above a frecency-boosted alias match", () => {
     const docs = [
       buildActionSearchDocument(
-        action("pier.git.stash", "git: Stash", ["git stash", "stash save"]),
+        action("pier.git.stash", "GIT: Stash", ["git stash", "stash save"]),
         { categoryLabel: "git" }
       ),
       buildActionSearchDocument(
-        action("pier.git.stashPop", "git: Pop Stash...", [
+        action("pier.git.stashPop", "GIT: Pop Stash...", [
           "git stash pop",
           "pop stash",
           "restore stash",
@@ -553,7 +553,7 @@ describe("action search", () => {
     ];
 
     expect(
-      rankActionSearchDocuments(docs, "git: stash", {
+      rankActionSearchDocuments(docs, "GIT: stash", {
         frecencyMap: new Map([["pier.git.stashPop", 50]]),
       })[0]?.document.id
     ).toBe("pier.git.stash");
@@ -575,10 +575,10 @@ describe("action search", () => {
         { categoryLabel: "git" }
       ),
       buildActionSearchDocument(
-        action("pier.git.merge", "git: Merge Branch...", ["git merge"]),
+        action("pier.git.merge", "GIT: Merge Branch...", ["git merge"]),
         { categoryLabel: "git" }
       ),
-      buildActionSearchDocument(action("pier.git.stash", "git: Stash"), {
+      buildActionSearchDocument(action("pier.git.stash", "GIT: Stash"), {
         categoryLabel: "git",
       }),
     ];

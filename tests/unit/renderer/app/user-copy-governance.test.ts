@@ -234,6 +234,72 @@ describe("user-facing copy governance", () => {
       "tests/unit/renderer/app/user-copy-governance.test.ts"
     );
     expect(agentContext).toContain("Canvas 发现面「物料」");
+    expect(agentContext).toContain("git 产品名用全大写 GIT");
+  });
+
+  it("uses all-caps GIT for plugin name, command palette group, and command prefixes", () => {
+    const offenders: string[] = [];
+    for (const locale of ["zh-CN", "en", "ja", "ko"] as const) {
+      const palettePath = join(
+        ROOT,
+        "src",
+        "renderer",
+        "i18n",
+        "locales",
+        locale,
+        "command-palette.ts"
+      );
+      if (!/\bgit:\s*"GIT"/.test(readFileSync(palettePath, "utf8"))) {
+        offenders.push(`${projectRelative(palettePath)}: category.git`);
+      }
+
+      const pluginLocalePath = join(
+        ROOT,
+        "src",
+        "plugins",
+        "builtin",
+        "git",
+        "locales",
+        `${locale}.json`
+      );
+      const pluginLocale = JSON.parse(
+        readFileSync(pluginLocalePath, "utf8")
+      ) as {
+        commands?: Record<string, { title?: string }>;
+        name?: string;
+      };
+      if (pluginLocale.name !== "GIT") {
+        offenders.push(`${projectRelative(pluginLocalePath)}: name`);
+      }
+      for (const [id, command] of Object.entries(pluginLocale.commands ?? {})) {
+        const title = command.title;
+        if (
+          typeof title === "string" &&
+          /^git:/i.test(title) &&
+          !title.startsWith("GIT: ")
+        ) {
+          offenders.push(`${projectRelative(pluginLocalePath)}: ${id}`);
+        }
+      }
+    }
+
+    const manifestPath = join(
+      ROOT,
+      "src",
+      "plugins",
+      "builtin",
+      "git",
+      "manifest.ts"
+    );
+    const manifest = readFileSync(manifestPath, "utf8");
+    if (!/\bname:\s*"GIT"/.test(manifest)) {
+      offenders.push(`${projectRelative(manifestPath)}: name`);
+    }
+    if (/title:\s*"git:/.test(manifest)) {
+      offenders.push(`${projectRelative(manifestPath)}: title prefix`);
+    }
+
+    expect(offenders).toEqual([]);
   });
 
   it("keeps Chinese locale string values free of implementation jargon", () => {

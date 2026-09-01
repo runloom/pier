@@ -4,7 +4,7 @@
       "aliases": ["git merge", "ブランチをマージ", "マージ", "マージブランチ"],
       "category": "git",
       "description": "ブランチを選び、現在のブランチにマージします。",
-      "title": "git: ブランチをマージ..."
+      "title": "GIT: ブランチをマージ..."
     },
     "pier.git.switchBranch": {
       "aliases": [
@@ -19,13 +19,13 @@
       ],
       "category": "git",
       "description": "ローカルブランチに切り替えるか、現在のチェックアウトから新しいブランチを作ります。",
-      "title": "git: ブランチを切り替え..."
+      "title": "GIT: ブランチを切り替え..."
     },
     "pier.git.mergeAbort": {
       "aliases": ["git merge abort", "マージを中止", "中止マージ"],
       "category": "git",
       "description": "進行中のマージを中止します。",
-      "title": "git: マージを中止"
+      "title": "GIT: マージを中止"
     },
     "pier.git.stash": {
       "aliases": [
@@ -36,19 +36,19 @@
       ],
       "category": "git",
       "description": "変更済みファイルのローカル変更をスタッシュします。",
-      "title": "git: スタッシュ"
+      "title": "GIT: スタッシュ"
     },
     "pier.git.stashApply": {
       "aliases": ["git stash apply", "スタッシュを適用", "適用スタッシュ"],
       "category": "git",
       "description": "スタッシュを選んで適用し、一覧には残します。",
-      "title": "git: スタッシュを適用..."
+      "title": "GIT: スタッシュを適用..."
     },
     "pier.git.stashDrop": {
       "aliases": ["git stash drop", "スタッシュを削除", "スタッシュを捨てる"],
       "category": "git",
       "description": "スタッシュを選んで一覧から削除します。",
-      "title": "git: スタッシュを削除..."
+      "title": "GIT: スタッシュを削除..."
     },
     "pier.git.stashIncludeUntracked": {
       "aliases": [
@@ -59,31 +59,31 @@
       ],
       "category": "git",
       "description": "新規ファイルも含めて、ローカル変更をスタッシュします。",
-      "title": "git: スタッシュ（新規ファイルを含む）"
+      "title": "GIT: スタッシュ（新規ファイルを含む）"
     },
     "pier.git.stashPop": {
       "aliases": ["git stash pop", "スタッシュをポップ", "スタッシュを復元"],
       "category": "git",
       "description": "スタッシュを選んで適用し、一覧から取り除きます。",
-      "title": "git: スタッシュをポップ..."
+      "title": "GIT: スタッシュをポップ..."
     },
     "pier.git.rebase": {
       "aliases": ["git rebase", "ブランチをリベース", "リベース"],
       "category": "git",
       "description": "ブランチを選び、現在のブランチをその上へリベースします。",
-      "title": "git: ブランチをリベース..."
+      "title": "GIT: ブランチをリベース..."
     },
     "pier.git.rebaseAbort": {
       "aliases": ["git rebase abort", "リベースを中止"],
       "category": "git",
       "description": "進行中のリベースを中止します。",
-      "title": "git: リベースを中止"
+      "title": "GIT: リベースを中止"
     },
     "pier.git.rebaseContinue": {
       "aliases": ["git rebase continue", "リベースを続ける"],
       "category": "git",
       "description": "進行中のリベースを続けます。",
-      "title": "git: リベースを続ける"
+      "title": "GIT: リベースを続ける"
     },
     "pier.git.cherryPick": {
       "aliases": [
@@ -94,43 +94,43 @@
       ],
       "category": "git",
       "description": "コミットを選び、現在のブランチに適用します。",
-      "title": "git: コミットをチェリーピック..."
+      "title": "GIT: コミットをチェリーピック..."
     },
     "pier.git.cherryPickAbort": {
       "aliases": ["git cherry-pick abort", "チェリーピックを中止"],
       "category": "git",
       "description": "進行中のチェリーピックを中止します。",
-      "title": "git: チェリーピックを中止"
+      "title": "GIT: チェリーピックを中止"
     },
     "pier.git.cherryPickContinue": {
       "aliases": ["git cherry-pick continue", "チェリーピックを続ける"],
       "category": "git",
       "description": "進行中のチェリーピックを続けます。",
-      "title": "git: チェリーピックを続ける"
+      "title": "GIT: チェリーピックを続ける"
     },
     "pier.git.revert": {
       "aliases": ["git revert", "コミットをリバート", "コミットを取り消す"],
       "category": "git",
       "description": "コミットを選び、それを取り消す新しいコミットを作ります。",
-      "title": "git: コミットをリバート..."
+      "title": "GIT: コミットをリバート..."
     },
     "pier.git.revertAbort": {
       "aliases": ["git revert abort", "リバートを中止"],
       "category": "git",
       "description": "進行中のリバートを中止します。",
-      "title": "git: リバートを中止"
+      "title": "GIT: リバートを中止"
     },
     "pier.git.revertContinue": {
       "aliases": ["git revert continue", "リバートを続ける"],
       "category": "git",
       "description": "進行中のリバートを続けます。",
-      "title": "git: リバートを続ける"
+      "title": "GIT: リバートを続ける"
     },
     "pier.git.commit": {
       "aliases": ["git commit", "コミット", "変更をコミット"],
       "category": "git",
       "description": "現在の変更をコミットします。ステージしていない変更の取り込みとプッシュも選べます。",
-      "title": "git: コミット"
+      "title": "GIT: コミット"
     },
     "pier.git.undoLastCommit": {
       "aliases": [
@@ -144,31 +144,31 @@
       ],
       "category": "git",
       "description": "直前のコミットを取り消し、変更はステージ済みのまま残します。",
-      "title": "git: 直前のコミットを取り消す"
+      "title": "GIT: 直前のコミットを取り消す"
     },
     "pier.git.review.openFile": {
       "aliases": ["ファイルを開く", "変更ファイルを開く", "レビューで開く"],
       "category": "git",
       "description": "この変更ファイルをエディタで開きます。",
-      "title": "git: ファイルを開く"
+      "title": "GIT: ファイルを開く"
     },
     "pier.git.review.openInEditor": {
       "aliases": ["ソースへジャンプ", "エディタで開く", "行で開く", "行へ移動"],
       "category": "git",
       "description": "ソースエディタのこの変更へジャンプします。対応する作業ディレクトリの行があればそこに合わせます。",
-      "title": "git: ソースへジャンプ"
+      "title": "GIT: ソースへジャンプ"
     },
     "pier.git.review.stageFile": {
       "aliases": ["ファイルをステージ", "git add", "変更をステージ"],
       "category": "git",
       "description": "選んだファイルの変更をステージします。",
-      "title": "git: ステージ"
+      "title": "GIT: ステージ"
     },
     "pier.git.review.unstageFile": {
       "aliases": ["ステージ解除", "git restore --staged", "変更のステージ解除"],
       "category": "git",
       "description": "選んだファイルのステージ済み変更を解除します。",
-      "title": "git: ステージ解除"
+      "title": "GIT: ステージ解除"
     },
     "pier.git.review.discardFile": {
       "aliases": [
@@ -183,7 +183,7 @@
       ],
       "category": "git",
       "description": "ローカル変更を破棄するか、新規ファイルをゴミ箱へ移します。",
-      "title": "git: 変更を破棄"
+      "title": "GIT: 変更を破棄"
     },
     "pier.git.review.toggleTree": {
       "category": "git",
@@ -204,27 +204,27 @@
       "aliases": ["ディレクトリを開く", "プロジェクトフォルダを開く"],
       "category": "git",
       "description": "Files のディレクトリツリーでこのプロジェクトを開きます。",
-      "title": "git: ディレクトリを開く"
+      "title": "GIT: ディレクトリを開く"
     },
     "pier.git.review.copyPath": {
       "category": "git",
       "description": "選んだ変更の絶対パスをコピーします。",
-      "title": "git: パスをコピー"
+      "title": "GIT: パスをコピー"
     },
     "pier.git.review.copyRelativePath": {
       "category": "git",
       "description": "選んだ変更のリポジトリ相対パスをコピーします。",
-      "title": "git: 相対パスをコピー"
+      "title": "GIT: 相対パスをコピー"
     },
     "pier.git.review.copyPathWithRange": {
       "category": "git",
       "description": "リポジトリ相対パスと選択中の行番号をコピーします。",
-      "title": "git: パスと選択行をコピー"
+      "title": "GIT: パスと選択行をコピー"
     },
     "pier.git.review.revealInFinder": {
       "category": "git",
       "description": "選んだ変更をシステムのファイルマネージャで表示します。",
-      "title": "git: Finder で表示"
+      "title": "GIT: Finder で表示"
     },
     "pier.worktree.create": {
       "aliases": [
@@ -286,19 +286,19 @@
       ],
       "category": "git",
       "description": "作業ディレクトリは変えずに、最新のリモートブランチ情報を取得します。",
-      "title": "git: フェッチ"
+      "title": "GIT: フェッチ"
     },
     "pier.git.pull": {
       "aliases": ["git pull", "プル", "変更をプル", "早送り"],
       "category": "git",
       "description": "早送りのみでリモートの変更をプルします。",
-      "title": "git: プル"
+      "title": "GIT: プル"
     },
     "pier.git.push": {
       "aliases": ["git push", "プッシュ", "変更をプッシュ"],
       "category": "git",
       "description": "ローカルのコミットをリモートへプッシュします。",
-      "title": "git: プッシュ"
+      "title": "GIT: プッシュ"
     },
     "pier.git.publish": {
       "aliases": [
@@ -310,13 +310,13 @@
       ],
       "category": "git",
       "description": "現在のブランチをリモートへプッシュし、上流を設定します。",
-      "title": "git: ブランチを公開"
+      "title": "GIT: ブランチを公開"
     },
     "pier.git.sync": {
       "aliases": ["git sync", "同期", "変更を同期", "プルしてプッシュ"],
       "category": "git",
       "description": "先にプルしてからプッシュし、リモートと同期します。",
-      "title": "git: 同期"
+      "title": "GIT: 同期"
     },
     "pier.git.viewChanges": {
       "aliases": [
@@ -333,7 +333,7 @@
       ],
       "category": "git",
       "description": "現在のリポジトリの変更レビューパネルを開きます。",
-      "title": "git: レビューを開く"
+      "title": "GIT: レビューを開く"
     }
   },
   "description": "内蔵の git コマンドパレットとターミナル状態のサポートです。",
@@ -932,5 +932,5 @@
       "title": "変更"
     }
   },
-  "name": "git"
+  "name": "GIT"
 }
