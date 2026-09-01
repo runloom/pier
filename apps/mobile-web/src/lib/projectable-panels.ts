@@ -3,6 +3,7 @@
  * 无投影协议的 component（Canvas / 设置 / Web 等）不列。
  */
 import type { ControlSnapshotPayload } from "@shared/contracts/local-control/control-snapshot.ts";
+import { panelScopeKey } from "./panel-scope.ts";
 import { pathLeaf } from "./worktree-scope.ts";
 
 export const GIT_CHANGES_PANEL_COMPONENT = "pier.git.changes";
@@ -21,6 +22,7 @@ export interface ProjectablePanelRow {
   sourcePath: string | null;
   sourceRoot: string | null;
   statusLabel: string;
+  windowId: string;
   worktreeKey: string | null;
 }
 
@@ -79,20 +81,26 @@ export function buildProjectableGroups(
     return empty;
   }
   const agentByPanel = new Map(
-    snapshot.agents.map((agent) => [agent.panelId, agent])
+    snapshot.agents.map((agent) => [
+      panelScopeKey(agent.windowId, agent.panelId),
+      agent,
+    ])
   );
   const activityByPanel = new Map(
     snapshot.activity.flatMap((entry) =>
-      entry.panelId === undefined ? [] : [[entry.panelId, entry] as const]
+      entry.panelId === undefined || entry.windowId === undefined
+        ? []
+        : [[panelScopeKey(entry.windowId, entry.panelId), entry] as const]
     )
   );
   const groups: ProjectableGroups = { changes: [], docs: [], terminals: [] };
   const seen = new Set<string>();
 
   for (const panel of snapshot.panels) {
-    seen.add(panel.panelId);
-    const agent = agentByPanel.get(panel.panelId);
-    const activity = activityByPanel.get(panel.panelId);
+    const scopeKey = panelScopeKey(panel.windowId, panel.panelId);
+    seen.add(scopeKey);
+    const agent = agentByPanel.get(scopeKey);
+    const activity = activityByPanel.get(scopeKey);
     const cwd = panel.cwd ?? agent?.cwd ?? null;
     const worktreeKey = panel.worktreeKey ?? agent?.worktreeKey ?? null;
     if (isTerminalComponent(panel.component) || agent !== undefined) {
@@ -107,6 +115,7 @@ export function buildProjectableGroups(
           (cwd === null ? null : pathLeaf(cwd)) ??
           "终端",
         panelId: panel.panelId,
+        windowId: panel.windowId,
         pendingInteractionId: activity?.pendingInteractionId ?? null,
         sourcePath: null,
         sourceRoot: null,
@@ -125,6 +134,7 @@ export function buildProjectableGroups(
         group: "changes",
         label: `变更 · ${scope === null ? "工作树" : pathLeaf(scope)}`,
         panelId: panel.panelId,
+        windowId: panel.windowId,
         pendingInteractionId: null,
         sourcePath: null,
         sourceRoot: null,
@@ -141,6 +151,7 @@ export function buildProjectableGroups(
         group: "docs",
         label: panel.title ?? "文档",
         panelId: panel.panelId,
+        windowId: panel.windowId,
         pendingInteractionId: null,
         sourcePath: panel.sourcePath ?? null,
         sourceRoot: panel.sourceRoot ?? null,
@@ -152,10 +163,12 @@ export function buildProjectableGroups(
 
   // agents 表有行但 panels 尚未枚举到（短暂不同步）：仍列入终端组。
   for (const agent of snapshot.agents) {
-    if (seen.has(agent.panelId)) {
+    if (seen.has(panelScopeKey(agent.windowId, agent.panelId))) {
       continue;
     }
-    const activity = activityByPanel.get(agent.panelId);
+    const activity = activityByPanel.get(
+      panelScopeKey(agent.windowId, agent.panelId)
+    );
     groups.terminals.push({
       activityStatus: activity?.status ?? null,
       agentId: agent.agentId,
@@ -163,6 +176,7 @@ export function buildProjectableGroups(
       group: "terminal",
       label: agent.agentId,
       panelId: agent.panelId,
+      windowId: agent.windowId,
       pendingInteractionId: activity?.pendingInteractionId ?? null,
       sourcePath: null,
       sourceRoot: null,

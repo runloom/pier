@@ -5,6 +5,7 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { TopBar } from "../components/top-bar.tsx";
 import { openChangesSynced } from "../lib/open-changes.ts";
+import { panelScopeKey } from "../lib/panel-scope.ts";
 import {
   buildProjectableGroups,
   type ProjectablePanelRow,
@@ -60,17 +61,21 @@ function openRow(row: ProjectablePanelRow): void {
     });
     return;
   }
-  navigate({ page: "session", panelId: row.panelId });
+  navigate({
+    page: "session",
+    panelId: row.panelId,
+    windowId: row.windowId,
+  });
 }
 
 function PanelList(props: { rows: ProjectablePanelRow[]; testId: string }) {
   return (
     <ul className="flex flex-col gap-2" data-testid={props.testId}>
       {props.rows.map((row) => (
-        <li key={row.panelId}>
+        <li key={panelScopeKey(row.windowId, row.panelId)}>
           <button
             className="w-full rounded border border-neutral-800 bg-neutral-900/60 p-3 text-left"
-            data-testid={`panel-${row.panelId}`}
+            data-testid={`panel-${row.windowId}-${row.panelId}`}
             onClick={() => {
               openRow(row);
             }}

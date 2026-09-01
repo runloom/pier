@@ -128,9 +128,9 @@ describe("发送、冷却与失效清理", () => {
     }
     const [subscription, payloadJson, vapid] = call;
     expect(subscription).toEqual(SUBSCRIPTION);
-    // 会话深链（闭环第 6 条）：只带 panelId（面板寻址，窗口概念不出宿主）。
+    // 会话深链：panelId 跨窗不唯一，必须带 window。
     expect(JSON.parse(payloadJson)).toMatchObject({
-      path: "/session?panel=p1",
+      path: "/session?panel=p1&window=11",
       title: "需要你处理",
     });
     expect((vapid as { publicKey: string }).publicKey).toBe("vapid-public");

@@ -96,6 +96,7 @@ export const controlSnapshotNotificationEntrySchema = z
     read: z.boolean(),
     ts: z.number().int().nonnegative(),
     panelId: nonEmpty.optional(),
+    windowId: nonEmpty.optional(),
     agentRef: nonEmpty.optional(),
   })
   .strict();

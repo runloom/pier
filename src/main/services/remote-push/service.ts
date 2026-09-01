@@ -207,17 +207,16 @@ export function createRemotePushService(args: {
       if (keys === null) {
         return;
       }
-      // 会话深链（闭环第 6 条「点开回到该会话」）：深链只带 panelId——
-      // 面板 id 跨窗口迁移/重启稳定，窗口概念不出宿主（Web 壳按 panel 寻址）。
+      // 会话深链：panelId 跨窗不唯一，必须带 window。
       // agentRef 解析只在 main（parseAgentRef 纪律）；无法解析 → 回收件箱。
-      const panelId = notification.agentRef
-        ? parseAgentRef(notification.agentRef)?.panelId
+      const parsed = notification.agentRef
+        ? parseAgentRef(notification.agentRef)
         : undefined;
       const payload: PierRemotePushPayload = {
         title: notification.title,
         ...(notification.body === undefined ? {} : { body: notification.body }),
-        path: panelId
-          ? `/session?panel=${encodeURIComponent(panelId)}`
+        path: parsed
+          ? `/session?panel=${encodeURIComponent(parsed.panelId)}&window=${encodeURIComponent(parsed.windowId)}`
           : "/notifications",
         ...(notification.dedupeKey === undefined
           ? {}

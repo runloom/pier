@@ -9,12 +9,12 @@ export type Route =
   | { page: "hosts" }
   | { page: "host" }
   /**
-   * panelId = 会话面板的稳定 id（布局持久化、跨窗口迁移不变）。
-   * 移动端没有窗口概念——寻址一律按面板，宿主自行解析当前窗口；
-   * 宿主 Web Push 深链 `/session?panel=<panelId>` 与此同构。
+   * 会话地址 = panelId + 可选 windowId。
+   * panelId 跨窗口不唯一；深链缺 window 时仅在快照里恰好一命中才打开。
+   * 宿主 Web Push：`/session?panel=<panelId>&window=<windowId>`。
    * 不用 agentId（claude / codex 等产品名）——多开同款智能体会撞车。
    */
-  | { page: "session"; panelId: string }
+  | { page: "session"; panelId: string; windowId?: string }
   | { page: "changes"; cwd?: string }
   | { page: "files"; path?: string; root?: string }
   | { page: "notifications" };
@@ -39,8 +39,13 @@ export function parseHash(hash: string): Route {
       return { page: "host" };
     case "/session": {
       const panelId = params.get("panel") ?? "";
+      const windowId = optionalParam(params, "window");
       return panelId.length > 0
-        ? { page: "session", panelId }
+        ? {
+            page: "session",
+            panelId,
+            ...(windowId === undefined ? {} : { windowId }),
+          }
         : { page: "host" };
     }
     case "/changes": {
@@ -65,8 +70,12 @@ export function parseHash(hash: string): Route {
 
 export function routeToHash(route: Route): string {
   switch (route.page) {
-    case "session":
-      return `#/session?panel=${encodeURIComponent(route.panelId)}`;
+    case "session": {
+      const panel = encodeURIComponent(route.panelId);
+      return route.windowId === undefined
+        ? `#/session?panel=${panel}`
+        : `#/session?panel=${panel}&window=${encodeURIComponent(route.windowId)}`;
+    }
     case "hosts":
       return "#/hosts";
     case "pair":

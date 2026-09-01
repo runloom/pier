@@ -168,4 +168,47 @@ describe("buildProjectableGroups", () => {
     ]);
     expect(groups.terminals[0]?.pendingInteractionId).toBe("ix-1");
   });
+
+  it("keeps two windows with the same panelId as distinct rows", () => {
+    const groups = buildProjectableGroups(
+      snapshot({
+        agents: [
+          { agentId: "codex", panelId: "dup", windowId: "w1" },
+          { agentId: "claude", panelId: "dup", windowId: "w2" },
+        ],
+        activity: [
+          {
+            kind: "agent",
+            panelId: "dup",
+            status: "ready",
+            windowId: "w1",
+          },
+          {
+            kind: "agent",
+            panelId: "dup",
+            pendingInteractionId: "ix-w2",
+            status: "waiting",
+            windowId: "w2",
+          },
+        ],
+        panels: [
+          { panelId: "dup", windowId: "w1", component: "terminal" },
+          { panelId: "dup", windowId: "w2", component: "terminal" },
+        ],
+      })
+    );
+    expect(groups.terminals).toEqual([
+      expect.objectContaining({
+        agentId: "claude",
+        panelId: "dup",
+        pendingInteractionId: "ix-w2",
+        windowId: "w2",
+      }),
+      expect.objectContaining({
+        agentId: "codex",
+        panelId: "dup",
+        windowId: "w1",
+      }),
+    ]);
+  });
 });

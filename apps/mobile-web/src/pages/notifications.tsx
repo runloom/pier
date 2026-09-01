@@ -18,6 +18,7 @@ interface NotificationItem {
   severity: string;
   title: string;
   ts: number;
+  windowId?: string;
 }
 
 interface NotificationsListResult {
@@ -111,7 +112,11 @@ export function NotificationsPage() {
           setError("标记已读失败");
         });
     }
-    navigate({ page: "session", panelId: item.panelId });
+    navigate({
+      page: "session",
+      panelId: item.panelId,
+      ...(item.windowId === undefined ? {} : { windowId: item.windowId }),
+    });
   };
 
   const markAllRead = () => {

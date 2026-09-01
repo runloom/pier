@@ -237,6 +237,32 @@ describe("agent.attention.respond 面板寻址（移动端：裸 panelId）", ()
     expect(sendText).toHaveBeenCalledTimes(1);
   });
 
+  it("裸 panelId + windowId 消歧两窗同 id → 写到指定窗", async () => {
+    const w2Ref = makeAgentRef("w2", PANEL_ID);
+    const registry = createPendingInteractionRegistry();
+    registry.onHookEvent(
+      { ...requested(INTERACTION_ID), windowId: "w2" },
+      w2Ref
+    );
+    const result = await executeAgentAttentionRespondCommand(
+      "p2b",
+      { ...cmd("enter"), agentRef: PANEL_ID, windowId: "w2" },
+      services({
+        activities: [
+          { panelId: PANEL_ID, status: "waiting", windowId: WINDOW_ID },
+          { panelId: PANEL_ID, status: "waiting", windowId: "w2" },
+        ],
+        registry,
+      })
+    );
+    expect(result).toEqual({
+      data: { accepted: true },
+      ok: true,
+      requestId: "p2b",
+    });
+    expect(sendText).toHaveBeenCalledTimes(1);
+  });
+
   it("裸 panelId 跨窗歧义（两窗同面板 id）→ interaction_stale，不写终端", async () => {
     const result = await executeAgentAttentionRespondCommand(
       "p2",

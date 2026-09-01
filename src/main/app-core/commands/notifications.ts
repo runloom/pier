@@ -2,6 +2,7 @@
  * notifications list/get/watch/focus/mark-read（W5-S2）。
  * 唯一读写 NCS；focus 复用 agentRuntimeIndex.focus，不改 FA / 运行结论。
  */
+import { parseAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import type {
   PierCommand,
   PierCommandResult,
@@ -33,6 +34,8 @@ export interface NotificationCenterCommandFacade {
 }
 
 function mapItem(item: AppNotification) {
+  const parsed = item.agentRef ? parseAgentRef(item.agentRef) : null;
+  const panelId = parsed?.panelId ?? item.panelRef?.panelId;
   return {
     id: item.id,
     kind: item.kind,
@@ -42,7 +45,8 @@ function mapItem(item: AppNotification) {
     ts: item.ts,
     ...(item.body ? { body: item.body } : {}),
     ...(item.agentRef ? { agentRef: item.agentRef } : {}),
-    ...(item.panelRef?.panelId ? { panelId: item.panelRef.panelId } : {}),
+    ...(panelId ? { panelId } : {}),
+    ...(parsed?.windowId ? { windowId: parsed.windowId } : {}),
     ...(item.dedupeKey ? { dedupeKey: item.dedupeKey } : {}),
     ...(item.repeatCount === undefined
       ? {}
