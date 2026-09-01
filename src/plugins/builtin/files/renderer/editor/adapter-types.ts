@@ -90,8 +90,10 @@ export interface FileEditorAdapterProps {
     | undefined;
   markdownZoomLabels?:
     | {
+        controlsLabel: string;
         reset: string;
         zoomIn: string;
+        zoomLevel: string;
         zoomOut: string;
       }
     | undefined;

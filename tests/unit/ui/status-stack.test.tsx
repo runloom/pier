@@ -97,26 +97,48 @@ describe("StatusStack", () => {
     expect(desc?.textContent).toBe("Line A\nLine B");
   });
 
-  it("renders action in footer row", () => {
+  it("renders title-only action on the same row", () => {
     const onClick = vi.fn();
     render(
       <StatusStack
         items={[
           {
             id: "a",
-            tone: "destructive",
-            title: "Broken",
+            tone: "warning",
+            title: "Some agents are not connected.",
+            action: { label: "View details", onClick },
+          },
+        ]}
+      />
+    );
+    const item = screen
+      .getByRole("button", { name: "View details" })
+      .closest("[data-slot='status-stack-item']");
+    expect(item).toHaveAttribute("data-compact-action", "true");
+    expect(item?.className).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
+    fireEvent.click(screen.getByRole("button", { name: "View details" }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps action in a footer row when description is present", () => {
+    const onClick = vi.fn();
+    render(
+      <StatusStack
+        items={[
+          {
             action: { label: "Retry", onClick },
+            description: "More detail",
+            id: "a",
+            title: "Broken",
+            tone: "destructive",
           },
         ]}
       />
     );
     const action = screen.getByRole("button", { name: "Retry" });
     expect(
-      action.closest('[data-slot="status-stack-item-action"]')
-    ).not.toBeNull();
-    fireEvent.click(action);
-    expect(onClick).toHaveBeenCalledTimes(1);
+      action.closest('[data-slot="status-stack-item-action"]')?.className
+    ).toContain("mt-2");
   });
 
   it("sizes the status icon to the first line and does not span later rows", () => {
@@ -137,7 +159,7 @@ describe("StatusStack", () => {
     expect(icon?.className).toContain("size-[1lh]");
     expect(icon?.className).toContain("leading-5");
     const item = container.querySelector("[data-slot='status-stack-item']");
-    expect(item?.className).toContain("self-start");
+    expect(item?.className).toContain("items-center");
     expect(item?.className).toContain("leading-5");
     expect(item?.className).not.toContain("row-span-2");
     expect(item?.className).not.toContain("translate-y-0.5");

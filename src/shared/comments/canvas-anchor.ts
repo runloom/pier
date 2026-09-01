@@ -2,6 +2,7 @@
  * Canvas 评论可选稳定锚点（Design Mode 主路径不强制）。
  * 作者可在 canvas 源声明 data-pier-comment-id；有 id 时热重载后仍可钉徽标。
  * 无 id 时靠 label/excerpt 进清单与智能体上下文。禁止坐标 pin。
+ * Artboard 帧上铺满的包装 id 只稳定「整帧」评论，不把拾取限制在整块画板。
  */
 export const CANVAS_COMMENT_ANCHOR_ATTR = "data-pier-comment-id";
 

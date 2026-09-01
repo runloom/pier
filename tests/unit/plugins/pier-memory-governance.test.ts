@@ -38,6 +38,9 @@ describe("pier.memory governance", () => {
     expect(ui).toContain("# 项目记忆：设置页表面");
     expect(ui).toContain("pier.memory.project");
     expect(ui).toContain("设置 → 项目");
+    expect(ui).toContain("data-compact-action");
+    expect(ui).toContain("N 是 written 目标上的 consumer 去重人数");
+    expect(ui).toContain("text-xs");
     expect(ui).toContain('Button variant="destructive"');
     expect(ui).toContain("self-start");
     expect(spec).toContain("projectSettings");
@@ -109,6 +112,9 @@ describe("pier.memory governance", () => {
     );
     expect(v3).not.toContain('stdio: "inherit"');
     expect(v3).toContain('stdio: ["pipe","pipe","inherit"]');
+    expect(v3).toContain("未标记但 stdio 身份等价");
+    expect(v3).toContain("snapshotStatus` / `registryStatus` **只核对**");
+    expect(v3).toContain("读路径不写盘");
     // 红线:项目级 reconciler 不再写任何 MCP 目标(交付面唯一在 registry)。
     const reconcile = readFileSync(
       join(ROOT, "src/main/services/agent-managed-assets/reconcile.ts"),
@@ -126,6 +132,23 @@ describe("pier.memory governance", () => {
       "utf8"
     );
     expect(targets).toContain("MCP_DISCOVERY_ADAPTERS");
+    const home = readFileSync(
+      join(ROOT, "src/main/app-core/pier-home.ts"),
+      "utf8"
+    );
+    const statusAt = home.indexOf("registryStatus:");
+    expect(statusAt).toBeGreaterThan(0);
+    const statusChunk = home.slice(statusAt, statusAt + 320);
+    expect(statusChunk).toContain("memoryRegistryStatusRows");
+    expect(statusChunk).not.toContain("convergeRegistry");
+    const settings = readFileSync(
+      join(ROOT, "src/plugins/builtin/memory/renderer/settings-detail.tsx"),
+      "utf8"
+    );
+    expect(settings).toContain("formatMemoryDegradedDetails");
+    expect(settings).toContain("connectedMemoryAgentCount");
+    expect(settings).toContain('ItemDescription className="text-xs"');
+    expect(settings).toContain("entityLabel(t, item.entityType)");
   });
 
   it("locks MCP instructions as the default-enable guidance path", () => {

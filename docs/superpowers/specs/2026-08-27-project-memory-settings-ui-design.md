@@ -73,8 +73,8 @@
 
 - `CardHeader` / `CardTitle`：记忆条目（或同等 locale）。
 - `CardContent`：`ItemGroup`。每条 observation 一个 `Item outline` `size="sm"`：
-  - `ItemTitle`：观察正文
-  - `ItemDescription`：实体名 · 类型白话（约定 / 踩过的坑 / 拍板决策 / 环境事实）
+  - `ItemTitle`：观察正文（`text-sm`）
+  - `ItemDescription`：`text-xs`（与设置其它 Item 列表同层级）；文案为 **实体名 · 类型白话**（约定 / 踩过的坑 / 拍板决策 / 环境事实）。分组标题已有类型，说明行仍带类型，便于扫读未看小节标题的条目。
   - `ItemActions`：`Trash2` 的 `icon-sm` ghost 按钮，`aria-label` 删除这条记忆
 - 分组用 `FieldLegend` 或 `DIALOG_SECTION_TITLE_CLASS` 同类小节标题，顺序 convention → pitfall → decision → environment。不要为分组加 `Separator`，除非无法用标题表达。
 - 卡底主操作：内容宽度的 `Button variant="destructive"`「清空本项目记忆」（`self-start`，禁止拉满卡片；`Trash2` + `data-icon="inline-start"`，与技能删除同构）。设置页不是 content dialog，**不要** `setFooter`。
@@ -189,7 +189,7 @@
 
 ### tab · 部分接入
 
-`StatusStack` 在开关卡 **Content 顶部**（与插件设置、通知「提醒方式」同位置）。
+`StatusStack` 在开关卡 **Content 顶部**（与插件设置、通知「提醒方式」同位置）。**只有标题 + action、没有 description/body 时，动作与标题同一行**（`data-compact-action`），不要把「查看详情」单独垫到第二行。
 
 ```
 | +------------------------------------------------------+ |
@@ -199,7 +199,10 @@
 | +------------------------------------------------------+ |
 ```
 
-「查看详情」→ `dialogs.alert`（固定 `sm`，单主按钮右簇），body 为各目标路径 + outcome。
+「查看详情」→ `dialogs.alert`（固定 `sm`，单主按钮右簇）。body **不是**全量 `path: written` 日志：
+
+1. 只列 `outcome=failed` 的目标：家目录折成 `~` 的路径 + 白话下一步（冲突 / 未写过 / 磁盘被改），不要把 serializer 英文 reason 直接给用户。
+2. 若仍有已接入智能体，末行一句「其余 N 个智能体已接入」。**N 是 written 目标上的 consumer 去重人数**，与开关说明「已接入 N 个智能体」同一口径，不是配置文件条数。
 
 ### tab · 文件过大
 
@@ -297,6 +300,8 @@
 ## 检查点
 
 - `tests/unit/plugins/pier-memory-governance.test.ts`
-- `tests/unit/main/agent-managed-assets/`（list / delete / clear）
+- `tests/unit/main/agent-managed-assets/`（list / delete / clear；TOML/Vibe 等价未标记收编）
 - `tests/unit/plugins/pier-memory-settings.test.tsx`
+- `tests/unit/plugins/pier-memory-degraded-details.test.ts`
+- `tests/unit/ui/status-stack.test.tsx`（title-only action 同行）
 - `tests/unit/renderer/app/dialog-form-governance.test.ts` 与设置 Alert 布局治理（不在插件源码里再发明横向开关）

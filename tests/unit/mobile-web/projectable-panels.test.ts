@@ -48,7 +48,7 @@ describe("buildProjectableGroups", () => {
             windowId: "w1",
             component: "terminal",
             cwd: "/repo",
-            title: "codex",
+            title: "pier",
           },
           {
             panelId: "shell-1",
@@ -86,6 +86,10 @@ describe("buildProjectableGroups", () => {
       "agent-1",
       "shell-1",
     ]);
+    expect(groups.terminals[0]).toMatchObject({
+      agentId: "codex",
+      label: "pier",
+    });
     expect(groups.terminals[1]).toMatchObject({
       label: "zsh",
       statusLabel: "终端",
@@ -167,6 +171,78 @@ describe("buildProjectableGroups", () => {
       "ready-1",
     ]);
     expect(groups.terminals[0]?.pendingInteractionId).toBe("ix-1");
+  });
+
+  it("uses tab short, not agentId, as the terminal row title", () => {
+    const groups = buildProjectableGroups(
+      snapshot({
+        agents: [
+          {
+            agentId: "codex",
+            cwd: "/repo/pier",
+            panelId: "a",
+            windowId: "w1",
+          },
+          {
+            agentId: "codex",
+            cwd: "/repo/feat-x",
+            panelId: "b",
+            windowId: "w1",
+          },
+          {
+            agentId: "claude",
+            cwd: "/repo/no-title",
+            panelId: "c",
+            windowId: "w1",
+          },
+        ],
+        panels: [
+          {
+            component: "terminal",
+            panelId: "a",
+            title: "pier",
+            windowId: "w1",
+          },
+          {
+            component: "terminal",
+            panelId: "b",
+            title: "feat-x",
+            windowId: "w1",
+          },
+          {
+            component: "terminal",
+            cwd: "/repo/no-title",
+            panelId: "c",
+            windowId: "w1",
+          },
+        ],
+      })
+    );
+    expect(groups.terminals.map((row) => row.label)).toEqual([
+      "pier",
+      "feat-x",
+      "no-title",
+    ]);
+  });
+
+  it("falls back to cwd leaf for agents not yet in the panel list", () => {
+    const groups = buildProjectableGroups(
+      snapshot({
+        agents: [
+          {
+            agentId: "codex",
+            cwd: "/repo/feat-mobile",
+            panelId: "orphan",
+            windowId: "w1",
+          },
+        ],
+      })
+    );
+    expect(groups.terminals[0]).toMatchObject({
+      agentId: "codex",
+      label: "feat-mobile",
+      panelId: "orphan",
+    });
   });
 
   it("keeps two windows with the same panelId as distinct rows", () => {

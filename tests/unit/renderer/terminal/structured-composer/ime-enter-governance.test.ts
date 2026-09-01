@@ -21,7 +21,7 @@ describe("composer IME Enter handlers", () => {
       const enterStart = source.indexOf("KEY_ENTER_COMMAND");
       expect(enterStart, fileName).toBeGreaterThan(-1);
       const handler = source.slice(enterStart, enterStart + 700);
-      const ime = handler.indexOf("isImePendingLexicalEnter");
+      const ime = handler.indexOf("shouldDeferImeEnter");
       expect(ime, `${fileName} IME check`).toBeGreaterThan(-1);
       const prevent = handler.indexOf("preventDefault");
       if (prevent !== -1) {
@@ -38,7 +38,7 @@ describe("composer IME Enter handlers", () => {
       "utf8"
     );
     expect(source).toMatch(
-      /if \(isImePendingLexicalEnter\(event\)\) \{\s*return true;/u
+      /if \(shouldDeferImeEnter\(event, isImeHeld\)\) \{\s*return true;/u
     );
   });
 });

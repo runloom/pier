@@ -9,6 +9,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PierMobileClientError } from "../../../apps/mobile-web/src/lib/client-types.ts";
 import {
   type StoredHost,
   saveHost,
@@ -39,7 +40,9 @@ describe("HostsPage（H1 主机列表）", () => {
     activeKeyRef.value = null;
     fetchHostsStatusMock.mockReset();
     fetchHostsStatusMock.mockResolvedValue(new Map());
+    connectHostMock.mockReset();
     useMobileWebStore.getState().setConnection("idle");
+    window.location.hash = "";
   });
 
   afterEach(() => {
@@ -225,5 +228,66 @@ describe("HostsPage（H1 主机列表）", () => {
     });
     expect(screen.queryByTestId("host-error-192.168.1.10:4455")).toBeNull();
     connectHostMock.mockReset();
+  });
+
+  it("会合进入失败且令牌吊销 → 提示重新扫码，不掩盖为暂时不可用", async () => {
+    const relayHost: StoredHost = {
+      deviceId: "dev-1",
+      deviceToken: "tok-1",
+      fingerprint: "abcdef0123456789",
+      host: "192.168.1.10",
+      hostId: "h1",
+      pairedAt: 0,
+      port: 4455,
+      relayUrl: "wss://relay.pier.codes",
+    };
+    saveHost(relayHost);
+    connectHostMock.mockRejectedValueOnce(
+      new PierMobileClientError("device_revoked", "paired device revoked")
+    );
+    const { HostsPage } = await import(
+      "../../../apps/mobile-web/src/pages/hosts.tsx"
+    );
+    render(<HostsPage />);
+    fireEvent.click(screen.getByTestId("host-enter-h1"));
+    await waitFor(() => {
+      expect(screen.getByTestId("host-error-h1")).toBeDefined();
+    });
+    const text = screen.getByTestId("host-error-h1").textContent ?? "";
+    expect(text).toContain("重新扫码配对");
+    expect(text).toContain("吊销");
+    expect(text).not.toContain("暂时不可用");
+    expect(text).not.toContain("device_revoked");
+    expect(text).not.toContain("paired device revoked");
+    expect(window.location.hash).not.toBe("#/host");
+  });
+
+  it("会合进入失败（非鉴权）→ 展示错误详情，不丢弃 Error.message", async () => {
+    const relayHost: StoredHost = {
+      deviceId: "dev-1",
+      deviceToken: "tok-1",
+      fingerprint: "abcdef0123456789",
+      host: "192.168.1.10",
+      hostId: "h1",
+      pairedAt: 0,
+      port: 4455,
+      relayUrl: "wss://relay.pier.codes",
+    };
+    saveHost(relayHost);
+    connectHostMock.mockRejectedValueOnce(new Error("connection closed"));
+    const { HostsPage } = await import(
+      "../../../apps/mobile-web/src/pages/hosts.tsx"
+    );
+    render(<HostsPage />);
+    fireEvent.click(screen.getByTestId("host-enter-h1"));
+    await waitFor(() => {
+      expect(screen.getByTestId("host-error-h1")).toBeDefined();
+    });
+    expect(screen.getByTestId("host-error-h1").textContent).toContain(
+      "connection closed"
+    );
+    expect(screen.getByTestId("host-error-h1").textContent).not.toBe(
+      "远程连接暂时不可用，请稍后重试"
+    );
   });
 });

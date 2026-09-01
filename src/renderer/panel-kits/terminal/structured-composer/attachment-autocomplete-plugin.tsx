@@ -19,7 +19,7 @@ import {
   useState,
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
-import { isImePendingLexicalEnter } from "@/lib/keybindings/is-text-input.ts";
+import { shouldDeferImeEnter } from "@/lib/keybindings/ime-composition-gate.ts";
 import type { ComposerAttachment } from "../composer-attachments-model.ts";
 import {
   ATTACHMENT_LISTBOX_ID,
@@ -85,12 +85,14 @@ export function AttachmentAutocompletePlugin({
   attachments,
   chromeAnchor = null,
   dismissMenuRef,
+  isImeHeld,
   menuOpenRef,
 }: {
   attachments: readonly ComposerAttachment[];
   /** Composer chrome for list width; falls back to editor root. */
   chromeAnchor?: HTMLElement | null;
   dismissMenuRef: { current: (() => void) | null };
+  isImeHeld: () => boolean;
   menuOpenRef: { current: boolean };
 }): JSX.Element | null {
   const [editor] = useLexicalComposerContext();
@@ -288,7 +290,7 @@ export function AttachmentAutocompletePlugin({
       editor.registerCommand(
         KEY_ENTER_COMMAND,
         (event) => {
-          if (isImePendingLexicalEnter(event)) {
+          if (shouldDeferImeEnter(event, isImeHeld)) {
             return true;
           }
           event?.preventDefault();
@@ -318,7 +320,7 @@ export function AttachmentAutocompletePlugin({
         unsub();
       }
     };
-  }, [editor, open, selectIndex]);
+  }, [editor, isImeHeld, open, selectIndex]);
 
   if (!open) {
     return null;

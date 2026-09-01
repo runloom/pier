@@ -75,7 +75,8 @@ file-canvas-preview（相对根）
 │        └─ [data-pier-canvas-shell]（flow 版心 class 只出自 canvas-stage.ts · 评论 overlay 几何盒）
 │           ├─ file-canvas-host（mount 目标）
 │           └─ CanvasCommentOverlay
-└─ ImagePreviewControls（仅 world；文案走 filePanel.canvas.stage.*）
+└─ CommentNavigator（底中；markdown / git / canvas 同款）
+└─ ImagePreviewControls（仅 world；底右；与图片 / mermaid 同款 `justify-end`）
    （DocsShell flow 无浮动字号控件；阅读偏好经 CSS 变量被动应用）
 ```
 
@@ -98,7 +99,8 @@ file-canvas-preview（相对根）
 - `file-canvas-scroll` 切换为 viewport 锁定（`overflow-hidden`）。
 - **相机而非滚动**：world 视口是 `WorldCamera { x, y, scale }` 一次变换（`translate(x,y) scale(s)`，origin 0 0），不再用 CSS `zoom` + 原生滚动。纯函数在 `canvas-math.ts`（`fitCamera` / `zoomCameraAt` / `softClampCamera`），交互在 `useWorldCamera`（`packages/ui/src/image-preview/use-world-camera.ts`）。图片 / Mermaid / fit 卡片是文档查看器语义，仍留在 `useZoomPanViewport`；两个 hook 共享同一数学模块。
 - **交互矩阵（对齐画布工具）**：普通滚轮 / 双指 = 平移（rAF 合帧，无聚焦门控——旧门控只因 wheel 曾是缩放）；`ctrl+wheel`（触控板捏合）= 光标锚定平滑缩放（无滚动钳制，锚点精确）；背景拖拽 = 平移（`INTERACTIVE_PAN_IGNORE`；Design Mode pick 禁 pan）；双击 = fit ↔ 100%；`+`/`-`/`0`/方向键保留。相机自由,仅软约束（内容包络至少留 `CAMERA_KEEP_VISIBLE_PX` 在视口内,防甩丢）。
-- **fit 是相机位不是特殊态**：初始 = `fitCamera(内容包络, 视口, padding)`；用户未动相机（`fit` 模式）时视口 / 包络变化自动跟随,动过（`free`）不再打扰。
+- **fit 是相机位不是特殊态**：初始 = `fitCamera(内容包络, 视口, padding)`；用户未动相机（`fit` 模式）时视口 / 包络变化自动跟随,动过（`free`）不再打扰。「不再打扰」= 不重新 contain-fit；`free` 下窗口改尺寸只改 translate，使原世界中心仍在视口中心。
+- **离开再回来**（files 预览画板）：视口记忆见 [`2026-09-01-canvas-world-camera-memory-gold-standard.md`](2026-09-01-canvas-world-camera-memory-gold-standard.md)。落盘真源是世界中心点 + 缩放，禁止把屏幕 `x/y` 当持久化；热更新 nonce 不得重置相机。
 - **壳 chrome 单一来源 `WorldViewportFrame`**（`packages/ui/src/image-preview/world-canvas.tsx`）：section + 相机盒由它渲染，`ZoomPanWorldStage` 与 files 预览共同消费；files 预览传 `active=false` 时两层皆 `display: contents`，flow ↔ world 翻转不重挂命令式 host。
 - **不包 `HtmlWorldCanvas presentation="stage"`。** 该挡位是 ContentPreviewHost 全屏路径；包进 files 预览会重挂 live-module host。治理锁定 `canvas.tsx` 只消费 `WorldViewportFrame`。
 - 文本清晰度：交互期挂 `will-change: transform`,静止 200ms 后摘除,合成层按最终 scale 重栅格化。

@@ -2,7 +2,7 @@ import { Button } from "@pier/ui/button.tsx";
 import { Separator } from "@pier/ui/separator.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, MessageCircle, Trash2 } from "lucide-react";
 import type { JSX, ReactElement } from "react";
 
 function BottomBarTip({
@@ -24,20 +24,26 @@ function BottomBarTip({
 export const COMMENT_NAVIGATOR_SCROLL_PAD_CLASS = "pb-14";
 
 /**
- * Floating comment navigator (identity + n/N + prev/next + clear all).
+ * Comment navigator (identity + n/N + prev/next + clear all).
  * Shared by git review, markdown preview, and canvas preview.
  * Callers omit mount when total < 1; this component assumes total >= 1.
  *
- * `absolute bottom-*` is pinned to the nearest positioned ancestor. Mount it
- * on a viewport-sized, non-scrolling frame (sibling of `overflow-auto`),
- * never inside the scroll root — otherwise the bar rides the document.
- * Scroll roots should use `COMMENT_NAVIGATOR_SCROLL_PAD_CLASS` when the bar
- * is mounted so the last line is not trapped under the pill.
+ * `floating` (default): `absolute bottom-*` pinned to the nearest positioned
+ * ancestor. Mount it on a viewport-sized, non-scrolling frame (sibling of
+ * `overflow-auto`), never inside the scroll root — otherwise the bar rides
+ * the document. Scroll roots should use `COMMENT_NAVIGATOR_SCROLL_PAD_CLASS`
+ * when the bar is mounted so the last line is not trapped under the pill.
+ * Floating chrome is always bottom-center (markdown / git review / canvas).
+ * Zoom lives in a separate bottom-right pill (`ImagePreviewControls`).
+ *
+ * `cluster`: inner controls only, for nesting in another bottom pill.
+ * Not a second toolbar.
  */
 export function CommentNavigator({
   activeIndex,
   className,
   clearLabel,
+  layout = "floating",
   nextLabel,
   onClear,
   onNext,
@@ -51,6 +57,7 @@ export function CommentNavigator({
   readonly activeIndex: number;
   readonly className?: string;
   readonly clearLabel: string;
+  readonly layout?: "cluster" | "floating";
   readonly nextLabel: string;
   readonly onClear: () => void;
   readonly onNext: () => void;
@@ -62,17 +69,24 @@ export function CommentNavigator({
   readonly toolbarLabel: string;
   readonly total: number;
 }): JSX.Element {
+  const clustered = layout === "cluster";
+  const iconSize = clustered ? "icon-sm" : "icon-xs";
+  const textSize = clustered ? "sm" : "xs";
   const positionText = `${activeIndex + 1}/${total}`;
   return (
     <div
-      aria-label={toolbarLabel}
       className={cn(
-        "pointer-events-auto absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-border bg-popover px-1.5 py-1 text-sm shadow-md",
+        "flex items-center gap-0.5",
+        clustered
+          ? undefined
+          : "pointer-events-auto absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border bg-popover px-1.5 py-1 text-sm shadow-md",
         className
       )}
       data-slot="comment-navigator"
       data-testid="comment-navigator"
-      role="toolbar"
+      {...(clustered
+        ? {}
+        : { "aria-label": toolbarLabel, role: "toolbar" as const })}
     >
       <span
         aria-hidden
@@ -87,7 +101,7 @@ export function CommentNavigator({
             aria-live="polite"
             className="min-w-10 px-1 tabular-nums"
             onClick={onRevealCurrent}
-            size="xs"
+            size={textSize}
             type="button"
             variant="ghost"
           >
@@ -100,7 +114,7 @@ export function CommentNavigator({
           <Button
             aria-label={previousLabel}
             onClick={onPrevious}
-            size="icon-xs"
+            size={iconSize}
             type="button"
             variant="ghost"
           >
@@ -113,7 +127,7 @@ export function CommentNavigator({
           <Button
             aria-label={nextLabel}
             onClick={onNext}
-            size="icon-xs"
+            size={iconSize}
             type="button"
             variant="ghost"
           >
@@ -122,15 +136,19 @@ export function CommentNavigator({
         </span>
       </BottomBarTip>
       <Separator className="mx-0.5 h-4 self-center" orientation="vertical" />
-      <Button
-        className="rounded-full px-2.5"
-        onClick={onClear}
-        size="xs"
-        type="button"
-        variant="ghost"
-      >
-        {clearLabel}
-      </Button>
+      <BottomBarTip label={clearLabel}>
+        <span className="inline-flex">
+          <Button
+            aria-label={clearLabel}
+            onClick={onClear}
+            size={iconSize}
+            type="button"
+            variant="ghost"
+          >
+            <Trash2 aria-hidden data-icon />
+          </Button>
+        </span>
+      </BottomBarTip>
     </div>
   );
 }

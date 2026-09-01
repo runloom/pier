@@ -81,6 +81,102 @@ describe("resolveCanvasElementPick", () => {
     expect(pick?.label).toBe("Welcome sub");
   });
 
+  it("does not promote inner controls to an Artboard-filling comment wrapper", () => {
+    const host = document.createElement("div");
+    host.innerHTML = `
+      <div data-slot="artboard-frame">
+        <div class="h-full" data-pier-comment-id="mobile-web-host">
+          <button type="button"><span>feat-mobile</span></button>
+        </div>
+      </div>
+    `;
+    const span = host.querySelector("span") as HTMLElement;
+    const button = host.querySelector("button") as HTMLElement;
+    const pick = pickFromCanvasElement(host, span);
+    expect(pick?.label).toBe("feat-mobile");
+    expect(pick?.anchorId).toBeUndefined();
+    const chain = buildCanvasPickChain(host, span);
+    expect(chain).not.toBeNull();
+    expect(chain!.chain[chain!.defaultDepth]).toBe(button);
+  });
+
+  it("picks the row control for copy inside a frame-wrapped PressRow", () => {
+    const host = document.createElement("div");
+    host.innerHTML = `
+      <div data-slot="artboard-frame">
+        <div class="h-full" data-pier-comment-id="mobile-web-host">
+          <button type="button"><p>feat-mobile</p></button>
+        </div>
+      </div>
+    `;
+    const para = host.querySelector("p") as HTMLElement;
+    const button = host.querySelector("button") as HTMLElement;
+    const pick = pickFromCanvasElement(host, para);
+    expect(pick?.label).toBe("feat-mobile");
+    expect(pick?.anchorId).toBeUndefined();
+    const chain = buildCanvasPickChain(host, para);
+    expect(chain).not.toBeNull();
+    expect(chain!.chain[chain!.defaultDepth]).toBe(button);
+  });
+
+  it("keeps an Artboard-filling wrapper selectable when it is the hit", () => {
+    const host = document.createElement("div");
+    host.innerHTML = `
+      <div data-slot="artboard-frame">
+        <div class="h-full" data-pier-comment-id="mobile-web-host">
+          <button type="button">feat-mobile</button>
+        </div>
+      </div>
+    `;
+    const wrap = host.querySelector("[data-pier-comment-id]") as HTMLElement;
+    const pick = pickFromCanvasElement(host, wrap);
+    expect(pick?.anchorId).toBe("mobile-web-host");
+  });
+
+  it("does not inherit a frame-shell id onto a nested pick snapshot", () => {
+    const host = document.createElement("div");
+    host.innerHTML = `
+      <div data-slot="artboard-frame">
+        <div class="h-full" data-pier-comment-id="mobile-web-host">
+          <button type="button">ghostty</button>
+        </div>
+      </div>
+    `;
+    const button = host.querySelector("button") as HTMLElement;
+    const chain = buildCanvasPickChain(host, button);
+    expect(chain).not.toBeNull();
+    const pick = snapshotCanvasElementPick(host, button, chain!.chain);
+    expect(pick.label).toBe("ghostty");
+    expect(pick.anchorId).toBeUndefined();
+  });
+
+  it("treats a nested wrapper that fills the Artboard frame as a shell", () => {
+    const host = document.createElement("div");
+    const frame = document.createElement("div");
+    frame.setAttribute("data-slot", "artboard-frame");
+    const outer = document.createElement("div");
+    const wrap = document.createElement("div");
+    wrap.setAttribute("data-pier-comment-id", "mobile-web-host");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "feat-mobile";
+    wrap.append(button);
+    outer.append(wrap);
+    frame.append(outer);
+    host.append(frame);
+    document.body.append(host);
+
+    mockBox(frame, { left: 0, top: 0, width: 393, height: 852 });
+    mockBox(outer, { left: 0, top: 0, width: 393, height: 852 });
+    mockBox(wrap, { left: 0, top: 0, width: 393, height: 852 });
+    mockBox(button, { left: 16, top: 80, width: 360, height: 44 });
+
+    const pick = pickFromCanvasElement(host, button);
+    expect(pick?.label).toBe("feat-mobile");
+    expect(pick?.anchorId).toBeUndefined();
+    host.remove();
+  });
+
   it("prefers aria-label over raw text", () => {
     const host = document.createElement("div");
     host.innerHTML = `<button aria-label="Close dialog" type="button">×</button>`;
@@ -338,6 +434,17 @@ describe("pickFromCanvasElement", () => {
     const span = host.querySelector("span");
     const pick = pickFromCanvasElement(host, span);
     expect(pick?.label).toBe("OK");
+  });
+
+  it("promotes a paragraph inside a button to the button", () => {
+    const host = document.createElement("div");
+    host.innerHTML = `<button type="button"><p>feat-mobile</p></button>`;
+    const para = host.querySelector("p") as HTMLElement;
+    const button = host.querySelector("button") as HTMLElement;
+    const chain = buildCanvasPickChain(host, para);
+    expect(chain).not.toBeNull();
+    expect(chain!.chain[chain!.defaultDepth]).toBe(button);
+    expect(pickFromCanvasElement(host, para)?.label).toBe("feat-mobile");
   });
 });
 
