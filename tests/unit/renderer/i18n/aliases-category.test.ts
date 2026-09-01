@@ -87,7 +87,7 @@ describe("category i18n", () => {
   });
 
   it("getCategory resolves English category labels", () => {
-    expect(getCategory("git")).toBe("git");
+    expect(getCategory("git")).toBe("GIT");
     expect(getCategory("panel")).toBe("Panel");
     expect(getCategory("terminal")).toBe("Terminal");
     expect(getCategory("file")).toBe("File");
@@ -95,6 +95,7 @@ describe("category i18n", () => {
 
   it("getCategory follows locale switch to zh-CN", async () => {
     await i18next.changeLanguage("zh-CN");
+    expect(getCategory("git")).toBe("GIT");
     expect(getCategory("panel")).toBe("面板");
     expect(getCategory("terminal")).toBe("终端");
     expect(getCategory("window")).toBe("窗口");
@@ -125,10 +126,7 @@ describe("category i18n", () => {
     for (const key of allKeys) {
       const label = getCategory(key);
       expect(label).toBeTruthy();
-      // Product name is lowercase `git`, same as the category id.
-      if (key !== "git") {
-        expect(label).not.toBe(key);
-      }
+      expect(label).not.toBe(key);
     }
   });
 });

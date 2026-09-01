@@ -422,7 +422,7 @@ export function registerMergeAction(
       openBranchPick(
         context,
         "merge",
-        commandTitle(context, "pier.git.merge", "git: Merge Branch...")
+        commandTitle(context, "pier.git.merge", "GIT: Merge Branch...")
       ),
     id: "pier.git.merge",
     metadata: {
@@ -433,7 +433,7 @@ export function registerMergeAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.merge", "git: Merge Branch..."),
+      commandTitle(context, "pier.git.merge", "GIT: Merge Branch..."),
   });
 }
 
@@ -444,7 +444,7 @@ export function openSwitchBranchPick(
   return openBranchPick(
     context,
     "switch",
-    commandTitle(context, "pier.git.switchBranch", "git: Switch Branch..."),
+    commandTitle(context, "pier.git.switchBranch", "GIT: Switch Branch..."),
     options.cwd
   );
 }
@@ -466,7 +466,7 @@ export function registerSwitchBranchAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.switchBranch", "git: Switch Branch..."),
+      commandTitle(context, "pier.git.switchBranch", "GIT: Switch Branch..."),
   });
 }
 
@@ -481,7 +481,7 @@ export function registerRebaseAction(
       openBranchPick(
         context,
         "rebase",
-        commandTitle(context, "pier.git.rebase", "git: Rebase Branch...")
+        commandTitle(context, "pier.git.rebase", "GIT: Rebase Branch...")
       ),
     id: "pier.git.rebase",
     metadata: {
@@ -492,6 +492,6 @@ export function registerRebaseAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.rebase", "git: Rebase Branch..."),
+      commandTitle(context, "pier.git.rebase", "GIT: Rebase Branch..."),
   });
 }

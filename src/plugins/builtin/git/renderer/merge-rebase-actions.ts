@@ -22,7 +22,7 @@ export function registerMergeAbortAction(
       const title = commandTitle(
         context,
         "pier.git.mergeAbort",
-        "git: Abort Merge"
+        "GIT: Abort Merge"
       );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
@@ -43,7 +43,7 @@ export function registerMergeAbortAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.mergeAbort", "git: Abort Merge"),
+      commandTitle(context, "pier.git.mergeAbort", "GIT: Abort Merge"),
   });
 }
 
@@ -58,7 +58,7 @@ export function registerRebaseAbortAction(
       const title = commandTitle(
         context,
         "pier.git.rebaseAbort",
-        "git: Abort Rebase"
+        "GIT: Abort Rebase"
       );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
@@ -79,7 +79,7 @@ export function registerRebaseAbortAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.rebaseAbort", "git: Abort Rebase"),
+      commandTitle(context, "pier.git.rebaseAbort", "GIT: Abort Rebase"),
   });
 }
 
@@ -94,7 +94,7 @@ export function registerRebaseContinueAction(
       const title = commandTitle(
         context,
         "pier.git.rebaseContinue",
-        "git: Continue Rebase"
+        "GIT: Continue Rebase"
       );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
@@ -115,6 +115,6 @@ export function registerRebaseContinueAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.rebaseContinue", "git: Continue Rebase"),
+      commandTitle(context, "pier.git.rebaseContinue", "GIT: Continue Rebase"),
   });
 }

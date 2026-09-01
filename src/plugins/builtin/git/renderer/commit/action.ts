@@ -15,7 +15,7 @@ import { isWorkingTreeEmpty } from "./paths.ts";
 export async function runGitCommitCommand(
   context: RendererPluginContext
 ): Promise<void> {
-  const title = commandTitle(context, "pier.git.commit", "git: Commit");
+  const title = commandTitle(context, "pier.git.commit", "GIT: Commit");
   const cwd = activeCwdOrMessage(context, title);
   if (!cwd) {
     return;
@@ -68,6 +68,6 @@ export function registerCommitAction(
       sortOrder: 19,
     },
     surfaces: ["command-palette"],
-    title: () => commandTitle(context, "pier.git.commit", "git: Commit"),
+    title: () => commandTitle(context, "pier.git.commit", "GIT: Commit"),
   });
 }

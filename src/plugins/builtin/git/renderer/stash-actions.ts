@@ -263,7 +263,7 @@ export function registerStashAction(
     handler: async () =>
       runStash(
         context,
-        commandTitle(context, "pier.git.stash", "git: Stash"),
+        commandTitle(context, "pier.git.stash", "GIT: Stash"),
         false
       ),
     id: "pier.git.stash",
@@ -274,7 +274,7 @@ export function registerStashAction(
       sortOrder: 12,
     },
     surfaces: ["command-palette"],
-    title: () => commandTitle(context, "pier.git.stash", "git: Stash"),
+    title: () => commandTitle(context, "pier.git.stash", "GIT: Stash"),
   });
 }
 
@@ -291,7 +291,7 @@ export function registerStashIncludeUntrackedAction(
         commandTitle(
           context,
           "pier.git.stashIncludeUntracked",
-          "git: Stash (Include Untracked)"
+          "GIT: Stash (Include Untracked)"
         ),
         true
       ),
@@ -307,7 +307,7 @@ export function registerStashIncludeUntrackedAction(
       commandTitle(
         context,
         "pier.git.stashIncludeUntracked",
-        "git: Stash (Include Untracked)"
+        "GIT: Stash (Include Untracked)"
       ),
   });
 }
@@ -323,7 +323,7 @@ export function registerStashPopAction(
       const title = commandTitle(
         context,
         "pier.git.stashPop",
-        "git: Pop Stash..."
+        "GIT: Pop Stash..."
       );
       await openStashPick(
         context,
@@ -341,7 +341,7 @@ export function registerStashPopAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.stashPop", "git: Pop Stash..."),
+      commandTitle(context, "pier.git.stashPop", "GIT: Pop Stash..."),
   });
 }
 
@@ -356,7 +356,7 @@ export function registerStashApplyAction(
       const title = commandTitle(
         context,
         "pier.git.stashApply",
-        "git: Apply Stash..."
+        "GIT: Apply Stash..."
       );
       await openStashPick(
         context,
@@ -374,7 +374,7 @@ export function registerStashApplyAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.stashApply", "git: Apply Stash..."),
+      commandTitle(context, "pier.git.stashApply", "GIT: Apply Stash..."),
   });
 }
 
@@ -389,7 +389,7 @@ export function registerStashDropAction(
       const title = commandTitle(
         context,
         "pier.git.stashDrop",
-        "git: Drop Stash..."
+        "GIT: Drop Stash..."
       );
       await openStashPick(
         context,
@@ -407,6 +407,6 @@ export function registerStashDropAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.stashDrop", "git: Drop Stash..."),
+      commandTitle(context, "pier.git.stashDrop", "GIT: Drop Stash..."),
   });
 }

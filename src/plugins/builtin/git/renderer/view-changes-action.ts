@@ -36,6 +36,6 @@ export function registerViewChangesAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.viewChanges", "git: Open Review"),
+      commandTitle(context, "pier.git.viewChanges", "GIT: Open Review"),
   });
 }

@@ -30,6 +30,8 @@ extraResources:
     to: bin/pier-cli-path.js
   - from: bin/pier-cli-launch.js
     to: bin/pier-cli-launch.js
+  - from: bin/pier-cli-human.js
+    to: bin/pier-cli-human.js
   - from: bin/pier-control-client.js
     to: bin/pier-control-client.js
   - from: bin/pier-app.sh

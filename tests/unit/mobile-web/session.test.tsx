@@ -117,7 +117,7 @@ describe("SessionPage", () => {
       type: "git.openReviewPanel",
     });
     expect(decodeURIComponent(window.location.hash)).toBe(
-      "#/changes?cwd=/repo"
+      "#/changes?cwd=/repo&fromPanel=p-shell&fromWindow=w1"
     );
   });
 
@@ -154,7 +154,7 @@ describe("SessionPage", () => {
     expect(screen.queryByTestId("approval-bar")).toBeNull();
     fireEvent.click(screen.getByTestId("session-nav-changes"));
     expect(decodeURIComponent(window.location.hash)).toBe(
-      "#/changes?cwd=/repo"
+      "#/changes?cwd=/repo&fromPanel=p-shell&fromWindow=w1"
     );
   });
 
@@ -169,7 +169,7 @@ describe("SessionPage", () => {
     expect(screen.queryByText("codex")).toBeNull();
     fireEvent.click(screen.getByTestId("session-nav-files"));
     expect(decodeURIComponent(window.location.hash)).toBe(
-      "#/files?root=/repo/agent"
+      "#/files?root=/repo/agent&fromPanel=p-agent&fromWindow=w1"
     );
   });
 
@@ -241,7 +241,7 @@ describe("SessionPage", () => {
     });
     fireEvent.click(screen.getByTestId("session-nav-files"));
     expect(decodeURIComponent(window.location.hash)).toBe(
-      "#/files?root=/repo/w2"
+      "#/files?root=/repo/w2&fromPanel=p-agent&fromWindow=w2"
     );
   });
 

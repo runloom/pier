@@ -27,27 +27,41 @@ function isAbsolutePathToken(path) {
   return path.startsWith("/") || ABSOLUTE_WIN_PATH.test(path);
 }
 
+function resolveAgainstCwd(path, cwd) {
+  const expanded = expandHome(path);
+  return isAbsolute(expanded) ? expanded : resolve(cwd, expanded);
+}
+
 /**
  * Argv-only `:line[:col]` strip. 1-based. Same C: guard as
  * `parseTerminalPathLocation`, without quote/prose unwrapping.
+ *
+ * Edge whitespace matches editor CLIs, not POSIX argv-as-opaque:
+ * VS Code `preparePath` strips U+0020 then U+0009; Zed
+ * `PathWithPosition::parse_str` uses `str::trim` (Unicode White_Space).
+ * JS `String#trim` is the Zed set (includes VS Code's).
  */
 export function parsePathLocationToken(raw) {
-  const match = LINE_COLUMN_SUFFIX.exec(raw);
-  if (!match) {
-    return { path: raw };
+  const token = raw.trim();
+  if (!token) {
+    return { path: "" };
   }
-  const path = match[1] ?? raw;
+  const match = LINE_COLUMN_SUFFIX.exec(token);
+  if (!match) {
+    return { path: token };
+  }
+  const path = match[1] ?? token;
   const lineText = match[2];
   const columnText = match[3];
   if (!(path && lineText)) {
-    return { path: raw };
+    return { path: token };
   }
   if (DRIVE_LETTER.test(path) && isAbsolutePathToken(`${path}:`)) {
-    return { path: raw };
+    return { path: token };
   }
   const line = Number(lineText);
   if (!Number.isInteger(line) || line < 1) {
-    return { path: raw };
+    return { path: token };
   }
   const location = { line, path };
   if (columnText) {
@@ -70,7 +84,13 @@ export function expandHome(path) {
 }
 
 export function looksLikePathToken(token, cwd) {
+  if (existsSync(resolveAgainstCwd(token, cwd))) {
+    return true;
+  }
   const { path } = parsePathLocationToken(token);
+  if (!path) {
+    return false;
+  }
   if (path === "." || path === "..") {
     return true;
   }
@@ -89,9 +109,7 @@ export function looksLikePathToken(token, cwd) {
   if (leaf.includes(".") && !PIER_CLI_RESERVED_COMMANDS.has(path)) {
     return true;
   }
-  const expanded = expandHome(path);
-  const absolute = isAbsolute(expanded) ? expanded : resolve(cwd, expanded);
-  return existsSync(absolute);
+  return existsSync(resolveAgainstCwd(path, cwd));
 }
 
 function nestedOrigin(hasExplicitWindow) {
@@ -112,10 +130,18 @@ export function parsePathOpenArgs({ cwd, hasExplicitWindow, route, tokens }) {
   }
   const paths = [];
   for (const token of tokens) {
+    // Zed `parse_path_with_position`: canonicalize the raw token if it
+    // exists, else trim + `:line[:col]`. VS Code always `preparePath`.
+    const rawAbsolute = resolveAgainstCwd(token, cwd);
+    if (existsSync(rawAbsolute)) {
+      paths.push({ path: rawAbsolute });
+      continue;
+    }
     const location = parsePathLocationToken(token);
-    const expanded = expandHome(location.path);
-    const absolute = isAbsolute(expanded) ? expanded : resolve(cwd, expanded);
-    const entry = { path: absolute };
+    if (!location.path) {
+      throw new Error("missing required pier CLI argument");
+    }
+    const entry = { path: resolveAgainstCwd(location.path, cwd) };
     if (location.line !== undefined) {
       entry.line = location.line;
     }
