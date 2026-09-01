@@ -5,8 +5,10 @@ export interface MarkdownPreviewTocLabels {
 }
 
 export interface MarkdownPreviewZoomLabels {
+  controlsLabel: string;
   reset: string;
   zoomIn: string;
+  zoomLevel: string;
   zoomOut: string;
 }
 
@@ -34,8 +36,10 @@ export const DEFAULT_TOC_LABELS: MarkdownPreviewTocLabels = {
 };
 
 export const DEFAULT_ZOOM_LABELS: MarkdownPreviewZoomLabels = {
+  controlsLabel: "Text size",
   reset: "Reset text size",
   zoomIn: "Increase text size",
+  zoomLevel: "Text size",
   zoomOut: "Decrease text size",
 };
 

@@ -1509,8 +1509,10 @@ describe("MarkdownPreview", () => {
         source={source}
         value={"# Title\n\n## Section\n\nParagraph with `code`."}
         zoomLabels={{
+          controlsLabel: "Text size",
           reset: "Reset text size",
           zoomIn: "Increase text size",
+          zoomLevel: "Text size",
           zoomOut: "Decrease text size",
         }}
       />
@@ -1535,7 +1537,7 @@ describe("MarkdownPreview", () => {
     expect(h2.className).not.toContain("border-b");
     expect(container.querySelector("code.md-inline-code")).not.toBeNull();
     expect(
-      container.querySelector('[data-slot="markdown-font-scale"]')
+      container.querySelector('[data-slot="image-preview-controls"]')
     ).not.toBeNull();
     const toc = container.querySelector(
       '[data-slot="markdown-preview-toc"]'

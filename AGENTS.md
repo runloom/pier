@@ -242,6 +242,16 @@ Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 
 检查点在 `tests/unit/plugins/markdown/markdown-table-column-width-governance.test.ts`。
 
+### Canvas 画板视口记忆
+
+权威规格：[`docs/superpowers/specs/2026-09-01-canvas-world-camera-memory-gold-standard.md`](docs/superpowers/specs/2026-09-01-canvas-world-camera-memory-gold-standard.md)。
+
+- 意图：未动手则适应窗口并跟随尺寸；用户平移/缩放后自由视口优先。
+- 落盘：`(项目根, 画板路径)` → `localStorage`；自由态存视口中心对准的世界点 + 缩放（`worldX` / `worldY`），适应态只存 `fit`。禁止 nonce、禁止把屏幕平移当真源、**不进 userData**。
+- 热更新与切源码不得抢视口；`free` 改窗口只保世界中心，不重新 fit。
+
+检查点在 `tests/unit/plugins/files/canvas-world-camera-memory-governance.test.ts`。
+
 ### 交互控件密度规范
 
 Pier 桌面端的单行交互控件统一使用 28px 高度：

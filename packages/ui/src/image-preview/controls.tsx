@@ -1,5 +1,5 @@
 import { ChevronDown, Copy, Minus, Plus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { Button } from "../button.tsx";
 import {
   DropdownMenu,
@@ -12,22 +12,44 @@ import {
 import { MAX_ZOOM, MIN_ZOOM, PRESET_ZOOM_LEVELS } from "./canvas-math.ts";
 import { useImagePreviewPortalContainer } from "./portal-scope.ts";
 
-export interface ImagePreviewCanvasLabels {
+/** Shared zoom-pill copy. Camera surfaces also pass `fit`. */
+export interface ImagePreviewZoomLabels {
   actualSize: string;
   controlsLabel: string;
   copyImage?: string;
-  fit: string;
-  loadFailedDescription: string;
-  loadFailedTitle: string;
-  loading: string;
-  viewerLabel: string;
+  fit?: string;
   zoomIn: string;
   zoomLevel: string;
   zoomOut: string;
 }
 
+export interface ImagePreviewCanvasLabels extends ImagePreviewZoomLabels {
+  fit: string;
+  loadFailedDescription: string;
+  loadFailedTitle: string;
+  loading: string;
+  viewerLabel: string;
+}
+
+function ToolbarRule(): ReactNode {
+  return (
+    <div aria-hidden="true" className="mx-0.5 h-5 w-px shrink-0 bg-border/60" />
+  );
+}
+
+function formatZoomPercent(level: number): string {
+  return `${Math.round(level * 100)}%`;
+}
+
+/**
+ * Shared preview zoom pill (image / mermaid / canvas world / markdown reading).
+ * Always bottom-right; comment n/N stays bottom-center.
+ * Camera surfaces keep Fit + PRESET_ZOOM_LEVELS; reading zoom passes discrete
+ * presets and `includeFit={false}`.
+ */
 export function ImagePreviewControls({
   effectiveZoom,
+  includeFit = true,
   labels,
   maxZoom = MAX_ZOOM,
   minZoom = MIN_ZOOM,
@@ -35,19 +57,24 @@ export function ImagePreviewControls({
   onZoomChange,
   onZoomIn,
   onZoomOut,
+  presets = PRESET_ZOOM_LEVELS,
+  start,
   zoom,
 }: {
   effectiveZoom: number;
-  labels: ImagePreviewCanvasLabels;
-  /** Defaults to image-preview MAX_ZOOM (8). Mermaid stage passes 4. */
+  /** Camera menus include Fit; markdown reading scale does not. */
+  includeFit?: boolean;
+  labels: ImagePreviewZoomLabels;
   maxZoom?: number | undefined;
-  /** Defaults to image-preview MIN_ZOOM (0.1). Mermaid stage passes 0.12. */
   minZoom?: number | undefined;
   /** When provided (with `labels.copyImage`), appends a copy-image button. */
   onCopyImage?: () => Promise<void>;
   onZoomChange: (zoom: number | "fit") => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  presets?: readonly number[];
+  /** Leading cluster in the same pill (optional, e.g. copy lives at the end). */
+  start?: ReactNode;
   zoom: number | "fit";
 }) {
   const [copying, setCopying] = useState(false);
@@ -65,12 +92,18 @@ export function ImagePreviewControls({
       setCopying(false);
     }
   }, [copying, onCopyImage]);
-  const zoomLabel = zoom === "fit" ? labels.fit : `${Math.round(zoom * 100)}%`;
-  const presets = PRESET_ZOOM_LEVELS.filter((level) => level <= maxZoom);
+  const zoomLabel =
+    zoom === "fit"
+      ? (labels.fit ?? formatZoomPercent(effectiveZoom))
+      : formatZoomPercent(zoom);
+  const menuLevels = presets.filter(
+    (level) => level >= minZoom && level <= maxZoom
+  );
   const showCopy = Boolean(onCopyImage && labels.copyImage);
+  const showFit = includeFit && Boolean(labels.fit);
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pt-2 pb-4">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-end px-3 pt-2 pb-4">
       {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: stop empty-click dismiss on toolbar */}
       <div
         aria-label={labels.controlsLabel}
@@ -81,6 +114,12 @@ export function ImagePreviewControls({
         onPointerDown={(event) => event.stopPropagation()}
         role="toolbar"
       >
+        {start ? (
+          <>
+            {start}
+            <ToolbarRule />
+          </>
+        ) : null}
         <Button
           aria-label={labels.zoomOut}
           disabled={effectiveZoom <= minZoom}
@@ -117,12 +156,14 @@ export function ImagePreviewControls({
               }
               value={zoom === "fit" ? "fit" : String(zoom)}
             >
-              <DropdownMenuRadioItem value="fit">
-                {labels.fit}
-              </DropdownMenuRadioItem>
-              {presets.map((level) => (
+              {showFit ? (
+                <DropdownMenuRadioItem value="fit">
+                  {labels.fit}
+                </DropdownMenuRadioItem>
+              ) : null}
+              {menuLevels.map((level) => (
                 <DropdownMenuRadioItem key={level} value={String(level)}>
-                  {level * 100}%
+                  {formatZoomPercent(level)}
                   {level === 1 ? (
                     <DropdownMenuShortcut className="pr-6">
                       {labels.actualSize}
@@ -145,10 +186,7 @@ export function ImagePreviewControls({
         </Button>
         {showCopy ? (
           <>
-            <div
-              aria-hidden="true"
-              className="mx-0.5 h-5 w-px shrink-0 bg-border/60"
-            />
+            <ToolbarRule />
             <Button
               aria-label={labels.copyImage}
               disabled={copying}

@@ -110,7 +110,10 @@ describe("markdown preview layout governance", () => {
     expect(layout).toContain("MARKDOWN_TOC_CONTENT_GAP_PX");
     expect(preview).toContain("MARKDOWN_TOC_CONTENT_INSET_PX");
     expect(preview).toContain("hasOutline");
-    expect(fontScale).toContain("MARKDOWN_PREVIEW_EDGE_INSET_PX");
+    expect(fontScale).toContain("ImagePreviewControls");
+    expect(fontScale).toContain("includeFit={false}");
+    expect(fontScale).not.toContain("rounded-md");
+    expect(fontScale).not.toContain("MARKDOWN_PREVIEW_EDGE_INSET_PX");
     expect(article).toContain("MARKDOWN_TOC_EDGE_INSET_PX");
     expect(toc).not.toContain("MARKDOWN_TOC_PANEL_WIDTH_PX");
     expect(toc).toContain("MARKDOWN_TOC_TICK_HEIGHT_PX");

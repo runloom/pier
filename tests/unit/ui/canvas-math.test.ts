@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import {
   anchoredScrollAfterZoom,
+  cameraLookingAtWorld,
   fitCamera,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -8,6 +9,7 @@ import {
   pinchZoom,
   screenToWorldPoint,
   softClampCamera,
+  worldPointAtViewportCenter,
   worldToScreenPoint,
   zoomCameraAt,
 } from "@pier/ui/image-preview/canvas-math.ts";
@@ -153,6 +155,36 @@ describe("coordinate transforms", () => {
       x: 200,
       y: 150,
     });
+  });
+});
+
+describe("look-at camera", () => {
+  const viewport = { height: 400, width: 800 };
+  const lookAt = { scale: 2, worldX: 100, worldY: 50 };
+
+  it("round-trips the world point under the viewport center", () => {
+    const camera = cameraLookingAtWorld(lookAt, viewport);
+    const center = worldPointAtViewportCenter(camera, viewport);
+    expect(camera.scale).toBe(2);
+    expect(center.x).toBeCloseTo(lookAt.worldX);
+    expect(center.y).toBeCloseTo(lookAt.worldY);
+  });
+
+  it("keeps the same world center when the viewport size changes", () => {
+    const camera = cameraLookingAtWorld(lookAt, viewport);
+    const center = worldPointAtViewportCenter(camera, viewport);
+    const wider = cameraLookingAtWorld(
+      { scale: camera.scale, worldX: center.x, worldY: center.y },
+      { height: 400, width: 1200 }
+    );
+    const restored = worldPointAtViewportCenter(wider, {
+      height: 400,
+      width: 1200,
+    });
+    expect(restored.x).toBeCloseTo(lookAt.worldX);
+    expect(restored.y).toBeCloseTo(lookAt.worldY);
+    expect(wider.scale).toBe(2);
+    expect(wider.x).not.toBe(camera.x);
   });
 });
 

@@ -31,7 +31,8 @@ import {
  *
  * Fonts: UI font only — design frames must look like product UI.
  * Comments stay in host Design Mode: keep a stable `data-pier-comment-id`
- * on each frame so pins survive reload. Do not fake pin chrome.
+ * on each frame so whole-frame pins survive reload. Inner controls stay
+ * pickable; do not fake pin chrome.
  */
 export const canvas = {
   description: "Multi-device Library mockup on a world stage.",

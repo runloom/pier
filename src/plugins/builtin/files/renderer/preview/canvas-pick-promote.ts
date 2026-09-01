@@ -7,6 +7,7 @@ import {
   type CanvasPickChain,
   COPY_LEAF_SELECTOR,
   INTERACTIVE_SELECTOR,
+  isCanvasFrameShellAnchor,
   isIgnorableCanvasPickTarget,
   isTabPanelLike,
   normalizeCanvasPickText,
@@ -45,15 +46,16 @@ export function buildCanvasPickChain(
  *
  * Industry default (DevTools / Orca Design Mode): pick what is under the
  * cursor (leaf), with only a few automatic promotions:
- * - declared anchor id
+ * - tight declared anchor id (not an Artboard-filling frame shell)
  * - span/icon → nearby button/tab (≤2 ancestors)
  * - inner svg/canvas host → outer mermaid/product surface
  *
  * We deliberately do NOT auto-promote to Card/Item shells or tab panels:
  * titles and body copy must stay selectable. Radix TabsContent is
  * role=tabpanel tabindex=0 — treating that as "interactive" snapped every
- * heading to the whole page. Promotion never returns out-of-range; leaf is
- * always valid.
+ * heading to the whole page. Frame-level `data-pier-comment-id` wrappers
+ * (template `h-full` roots) only bind when that shell itself is the hit.
+ * Promotion never returns out-of-range; leaf is always valid.
  */
 export function defaultPickDepth(
   _host: HTMLElement,
@@ -65,15 +67,19 @@ export function defaultPickDepth(
 
   for (let i = 0; i < chain.length; i++) {
     const el = chain[i];
-    if (el?.getAttribute(CANVAS_COMMENT_ANCHOR_ATTR)?.trim()) {
-      return i;
+    const id = el?.getAttribute(CANVAS_COMMENT_ANCHOR_ATTR)?.trim();
+    if (!id) {
+      continue;
     }
+    if (i > 0 && el && isCanvasFrameShellAnchor(el)) {
+      continue;
+    }
+    return i;
   }
 
   const leaf = chain[0];
-  if (leaf?.matches(COPY_LEAF_SELECTOR)) {
-    return 0;
-  }
+  // Copy inside a button/tab is the control (PressRow title). Bare headings
+  // stay selectable: they have no interactive ancestor in the ≤2 window.
   if (leaf && !leaf.matches(INTERACTIVE_SELECTOR)) {
     for (let i = 1; i < Math.min(chain.length, 3); i++) {
       const el = chain[i];
@@ -94,6 +100,10 @@ export function defaultPickDepth(
         return i;
       }
     }
+  }
+
+  if (leaf?.matches(COPY_LEAF_SELECTOR)) {
+    return 0;
   }
 
   // Alert / mermaid: annotate the unit, not inner chrome (title, body, icon).
@@ -167,12 +177,12 @@ export function snapshotCanvasElementPick(
   chain?: readonly HTMLElement[]
 ): CanvasElementPick {
   const walk = chain ?? buildCanvasPickChain(host, target)?.chain ?? [target];
-  const anchorId =
-    target.getAttribute(CANVAS_COMMENT_ANCHOR_ATTR)?.trim() ||
-    walk
-      .map((el) => el.getAttribute(CANVAS_COMMENT_ANCHOR_ATTR)?.trim())
-      .find((id) => id && id.length > 0) ||
-    undefined;
+  const ownId = target.getAttribute(CANVAS_COMMENT_ANCHOR_ATTR)?.trim();
+  const inheritedId = walk
+    .filter((el) => el !== target && !isCanvasFrameShellAnchor(el))
+    .map((el) => el.getAttribute(CANVAS_COMMENT_ANCHOR_ATTR)?.trim())
+    .find((id) => id && id.length > 0);
+  const anchorId = ownId || inheritedId || undefined;
   const aria = target.getAttribute("aria-label")?.trim();
   const text = normalizeCanvasPickText(target.textContent, 80);
   const tag = target.tagName.toLowerCase();

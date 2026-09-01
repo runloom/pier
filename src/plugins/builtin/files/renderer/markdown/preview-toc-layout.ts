@@ -38,7 +38,7 @@ export const MARKDOWN_TOC_INSET_PX = 8;
 export const MARKDOWN_TOC_TOP_RATIO = 0.22;
 
 /**
- * Preview frame edge inset for font-scale control (`right-3` / `bottom-3` = 12px).
+ * Preview frame edge inset matching the shared zoom pill (`px-3` = 12px).
  */
 export const MARKDOWN_PREVIEW_EDGE_INSET_PX = 12;
 

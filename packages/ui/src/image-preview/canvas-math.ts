@@ -131,6 +131,37 @@ export function worldToScreenPoint(
   };
 }
 
+/** Persistable free pose: world point under the viewport center + scale. */
+export interface WorldCameraLookAt {
+  scale: number;
+  worldX: number;
+  worldY: number;
+}
+
+/** World point currently under the viewport center. */
+export function worldPointAtViewportCenter(
+  camera: WorldCamera,
+  viewport: WorldSizeBox
+): { x: number; y: number } {
+  return screenToWorldPoint(
+    { x: viewport.width / 2, y: viewport.height / 2 },
+    camera
+  );
+}
+
+/** Camera whose viewport center sits on `worldX/worldY` at `scale`. */
+export function cameraLookingAtWorld(
+  lookAt: WorldCameraLookAt,
+  viewport: WorldSizeBox
+): WorldCamera {
+  const scale = clampZoom(lookAt.scale);
+  return {
+    scale,
+    x: viewport.width / 2 - lookAt.worldX * scale,
+    y: viewport.height / 2 - lookAt.worldY * scale,
+  };
+}
+
 /** Fit pose: contain scale (no upscale) with the content centered in the viewport. */
 export function fitCamera(
   content: WorldSizeBox,

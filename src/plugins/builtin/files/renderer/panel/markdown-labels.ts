@@ -123,13 +123,17 @@ export function createMarkdownTocLabels(t: FilesTranslate): {
 }
 
 export function createMarkdownZoomLabels(t: FilesTranslate): {
+  controlsLabel: string;
   reset: string;
   zoomIn: string;
+  zoomLevel: string;
   zoomOut: string;
 } {
   return {
+    controlsLabel: t("filePanel.markdown.zoom.controlsLabel", "Text size"),
     reset: t("filePanel.markdown.zoom.reset", "Reset text size"),
     zoomIn: t("filePanel.markdown.zoom.in", "Increase text size"),
+    zoomLevel: t("filePanel.markdown.zoom.level", "Text size"),
     zoomOut: t("filePanel.markdown.zoom.out", "Decrease text size"),
   };
 }
