@@ -15,6 +15,7 @@ import {
   shouldWaitForControlSocket,
   waitForSocket,
 } from "./pier-cli-launch.js";
+import { formatCliHumanError } from "./pier-cli-human.js";
 import {
   hasPierCliOption,
   parsePierCliArgs,
@@ -573,7 +574,7 @@ try {
     } else if (!response.ok) {
       const code = response.error?.code ?? "error";
       const message = response.error?.message ?? "command failed";
-      console.error(`${code}: ${message}`);
+      console.error(formatCliHumanError(code, message));
       if (response.error?.details !== undefined) {
         console.error(JSON.stringify(response.error.details));
       }
@@ -652,7 +653,7 @@ try {
   } else if (!result.ok) {
     const code = result.error?.code ?? "error";
     const message = result.error?.message ?? "command failed";
-    console.error(`${code}: ${message}`);
+    console.error(formatCliHumanError(code, message));
   }
   process.exit(result.ok ? 0 : 1);
 } catch (error) {

@@ -52,6 +52,32 @@ describe("parsePathLocationToken", () => {
   it("does not treat C: drive as a line suffix", () => {
     expect(parsePathLocationToken("C:")).toEqual({ path: "C:" });
   });
+
+  it("trims like VS Code preparePath (space/tab) and Zed parse_str (Unicode)", () => {
+    expect(parsePathLocationToken("  app.ts:12:3  ")).toEqual({
+      column: 3,
+      line: 12,
+      path: "app.ts",
+    });
+    expect(parsePathLocationToken("\t/tmp/a.png\t")).toEqual({
+      path: "/tmp/a.png",
+    });
+    expect(parsePathLocationToken("\u00A0/tmp/a.png\u00A0")).toEqual({
+      path: "/tmp/a.png",
+    });
+    expect(parsePathLocationToken("\u3000/tmp/a.png\u3000")).toEqual({
+      path: "/tmp/a.png",
+    });
+  });
+
+  it("does not unwrap quotes or backticks", () => {
+    expect(parsePathLocationToken('"/tmp/a.png"')).toEqual({
+      path: '"/tmp/a.png"',
+    });
+    expect(parsePathLocationToken(" `/tmp/a.png` ")).toEqual({
+      path: "`/tmp/a.png`",
+    });
+  });
 });
 
 describe("path shorthand parser", () => {
@@ -67,6 +93,57 @@ describe("path shorthand parser", () => {
       paths: [{ column: 3, line: 12, path: "/Users/me/proj/a.ts" }],
       type: "panel.open",
     });
+  });
+
+  it("keeps pasted absolute paths absolute after editor-CLI whitespace", () => {
+    const parsed = asV1(
+      parsePierCliArgs(["\u00A0/tmp/a.png\u00A0"], {
+        cwd: "/Users/me/proj",
+        requestId: "req-nbsp",
+      })
+    );
+    expect(parsed.envelope.command).toEqual({
+      path: "/tmp/a.png",
+      paths: [{ path: "/tmp/a.png" }],
+      type: "panel.open",
+    });
+    expect(
+      asV1(
+        parsePierCliArgs(["open", " /tmp/a.png "], {
+          cwd: "/Users/me/proj",
+          requestId: "req-open-pad",
+        })
+      ).envelope.command
+    ).toMatchObject({
+      path: "/tmp/a.png",
+      type: "panel.open",
+    });
+  });
+
+  it("keeps an existing leading-space filename like Zed canonicalize-first", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pier-lead-space-"));
+    tempDirs.push(dir);
+    const spaced = join(dir, " foo.txt");
+    writeFileSync(spaced, "ok\n");
+    expect(looksLikePathToken(" foo.txt", dir)).toBe(true);
+    expect(
+      asV1(parsePierCliArgs([" foo.txt"], { cwd: dir, requestId: "req-lead" }))
+        .envelope.command
+    ).toMatchObject({
+      path: spaced,
+      type: "panel.open",
+    });
+  });
+
+  it("does not treat whitespace-only as the cwd path", () => {
+    expect(looksLikePathToken("   ", "/tmp")).toBe(false);
+    expect(looksLikePathToken("\u00A0", "/tmp")).toBe(false);
+    expect(() =>
+      parsePierCliArgs(["open", "\u00A0"], {
+        cwd: "/tmp",
+        requestId: "req-blank",
+      })
+    ).toThrow(/missing required pier CLI argument/u);
   });
 
   it("expands quoted-style ~/proj", () => {
