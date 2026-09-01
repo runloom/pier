@@ -89,4 +89,89 @@ describe("saveHost / removeHostByKey 按稳定键", () => {
       relayUrl: "wss://relay.pier.codes",
     });
   });
+
+  it("先 LAN 再会合 QR（同 host:port）合并成一条，保留 hostId", () => {
+    saveHost({
+      deviceId: "dev-lan",
+      deviceToken: "tok-lan",
+      host: "192.168.1.10",
+      pairedAt: 0,
+      port: 4455,
+    });
+    saveHost({
+      deviceId: "dev-relay",
+      deviceToken: "tok-relay",
+      fingerprint: "abcdef0123456789",
+      host: "192.168.1.10",
+      hostId: "h1",
+      pairedAt: 1,
+      port: 4455,
+      relayUrl: "wss://relay.pier.codes",
+    });
+    const hosts = loadHosts();
+    expect(hosts).toHaveLength(1);
+    expect(hosts[0]).toMatchObject({
+      deviceId: "dev-relay",
+      hostId: "h1",
+      relayUrl: "wss://relay.pier.codes",
+    });
+  });
+
+  it("会合后再 LAN 同 host:port 仍一条，不丢会合字段", () => {
+    saveHost({
+      deviceId: "dev-relay",
+      deviceToken: "tok-relay",
+      fingerprint: "abcdef0123456789",
+      host: "192.168.1.10",
+      hostId: "h1",
+      pairedAt: 0,
+      port: 4455,
+      relayUrl: "wss://relay.pier.codes",
+    });
+    saveHost({
+      deviceId: "dev-lan",
+      deviceToken: "tok-lan",
+      host: "192.168.1.10",
+      pairedAt: 1,
+      port: 4455,
+    });
+    const hosts = loadHosts();
+    expect(hosts).toHaveLength(1);
+    expect(hosts[0]).toMatchObject({
+      deviceId: "dev-lan",
+      hostId: "h1",
+      relayUrl: "wss://relay.pier.codes",
+    });
+  });
+
+  it("读取时合并已落盘的 LAN + 会合重复条目", () => {
+    window.localStorage.setItem(
+      "pier.mobile.hosts",
+      JSON.stringify([
+        {
+          deviceId: "dev-relay",
+          deviceToken: "tok-relay",
+          fingerprint: "abcdef0123456789",
+          host: "192.168.1.10",
+          hostId: "h1",
+          pairedAt: 1,
+          port: 4455,
+          relayUrl: "wss://relay.pier.codes",
+        },
+        {
+          deviceId: "dev-lan",
+          deviceToken: "tok-lan",
+          host: "192.168.1.10",
+          pairedAt: 0,
+          port: 4455,
+        },
+      ])
+    );
+    const hosts = loadHosts();
+    expect(hosts).toHaveLength(1);
+    expect(hosts[0]).toMatchObject({ deviceId: "dev-relay", hostId: "h1" });
+    expect(
+      JSON.parse(window.localStorage.getItem("pier.mobile.hosts") ?? "[]")
+    ).toHaveLength(1);
+  });
 });

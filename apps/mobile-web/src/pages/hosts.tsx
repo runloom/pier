@@ -5,6 +5,10 @@
 import { useEffect, useState } from "react";
 import { TopBar } from "../components/top-bar.tsx";
 import {
+  FATAL_AUTH_CODES,
+  PierMobileClientError,
+} from "../lib/client-types.ts";
+import {
   canReachViaRelay,
   loadHosts,
   removeHostByKey,
@@ -66,17 +70,28 @@ function statusTextFor(
   return "离线";
 }
 
-/** 进入失败的分层文案：电脑离线 ≠ 远程连接不可用 ≠ 同网直连失败。 */
+function isFatalAuthError(err: unknown): err is PierMobileClientError {
+  return (
+    err instanceof PierMobileClientError && FATAL_AUTH_CODES[err.code] === true
+  );
+}
+
+/** 进入失败：吊销/鉴权 ≠ 电脑离线 ≠ 远程暂不可用 ≠ 同网直连失败。 */
 function enterFailureMessage(
   stored: StoredHost,
   relayOnline: RelayOnlineView,
   err: unknown
 ): string {
+  if (isFatalAuthError(err)) {
+    return "本设备已在电脑上被吊销，请移除本条目后重新扫码配对";
+  }
   if (canReachViaRelay(stored)) {
     if (relayOnline.get(stored.hostId) === false) {
       return "这台电脑目前离线：请让它保持开机与唤醒，并确认已开启远程访问。若它确认在线仍显示离线，本设备可能已在电脑上被吊销——请移除本条目后重新扫码配对";
     }
-    return "远程连接暂时不可用，请稍后重试";
+    return err instanceof Error
+      ? `远程连接失败：${err.message}`
+      : "远程连接暂时不可用，请稍后重试";
   }
   return err instanceof Error
     ? `连接失败：${err.message}`
