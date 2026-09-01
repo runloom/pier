@@ -102,6 +102,10 @@ describe("pier-canvas methodology packs", () => {
     expect(skill).toContain("methodology");
     expect(skill).toContain("freeform");
     expect(skill).toContain("Stage selection");
+    expect(skill).toContain("Auto-resolve");
+    expect(skill).toContain("You choose the preview shell");
+    expect(skill).toContain("The host does not infer the shell");
+    expect(skill).toContain("A mockup is **not** a design-doc");
     // Shell inventory + auto-selection (docs shell carries its own chrome).
     expect(skill).toContain("DocsShell");
     expect(skill).toContain("Pick the shell from the user's ask");
@@ -136,6 +140,8 @@ describe("pier-canvas methodology packs", () => {
     expect(methodology).toContain("不为「显得高级」加演示");
     expect(methodology).toContain("Recommended information architecture");
     expect(methodology).toContain("Pack selection");
+    expect(methodology).toContain("Auto-resolve");
+    expect(methodology).toContain("WorldStage");
     expect(methodology).toContain("decision_nav_4");
     expect(methodology).toContain("Day 1");
     expect(methodology).toContain("Overview");

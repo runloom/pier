@@ -33,7 +33,11 @@ export function parsePierCanvasMeta(value: unknown): PierCanvasMeta | null {
 const PIER_CANVAS_INVOKE_RE =
   /(^|[\s])(\/skills\s+pier-canvas|\/skill:pier-canvas|[/$]pier-canvas)(?=$|[\s])/u;
 
-/** Append `locale=` to a pier-canvas invoke if the host has not already set one. */
+/**
+ * Append `locale=` to a pier-canvas invoke if the host has not already set one.
+ * The host does not infer `mode` / `recipe` / `content` — the agent does that
+ * from the skill.
+ */
 export function annotatePierCanvasInvokeLocale(
   text: string,
   locale: string

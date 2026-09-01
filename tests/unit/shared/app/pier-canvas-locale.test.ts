@@ -37,4 +37,13 @@ describe("pier-canvas locale helpers", () => {
     expect(resolveCanvasNavLabel(labels, "path", "zh-CN")).toBe("Day 1");
     expect(resolveCanvasNavLabel(labels, "missing", "en")).toBeUndefined();
   });
+
+  it("does not stamp mode, recipe, or content from the ask", () => {
+    expect(
+      annotatePierCanvasInvokeLocale(
+        "/pier-canvas 这里先帮我设计下对应的 UI 设计稿呢",
+        "zh-CN"
+      )
+    ).toBe("/pier-canvas locale=zh-CN 这里先帮我设计下对应的 UI 设计稿呢");
+  });
 });
