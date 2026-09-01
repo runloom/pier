@@ -19,7 +19,7 @@ import {
   useState,
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
-import { isImePendingLexicalEnter } from "@/lib/keybindings/is-text-input.ts";
+import { shouldDeferImeEnter } from "@/lib/keybindings/ime-composition-gate.ts";
 import { ComposerAutocompletePortal } from "./composer-autocomplete-portal.tsx";
 import { $placeCaretAfterComposerChip } from "./composer-chip-caret.ts";
 import {
@@ -56,6 +56,7 @@ export function SkillSuggestPlugin({
   agentKind,
   chromeAnchor = null,
   dismissMenuRef,
+  isImeHeld,
   menuOpenRef,
   projectRootPath,
 }: {
@@ -63,6 +64,7 @@ export function SkillSuggestPlugin({
   /** Composer chrome for list width; falls back to editor root. */
   chromeAnchor?: HTMLElement | null;
   dismissMenuRef: { current: (() => void) | null };
+  isImeHeld: () => boolean;
   menuOpenRef: { current: boolean };
   projectRootPath: string | null;
 }): JSX.Element | null {
@@ -357,7 +359,7 @@ export function SkillSuggestPlugin({
       editor.registerCommand(
         KEY_ENTER_COMMAND,
         (event) => {
-          if (isImePendingLexicalEnter(event)) {
+          if (shouldDeferImeEnter(event, isImeHeld)) {
             return true;
           }
           // Only own Enter when there is something to insert — leave
@@ -389,7 +391,7 @@ export function SkillSuggestPlugin({
         unsub();
       }
     };
-  }, [editor, open, selectIndex]);
+  }, [editor, isImeHeld, open, selectIndex]);
 
   if (!open) {
     return null;

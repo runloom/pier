@@ -11,6 +11,7 @@ import type {
 import { useMemo, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
+import type { ImeCompositionGate } from "@/lib/keybindings/ime-composition-gate.ts";
 import { isMac } from "@/lib/keybindings/matcher.ts";
 import { parseChord } from "@/lib/keybindings/parse.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
@@ -66,10 +67,10 @@ export interface TerminalComposerViewProps {
   bottomOffsetPx: number;
   canSend: boolean;
   compact: boolean;
-  composingRef: { current: boolean };
   disabled: boolean;
   editorRef: Ref<StructuredComposerEditorHandle>;
   hasAttachments: boolean;
+  imeGate: ImeCompositionGate;
   /** Editor-state JSON from last close; keeps chips across toggle. */
   initialSnapshotJson: string | null;
   inputFocusRisk: TuiInputFocusRisk | null;
@@ -99,11 +100,11 @@ export function TerminalComposerView({
   bottomOffsetPx,
   canSend,
   compact,
-  composingRef,
   disabled,
   editorRef,
-  initialSnapshotJson,
   hasAttachments,
+  imeGate,
+  initialSnapshotJson,
   onChromeMouseDown,
   onDragOver,
   onDrop,
@@ -198,8 +199,9 @@ export function TerminalComposerView({
           compact={compact}
           disabled={disabled}
           initialSnapshotJson={initialSnapshotJson}
+          isImeHeld={imeGate.isHeld}
           onCompositionEnd={() => {
-            composingRef.current = false;
+            imeGate.end();
             const el =
               typeof editorRef === "object" && editorRef
                 ? editorRef.current?.getElement()
@@ -209,14 +211,14 @@ export function TerminalComposerView({
             }
           }}
           onCompositionStart={() => {
-            composingRef.current = true;
+            imeGate.begin();
           }}
           onFocus={() => {
             useTerminalStore.getState().activateOverlay(overlayId);
           }}
           onKeyDown={(event) => {
             onKeyDown(event);
-            if (!composingRef.current) {
+            if (!imeGate.isHeld()) {
               const el =
                 typeof editorRef === "object" && editorRef
                   ? editorRef.current?.getElement()

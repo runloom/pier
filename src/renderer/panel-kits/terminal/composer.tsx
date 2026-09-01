@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { createImeCompositionGate } from "@/lib/keybindings/ime-composition-gate.ts";
 import { isImePendingKeyboardEvent } from "@/lib/keybindings/is-text-input.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
@@ -94,7 +95,9 @@ export function TerminalComposer({
   valueRef.current = value;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  const composingRef = useRef(false);
+  const imeGateRef = useRef(createImeCompositionGate());
+  const imeGate = imeGateRef.current;
+  useEffect(() => () => imeGate.dispose(), [imeGate]);
 
   useComposerDraft(panelId, value);
   useEffect(() => registerComposerDraftSinkForTests(setValue), []);
@@ -183,7 +186,7 @@ export function TerminalComposer({
     const report = () => {
       onHeightChange(root.getBoundingClientRect().height);
       hitOverlay.flush();
-      if (!composingRef.current) {
+      if (!imeGate.isHeld()) {
         const el = editorRef.current?.getElement();
         if (el) {
           setSoftWrapped(elementSoftWrapped(el));
@@ -201,18 +204,18 @@ export function TerminalComposer({
       observer.disconnect();
       onHeightChange(0);
     };
-  }, [hitOverlay, onHeightChange]);
+  }, [hitOverlay, imeGate, onHeightChange]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `value` triggers wrap recompute
   useLayoutEffect(() => {
-    if (composingRef.current) {
+    if (imeGate.isHeld()) {
       return;
     }
     const el = editorRef.current?.getElement();
     if (el) {
       setSoftWrapped(elementSoftWrapped(el));
     }
-  }, [value]);
+  }, [imeGate, value]);
 
   useEffect(
     () =>
@@ -329,7 +332,7 @@ export function TerminalComposer({
     buildPayloadOrReport: attachments.buildPayloadOrReport,
     disabled,
     getDraft: () => editorRef.current?.getValue() ?? valueRef.current,
-    isComposing: () => composingRef.current,
+    isComposing: () => imeGate.isHeld(),
     onSent: () => {
       clearComposerDraft(panelId);
       setValue("");
@@ -341,7 +344,7 @@ export function TerminalComposer({
   });
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (isImePendingKeyboardEvent(event.nativeEvent)) {
+    if (isImePendingKeyboardEvent(event.nativeEvent) || imeGate.isHeld()) {
       return;
     }
     if (event.key === "Escape") {
@@ -406,7 +409,7 @@ export function TerminalComposer({
   const wantExpand = hasAttachments || hasHardNewline || softWrapExpand;
 
   useLayoutEffect(() => {
-    if (composingRef.current) {
+    if (imeGate.isHeld()) {
       return;
     }
     if (wantExpand) {
@@ -416,7 +419,7 @@ export function TerminalComposer({
     if (!hasAttachments && value.trim() === "") {
       setStickyExpanded(false);
     }
-  }, [hasAttachments, value, wantExpand]);
+  }, [hasAttachments, imeGate, value, wantExpand]);
 
   const compact = !(wantExpand || stickyExpanded);
 
@@ -456,10 +459,10 @@ export function TerminalComposer({
       bottomOffsetPx={bottomOffsetPx}
       canSend={canSend}
       compact={compact}
-      composingRef={composingRef}
       disabled={disabled}
       editorRef={editorRef}
       hasAttachments={hasAttachments}
+      imeGate={imeGate}
       initialSnapshotJson={initialSnapshotJson}
       inputFocusRisk={inputFocusRisk}
       onChromeMouseDown={focusInputFromChrome}

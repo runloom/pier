@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  createImeCompositionGate,
+  shouldDeferImeEnter,
+} from "@/lib/keybindings/ime-composition-gate.ts";
+import {
   isImePendingKeyboardEvent,
   isImePendingLexicalEnter,
 } from "@/lib/keybindings/is-text-input.ts";
@@ -98,5 +102,24 @@ describe("isImePendingLexicalEnter", () => {
     const event = new KeyboardEvent("keydown", { key: "Enter" });
     Object.defineProperty(event, "keyCode", { value: 229 });
     expect(isImePendingLexicalEnter(event)).toBe(true);
+  });
+});
+
+describe("shouldDeferImeEnter", () => {
+  it("defers leftover Enter when the composition gate is held", async () => {
+    const leftover = new KeyboardEvent("keydown", { key: "Enter" });
+    Object.defineProperty(leftover, "keyCode", { value: 13 });
+    const gate = createImeCompositionGate();
+    expect(shouldDeferImeEnter(leftover, () => false)).toBe(false);
+    gate.begin();
+    expect(shouldDeferImeEnter(leftover, gate.isHeld)).toBe(true);
+    gate.end();
+    expect(shouldDeferImeEnter(leftover, gate.isHeld)).toBe(true);
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(gate.isHeld()).toBe(false);
+    expect(shouldDeferImeEnter(leftover, gate.isHeld)).toBe(false);
+    gate.dispose();
   });
 });

@@ -845,7 +845,7 @@ describe("TerminalComposer", () => {
     expect(readComposerDraftText()).toBe("实");
   });
 
-  it("sends on the next real Enter after an IME confirm key (composingRef does not stick)", async () => {
+  it("sends on the next real Enter after an IME confirm key (composition gate does not stick)", async () => {
     renderComposer();
     setComposerDraftText("实现");
     fireEvent.keyDown(composerInput(), {
@@ -856,6 +856,32 @@ describe("TerminalComposer", () => {
     });
     expect(sendText).not.toHaveBeenCalled();
     fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => {
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        submit: true,
+        text: "实现",
+      });
+    });
+  });
+
+  it("does not send leftover Enter in the same turn as compositionend", async () => {
+    renderComposer();
+    setComposerDraftText("实现");
+    const input = composerInput();
+    fireEvent.compositionStart(input);
+    fireEvent.compositionEnd(input);
+    const allowed = fireEvent.keyDown(input, {
+      isComposing: false,
+      key: "Enter",
+      keyCode: 13,
+    });
+    expect(allowed).toBe(true);
+    expect(sendText).not.toHaveBeenCalled();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    fireEvent.keyDown(input, { key: "Enter" });
     await vi.waitFor(() => {
       expect(sendText).toHaveBeenCalledWith({
         panelId: "t-1",

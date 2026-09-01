@@ -94,6 +94,8 @@ export interface StructuredComposerEditorProps {
   disabled: boolean;
   /** Editor-state JSON captured at last close; restore keeps chips across toggle. */
   initialSnapshotJson?: string | null;
+  /** True while IME composition (and leftover confirm Enter) is held. */
+  isImeHeld: () => boolean;
   onCompositionEnd?: () => void;
   onCompositionStart?: () => void;
   onFocus: () => void;
@@ -261,6 +263,7 @@ export function StructuredComposerEditor({
   compact = false,
   disabled,
   initialSnapshotJson = null,
+  isImeHeld,
   onCompositionEnd,
   onCompositionStart,
   onFocus,
@@ -335,6 +338,7 @@ export function StructuredComposerEditor({
           <MentionPlugin
             chromeAnchor={chromeAnchor}
             dismissMenuRef={dismissMentionMenuRef}
+            isImeHeld={isImeHeld}
             menuOpenRef={mentionMenuOpenRef}
             projectRootPath={projectRootPath}
           />
@@ -342,12 +346,14 @@ export function StructuredComposerEditor({
             attachments={attachments}
             chromeAnchor={chromeAnchor}
             dismissMenuRef={dismissAttachmentMenuRef}
+            isImeHeld={isImeHeld}
             menuOpenRef={attachmentMenuOpenRef}
           />
           <SkillSuggestPlugin
             agentKind={agentKind}
             chromeAnchor={chromeAnchor}
             dismissMenuRef={dismissSkillMenuRef}
+            isImeHeld={isImeHeld}
             menuOpenRef={skillMenuOpenRef}
             projectRootPath={projectRootPath}
           />
@@ -387,7 +393,11 @@ export function StructuredComposerEditor({
       <MentionAtomicSelectionPlugin />
       <MentionDeletePlugin />
       <PastePlainTextPlugin onLargePlainPaste={onLargePlainPaste} />
-      <EnterKeyPlugin menuOpenRef={anyMenuOpenRef} onSend={onSend} />
+      <EnterKeyPlugin
+        isImeHeld={isImeHeld}
+        menuOpenRef={anyMenuOpenRef}
+        onSend={onSend}
+      />
       <AttachmentTokenValidityPlugin attachments={attachments} />
       <OnChangePlainTextPlugin
         onChange={(text) => {
