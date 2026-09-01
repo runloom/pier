@@ -4,7 +4,7 @@
       "aliases": ["git merge", "병합", "분기 병합"],
       "category": "git",
       "description": "분기를 골라 현재 분기에 병합합니다.",
-      "title": "git: 분기 병합..."
+      "title": "GIT: 분기 병합..."
     },
     "pier.git.switchBranch": {
       "aliases": [
@@ -18,31 +18,31 @@
       ],
       "category": "git",
       "description": "로컬 분기로 전환하거나, 현재 체크아웃에서 새 분기를 만듭니다.",
-      "title": "git: 분기 전환..."
+      "title": "GIT: 분기 전환..."
     },
     "pier.git.mergeAbort": {
       "aliases": ["git merge abort", "병합 중단"],
       "category": "git",
       "description": "현재 병합을 중단합니다.",
-      "title": "git: 병합 중단"
+      "title": "GIT: 병합 중단"
     },
     "pier.git.stash": {
       "aliases": ["git stash", "스태시", "git stash save"],
       "category": "git",
       "description": "수정된 파일의 로컬 변경을 스태시합니다.",
-      "title": "git: 스태시"
+      "title": "GIT: 스태시"
     },
     "pier.git.stashApply": {
       "aliases": ["git stash apply", "스태시 적용"],
       "category": "git",
       "description": "스태시를 골라 적용하고 목록에는 남깁니다.",
-      "title": "git: 스태시 적용..."
+      "title": "GIT: 스태시 적용..."
     },
     "pier.git.stashDrop": {
       "aliases": ["git stash drop", "스태시 삭제"],
       "category": "git",
       "description": "스태시를 골라 목록에서 삭제합니다.",
-      "title": "git: 스태시 삭제..."
+      "title": "GIT: 스태시 삭제..."
     },
     "pier.git.stashIncludeUntracked": {
       "aliases": [
@@ -52,73 +52,73 @@
       ],
       "category": "git",
       "description": "새 파일을 포함해 로컬 변경을 스태시합니다.",
-      "title": "git: 스태시(새 파일 포함)"
+      "title": "GIT: 스태시(새 파일 포함)"
     },
     "pier.git.stashPop": {
       "aliases": ["git stash pop", "스태시 꺼내기"],
       "category": "git",
       "description": "스태시를 골라 적용한 뒤 목록에서 제거합니다.",
-      "title": "git: 스태시 꺼내기..."
+      "title": "GIT: 스태시 꺼내기..."
     },
     "pier.git.rebase": {
       "aliases": ["git rebase", "리베이스"],
       "category": "git",
       "description": "분기를 골라 현재 분기를 그 위로 리베이스합니다.",
-      "title": "git: 분기 리베이스..."
+      "title": "GIT: 분기 리베이스..."
     },
     "pier.git.rebaseAbort": {
       "aliases": ["git rebase abort", "리베이스 중단"],
       "category": "git",
       "description": "현재 리베이스를 중단합니다.",
-      "title": "git: 리베이스 중단"
+      "title": "GIT: 리베이스 중단"
     },
     "pier.git.rebaseContinue": {
       "aliases": ["git rebase continue", "리베이스 계속"],
       "category": "git",
       "description": "현재 리베이스를 계속합니다.",
-      "title": "git: 리베이스 계속"
+      "title": "GIT: 리베이스 계속"
     },
     "pier.git.cherryPick": {
       "aliases": ["git cherry-pick", "체리픽", "커밋 가져오기"],
       "category": "git",
       "description": "커밋을 골라 현재 분기에 적용합니다.",
-      "title": "git: 커밋 체리픽..."
+      "title": "GIT: 커밋 체리픽..."
     },
     "pier.git.cherryPickAbort": {
       "aliases": ["git cherry-pick abort", "체리픽 중단"],
       "category": "git",
       "description": "현재 체리픽을 중단합니다.",
-      "title": "git: 체리픽 중단"
+      "title": "GIT: 체리픽 중단"
     },
     "pier.git.cherryPickContinue": {
       "aliases": ["git cherry-pick continue", "체리픽 계속"],
       "category": "git",
       "description": "현재 체리픽을 계속합니다.",
-      "title": "git: 체리픽 계속"
+      "title": "GIT: 체리픽 계속"
     },
     "pier.git.revert": {
       "aliases": ["git revert", "커밋 되돌리기"],
       "category": "git",
       "description": "커밋을 골라 되돌리는 새 커밋을 만듭니다.",
-      "title": "git: 커밋 되돌리기..."
+      "title": "GIT: 커밋 되돌리기..."
     },
     "pier.git.revertAbort": {
       "aliases": ["git revert abort", "되돌리기 중단"],
       "category": "git",
       "description": "현재 되돌리기를 중단합니다.",
-      "title": "git: 되돌리기 중단"
+      "title": "GIT: 되돌리기 중단"
     },
     "pier.git.revertContinue": {
       "aliases": ["git revert continue", "되돌리기 계속"],
       "category": "git",
       "description": "현재 되돌리기를 계속합니다.",
-      "title": "git: 되돌리기 계속"
+      "title": "GIT: 되돌리기 계속"
     },
     "pier.git.commit": {
       "aliases": ["git commit", "커밋", "변경 커밋"],
       "category": "git",
       "description": "현재 변경을 커밋합니다. 스테이징하지 않은 변경을 포함하고 푸시할 수도 있습니다.",
-      "title": "git: 커밋"
+      "title": "GIT: 커밋"
     },
     "pier.git.undoLastCommit": {
       "aliases": [
@@ -130,31 +130,31 @@
       ],
       "category": "git",
       "description": "마지막 커밋을 취소하고 변경은 스테이징된 채로 남깁니다.",
-      "title": "git: 마지막 커밋 취소"
+      "title": "GIT: 마지막 커밋 취소"
     },
     "pier.git.review.openFile": {
       "aliases": ["파일 열기", "변경 파일 열기"],
       "category": "git",
       "description": "이 변경 파일을 편집기에서 엽니다.",
-      "title": "git: 파일 열기"
+      "title": "GIT: 파일 열기"
     },
     "pier.git.review.openInEditor": {
       "aliases": ["소스로 이동", "편집기에서 열기", "줄로 이동"],
       "category": "git",
       "description": "소스 편집기에서 이 변경으로 이동합니다. 가능하면 작업 디렉터리의 해당 줄입니다.",
-      "title": "git: 소스로 이동"
+      "title": "GIT: 소스로 이동"
     },
     "pier.git.review.stageFile": {
       "aliases": ["스테이지", "git add"],
       "category": "git",
       "description": "선택한 파일의 변경을 스테이징합니다.",
-      "title": "git: 스테이지"
+      "title": "GIT: 스테이지"
     },
     "pier.git.review.unstageFile": {
       "aliases": ["언스테이지", "git restore --staged"],
       "category": "git",
       "description": "선택한 파일의 스테이징된 변경을 해제합니다.",
-      "title": "git: 언스테이지"
+      "title": "GIT: 언스테이지"
     },
     "pier.git.review.discardFile": {
       "aliases": [
@@ -166,7 +166,7 @@
       ],
       "category": "git",
       "description": "로컬 변경을 버리거나, 새 파일을 휴지통으로 옮깁니다.",
-      "title": "git: 변경 버리기"
+      "title": "GIT: 변경 버리기"
     },
     "pier.git.review.toggleTree": {
       "category": "git",
@@ -187,27 +187,27 @@
       "aliases": ["디렉터리 열기", "프로젝트 폴더 열기"],
       "category": "git",
       "description": "Files 디렉터리 트리에서 이 프로젝트를 엽니다.",
-      "title": "git: 디렉터리 열기"
+      "title": "GIT: 디렉터리 열기"
     },
     "pier.git.review.copyPath": {
       "category": "git",
       "description": "선택한 변경의 절대 경로를 복사합니다.",
-      "title": "git: 경로 복사"
+      "title": "GIT: 경로 복사"
     },
     "pier.git.review.copyRelativePath": {
       "category": "git",
       "description": "선택한 변경의 저장소 상대 경로를 복사합니다.",
-      "title": "git: 상대 경로 복사"
+      "title": "GIT: 상대 경로 복사"
     },
     "pier.git.review.copyPathWithRange": {
       "category": "git",
       "description": "저장소 상대 경로와 선택한 줄 번호를 복사합니다.",
-      "title": "git: 경로와 선택한 줄 복사"
+      "title": "GIT: 경로와 선택한 줄 복사"
     },
     "pier.git.review.revealInFinder": {
       "category": "git",
       "description": "시스템 파일 관리자에서 선택한 변경을 표시합니다.",
-      "title": "git: Finder에서 보기"
+      "title": "GIT: Finder에서 보기"
     },
     "pier.worktree.create": {
       "aliases": ["작업 트리", "작업 트리 만들기", "worktree", "wt", "wt add"],
@@ -250,31 +250,31 @@
       "aliases": ["git fetch", "가져오기", "원격 새로고침"],
       "category": "git",
       "description": "작업 디렉터리는 바꾸지 않고 최신 원격 분기 데이터만 가져옵니다.",
-      "title": "git: 가져오기"
+      "title": "GIT: 가져오기"
     },
     "pier.git.pull": {
       "aliases": ["git pull", "당기기", "빠른 감기"],
       "category": "git",
       "description": "빠른 감기만 허용해 원격 변경을 당깁니다.",
-      "title": "git: 당기기"
+      "title": "GIT: 당기기"
     },
     "pier.git.push": {
       "aliases": ["git push", "밀기"],
       "category": "git",
       "description": "로컬 커밋을 원격으로 밉니다.",
-      "title": "git: 밀기"
+      "title": "GIT: 밀기"
     },
     "pier.git.publish": {
       "aliases": ["git publish", "게시", "업스트림 설정", "첫 밀기"],
       "category": "git",
       "description": "현재 분기를 원격으로 밀고 업스트림을 설정합니다.",
-      "title": "git: 분기 게시"
+      "title": "GIT: 분기 게시"
     },
     "pier.git.sync": {
       "aliases": ["git sync", "동기화", "당기고 밀기"],
       "category": "git",
       "description": "당긴 뒤 밀어 원격과 맞춥니다.",
-      "title": "git: 동기화"
+      "title": "GIT: 동기화"
     },
     "pier.git.viewChanges": {
       "aliases": [
@@ -287,7 +287,7 @@
       ],
       "category": "git",
       "description": "현재 저장소의 변경 검토 패널을 엽니다.",
-      "title": "git: 검토 열기"
+      "title": "GIT: 검토 열기"
     }
   },
   "description": "내장 git 명령 팔레트와 터미널 상태 지원.",
@@ -886,5 +886,5 @@
       "title": "변경"
     }
   },
-  "name": "git"
+  "name": "GIT"
 }

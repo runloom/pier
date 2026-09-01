@@ -7,7 +7,7 @@ import type { FileEntry, FileListResult } from "@shared/contracts/file.ts";
 import { fileListResultSchema } from "@shared/contracts/file.ts";
 import { useEffect, useState } from "react";
 import { TopBar } from "../components/top-bar.tsx";
-import { useHashRoute } from "../lib/routes.ts";
+import { projectionBack, useHashRoute } from "../lib/routes.ts";
 import { getMobileClient } from "../lib/session.ts";
 import { useMobileWebStore } from "../lib/store.ts";
 import { parentDir, pickFileRoot } from "../lib/worktree-scope.ts";
@@ -144,7 +144,10 @@ export function FilesPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-neutral-950 text-neutral-100">
-      <TopBar back={{ page: "host" }} title="文件 · 只读" />
+      <TopBar
+        back={route.page === "files" ? projectionBack(route) : { page: "host" }}
+        title="文件 · 只读"
+      />
       <main className="flex flex-1 flex-col px-4 py-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p

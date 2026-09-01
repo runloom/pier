@@ -123,6 +123,11 @@ export function SessionPage() {
       });
   };
 
+  const sessionOrigin =
+    sessionWindowId === undefined
+      ? { panelId }
+      : { panelId, windowId: sessionWindowId };
+
   return (
     <div className="flex min-h-dvh flex-col bg-neutral-950 text-neutral-100">
       <TopBar back={{ page: "host" }} title={title} />
@@ -132,7 +137,7 @@ export function SessionPage() {
             className="min-h-10 flex-1 rounded-md border border-neutral-700 text-neutral-200 text-sm active:bg-neutral-800"
             data-testid="session-nav-changes"
             onClick={() => {
-              openChangesSynced(sessionGitRoot);
+              openChangesSynced(sessionGitRoot, sessionOrigin);
             }}
             type="button"
           >
@@ -143,11 +148,11 @@ export function SessionPage() {
           className="min-h-10 flex-1 rounded-md border border-neutral-700 text-neutral-200 text-sm active:bg-neutral-800"
           data-testid="session-nav-files"
           onClick={() => {
-            navigate(
-              sessionCwd === null
-                ? { page: "files" }
-                : { page: "files", root: sessionCwd }
-            );
+            navigate({
+              page: "files",
+              from: sessionOrigin,
+              ...(sessionCwd === null ? {} : { root: sessionCwd }),
+            });
           }}
           type="button"
         >

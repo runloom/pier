@@ -4,12 +4,16 @@
  * 同一作用域的只读投影。宿主开面板失败（旧配对缺 panel:open、无窗口等）
  * 不阻断手机侧投影——导航本身就是本次点击的主反馈。
  */
-import { navigate } from "./routes.ts";
+import { navigate, type SessionOrigin } from "./routes.ts";
 import { getMobileClient } from "./session.ts";
 
-export function openChangesSynced(gitRoot: string | null): void {
+export function openChangesSynced(
+  gitRoot: string | null,
+  from?: SessionOrigin
+): void {
+  const origin = from === undefined ? {} : { from };
   if (gitRoot === null) {
-    navigate({ page: "changes" });
+    navigate({ page: "changes", ...origin });
     return;
   }
   try {
@@ -21,5 +25,5 @@ export function openChangesSynced(gitRoot: string | null): void {
   } catch (error) {
     console.warn("[mobile] open review panel on desktop failed", error);
   }
-  navigate({ page: "changes", cwd: gitRoot });
+  navigate({ page: "changes", cwd: gitRoot, ...origin });
 }

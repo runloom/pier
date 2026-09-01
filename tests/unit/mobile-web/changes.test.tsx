@@ -233,4 +233,17 @@ describe("ChangesPage", () => {
       DIFF_HUNK_LINE_LIMIT
     );
   });
+
+  it("从会话进入时顶栏返回会话，而不是工作台", async () => {
+    window.location.hash =
+      "#/changes?cwd=/session-wt&fromPanel=p-shell&fromWindow=w1";
+    render(<ChangesPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId("changes-cwd").textContent).toBe("/session-wt");
+    });
+    fireEvent.click(screen.getByTestId("topbar-back"));
+    expect(decodeURIComponent(window.location.hash)).toBe(
+      "#/session?panel=p-shell&window=w1"
+    );
+  });
 });
