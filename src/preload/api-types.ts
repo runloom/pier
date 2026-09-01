@@ -14,11 +14,15 @@ import type {
   PluginRegistryEntry,
   PluginRegistryListResult,
 } from "@shared/contracts/plugin.ts";
-import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import type {
+  ProjectPreferences,
+  ThemePreference,
+} from "@shared/contracts/preferences.ts";
 import type {
   RendererCommandEnvelope,
   RendererCommandResult,
 } from "@shared/contracts/renderer-command.ts";
+import type { ThemeSystemAppearancePayload } from "@shared/contracts/theme/system-appearance.ts";
 
 /** Preload API namespace interfaces, split from index.ts (file-size cap). */
 
@@ -89,6 +93,10 @@ export interface ThemeVisualPreviewPayload {
 }
 
 export interface PierThemeAPI {
+  /** 订阅 OS / nativeTheme 外观变化（偏好为跟随系统时重解主题）。 */
+  onSystemAppearance: (
+    cb: (payload: ThemeSystemAppearancePayload) => void
+  ) => () => void;
   /** 订阅其它窗发起的 ephemeral 主题预览。 */
   onVisualPreview: (
     cb: (payload: ThemeVisualPreviewPayload) => void
@@ -98,8 +106,13 @@ export interface PierThemeAPI {
    * 本窗已由 applyThemeVisual 本地应用；main 排除 sender。
    */
   previewVisual: (payload: ThemeVisualPreviewPayload) => Promise<void>;
+  /**
+   * 同步 Electron `nativeTheme.themeSource` 与窗口兜底底色。
+   * 第一参必须是偏好（含 `system`），禁止传已解析的 light/dark，
+   * 否则会锁死 Chromium `prefers-color-scheme`，系统主题切换不再到达 renderer。
+   */
   setNativeChrome: (
-    resolved: "light" | "dark",
+    themeSource: ThemePreference,
     chromeColor?: string
   ) => Promise<void>;
 }
