@@ -4,6 +4,7 @@ import type {
   PierClientKind,
 } from "@shared/contracts/permissions.ts";
 import { ASSET_COMMAND_METADATA } from "./asset-metadata.ts";
+import { PANEL_TRANSFER_COMMAND_METADATA } from "./panel-transfer-metadata.ts";
 
 /** Exhaustive per-command authorization; Record keys cover every PierCommand type. */
 export interface CommandMetadata {
@@ -15,6 +16,11 @@ export interface CommandMetadata {
 
 export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   ...ASSET_COMMAND_METADATA,
+  ...PANEL_TRANSFER_COMMAND_METADATA,
+  "app.openExternal": {
+    allowedClientKinds: ["canvas"],
+    capabilities: ["external:open"],
+  },
   "ai.status": { capabilities: ["ai:invoke"] },
   "ai.generateText": { capabilities: ["ai:invoke"] },
   "environment.project.add": { capabilities: ["environment:write"] },
@@ -142,6 +148,10 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "plugin.disable": { capabilities: ["plugin:write"] },
   "plugin.enable": { capabilities: ["plugin:write"] },
   "plugin.inspect": { capabilities: ["plugin:read"] },
+  "plugin.applets": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["plugin:read"],
+  },
   "plugin.list": { capabilities: ["plugin:read"] },
   "plugin.workspace.plan": {
     allowedClientKinds: ["desktop-renderer", "cli-local"],
@@ -466,34 +476,6 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     capabilities: ["workspace:open", "terminal:control"],
   },
   "app.relaunch": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.offer": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.drop": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.finishDrag": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.cancel": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.bootstrap": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.ready": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.relocate": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["window:control"],
   },

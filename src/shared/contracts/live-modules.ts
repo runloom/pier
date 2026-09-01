@@ -208,7 +208,7 @@ export const liveModuleIdSchema = z
   .string()
   .min(1)
   .max(256)
-  .regex(/^[A-Za-z0-9._/-]+$/u, "invalid live module id");
+  .regex(/^[A-Za-z0-9@._/-]+$/u, "invalid live module id");
 
 export const liveModuleCompileSuccessSchema = z
   .object({

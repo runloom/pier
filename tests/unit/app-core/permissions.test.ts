@@ -338,6 +338,15 @@ describe("authorizeCommand", () => {
     }
   });
 
+  it("plugin.applets allows desktop-renderer and cli-local", () => {
+    expect(
+      authorizeCommand({ type: "plugin.applets" }, client("desktop-renderer"))
+    ).toEqual({ ok: true });
+    expect(
+      authorizeCommand({ type: "plugin.applets" }, client("cli-local"))
+    ).toEqual({ ok: true });
+  });
+
   it("plugin.catalog.list allows desktop-renderer and cli-local", () => {
     expect(
       authorizeCommand(

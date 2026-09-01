@@ -13,6 +13,7 @@ const PRODUCTION_SOURCE_ROOTS = [
   join(ROOT, "packages", "plugin-grok"),
   join(ROOT, "packages", "plugin-ssh"),
   join(ROOT, "packages", "plugin-agent-splits"),
+  join(ROOT, "packages", "plugin-tasks"),
 ];
 
 /** Content-dialog commit forms that must use setFooter (not body fake-footer). */
@@ -22,6 +23,7 @@ const COMMIT_FORM_DIALOG_FILES = [
   "src/renderer/pages/settings/components/skills/create-dialog.tsx",
   "src/renderer/pages/settings/components/pier-home-create-skill-dialog.tsx",
   "packages/plugin-ssh/src/renderer/host-form-dialog.tsx",
+  "packages/plugin-tasks/src/renderer/connect-dialog.tsx",
   "packages/plugin-ssh/src/renderer/import-hosts-dialog.tsx",
   "packages/plugin-codex/src/renderer/switch-confirm-dialog.tsx",
   "packages/plugin-codex/src/renderer/add-account-dialog.tsx",

@@ -357,6 +357,75 @@ describe("canvas host runtime", () => {
     });
   });
 
+  it("filters plugin projection events by canonical params across scopes", async () => {
+    const invoke = vi.fn(async () => ({ columns: ["mine"] }));
+    let listener: ((event: unknown) => void) | undefined;
+    const subscribe = vi.fn(
+      (_channel: string, fn: (event: unknown) => void) => {
+        listener = fn;
+        return () => undefined;
+      }
+    );
+    window.pier = {
+      canvasHost: {
+        inspect: host.inspect,
+        invoke,
+        snapshot: vi.fn(),
+        subscribe,
+      },
+    } as unknown as typeof window.pier;
+
+    const { result, unmount } = renderHook(() =>
+      useHostSnapshot("plugin:pier.tasks/board?milestone=结算重构")
+    );
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(invoke).toHaveBeenCalledWith({
+      type: "pluginData.snapshot",
+      payload: {
+        key: "board",
+        params: { milestone: "结算重构" },
+        pluginId: "pier.tasks",
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith({
+      type: "pluginData.watchStart",
+      payload: {
+        key: "board",
+        params: { milestone: "结算重构" },
+        pluginId: "pier.tasks",
+      },
+    });
+
+    act(() => {
+      listener?.({
+        columns: ["other-window"],
+        key: "board",
+        params: { label: "req/x" },
+        pluginId: "pier.tasks",
+      });
+    });
+    expect(result.current.data).toEqual({ columns: ["mine"] });
+
+    act(() => {
+      listener?.({
+        columns: ["fresh"],
+        key: "board",
+        params: { milestone: "结算重构" },
+        pluginId: "pier.tasks",
+      });
+    });
+    expect(result.current.data).toEqual({ columns: ["fresh"] });
+    unmount();
+    expect(invoke).toHaveBeenCalledWith({
+      type: "pluginData.watchStop",
+      payload: {
+        key: "board",
+        params: { milestone: "结算重构" },
+        pluginId: "pier.tasks",
+      },
+    });
+  });
+
   it("propagates plugin snapshot command failures to the error state", async () => {
     const invoke = vi.fn(async () => {
       throw new Error("projection not declared");

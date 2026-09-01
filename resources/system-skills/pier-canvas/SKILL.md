@@ -37,7 +37,7 @@ Unknown pack ids are hard failures (do not guess).
 | `content` | `design-doc` | Content pack id under `packs/content/` |
 | `presentation` | *resolved* | See **Pack selection**. Do not default every overview to five tabs. |
 | `ui` | `pier-default` | UI pack id under `packs/ui/` |
-| `recipe` | (none) | Freeform starter: `design` or `board` (see **Stage selection**). Ignored in methodology mode. |
+| `recipe` | (none) | Freeform starter: `design`, `task-list`, or `task-dag` (see **Stage selection**). Ignored in methodology mode. Project-level tracking is the **plugin panel** (⌘N / command palette “Task tracker”). Canvas recipes are named list/DAG **islands**, not a second kanban. |
 | `slug` | derived from title | Directory name under `.pier/canvases/<slug>/` |
 | `locale` | injected by Pier | BCP-47 UI language (`en`, `zh-CN`, …). Host adds this on send. |
 
@@ -86,8 +86,19 @@ Examples (skill calls, not shell):
 /pier-canvas mode=freeform recipe=design
   Multi-device mockup on a world stage
 
-/pier-canvas mode=freeform recipe=board
-  Full-bleed kanban (fill + Sortable / Droppable + sibling JSON)
+/pier-canvas mode=freeform recipe=task-list
+  Named list island in a flow canvas. Import
+  `@pier-applet/pier.tasks/task-list`. Daily tracking is ⌘N → Task tracker.
+
+/pier-canvas mode=freeform recipe=task-dag
+  Named experimental dependency island. Prefer the panel or list when the
+  graph is hard to read.
+
+Do **not** treat `pier tasks` CLI (run a script) as the tracker board.
+Do **not** scaffold a tracker-board canvas — the kanban lives in the plugin
+panel. If the user wants to “see tasks / verify the tracker”, tell them to
+open the Task tracker panel after connecting a tracker in project settings.
+Only scaffold a canvas when they ask for a **named list or DAG slice**.
 ```
 
 Recommended combo for runtime/control-plane schemes:
@@ -153,7 +164,7 @@ code — do not ask the user to choose a shell:**
 - Do not wrap a reading doc in `WorldStage`.
 - Do not stack phone/desktop frames as a document inside `Frame` — use
   `WorldStage` + `Artboard` (`preset`) + `Layer`.
-- Full-bleed kanban / app shells use **fill**, not world.
+- Full-bleed app shells use **fill**, not world.
 - `ArtboardStage` stays a **fit-all card in flow** (same as `Mermaid`). Inline
   zoom/pan is world only.
 - Unknown `recipe` ids are hard failures. Known recipes:
@@ -161,7 +172,8 @@ code — do not ask the user to choose a shell:**
 | `recipe` | Pack | Stage | Start from |
 | --- | --- | --- | --- |
 | `design` | `packs/recipes/design/` | world | `templates/design-mockup.canvas.tsx` |
-| `board` | `packs/recipes/board/` | fill | `templates/kanban.canvas.tsx` |
+| `task-list` | `packs/recipes/task-list/` | flow | `templates/task-list.canvas.tsx` |
+| `task-dag` | `packs/recipes/task-dag/` | flow | `templates/task-dag.canvas.tsx` |
 
 When `recipe=` is set, use **Workflow B** (freeform). Do not invent methodology
 tabs for a mockup or a DAG viewer.
@@ -244,12 +256,17 @@ Use when `mode=freeform` (or the user clearly asks for an unconstrained canvas).
      catalogs must look like product UI).
      - **`recipe=design`**: `WorldStage` root; `Artboard preset` + `Layer`;
        comments stay in host Design Mode (do not fake annotation chrome).
-     - **`recipe=board`**: root `<Stack fill>`; `Droppable` columns +
-       `Sortable` cards; persist the board with `useCanvasFile` (`board.json`)
-       and `watch` so other windows stay in sync. Cross-column moves land in
-       the target `Sortable.onDropItem(itemId, index)` — one callback, one
-       write (do not also mutate from the source `onReorder`). Not a host
-       task ledger.
+     - **`recipe=task-list`**: a **named island**, not the project kanban.
+       Daily tracking is the `pier.tasks` panel (⌘N). Import
+       `TaskList` from `@pier-applet/pier.tasks/task-list` inside `Frame`.
+       The applet defaults to island chrome (same as a markdown
+       `pier-applet` fence). Pass repo plus a milestone or label. Discover
+       applets with `pier plugins applets` / `plugin.inspect` — do not copy
+       applet source into the canvas skill or the project. Do not import
+       `@pier-applet/pier.tasks/tracker-board` on a canvas.
+     - **`recipe=task-dag`**: experimental layered dependencies as an
+       island; `import TaskGraph from "@pier-applet/pier.tasks/task-dag"`.
+       Prefer the panel or list when the graph is hard to read.
      - Multi-screen mockups without `recipe=`: still prefer `WorldStage`.
        `ArtboardStage` is only the flow fit-all card (no wheel capture).
      - Command inventories: one Accordion list; badge only unfinished items.

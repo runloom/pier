@@ -8,6 +8,10 @@ import { z } from "zod";
 
 const pluginIdParamSchema = z.object({ id: z.string().min(1) });
 
+export const pluginAppletsCommandSchema = z.object({
+  id: z.string().min(1).optional(),
+  type: z.literal("plugin.applets"),
+});
 export const pluginCatalogListCommandSchema = z.object({
   type: z.literal("plugin.catalog.list"),
 });
@@ -40,6 +44,7 @@ export const appRelaunchCommandSchema = z.object({
 });
 
 export const managedPluginCommandSchemas = [
+  pluginAppletsCommandSchema,
   pluginCatalogListCommandSchema,
   pluginCheckUpdatesCommandSchema,
   pluginInstallCommandSchema,

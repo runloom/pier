@@ -17,6 +17,7 @@
       "!docs/**/*.html",
       "!.pier/canvases",
       "!resources/system-skills/pier-canvas/templates",
+      "!packages/plugin-tasks/applets",
       "!fixtures/live-modules"
     ]
   },
@@ -44,6 +45,8 @@
         "packages/plugin-agent-splits/vite.config.*.ts",
         "packages/plugin-claude/src/**",
         "packages/plugin-claude/vite.config.*.ts",
+        "packages/plugin-tasks/src/**",
+        "packages/plugin-tasks/vite.config.*.ts",
         "electron.vite.config.ts",
         "vitest.config.ts",
         "tailwind.config.ts",
@@ -86,7 +89,8 @@
         "packages/plugin-codex/src/renderer/styles.css",
         "packages/plugin-grok/src/renderer/styles.css",
         "packages/plugin-ssh/src/renderer/styles.css",
-        "packages/plugin-claude/src/renderer/styles.css"
+        "packages/plugin-claude/src/renderer/styles.css",
+        "packages/plugin-tasks/src/renderer/styles.css"
       ],
       "linter": {
         "rules": { "suspicious": { "noUnknownAtRules": "off" } }

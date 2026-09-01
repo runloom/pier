@@ -7,13 +7,19 @@ export const workspace = {
       "The workspace is unavailable, so its layout could not be saved safely.",
   },
   pluginPanel: {
+    appletHostUnavailable: "Can’t show this view right now.",
+    appletLoadDetails: "Show details",
+    appletLoadFailed: "Couldn’t load the task view",
+    appletLoadFailedBody: "Retry. If it still fails, restart Pier.",
+    appletLoadRetry: "Retry",
+    appletNoProject: "Open a project folder first.",
+    crashDescription:
+      "The plugin UI hit an error. Other panels are unaffected. Disable or reload the plugin to recover.",
+    crashTitle: "Plugin panel crashed",
     loadingDescription: "Plugin is loading. Content will appear when ready.",
     loadingTitle: "Loading plugin panel",
     missingRendererDescription: "This plugin has no displayable UI.",
     unavailableTitle: "Plugin panel unavailable",
-    crashTitle: "Plugin panel crashed",
-    crashDescription:
-      "The plugin UI hit an error. Other panels are unaffected. Disable or reload the plugin to recover.",
   },
   startupError: {
     description: "Reload to try again.",

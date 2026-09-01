@@ -5,13 +5,19 @@ export const workspace = {
     unavailable: "工作区当前不可用，无法安全保存布局。",
   },
   pluginPanel: {
+    appletHostUnavailable: "现在无法显示这个视图。",
+    appletLoadDetails: "查看详情",
+    appletLoadFailed: "无法加载任务视图",
+    appletLoadFailedBody: "请重试。若仍然失败，请重新启动 Pier。",
+    appletLoadRetry: "重试",
+    appletNoProject: "请先打开项目文件夹。",
+    crashDescription:
+      "插件界面运行出错，其它面板不受影响。禁用或重新加载该插件后可恢复。",
+    crashTitle: "插件面板已崩溃",
     loadingDescription: "插件加载中，就绪后会显示内容。",
     loadingTitle: "正在加载插件面板",
     missingRendererDescription: "该插件没有可显示的界面。",
     unavailableTitle: "插件面板不可用",
-    crashTitle: "插件面板已崩溃",
-    crashDescription:
-      "插件界面运行出错，其它面板不受影响。禁用或重新加载该插件后可恢复。",
   },
   startupError: {
     description: "请重新加载后再试。",

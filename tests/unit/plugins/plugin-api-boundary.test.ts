@@ -77,6 +77,18 @@ describe("plugin api / plugin codex package boundaries", () => {
     expect(violations).toEqual([]);
   });
 
+  it("packages/plugin-tasks does not import app internals", async () => {
+    const result = await scanImports("packages/plugin-tasks/src", {
+      allowMissing: true,
+    });
+    const violations = result.imports.filter((entry) =>
+      /^src\/|^@shared\/|^@main\/|^@renderer\/|^@plugins\//.test(
+        entry.specifier
+      )
+    );
+    expect(violations).toEqual([]);
+  });
+
   it("src/** does not statically import external plugin implementation sources", async () => {
     const result = await scanImports("src");
     const violations = result.imports.filter((entry) =>

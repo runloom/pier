@@ -42,7 +42,7 @@ describe("project canvases render", () => {
     );
   });
 
-  it("finds exactly the in-repo React canvases (canvas-kit + cli manual + smoke)", () => {
+  it("finds exactly the in-repo React canvases", () => {
     const relative = Object.keys(CANVAS_MODULES)
       .filter((path) => !path.endsWith(".canvas.solid.tsx"))
       .map((path) => path.replace("../../../.pier/canvases/", ""))

@@ -204,6 +204,111 @@ describe("createPluginDataProjectionService", () => {
     ).rejects.toMatchObject({ code: "permission_denied" });
     expect(invoke).not.toHaveBeenCalled();
   });
+
+  test("declares by base key and leases by canonical params", async () => {
+    const calls: PluginRpcInvokeRequest[] = [];
+    const projections = service({
+      bus: {
+        invoke: async (request: PluginRpcInvokeRequest) => {
+          calls.push(request);
+          return { data: { ok: true }, ok: true };
+        },
+      },
+      manifestProjections: (id) => (id === "pier.tasks" ? ["board"] : []),
+    });
+    await expect(
+      projections.snapshot("pier.tasks", "board", { milestone: "结算重构" })
+    ).resolves.toEqual({ ok: true });
+    await projections.watchStart("pier.tasks", "board", {
+      milestone: "结算重构",
+    });
+    await projections.watchStart("pier.tasks", "board", { label: "req/x" });
+    await projections.watchStart("pier.tasks", "board", {
+      milestone: "结算重构",
+    });
+    await projections.watchStop("pier.tasks", "board", {
+      milestone: "结算重构",
+    });
+    expect(calls.map((call) => [call.method, call.payload])).toEqual([
+      ["projection.board", { params: { milestone: "结算重构" } }],
+      ["projection.board.watch", { params: { milestone: "结算重构" } }],
+      ["projection.board.watch", { params: { label: "req/x" } }],
+    ]);
+    await projections.watchStop("pier.tasks", "board", { label: "req/x" });
+    await projections.watchStop("pier.tasks", "board", {
+      milestone: "结算重构",
+    });
+    expect(calls.at(-2)).toMatchObject({
+      method: "projection.board.unwatch",
+      payload: { params: { label: "req/x" } },
+    });
+    expect(calls.at(-1)).toMatchObject({
+      method: "projection.board.unwatch",
+      payload: { params: { milestone: "结算重构" } },
+    });
+  });
+
+  test("tapEvents keeps params on the broadcast envelope", () => {
+    let listener:
+      | ((event: string, data: PluginRpcEventData) => void)
+      | undefined;
+    const sent: unknown[] = [];
+    const projections = service({
+      bus: {
+        onEvent: (fn) => {
+          listener = fn;
+          return () => {};
+        },
+      },
+      manifestProjections: (id) => (id === "pier.tasks" ? ["board"] : []),
+      sent,
+    });
+    const dispose = projections.tapEvents();
+    listener?.("projection.board", {
+      columns: [],
+      params: { milestone: "结算重构" },
+      pluginId: "pier.tasks",
+    });
+    listener?.("projection.board", {
+      columns: ["other"],
+      params: { label: "req/x" },
+      pluginId: "pier.tasks",
+    });
+    expect(sent).toEqual([
+      {
+        columns: [],
+        key: "board",
+        params: { milestone: "结算重构" },
+        pluginId: "pier.tasks",
+      },
+      {
+        columns: ["other"],
+        key: "board",
+        params: { label: "req/x" },
+        pluginId: "pier.tasks",
+      },
+    ]);
+    dispose();
+  });
+
+  test("query-string keys still declare against the base key", async () => {
+    const calls: PluginRpcInvokeRequest[] = [];
+    const projections = service({
+      bus: {
+        invoke: async (request: PluginRpcInvokeRequest) => {
+          calls.push(request);
+          return { data: { ok: 1 }, ok: true };
+        },
+      },
+      manifestProjections: (id) => (id === "pier.tasks" ? ["board"] : []),
+    });
+    await projections.snapshot("pier.tasks", "board?milestone=结算重构");
+    expect(calls[0]).toEqual({
+      method: "projection.board",
+      payload: { params: { milestone: "结算重构" } },
+      pluginId: "pier.tasks",
+    });
+  });
 });
 
 describe("createManifestProjectionReader", () => {

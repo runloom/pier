@@ -81,6 +81,12 @@ extraResources:
       - '*.tgz'
       - '*.tgz.sha256'
       - 'plugin.json'
+  - from: packages/plugin-tasks/dist-pkg
+    to: plugin-packages/pier.tasks
+    filter:
+      - '*.tgz'
+      - '*.tgz.sha256'
+      - 'plugin.json'
 
 asar: true
 asarUnpack:

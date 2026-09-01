@@ -420,6 +420,7 @@ export function ResolvedFilePanel({
           markdownInitialAnchor={markdownAnchor}
           markdownInitialAnchorRequestId={markdownAnchorRequestId}
           markdownLabels={createMarkdownRendererLabels(t)}
+          markdownLiveModules={context?.liveModules}
           markdownSource={
             document.source.kind === "disk" ? document.source : undefined
           }

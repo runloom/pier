@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { pierCapabilitySchema } from "../permissions.ts";
+import { pluginAppletContributionSchema } from "../plugin/applets.ts";
 import { pluginLanguageModeContributionSchema } from "../plugin/language-mode.ts";
 import {
   pluginCommandContributionSchema,
@@ -118,6 +119,11 @@ export const managedPluginPackageManifestSchema = z
     localization: pluginLocalizationSchema.optional(),
     main: relativePosixPathSchema,
     /**
+     * Optional so hand-written manifests/tests need not list an empty array.
+     * Runtime readers must use `manifest.applets ?? []`.
+     */
+    applets: z.array(pluginAppletContributionSchema).optional(),
+    /**
      * 可投影给 canvas 的只读数据键（设计 §4.1）。未声明键的
      * pluginData.snapshot 一律拒绝——纪律边界与 panels 同链。
      */
@@ -149,6 +155,7 @@ export const managedPluginPackageManifestSchema = z
     version: z.string().min(1),
   })
   .superRefine((manifest, ctx) => {
+    const prefix = `${manifest.id}.`;
     if (
       (manifest.languageServers?.length ?? 0) > 0 &&
       !manifest.permissions.includes("lsp:provide")
@@ -169,6 +176,26 @@ export const managedPluginPackageManifestSchema = z
           'languageModes require permissions to include "languageMode:provide"',
         path: ["languageModes"],
       });
+    }
+    for (const [index, contribution] of (
+      manifest.projectSettings ?? []
+    ).entries()) {
+      if (!contribution.id.startsWith(prefix)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `projectSettings id must start with "${prefix}": ${contribution.id}`,
+          path: ["projectSettings", index, "id"],
+        });
+      }
+    }
+    for (const [index, contribution] of (manifest.applets ?? []).entries()) {
+      if (!contribution.id.startsWith(prefix)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `applets id must start with "${prefix}": ${contribution.id}`,
+          path: ["applets", index, "id"],
+        });
+      }
     }
   });
 export type ManagedPluginPackageManifest = z.infer<

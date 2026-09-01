@@ -13,10 +13,25 @@
       "@pier/ui/*": ["./packages/ui/src/*"],
       "@pier/ui": ["./packages/ui/src"],
       "pier/canvas": ["./tests/support/pier-canvas.ts"],
-      "pier/host": ["./resources/system-skills/pier-canvas/sdk/host.d.ts"]
+      "pier/host": ["./resources/system-skills/pier-canvas/sdk/host.d.ts"],
+      "@pier-applet/pier.tasks/task-dag": [
+        "./packages/plugin-tasks/applets/task-dag/index.applet.tsx"
+      ],
+      "@pier-applet/pier.tasks/task-list": [
+        "./packages/plugin-tasks/applets/task-list/index.applet.tsx"
+      ],
+      "@pier-applet/pier.tasks/tracker-board": [
+        "./packages/plugin-tasks/applets/tracker-board/index.applet.tsx"
+      ]
     }
   },
-  "include": [".pier/canvases/**/*.canvas.tsx", "src/renderer/global.d.ts"],
+  "include": [
+    ".pier/canvases/**/*.canvas.tsx",
+    ".pier/types/**/*.d.ts",
+    "packages/plugin-tasks/applets/**/*.ts",
+    "packages/plugin-tasks/applets/**/*.tsx",
+    "src/renderer/global.d.ts"
+  ],
   "exclude": [
     "node_modules",
     "out",

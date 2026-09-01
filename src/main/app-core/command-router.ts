@@ -28,7 +28,10 @@ import { executeAgentAssetsCommand } from "./commands/agent-assets.ts";
 import { executeAgentAttentionRespondCommand } from "./commands/agent-attention-respond.ts";
 import { executeAiCommand } from "./commands/ai.ts";
 import { executeAppCliCommand } from "./commands/app-cli.ts";
-import { executeAppSnapshotCommand } from "./commands/app-snapshot.ts";
+import {
+  executeAppOpenExternalCommand,
+  executeAppSnapshotCommand,
+} from "./commands/app-snapshot.ts";
 import { executeCanvasCommand } from "./commands/canvas-command.ts";
 import { executeCommentsCommand } from "./commands/comments.ts";
 import { executeEnvironmentCommand } from "./commands/environment.ts";
@@ -137,6 +140,8 @@ async function executeAppStateCommand(
       });
     case "app.snapshot":
       return await executeAppSnapshotCommand(requestId, command, services);
+    case "app.openExternal":
+      return await executeAppOpenExternalCommand(requestId, command, services);
     case "app.cli.status":
     case "app.cli.install":
     case "app.cli.uninstall":

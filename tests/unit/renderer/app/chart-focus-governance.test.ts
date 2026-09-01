@@ -106,6 +106,10 @@ describe("focus governance", () => {
       "packages/ui/src/image-preview/canvas.tsx",
       "packages/ui/src/image-preview/world-canvas.tsx",
       "packages/ui/src/diff-view/image-diff/compare.tsx",
+      // 任务 applet 卡片/列表行：spec §7 键盘契约（focus ring；「移动到列」走菜单）
+      "packages/plugin-tasks/applets/tracker-board/card.tsx",
+      "packages/plugin-tasks/applets/task-list/index.applet.tsx",
+      "packages/plugin-tasks/applets/task-dag/node.tsx",
       "src/plugins/builtin/files/renderer/markdown/table/table-resize.tsx", // table column resize separator (arrow-key adjustable, mirrors image diff slider)
       "src/plugins/builtin/files/renderer/preview/canvas.tsx", // canvas world stage (camera keyboard contract; wheel pans, ctrl+wheel zooms)
       "src/plugins/builtin/files/renderer/preview/image.tsx",

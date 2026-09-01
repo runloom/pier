@@ -5,15 +5,22 @@ export const workspace = {
     unavailable: "ワークスペースを使えず、配置を安全に保存できませんでした。",
   },
   pluginPanel: {
+    appletHostUnavailable: "このビューを今は表示できません。",
+    appletLoadDetails: "詳細を表示",
+    appletLoadFailed: "タスクビューを読み込めませんでした",
+    appletLoadFailedBody:
+      "再試行してください。まだ失敗する場合は Pier を再起動してください。",
+    appletLoadRetry: "再試行",
+    appletNoProject: "先にプロジェクトフォルダを開いてください。",
+    crashDescription:
+      "プラグイン UI でエラーが発生しました。他のパネルには影響ありません。無効化または再読み込みで復旧できます。",
+    crashTitle: "プラグインパネルがクラッシュしました",
     loadingDescription:
       "プラグインを読み込み中です。準備でき次第表示されます。",
     loadingTitle: "プラグインパネルを読み込み中",
     missingRendererDescription:
       "このプラグインには表示できる画面がありません。",
     unavailableTitle: "プラグインパネルを使えません",
-    crashTitle: "プラグインパネルがクラッシュしました",
-    crashDescription:
-      "プラグイン UI でエラーが発生しました。他のパネルには影響ありません。無効化または再読み込みで復旧できます。",
   },
   startupError: {
     description: "再読み込みしてもう一度お試しください。",

@@ -154,19 +154,22 @@ async function executePluginDataCommand(
         requestId,
         await projections.snapshot(
           command.payload.pluginId,
-          command.payload.key
+          command.payload.key,
+          command.payload.params
         )
       );
     case "pluginData.watchStart":
       await projections.watchStart(
         command.payload.pluginId,
-        command.payload.key
+        command.payload.key,
+        command.payload.params
       );
       return success(requestId, null);
     case "pluginData.watchStop":
       await projections.watchStop(
         command.payload.pluginId,
-        command.payload.key
+        command.payload.key,
+        command.payload.params
       );
       return success(requestId, null);
     case "pluginAction.invoke":
@@ -247,6 +250,30 @@ export async function executePluginCommand(
         );
       }
       return success(requestId, plugin);
+    }
+    case "plugin.applets": {
+      const listed = await services.plugins.list();
+      const entries = command.id
+        ? listed.entries.filter((entry) => entry.manifest.id === command.id)
+        : listed.entries;
+      if (command.id && entries.length === 0) {
+        return failure(
+          requestId,
+          "not_found",
+          `plugin not found: ${command.id}`
+        );
+      }
+      return success(requestId, {
+        plugins: entries.map((entry) => ({
+          applets: (entry.manifest.applets ?? []).map((applet) => ({
+            deprecated: applet.deprecated === true,
+            id: applet.id,
+            propsSchema: applet.propsSchema ?? {},
+            title: applet.title ?? applet.id,
+          })),
+          id: entry.manifest.id,
+        })),
+      });
     }
     case "pluginSettings.getAll":
       return success(requestId, await services.pluginSettings.getAll());

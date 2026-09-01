@@ -451,18 +451,20 @@
   --info: #1677ff;
   --done: #7e22ce;
   --status-solid-foreground: oklch(0.985 0 0);
-  /* Ant Design default algorithm soft surfaces */
+  /* Ant Design default algorithm soft surfaces.
+   * fg 用同族 7/8 号深阶（非 6 号主色）：浅色 tint 上的 11–12px 徽标文字
+   * 要过 Tier-1 4.5:1，Ant 主色（#faad14 等）在自家 bg 上只有 ~2:1。 */
   --status-info-bg: #e6f4ff;
-  --status-info-fg: #1677ff;
+  --status-info-fg: #0958d9;
   --status-info-border: #91caff;
   --status-success-bg: #f6ffed;
-  --status-success-fg: #52c41a;
+  --status-success-fg: #237804;
   --status-success-border: #b7eb8f;
   --status-warning-bg: #fffbe6;
-  --status-warning-fg: #faad14;
+  --status-warning-fg: #874d00;
   --status-warning-border: #ffe58f;
   --status-danger-bg: #fff2f0;
-  --status-danger-fg: #ff4d4f;
+  --status-danger-fg: #cf1322;
   --status-danger-border: #ffccc7;
   /* Code/diff 变更色：对齐 Pierre light defaults。 */
   --diff-addition-fg: #0dbe4e;
@@ -624,17 +626,18 @@
   --info: #1677ff;
   --done: #7e22ce;
   --status-solid-foreground: oklch(0.985 0 0);
+  /* fg 深阶与全局 light 保持一致（Tier-1 徽标文字对比度）。 */
   --status-info-bg: #e6f4ff;
-  --status-info-fg: #1677ff;
+  --status-info-fg: #0958d9;
   --status-info-border: #91caff;
   --status-success-bg: #f6ffed;
-  --status-success-fg: #52c41a;
+  --status-success-fg: #237804;
   --status-success-border: #b7eb8f;
   --status-warning-bg: #fffbe6;
-  --status-warning-fg: #faad14;
+  --status-warning-fg: #874d00;
   --status-warning-border: #ffe58f;
   --status-danger-bg: #fff2f0;
-  --status-danger-fg: #ff4d4f;
+  --status-danger-fg: #cf1322;
   --status-danger-border: #ffccc7;
   /* neutral/done 是复合公式：在纸面作用域重声明以按纸面 token 重算。 */
   --status-neutral-bg: color-mix(in oklab, var(--muted) 64%, transparent);

@@ -1,0 +1,224 @@
+@reference "tailwindcss/theme.css";
+@reference "@pier/ui/tailwind-theme.css";
+@source "./";
+
+@scope ([data-pier-tasks-scope]) {
+  @tailwind utilities source(none);
+
+  /*
+   * Kanban geometry lives here: applet Tailwind JIT drops minmax() tracks,
+   * and Item's rounded-2xl / flex-wrap / title w-fit fight a board card.
+   * Narrow panels show two full columns (third scrolls); wide panels fit three.
+   */
+  [data-tracker-board] {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: row;
+    gap: 0.625rem;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding-block: 0.5rem;
+    padding-inline: 0.625rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 0.625rem;
+  }
+
+  [data-tracker-board] > * {
+    display: flex;
+    flex: 1 1 14rem;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 13.5rem;
+    max-width: 26rem;
+    height: auto;
+    min-height: 0;
+    padding: 0.5rem 0 0.5rem 0.5rem;
+    overflow: hidden;
+    scroll-snap-align: start;
+    border-radius: 0.5rem;
+  }
+
+  [data-tracker-board][data-tracker-narrow] > * {
+    flex: 0 0 calc(50% - 0.25rem);
+    min-width: 14rem;
+  }
+
+  [data-tracker-column-scroll] {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  [data-tracker-board] [data-slot="canvas-sortable"] {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+    list-style: none;
+  }
+
+  [data-board-card] {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+    padding: 0.5rem 0.625rem;
+    cursor: pointer;
+    user-select: none;
+    background-color: var(--card, var(--background));
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease;
+  }
+
+  [data-board-card]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--ring);
+  }
+
+  [data-board-card-title] {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    -webkit-line-clamp: 2;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--foreground);
+    text-align: start;
+    letter-spacing: -0.01em;
+    text-wrap: pretty;
+    overflow-wrap: break-word;
+  }
+
+  [data-board-card-title][data-done] {
+    color: var(--muted-foreground);
+    opacity: 0.8;
+  }
+
+  [data-board-card-footer] {
+    display: flex;
+    gap: 0.375rem;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-width: 0;
+    padding-top: 0.125rem;
+    margin-top: auto;
+  }
+
+  [data-board-card-footer] [data-slot="avatar"] {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  [data-board-issue-id] {
+    align-self: flex-start;
+    justify-content: flex-start;
+    width: fit-content;
+    max-width: 100%;
+    height: auto;
+    padding: 0;
+    font-family: var(
+      --font-mono,
+      ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      Monaco,
+      Consolas,
+      monospace
+    );
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--muted-foreground);
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    opacity: 0.85;
+    transition:
+      color 120ms ease,
+      opacity 120ms ease;
+  }
+
+  [data-board-issue-id]:hover {
+    color: var(--foreground);
+    text-decoration: none;
+    opacity: 1;
+  }
+
+  [data-board-card-actions] {
+    display: flex;
+    flex-shrink: 0;
+    gap: 0.25rem;
+    align-items: center;
+    margin-left: auto;
+  }
+
+  [data-board-card-menu] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  [data-board-card]:is(:hover, :focus-within) [data-board-card-menu] {
+    opacity: 1;
+  }
+
+  /* List view styling */
+  [data-tracker-list-row] {
+    display: flex;
+    gap: 0.625rem;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 2.125rem;
+    padding-block: 0.25rem;
+    padding-inline: 0.75rem;
+    cursor: pointer;
+    user-select: none;
+    background-color: transparent;
+    border-bottom: 1px solid var(--border);
+    transition: background-color 100ms ease;
+  }
+
+  [data-tracker-list-row]:hover {
+    background-color: var(--muted);
+  }
+
+  [data-tracker-list-row]:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--ring);
+  }
+
+  [data-tracker-list-row] [data-board-card-menu] {
+    opacity: 0;
+    transition: opacity 100ms ease;
+  }
+
+  [data-tracker-list-row]:is(:hover, :focus-within) [data-board-card-menu] {
+    opacity: 1;
+  }
+}

@@ -55,6 +55,18 @@ function strictHttpsUrl(value: string): string | null {
   }
 }
 
+/** Production wiring: system browser via Electron shell (lazy import keeps
+ * this module importable from plain-node unit tests). */
+export function createShellExternalNavigationService(): ExternalNavigationService {
+  return createExternalNavigationService({
+    now: Date.now,
+    openExternal: async (url) => {
+      const { shell } = await import("electron");
+      await shell.openExternal(url);
+    },
+  });
+}
+
 export function createExternalNavigationService(
   dependencies: ExternalNavigationDependencies
 ): ExternalNavigationService {

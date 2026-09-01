@@ -92,4 +92,19 @@ describe("live-modules canvas trust gate", () => {
     // compile itself succeeds depends on the fixture, but the gate is silent.
     expect(result.ok === false && "trust" in result).toBe(false);
   });
+
+  it("does not apply the canvas trust gate to plugin applet specifiers", async () => {
+    const root = await createProjectRoot();
+    const service = createLiveModulesService({
+      resolveHomeRoot: () => join(root, "home-unused"),
+      resolveProjectTrust: async () => false,
+    });
+    const spec = projectLiveRootSpec({ projectRootPath: root });
+    service.registerRoot(spec);
+    const result = await service.compile(
+      spec.id,
+      "@pier-applet/pier.tasks/tracker-board"
+    );
+    expect(result.ok === false && "trust" in result).toBe(false);
+  });
 });

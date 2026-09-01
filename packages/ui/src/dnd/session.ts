@@ -88,23 +88,31 @@ export function subscribeSortableDrag(
   };
 }
 
+function elementsUnderPoint(clientX: number, clientY: number): Element[] {
+  if (typeof document.elementsFromPoint === "function") {
+    const stack = document.elementsFromPoint(clientX, clientY);
+    if (stack.length > 0) {
+      return stack;
+    }
+  }
+  const top = document.elementFromPoint?.(clientX, clientY);
+  return top instanceof Element ? [top] : [];
+}
+
 export function droppableIdFromPoint(
   clientX: number,
   clientY: number
 ): string | null {
-  const fromPoint = document.elementFromPoint;
-  if (typeof fromPoint !== "function") {
-    return null;
+  for (const node of elementsUnderPoint(clientX, clientY)) {
+    if (node.closest("[data-slot=dnd-ghost]")) {
+      continue;
+    }
+    const hit = node.closest("[data-slot=canvas-droppable]");
+    if (hit instanceof HTMLElement) {
+      return hit.dataset.droppableId ?? null;
+    }
   }
-  const node = fromPoint.call(document, clientX, clientY);
-  if (!(node instanceof Element)) {
-    return null;
-  }
-  const hit = node.closest("[data-slot=canvas-droppable]");
-  if (!(hit instanceof HTMLElement)) {
-    return null;
-  }
-  return hit.dataset.droppableId ?? null;
+  return null;
 }
 
 export function setDropOver(id: string | null): void {
@@ -128,12 +136,16 @@ export function setDropOver(id: string | null): void {
  * frame while a drag is active.
  */
 export function autoScrollStep(x: number, y: number): void {
-  const fromPoint = document.elementFromPoint;
-  if (typeof fromPoint !== "function") {
-    return;
+  let node: HTMLElement | null = null;
+  for (const hit of elementsUnderPoint(x, y)) {
+    if (hit.closest("[data-slot=dnd-ghost]")) {
+      continue;
+    }
+    if (hit instanceof HTMLElement) {
+      node = hit;
+      break;
+    }
   }
-  const under = fromPoint.call(document, x, y);
-  let node = under instanceof HTMLElement ? under : null;
   while (node && node !== document.body) {
     const canY = node.scrollHeight > node.clientHeight + 1;
     const canX = node.scrollWidth > node.clientWidth + 1;
