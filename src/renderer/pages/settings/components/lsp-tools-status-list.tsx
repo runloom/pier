@@ -1,21 +1,17 @@
 import { Button } from "@pier/ui/button.tsx";
 import {
-  COLLECTION_LSP_TOOL_ITEM_MIN_WIDTH,
-  collectionAutoFitClassName,
-  collectionAutoFitStyle,
-  collectionLayoutMode,
-} from "@pier/ui/collection-auto-layout.ts";
-import {
   Item,
   ItemActions,
   ItemContent,
+  ItemDescription,
   ItemGroup,
+  ItemSeparator,
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import type { LspCatalogStatusRow } from "@shared/contracts/lsp-provider.ts";
 import { Check, Copy } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 
@@ -128,19 +124,12 @@ function LspToolsStatusSkeleton({ label }: { label: string }) {
     <div
       aria-busy="true"
       aria-label={label}
-      className={collectionAutoFitClassName(placeholders.length, {
-        gapClassName: "gap-2",
-        singleAs: "block",
-      })}
+      className="flex flex-col gap-2"
       data-testid="lsp-tools-status-loading"
       role="status"
-      style={collectionAutoFitStyle(
-        placeholders.length,
-        COLLECTION_LSP_TOOL_ITEM_MIN_WIDTH
-      )}
     >
       {placeholders.map((id) => (
-        <Skeleton className="h-16 w-full" key={id} />
+        <Skeleton className="h-12 w-full" key={id} />
       ))}
     </div>
   );
@@ -153,16 +142,21 @@ function LspToolStatusItem({ row }: { row: LspCatalogStatusRow }) {
     row.status === "missing" ? row.installCommand : undefined;
 
   return (
-    <Item className="h-full min-w-0" size="sm" variant="outline">
+    <Item className="rounded-none border-0 px-0" role="listitem">
       <ItemContent className="min-w-0 gap-0.5">
-        <ItemTitle>{row.displayName}</ItemTitle>
+        <ItemTitle className="min-w-0 max-w-full">
+          <span className="truncate">{row.displayName}</span>
+        </ItemTitle>
         {detail ? (
-          <p className="truncate font-mono text-muted-foreground text-xs">
+          <ItemDescription className="font-mono text-xs">
             {detail}
-          </p>
+          </ItemDescription>
         ) : null}
         {installCommand ? (
-          <div className="flex min-w-0 items-center gap-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="shrink-0 text-muted-foreground text-xs">
+              {t("settings.row.lspToolsInstallLabel")}
+            </span>
             <span
               className="min-w-0 truncate font-mono text-muted-foreground text-xs"
               title={installCommand}
@@ -185,9 +179,7 @@ function LspToolStatusItem({ row }: { row: LspCatalogStatusRow }) {
   );
 }
 
-/**
- * Read-only PATH / bundled language-server probe for Settings → Files.
- */
+/** Read-only language-server inventory for Settings → Files. */
 export function LspToolsStatusList() {
   const t = useT();
   const [rows, setRows] = useState<LspCatalogStatusRow[] | null>(null);
@@ -242,25 +234,18 @@ export function LspToolsStatusList() {
     );
   }
 
-  const layout = collectionLayoutMode(rows.length);
   return (
     <ItemGroup
       aria-label={t("settings.row.lspToolsTitle")}
-      className={collectionAutoFitClassName(rows.length, {
-        gapClassName: "gap-2",
-        singleAs: "block",
-      })}
-      data-layout={layout}
+      className="gap-0"
       data-testid="lsp-tools-status-list"
-      style={collectionAutoFitStyle(
-        rows.length,
-        COLLECTION_LSP_TOOL_ITEM_MIN_WIDTH
-      )}
+      role="list"
     >
-      {rows.map((row) => (
-        <li className="min-w-0" key={row.id}>
+      {rows.map((row, index) => (
+        <Fragment key={row.id}>
+          {index > 0 ? <ItemSeparator className="my-0" /> : null}
           <LspToolStatusItem row={row} />
-        </li>
+        </Fragment>
       ))}
     </ItemGroup>
   );

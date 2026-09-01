@@ -12,15 +12,6 @@ export const settingsPlugins = {
   },
   runtimeUnavailableDescription:
     "This plugin is installed but is not loaded right now. Restart Pier; if the issue persists, reinstall the plugin.",
-  contributionSummary: {
-    command: "{{count}} command",
-    commands: "{{count}} commands",
-    none: "No contributions",
-    panel: "{{count}} panel",
-    panels: "{{count}} panels",
-    terminalStatusItem: "{{count}} terminal status item",
-    terminalStatusItems: "{{count}} terminal status items",
-  },
   permissionLabels: pluginPermissions,
   loadingTitle: "Loading plugins",
   loadingDescription: "Reading plugin list…",
@@ -35,8 +26,6 @@ export const settingsPlugins = {
   errorTitle: "Unable to load plugins",
   openSettings: "Settings",
   openSettingsPlugin: "Open {{name}} settings",
-  permissionSummary: "Permissions: {{list}}",
-  permissionSummaryNone: "No special permissions",
   source: {
     builtin: "Built-in",
     local: "Local",

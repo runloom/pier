@@ -301,25 +301,23 @@ describe("ManagedPluginsSection Update All", () => {
         pendingBuiltinId={null}
       />
     );
-    const disableAda = await screen.findByRole("button", {
-      name: "Disable Ada",
+    const disableAda = await screen.findByRole("switch", {
+      name: "Ada",
     });
     expect(disableAda).not.toBeDisabled();
     fireEvent.click(await screen.findByRole("button", { name: "Update All" }));
     await waitFor(() => {
       expect(update).toHaveBeenCalled();
     });
-    expect(screen.getByRole("button", { name: "Disable Ada" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Disable Bea" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Ada" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Bea" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Update All" })).toBeDisabled();
     release();
     await waitFor(() => {
       expect(toastMocks.success).toHaveBeenCalled();
     });
     await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Disable Ada" })
-      ).not.toBeDisabled();
+      expect(screen.getByRole("switch", { name: "Ada" })).not.toBeDisabled();
     });
     expect(disable).not.toHaveBeenCalled();
   });

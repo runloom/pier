@@ -197,7 +197,7 @@
     "filePanel.languageService.nextStep.waitOrRestart": "再試行を待つか、繰り返す場合は Pier を再起動してください。",
     "filePanel.languageService.nextStep.focusEditor": "エディタをクリックすると、言語機能が再開します。",
     "filePanel.languageService.nextStep.installThenRestart": "下のインストールコマンドをターミナルで実行してから、Pier を再起動してください。",
-    "filePanel.languageService.nextStep.installOfficialTools": "このファイル種類の言語サーバーを PATH にインストール（「設定 → ファイル → ローカルツール」を参照）してから、Pier を再起動してください。",
+    "filePanel.languageService.nextStep.installOfficialTools": "このファイル種類の言語サーバーをインストールしてください（「設定 → ファイル → このパソコンの言語サーバー」）。その後 Pier を再起動してください。",
     "filePanel.languageService.nextStep.adjustLimit": "別のプロジェクトタブを閉じるか、「設定 → ファイル」で言語サービスの上限を上げてください。",
     "filePanel.languageService.nextStep.reinstallOrRestart": "Pier を再起動してください。続く場合は言語サーバーを再インストールしてください。",
     "filePanel.languageService.nextStep.restartApp": "Pier を再起動してから、ファイルを開き直してください。",

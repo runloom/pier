@@ -194,7 +194,9 @@ describe("languageServicePresentation", () => {
       t
     );
     expect(presentation.command).toBeUndefined();
-    expect(presentation.nextStep).toMatch(/PATH|Local tools|本机工具|Files/i);
+    expect(presentation.nextStep).toMatch(
+      /Files|Language servers|本机语言服务器/i
+    );
     expect(presentation.nextStep).not.toMatch(/Plugins|插件/i);
   });
 });

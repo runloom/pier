@@ -197,7 +197,7 @@
     "filePanel.languageService.nextStep.waitOrRestart": "Wait for the retry, or restart Pier if it keeps failing.",
     "filePanel.languageService.nextStep.focusEditor": "Click in the editor to resume language features.",
     "filePanel.languageService.nextStep.installThenRestart": "Run the install command below in a terminal, then restart Pier.",
-    "filePanel.languageService.nextStep.installOfficialTools": "Install the language server for this file type on your PATH (see Settings → Files → Local tools), then restart Pier.",
+    "filePanel.languageService.nextStep.installOfficialTools": "Install the language server for this file type (see Settings → Files → Language servers on this computer), then restart Pier.",
     "filePanel.languageService.nextStep.adjustLimit": "Close another project tab, or raise the language service limit under Settings → Files.",
     "filePanel.languageService.nextStep.reinstallOrRestart": "Restart Pier. If it keeps failing, reinstall the language server.",
     "filePanel.languageService.nextStep.restartApp": "Restart Pier, then open the file again.",

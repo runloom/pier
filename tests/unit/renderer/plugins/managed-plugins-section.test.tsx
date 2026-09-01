@@ -172,9 +172,7 @@ describe("ManagedPluginsSection", () => {
       />
     );
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Disable Codex" })
-    );
+    fireEvent.click(await screen.findByRole("switch", { name: "Codex" }));
 
     await waitFor(() => {
       expect(disable).toHaveBeenCalledWith("pier.codex");
@@ -184,9 +182,9 @@ describe("ManagedPluginsSection", () => {
     expect(
       await screen.findByRole("button", { name: "Restart Pier Now" })
     ).toBeInTheDocument();
-    expect(
-      await screen.findByRole("button", { name: "Enable Codex" })
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: "Codex" })).not.toBeChecked();
+    });
   });
 
   it("uses the managed update command for managed rows with available updates", async () => {
@@ -367,9 +365,7 @@ describe("ManagedPluginsSection", () => {
 
     expect(await screen.findByText("Codex")).toBeInTheDocument();
     expect(screen.getByText("Not loaded")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Disable Codex" })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Codex" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Install" })
     ).not.toBeInTheDocument();
