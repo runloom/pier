@@ -12,6 +12,7 @@ import {
   pierBlockMarkers,
   pierHookCommandGeneration,
   pierHookCommandV3WithStdin,
+  pierHookCommandV3WithStdinOutcomeDispatch,
   removePierTextBlock,
   upsertPierTextBlockUnlessNewer,
 } from "./shared.ts";
@@ -20,64 +21,37 @@ import type { AgentHookIntegration } from "./types.ts";
 const AGENT_ID: AgentKind = "kimi";
 
 /**
- * Kimi Code（2026-08-29 审计换代重接；本机 0.38.0 binary 一手证据）：
- * - 上游已从 Python kimi-cli 换代为 JS 实现的 Kimi Code。配置只读
- *   `KIMI_CODE_HOME`（默认 `~/.kimi-code`）下的 config.toml；老家目录
- *   `~/.kimi` 只剩迁移提示（binary："Old data kept at ~/.kimi/"），
- *   `$KIMI_SHARE_DIR` 在新 CLI 中已不存在——老路径仅保留清理。
- * - 载体仍是 config.toml 顶层 [[hooks]] 数组表（binary schema：
- *   `hooks: readHooks(raw["hooks"], …)`；本机 Orca 写入的 [[hooks]] 在新
- *   路径生效佐证）。字段：event（CamelCase）、command、matcher、
- *   timeout（秒，新 schema 默认 30，5 合法）。
- * - 现装 12 事件的名称与字段在新 CLI 全部有效（binary 逐字段核对：
- *   `agent_name` camelToSnake ✓、StopFailure `error_type/error_message` ✓、
- *   工具 `tool_call_id/tool_name` 默认别名 ✓）。PostToolUseFailure 的
- *   error 在新 CLI 是对象（toKimiErrorPayload：{code,message,name,…}），
- *   故补 `error.message` 路径提取；老 CLI 字符串 error 仍走字段提取。
- * - **刻意不装的新事件**（binary 20 事件枚举）：
- *   - `TurnStarted`/`Interrupt` 带 turn_id 且 hooks 服务按 agent 实例化
- *     （contributeAgentService）、payload 全用主 session_id 无 agent 区分
- *     字段——子智能体的 turn_id 会以外来回合抢占主 scope（cursor Task
- *     同款模式），Interrupt 还会在子智能体被取消时误封主回合。上游给
- *     payload 加 agent 身份字段前不得安装。
- *   - `PermissionRequest`/`PermissionResult`：fire-and-forget 且未证实
- *     配对 id 与 Result 必达；waiting 卡死代价高于收益，不装。
- *   - `Notification`：与 claude 集成同理，通知语义与状态无关。
+ * Kimi Code（2026-08-29 审计；本机 0.38.0/0.39.1 binary）：
+ * - 配置只读 `KIMI_CODE_HOME`（默认 `~/.kimi-code`）config.toml；`~/.kimi`
+ *   只做遗留清理。载体仍是顶层 [[hooks]]（CamelCase event、timeout 秒）。
+ * - 装 14 事件：原 12 项 + PermissionRequest/Result（`tool_call_id` /
+ *   `toolCallId` 配对，`decision` → accepted/rejected/cancelled/failed）。
+ * - 不装 TurnStarted/Interrupt：payload 用主 session_id 且带 turn_id，子
+ *   智能体会抢占主 scope。不装 Notification（与状态无关）。
+ * - PostToolUseFailure 的 error 在新 CLI 是对象，补 `error.message` 路径。
  *
- * 翻案记录：先前一版基于 PR#1131 ("AgentHooks for dogfooding") 改写为
- * ~/.config/agents/hooks/<name>/HOOK.md 文件制协议 —— 该 PR 已关闭未合并。
- * uninstall 仍清理该版误写入的 pier-<trigger>/HOOK.md 死目录。
- *
- * 孤儿条目清理：实测 kimi 侧工具重写 TOML 时会丢弃 marker 注释行，Pier
- * 再装时找不到 marker 便追加新块，旧条目成无 marker 孤儿（本机
- * ~/.kimi/config.toml 实证 12 条块内 + 12 条孤儿）。因此清理不能只依赖
- * 文本 marker：`withoutPierKimiHooks` 同时按 `isManagedPierHookCommand` 逐
- * [[hooks]] 条目剔除（对齐 JSON 系集成的条目所有权模式）。
- *
- * 终态对账：`transcript/kimi-reconciler.ts` 读 sessions 下 wire.jsonl 的
- * `TurnEnd`（v1 `<sid>/wire.jsonl` 与 v2 `<sid>/agents/main/wire.jsonl`
- * 双布局，roots 覆盖新老家目录），映射 TurnCompleted（payload 空，无法
- * 区分取消，interrupted 维持 unsupported；UI 回 ready 即可）。
+ * 翻案：PR#1131 文件制 HOOK.md 未合并；uninstall 仍清 pier-<trigger>。
+ * 孤儿：上游重写 TOML 会丢 marker，按 `isManagedPierHookCommand` 剔条目。
+ * 终态：`kimi-reconciler.ts` 读 wire.jsonl TurnEnd → TurnCompleted（无法
+ * 区分取消，interrupted 维持 unsupported）。
  */
 
-/**
- * HookEventType 官方枚举 (config.py) → pier 规范事件名。
- *
- * 官方枚举共 13 个:上面 12 个 + Notification。**不装 Notification**——
- * 与 claude 集成同理:kimisoul.py 源码里 Notification hook 触发点仅在
- * llm 通知场景(idle/auth_success 之类的 severity/type 通知), 与 agent
- * "正在做什么" 的状态语义无关, 装了会让状态栏抖动。刻意跳过。
- */
-const KIMI_HOOK_EVENTS: ReadonlyArray<{
+const KIMI_PERMISSION_ID_FIELDS = ["tool_call_id", "toolCallId"] as const;
+const KIMI_PERMISSION_OUTCOMES = [
+  { interactionOutcome: "accepted" as const, nativeValue: "approved" },
+  { interactionOutcome: "rejected" as const, nativeValue: "rejected" },
+  { interactionOutcome: "cancelled" as const, nativeValue: "cancelled" },
+  { interactionOutcome: "failed" as const, nativeValue: "error" },
+];
+
+/** HookEventType → pier 规范事件。不装 Notification / TurnStarted / Interrupt。 */
+export const KIMI_HOOK_EVENTS: ReadonlyArray<{
   agentTypeFields?: readonly string[];
   matcher?: string;
   nativeStateFields?: readonly string[];
   nativeStatePaths?: readonly string[];
   nativeEvent: string;
-  pierEvent: Exclude<
-    AgentHookEventPayloadV3["event"],
-    "InteractionRequested" | "InteractionResolved"
-  >;
+  pierEvent: AgentHookEventPayloadV3["event"];
 }> = [
   { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
   { nativeEvent: "UserPromptSubmit", pierEvent: "PromptSubmit" },
@@ -90,6 +64,15 @@ const KIMI_HOOK_EVENTS: ReadonlyArray<{
     nativeStateFields: ["error"],
     nativeStatePaths: ["error.message"],
     pierEvent: "ToolComplete",
+  },
+  {
+    nativeEvent: "PermissionRequest",
+    pierEvent: "InteractionRequested",
+  },
+  {
+    nativeEvent: "PermissionResult",
+    nativeStateFields: ["decision"],
+    pierEvent: "InteractionResolved",
   },
   { nativeEvent: "PreCompact", pierEvent: "processing" },
   { nativeEvent: "PostCompact", pierEvent: "processing" },
@@ -163,23 +146,51 @@ export function kimiDetect(): boolean {
  */
 const TRAILING_NEWLINES_RE = /\n+$/;
 
+function kimiManagedHookCommand(
+  event: (typeof KIMI_HOOK_EVENTS)[number]
+): string {
+  if (event.pierEvent === "InteractionRequested") {
+    return pierHookCommandV3WithStdin({
+      agentId: AGENT_ID,
+      event: "InteractionRequested",
+      interactionIdFields: KIMI_PERMISSION_ID_FIELDS,
+      interactionKind: "permission",
+      nativeEvent: event.nativeEvent,
+    });
+  }
+  if (event.pierEvent === "InteractionResolved") {
+    return pierHookCommandV3WithStdinOutcomeDispatch(
+      {
+        agentId: AGENT_ID,
+        event: "InteractionResolved",
+        interactionIdFields: KIMI_PERMISSION_ID_FIELDS,
+        interactionKind: "permission",
+        nativeEvent: event.nativeEvent,
+        nativeStateFields: event.nativeStateFields ?? ["decision"],
+      },
+      KIMI_PERMISSION_OUTCOMES
+    );
+  }
+  return pierHookCommandV3WithStdin({
+    agentId: AGENT_ID,
+    ...(event.agentTypeFields
+      ? { agentTypeFields: event.agentTypeFields }
+      : {}),
+    event: event.pierEvent,
+    nativeEvent: event.nativeEvent,
+    ...(event.nativeStateFields
+      ? { nativeStateFields: event.nativeStateFields }
+      : {}),
+    ...(event.nativeStatePaths
+      ? { nativeStatePaths: event.nativeStatePaths }
+      : {}),
+  });
+}
+
 function buildKimiHooksBlock(): string {
   const lines: string[] = [];
   for (const event of KIMI_HOOK_EVENTS) {
-    const command = pierHookCommandV3WithStdin({
-      agentId: AGENT_ID,
-      ...(event.agentTypeFields
-        ? { agentTypeFields: event.agentTypeFields }
-        : {}),
-      event: event.pierEvent,
-      nativeEvent: event.nativeEvent,
-      ...(event.nativeStateFields
-        ? { nativeStateFields: event.nativeStateFields }
-        : {}),
-      ...(event.nativeStatePaths
-        ? { nativeStatePaths: event.nativeStatePaths }
-        : {}),
-    });
+    const command = kimiManagedHookCommand(event);
     lines.push("[[hooks]]");
     lines.push(`event = ${JSON.stringify(event.nativeEvent)}`);
     if (event.matcher !== undefined) {

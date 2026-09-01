@@ -39,6 +39,8 @@ const NATIVE_EVENTS = [
   "PreToolUse",
   "PostToolUse",
   "PostToolUseFailure",
+  "PermissionRequest",
+  "PermissionResult",
   "PreCompact",
   "PostCompact",
   "Stop",
@@ -219,6 +221,162 @@ describe("withPierKimiHooks (TOML 注入)", () => {
       status: "error",
     });
   }, 15_000);
+
+  it("PermissionRequest/Result 用 toolCallId 配对，授权进 waiting", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-kimi-perm-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const config = withPierKimiHooks("");
+    const commandFor = (nativeEvent: string): string => {
+      const chunk = config
+        .split("[[hooks]]")
+        .find((entry) => entry.includes(`event = "${nativeEvent}"`));
+      const line = chunk
+        ?.split("\n")
+        .find((entry) => entry.startsWith("command = "));
+      return JSON.parse((line ?? "").slice("command = ".length)) as string;
+    };
+    for (const [event, payload] of [
+      [
+        "UserPromptSubmit",
+        {
+          hook_event_name: "UserPromptSubmit",
+          prompt: "Fix it",
+          session_id: "session-k",
+        },
+      ],
+      [
+        "PreToolUse",
+        {
+          hook_event_name: "PreToolUse",
+          session_id: "session-k",
+          toolCallId: "tool-perm-k",
+          toolName: "Bash",
+        },
+      ],
+      [
+        "PermissionRequest",
+        {
+          hook_event_name: "PermissionRequest",
+          session_id: "session-k",
+          toolCallId: "tool-perm-k",
+          toolName: "Bash",
+        },
+      ],
+      [
+        "PermissionResult",
+        {
+          decision: "approved",
+          hook_event_name: "PermissionResult",
+          session_id: "session-k",
+          toolCallId: "tool-perm-k",
+        },
+      ],
+    ] as const) {
+      const result = spawnSync("/bin/sh", ["-c", commandFor(event)], {
+        env: {
+          ...process.env,
+          PATH: pathForHookSpawn(process.env.PATH),
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+          PIER_PANEL_ID: "panel-1",
+          PIER_WINDOW_ID: "window-1",
+        },
+        input: JSON.stringify(payload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows[2]).toMatchObject({
+      event: "InteractionRequested",
+      interactionId: "tool-perm-k",
+      interactionKind: "permission",
+      toolUseId: "tool-perm-k",
+      v: 3,
+    });
+    expect(rows[3]).toMatchObject({
+      event: "InteractionResolved",
+      interactionId: "tool-perm-k",
+      interactionKind: "permission",
+      interactionOutcome: "accepted",
+      nativeState: "approved",
+      v: 3,
+    });
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: Array<string | undefined> = [];
+    for (const row of rows) {
+      if (row.kind !== "agentEvent") continue;
+      aggregator.ingestAgentEvent(row, {
+        evidenceSource: "hook",
+        stopAuthority: "advisory",
+        turnStartAuthority: "none",
+      });
+      const activity = aggregator.snapshot().activities[0];
+      statuses.push(activity?.kind === "agent" ? activity.status : undefined);
+    }
+    expect(statuses).toEqual(["processing", "tool", "waiting", "tool"]);
+  }, 15_000);
+
+  it("空 turnId 的 StopFailure 后 PreToolUse 解封，不再钉死错误", () => {
+    const aggregator = createForegroundActivityAggregator();
+    const options = {
+      evidenceSource: "hook",
+      stopAuthority: "advisory",
+      turnStartAuthority: "none",
+    } as const;
+    aggregator.ingestAgentEvent(
+      {
+        agent: "kimi",
+        event: "SessionStart",
+        kind: "agentEvent",
+        nativeEvent: "SessionStart",
+        panelId: "panel-1",
+        v: 3,
+        windowId: "window-1",
+      },
+      options
+    );
+    aggregator.ingestAgentEvent(
+      {
+        agent: "kimi",
+        event: "error",
+        kind: "agentEvent",
+        nativeEvent: "StopFailure",
+        panelId: "panel-1",
+        v: 3,
+        windowId: "window-1",
+      },
+      options
+    );
+    expect(aggregator.snapshot().activities[0]).toMatchObject({
+      kind: "agent",
+      status: "error",
+    });
+    aggregator.ingestAgentEvent(
+      {
+        agent: "kimi",
+        event: "ToolStart",
+        kind: "agentEvent",
+        nativeEvent: "PreToolUse",
+        panelId: "panel-1",
+        toolName: "Bash",
+        toolUseId: "tool-k",
+        v: 3,
+        windowId: "window-1",
+      },
+      options
+    );
+    expect(aggregator.snapshot().activities[0]).toMatchObject({
+      kind: "agent",
+      status: "tool",
+    });
+    aggregator.dispose();
+  });
 
   it("幂等：二次注入同源同结果", () => {
     const once = withPierKimiHooks("foo = 1\n");
@@ -587,5 +745,20 @@ describe("kimiDetect", () => {
 describe("kimiIntegration 契约", () => {
   it("id 为 kimi", () => {
     expect(kimiIntegration.id).toBe("kimi");
+  });
+
+  it("emittedMappings 含 PermissionRequest/Result 成对交互", () => {
+    expect(kimiIntegration.runtime.emittedMappings).toEqual(
+      expect.arrayContaining([
+        {
+          nativeEvent: "PermissionRequest",
+          pierEvent: "InteractionRequested",
+        },
+        {
+          nativeEvent: "PermissionResult",
+          pierEvent: "InteractionResolved",
+        },
+      ])
+    );
   });
 });

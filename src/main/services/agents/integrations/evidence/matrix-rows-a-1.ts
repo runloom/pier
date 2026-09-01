@@ -346,12 +346,11 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       ready: "reconciled",
       processing: "native",
       tool: "native",
-      waiting: "unsupported",
+      waiting: "native",
       error: "native",
       completed: "reconciled",
       // TurnEnd payload 为空、无法区分取消（取消也报 TurnCompleted）；
-      // Kimi Code 的 Interrupt 事件带子智能体 turn_id 泄漏面，未安装
-      // （见 kimi.ts「刻意不装的新事件」）。
+      // Interrupt 带子智能体 turn_id 泄漏面，未安装。
       interrupted: "unsupported",
       subagent: "native",
     },
@@ -362,6 +361,8 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       fact("ready", "reconciled", "kimi.wire.TurnEnd", "TurnCompleted"),
       nativeFact("processing", "UserPromptSubmit", "PromptSubmit"),
       nativeFact("tool", "PreToolUse", "ToolStart"),
+      nativeFact("waiting", "PermissionRequest", "InteractionRequested"),
+      nativeFact("waiting", "PermissionResult", "InteractionResolved"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
       nativeFact("processing", "PostToolUseFailure", "ToolComplete"),
       nativeFact("processing", "PreCompact", "processing"),

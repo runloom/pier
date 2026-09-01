@@ -13,6 +13,7 @@ import { DROID_HOOK_EVENTS } from "@main/services/agents/integrations/droid.ts";
 import { AGENT_STATUS_EVIDENCE } from "@main/services/agents/integrations/evidence/matrix.ts";
 import { GEMINI_HOOK_EVENTS } from "@main/services/agents/integrations/gemini.ts";
 import { GROK_HOOK_EVENTS } from "@main/services/agents/integrations/grok.ts";
+import { KIMI_HOOK_EVENTS } from "@main/services/agents/integrations/kimi.ts";
 import { buildOmpExtensionSource } from "@main/services/agents/integrations/omp.ts";
 import {
   buildOpencodePluginSource,
@@ -221,6 +222,19 @@ describe("S3 agentStatusHooks ingest gate", () => {
 });
 
 describe("B-tier permission-adjacent mappings retained after review", () => {
+  it("Kimi PermissionRequest/Result 成对映射 waiting", () => {
+    expect(hasWaitingMapping(KIMI_HOOK_EVENTS, "PermissionRequest")).toBe(true);
+    expect(hasWaitingMapping(KIMI_HOOK_EVENTS, "PermissionResult")).toBe(false);
+    expect(
+      KIMI_HOOK_EVENTS.some(
+        (event) =>
+          event.nativeEvent === "PermissionResult" &&
+          event.pierEvent === "InteractionResolved"
+      )
+    ).toBe(true);
+    expect(AGENT_STATUS_EVIDENCE.kimi.evidence.waiting).toBe("native");
+  });
+
   it("Gemini ToolPermission 与 ask_user 缺少完整结果闭环，不映射 waiting", () => {
     expect(hasWaitingMapping(GEMINI_HOOK_EVENTS, "Notification")).toBe(false);
     expect(hasWaitingMapping(GEMINI_HOOK_EVENTS, "BeforeTool")).toBe(false);
