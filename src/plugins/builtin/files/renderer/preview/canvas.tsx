@@ -272,6 +272,13 @@ export function FileCanvasPreview(props: {
       onContextMenu={onContextMenu}
       ref={previewRootRef}
     >
+      {softError ? (
+        <CanvasSoftErrorBanner
+          message={softError.message}
+          onReload={reload}
+          t={props.t}
+        />
+      ) : null}
       <div
         className={cn(
           "min-h-0 flex-1",
@@ -281,16 +288,6 @@ export function FileCanvasPreview(props: {
         data-slot="file-canvas-scroll"
         ref={shellRef}
       >
-        {softError ? (
-          <div className={cn(worldActive && "absolute inset-x-0 top-0 z-30")}>
-            <CanvasSoftErrorBanner
-              message={softError.message}
-              onReload={reload}
-              t={props.t}
-            />
-          </div>
-        ) : null}
-
         {state.kind === "error" ? (
           <CanvasCompileErrorEmpty
             diagnostics={state.diagnostics}

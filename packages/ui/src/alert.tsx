@@ -9,6 +9,11 @@ import { cn } from "./utils.ts";
  * - background + border carry status color
  * - icon uses the shared StatusIcon set on the first content line
  * - title/description stay on neutral text tokens (not tinted)
+ *
+ * `layout="callout"` (default): in-content card (settings, Markdown, dialogs).
+ * `layout="infobar"`: panel-chrome strip while the primary body remains
+ * visible — VS Code / JetBrains analogue. Flush to the panel edge; no extra
+ * wrapper padding or second border.
  */
 const alertVariants = cva(
   // Grid is [icon | body] when a status icon is present. Free children must
@@ -23,8 +28,13 @@ const alertVariants = cva(
         warning: "border-status-warning-border bg-status-warning-bg",
         destructive: "border-status-danger-border bg-status-danger-bg",
       },
+      layout: {
+        callout: "",
+        infobar: "shrink-0 rounded-none border-x-0 border-t-0",
+      },
     },
     defaultVariants: {
+      layout: "callout",
       variant: "default",
     },
   }
@@ -42,20 +52,29 @@ const ALERT_STATUS_ICON: Record<AlertVariant, StatusIconKind | null> = {
 
 function Alert({
   className,
+  layout = "callout",
   variant = "default",
   children,
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof alertVariants>) {
   const resolvedVariant = variant ?? "default";
+  const resolvedLayout = layout ?? "callout";
   const iconKind = ALERT_STATUS_ICON[resolvedVariant];
 
   return (
     <div
-      className={cn(alertVariants({ variant: resolvedVariant }), className)}
+      className={cn(
+        alertVariants({
+          layout: resolvedLayout,
+          variant: resolvedVariant,
+        }),
+        className
+      )}
       data-slot="alert"
       data-variant={resolvedVariant}
       role="alert"
       {...props}
+      data-layout={resolvedLayout}
     >
       {iconKind ? <StatusIcon kind={iconKind} size="md" /> : null}
       {/*

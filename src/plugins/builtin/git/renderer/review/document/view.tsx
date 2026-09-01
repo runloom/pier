@@ -244,7 +244,7 @@ export function GitReviewDocumentView({
       data-git-review-navigation-gate="false"
     >
       {!targetSelectionPending && warnings.length > 0 ? (
-        <Alert className="m-2">
+        <Alert layout="infobar">
           <AlertTitle>
             {pluginText(context, "reviewPartialTitle", "Partial results")}
           </AlertTitle>

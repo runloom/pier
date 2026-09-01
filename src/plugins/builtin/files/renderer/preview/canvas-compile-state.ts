@@ -4,7 +4,7 @@ import type { LiveModuleFramework } from "@shared/live-module-framework.ts";
 /** Only show skeleton if compile still pending after this delay (avoids flash). */
 export const CANVAS_SKELETON_DELAY_MS = 200;
 
-/** Hot-reload compile failure / warnings while previous mount stays visible. */
+/** Compile warnings while the successful mount stays visible. Failures use Empty. */
 export interface SoftError {
   diagnostics: LiveModuleDiagnostic[];
   message: string;
@@ -16,7 +16,7 @@ export type CanvasPreviewState =
   | {
       kind: "ready";
       framework: LiveModuleFramework;
-      /** Hot-reload compile failure: keep previous mount, show banner. */
+      /** Compile warnings: keep mount, show banner. Failures use kind "error". */
       softError?: SoftError;
     }
   | {

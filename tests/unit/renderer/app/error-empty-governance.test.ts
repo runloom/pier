@@ -71,11 +71,20 @@ describe("full-region error Empty governance", () => {
       }
       if (rel.endsWith("canvas-states.tsx")) {
         expect(src).toContain("CanvasCompileErrorEmpty");
-        // Runtime crash titles belong on Empty, not soft Alert banner.
+        expect(src).toContain("ErrorEmpty");
+        // Compile failures and runtime crashes belong on Empty, not soft Alert.
         expect(src).not.toMatch(/CanvasSoftErrorBanner[\s\S]{0,80}isRuntime/);
         expect(src).toMatch(
           /isRuntime[\s\S]{0,200}filePanel\.canvas\.runtimeFailed/
         );
+        expect(src).toContain(
+          "Compile failures and runtime crashes clear the host"
+        );
+        // Warning infobar: Alert layout="infobar", not a padded card.
+        expect(src).toContain('layout="infobar"');
+        expect(src).toContain("AlertAction");
+        expect(src).not.toMatch(/border-border border-b px-4 py-3/);
+        expect(src).not.toMatch(/rounded-none border-x-0 border-t-0/);
       }
       if (rel.endsWith("unavailable-panel.tsx")) {
         expect(src).toContain("ErrorEmpty");
@@ -83,5 +92,20 @@ describe("full-region error Empty governance", () => {
         expect(src).toMatch(/data-slot=["']panel-transfer-unavailable["']/);
       }
     }
+  });
+
+  it("canvas compile/import failure never keeps a stale mount via soft Alert", () => {
+    const src = readFileSync(
+      join(
+        ROOT,
+        "src/plugins/builtin/files/renderer/preview/canvas-compile-session.ts"
+      ),
+      "utf8"
+    );
+    expect(src).not.toMatch(
+      /isHotReload && unmountRef\.current && !isRuntimeError/
+    );
+    expect(src).toContain("never a soft Alert");
+    expect(src).toContain("always Empty");
   });
 });

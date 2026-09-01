@@ -276,25 +276,8 @@ export function useCanvasCompileSession(props: {
             setState(trustDeclinedState(t));
             return;
           }
-          const soft: SoftError = {
-            diagnostics: result.diagnostics,
-            message:
-              result.diagnostics[0]?.message ??
-              t("filePanel.canvas.compileFailed", "Couldn’t compile canvas"),
-          };
-          if (isHotReload && unmountRef.current) {
-            // Keep previous canvas; surface diagnostics as a banner.
-            setState((current) =>
-              current.kind === "ready"
-                ? { ...current, softError: soft }
-                : {
-                    diagnostics: soft.diagnostics,
-                    kind: "error",
-                    message: soft.message,
-                  }
-            );
-            return;
-          }
+          // Compile failure occupies the region — Empty, never a soft Alert
+          // over a stale previous mount (including hot reload).
           clearMountedCanvas(
             hostEl,
             unmountRef,
@@ -303,9 +286,11 @@ export function useCanvasCompileSession(props: {
           );
           mountedModuleIdRef.current = null;
           setState({
-            diagnostics: soft.diagnostics,
+            diagnostics: result.diagnostics,
             kind: "error",
-            message: soft.message,
+            message:
+              result.diagnostics[0]?.message ??
+              t("filePanel.canvas.compileFailed", "Couldn’t compile canvas"),
           });
           return;
         }
@@ -334,8 +319,8 @@ export function useCanvasCompileSession(props: {
         mountedModuleIdRef.current = null;
 
         // Runtime crash: ErrorBoundary already renders null — no body remains.
-        // Primary error state must be Empty (not soft Alert banner). Soft Alert
-        // is only for hot-reload compile failure while previous mount is kept.
+        // Compile failures and runtime crashes both use Empty. Soft Alert is
+        // only for compile warnings while the successful mount is kept.
         const reportRuntimeError = (error: Error) => {
           queueMicrotask(() => {
             if (!stillOwner()) {
@@ -422,24 +407,9 @@ export function useCanvasCompileSession(props: {
         }
         clearSkeletonTimer();
         const message = canvasMountErrorMessage(error, t);
-        // Mount shape failures (bad exports) use the runtime copy; compile/import
-        // failures keep the compile copy. Soft banner only when previous mount
-        // is still on screen (import failed before atomic swap tore it down).
+        // Mount shape failures use the runtime copy; compile/import keep compile
+        // copy. Previous mount is stale once this generation fails — always Empty.
         const isRuntimeError = error instanceof LiveModuleMountError;
-        if (isHotReload && unmountRef.current && !isRuntimeError) {
-          setState((current) =>
-            current.kind === "ready"
-              ? {
-                  ...current,
-                  softError: {
-                    diagnostics: [],
-                    message,
-                  },
-                }
-              : { diagnostics: [], kind: "error", message }
-          );
-          return;
-        }
         clearMountedCanvas(
           hostEl,
           unmountRef,

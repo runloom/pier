@@ -206,10 +206,11 @@ describe("FileCanvasPreview", () => {
       expect(screen.getByText("Couldn’t compile canvas")).toBeTruthy();
     });
     expect(
-      document.querySelector("[data-slot='file-canvas-diagnostics']")
+      document.querySelector("[data-slot='file-canvas-error-empty']")
     ).toBeTruthy();
-    expect(screen.getAllByText("first error").length).toBeGreaterThan(0);
-    expect(screen.getByText("second error")).toBeTruthy();
+    expect(screen.getByText(/first error/u)).toBeTruthy();
+    expect(screen.getByText(/second error/u)).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
     const reloadButtons = screen.getAllByRole("button", { name: "Reload" });
     expect(reloadButtons.length).toBeGreaterThan(0);
 
@@ -263,7 +264,7 @@ describe("FileCanvasPreview", () => {
     expect(
       screen.getByText("Cannot read properties of undefined (reading 'filter')")
     ).toBeTruthy();
-    // Soft Alert banner is only for hot-reload compile while content is kept.
+    // Soft Alert banner is only for compile warnings while content is kept.
     expect(
       document.querySelector("[data-slot='file-canvas-soft-error']")
     ).toBeNull();
@@ -273,7 +274,7 @@ describe("FileCanvasPreview", () => {
     consoleError.mockRestore();
   });
 
-  it("hot reload compile failure keeps previous mount (soft error)", async () => {
+  it("hot reload compile failure uses Empty and drops the previous mount", async () => {
     let generation = 0;
     const compile = vi.fn(async () => {
       generation += 1;
@@ -285,7 +286,7 @@ describe("FileCanvasPreview", () => {
           url: makeModuleDataUrl(`
             export function mount(el) {
               el.setAttribute("data-test-canvas", "kept");
-              return () => {};
+              return () => { el.removeAttribute("data-test-canvas"); };
             }
             export default function App() { return null; }
           `),
@@ -335,10 +336,57 @@ describe("FileCanvasPreview", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toBeTruthy();
+      expect(
+        document.querySelector("[data-slot='file-canvas-error-empty']")
+      ).toBeTruthy();
     });
-    expect(document.querySelector("[data-test-canvas='kept']")).toBeTruthy();
-    expect(screen.getByText(/syntax error after edit/u)).toBeTruthy();
+    expect(document.querySelector("[data-test-canvas='kept']")).toBeNull();
+    expect(
+      document.querySelector("[data-slot='file-canvas-soft-error']")
+    ).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText("Couldn’t compile canvas")).toBeTruthy();
+    expect(screen.getByText("syntax error after edit")).toBeTruthy();
+  });
+
+  it("compile warnings keep the mount and show a soft Alert banner", async () => {
+    const compile = vi.fn(async () => ({
+      graph: [],
+      moduleId: "smoke/hello.canvas.tsx",
+      ok: true as const,
+      url: makeModuleDataUrl(`
+        export function mount(el) {
+          el.setAttribute("data-test-canvas", "warn");
+          return () => {};
+        }
+        export default function App() { return null; }
+      `),
+      warnings: [{ message: "unused import", severity: "warning" as const }],
+    }));
+
+    render(
+      <FileCanvasPreview
+        context={createContext({
+          compile,
+          onChanged: vi.fn(() => () => undefined),
+          registerRoot: vi.fn(async () => undefined),
+        })}
+        path={CANVAS_PATH}
+        root={PROJECT_ROOT}
+        t={t}
+      />
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-test-canvas='warn']")).toBeTruthy();
+    });
+    expect(
+      document.querySelector("[data-slot='file-canvas-soft-error']")
+    ).toBeTruthy();
+    const banner = screen.getByRole("alert");
+    expect(banner.getAttribute("data-slot")).toBe("file-canvas-soft-error");
+    expect(banner.className).toMatch(/rounded-none/u);
+    expect(screen.getByText("unused import")).toBeTruthy();
   });
 
   it("hot reload keeps previous content (no skeleton) until new mount", async () => {

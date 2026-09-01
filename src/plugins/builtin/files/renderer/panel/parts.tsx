@@ -62,10 +62,7 @@ export function OutsideWorkspaceBanner({
     }
   }, [context, path, root, t]);
   return (
-    <Alert
-      className="shrink-0 rounded-none border-x-0 border-t-0"
-      variant="info"
-    >
+    <Alert layout="infobar" variant="info">
       <AlertTitle>
         {t(
           "filePanel.banner.outsideWorkspace",
@@ -152,7 +149,7 @@ export function FileReadErrorEmpty({
   );
 }
 
-/** Soft banner when save failed but editor body remains visible. */
+/** Soft infobar when save failed but editor body remains visible. */
 export function FileSaveErrorBanner({
   message,
   t,
@@ -161,14 +158,12 @@ export function FileSaveErrorBanner({
   t: FilesTranslate;
 }) {
   return (
-    <div className="shrink-0 px-4 py-3">
-      <Alert variant="destructive">
-        <AlertTitle>
-          {t("filePanel.errors.save.title", "Unable to save file")}
-        </AlertTitle>
-        <AlertDescription>{message}</AlertDescription>
-      </Alert>
-    </div>
+    <Alert layout="infobar" variant="destructive">
+      <AlertTitle>
+        {t("filePanel.errors.save.title", "Unable to save file")}
+      </AlertTitle>
+      <AlertDescription>{message}</AlertDescription>
+    </Alert>
   );
 }
 
