@@ -1,9 +1,9 @@
 /**
- * 全路径锁定：从 terminal 发起 background 任务时，
+ * 全路径锁定：从任意面板发起 background 任务时，
  * origin 面板的 tab 活跃点与 RC mount 必须同真。
  *
- * 覆盖产品复现：用户在 Grok/普通终端上 Run Task → mode=background
- * → originPanelId=当前终端 → 应有任务蓝点 + 任务运行条。
+ * 覆盖产品复现：在终端或 git 上 Run Task → mode=background
+ * → originPanelId=当前面板 → 应有任务蓝点 + 任务运行条。
  */
 
 import type {
@@ -64,7 +64,7 @@ function filterRunsForWindow(
   );
 }
 
-describe("task runtime presence path (terminal → background → origin RC)", () => {
+describe("task runtime presence path (origin panel → background → origin RC)", () => {
   const originPanelId = "terminal-grok";
   const ownerWindowId = "main";
 
@@ -126,6 +126,21 @@ describe("task runtime presence path (terminal → background → origin RC)", (
     });
     const filtered = filterRunsForWindow({ [run.runId]: run }, ownerWindowId);
     expect(Object.keys(filtered)).toEqual([run.runId]);
+  });
+
+  it("git changes origin gets the same RC-scope as a terminal origin", () => {
+    const originPanelId = "git-changes";
+    const run = backgroundRunOnOrigin(originPanelId, "running", {
+      ownerWindowId,
+    });
+    const snapshot: TaskRunsSnapshot = {
+      runs: { [run.runId]: run },
+      version: 1,
+    };
+    const dismissed = new Set<string>();
+    const forOrigin = taskRunsForPanel(snapshot, originPanelId);
+    expect(panelHasActiveTaskRun(snapshot, originPanelId)).toBe(true);
+    expect(panelShouldMountRuntimeControl(forOrigin, dismissed)).toBe(true);
   });
 
   it("agent panel without TaskRun: no active-task dot and no task RC", () => {

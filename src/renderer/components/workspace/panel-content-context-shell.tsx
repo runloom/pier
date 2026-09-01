@@ -3,6 +3,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
   useCallback,
+  useRef,
 } from "react";
 import { PANEL_CONTENT_SURFACE } from "@/lib/context-menu/build-entries.ts";
 import { captureDomSelectionText } from "@/lib/context-menu/selection-text.ts";
@@ -10,6 +11,7 @@ import { popupContextMenuAt } from "@/lib/context-menu/use-menu.ts";
 import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
+import { PanelTaskRuntimeOverlay } from "./panel-task-runtime-overlay.tsx";
 
 /**
  * 所有 web panel 内容区的兜底右键：弹出共享 panel/content 布局菜单。
@@ -20,11 +22,14 @@ export function PanelContentContextShell({
   api,
   children,
   component,
+  params,
 }: {
   api: IDockviewPanelProps["api"];
   children: ReactNode;
   component: string;
+  params?: unknown;
 }) {
+  const panelRootRef = useRef<HTMLDivElement | null>(null);
   const panelId = api.id;
   const groupId = typeof api.group?.id === "string" ? api.group.id : undefined;
   const onContextMenu = useCallback(
@@ -65,10 +70,16 @@ export function PanelContentContextShell({
     // biome-ignore lint/a11y/noStaticElementInteractions: panel content root is the layout-menu hit target
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: context menu only; keyboard path stays with focused content
     <div
-      className="h-full min-h-0 w-full min-w-0"
+      className="relative h-full min-h-0 w-full min-w-0"
       onContextMenu={onContextMenu}
+      ref={panelRootRef}
     >
       {children}
+      <PanelTaskRuntimeOverlay
+        api={api}
+        panelRootRef={panelRootRef}
+        params={params}
+      />
     </div>
   );
 }

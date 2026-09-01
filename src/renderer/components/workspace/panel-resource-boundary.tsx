@@ -48,6 +48,7 @@ export function withPanelResourceBoundary(
         <PanelContentContextShell
           api={props.api}
           component={props.api.component}
+          params={props.params}
         >
           <Component {...props} />
         </PanelContentContextShell>
@@ -164,7 +165,11 @@ export function withPluginPanelHostBoundary(
     if (registration.resourcePolicy === "unmountWhenHidden") {
       return (
         <UnmountWhenHiddenPanel>
-          <PanelContentContextShell api={props.api} component={registration.id}>
+          <PanelContentContextShell
+            api={props.api}
+            component={registration.id}
+            params={props.params}
+          >
             {bounded}
           </PanelContentContextShell>
         </UnmountWhenHiddenPanel>
@@ -172,7 +177,11 @@ export function withPluginPanelHostBoundary(
     }
     return (
       <PanelResourceBoundary api={props.api}>
-        <PanelContentContextShell api={props.api} component={registration.id}>
+        <PanelContentContextShell
+          api={props.api}
+          component={registration.id}
+          params={props.params}
+        >
           {bounded}
         </PanelContentContextShell>
       </PanelResourceBoundary>

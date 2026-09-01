@@ -32,7 +32,6 @@ interface TerminalRuntimeControlPresentation {
   now: number;
   phase: TerminalRuntimeControlPhase;
   runs: readonly TaskRunControlEntry[];
-  setAutoExitPause(paused: boolean): void;
 }
 
 type InternalPhase = "exiting" | "hidden" | "visible";
@@ -40,17 +39,6 @@ type InternalPhase = "exiting" | "hidden" | "visible";
 /** 与 tab 蓝点 / shared isActiveTaskRunNodeStatus 单一来源，禁止再分叉。 */
 export function isActiveTaskRunStatus(status: TaskRunNodeStatus): boolean {
   return isActiveTaskRunNodeStatus(status);
-}
-
-/** @deprecated 终态一律 linger 后退场；保留导出供旧测试/调用方过渡。 */
-export function isPersistentTaskRun(run: TaskRunControlEntry): boolean {
-  if (run.status === "failed" || run.status === "blocked") {
-    return true;
-  }
-  return (
-    run.status === "cancelled" &&
-    Object.values(run.nodes).some((node) => node.termination === "force")
-  );
 }
 
 function logicalTaskRunKey(run: TaskRunControlEntry): string {
@@ -328,8 +316,6 @@ export function useTerminalRuntimeControlPresentation(
     );
   }, [clearExitTimer, currentRuns, eligibleRuns, setPhase]);
 
-  const setAutoExitPause = useCallback((_paused: boolean) => {}, []);
-
   const runs = eligibleRuns.length > 0 ? eligibleRuns : retainedRuns;
   return {
     dismissRun,
@@ -337,6 +323,5 @@ export function useTerminalRuntimeControlPresentation(
     now,
     phase: eligibleRuns.length > 0 || phase === "hidden" ? "visible" : phase,
     runs,
-    setAutoExitPause,
   };
 }

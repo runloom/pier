@@ -2,7 +2,6 @@ import type {
   TaskCandidate,
   TaskListResult,
   TaskSource,
-  TaskSpawnMode,
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
 import { createLogger } from "@shared/logger.ts";
@@ -39,35 +38,26 @@ const log = createLogger("task.spawn.ui");
 async function spawnTask(args: {
   forceRestart: boolean;
   inputs?: Record<string, string>;
-  mode?: TaskSpawnMode;
   project: ProjectContext;
   skipMissingDependencies?: boolean;
   terminalPanelId?: string | undefined;
   taskId: string;
 }): Promise<TaskSpawnResult> {
-  const terminalPanelId =
-    args.terminalPanelId ??
-    (args.mode === "background" ? args.project.terminalPanelId : undefined);
+  const originPanelId = args.terminalPanelId ?? args.project.terminalPanelId;
   return await window.pier.tasks.spawn({
-    focus: args.mode !== "background",
+    focus: false,
     forceRestart: args.forceRestart,
     ...(args.inputs ? { inputs: args.inputs } : {}),
-    ...(args.mode === "background" ? { mode: args.mode } : {}),
-    placement: "active-tab",
+    mode: "background",
     projectRootPath: args.project.projectRootPath,
     ...(args.skipMissingDependencies ? { skipMissingDependencies: true } : {}),
-    ...(terminalPanelId ? { terminalPanelId } : {}),
-    ...(args.project.targetGroupId
-      ? { targetGroupId: args.project.targetGroupId }
-      : {}),
+    ...(originPanelId ? { terminalPanelId: originPanelId } : {}),
     taskId: args.taskId,
   });
 }
 
 interface ProjectContext {
-  defaultTaskSpawnMode?: TaskSpawnMode;
   projectRootPath: string;
-  targetGroupId?: string;
   terminalPanelId?: string;
 }
 
@@ -87,21 +77,10 @@ function activeProjectContext(
   }
   const sourcePanelId =
     invocation?.sourcePanelId ?? api?.activePanel?.id ?? undefined;
-  const sourcePanel = sourcePanelId
-    ? api?.panels.find((panel) => panel.id === sourcePanelId)
-    : api?.activePanel;
-  const resolvedTargetGroupId =
-    invocation?.sourcePanelGroupId ?? anchor.groupId ?? api?.activeGroup?.id;
   return {
-    defaultTaskSpawnMode:
-      sourcePanel?.view.contentComponent === "terminal"
-        ? "background"
-        : "terminal-tab",
+    // Run Task 一律后台挂当前面板；不另开终端 tab。terminal-tab 只用于重跑已有任务终端。
     projectRootPath,
-    ...(sourcePanel?.view.contentComponent === "terminal"
-      ? { terminalPanelId: sourcePanel.id }
-      : {}),
-    ...(resolvedTargetGroupId ? { targetGroupId: resolvedTargetGroupId } : {}),
+    ...(sourcePanelId ? { terminalPanelId: sourcePanelId } : {}),
   };
 }
 
@@ -208,13 +187,11 @@ async function spawnTaskWithInputFlow(
   taskId: string,
   options: {
     forceRestart: boolean;
-    mode?: TaskSpawnMode;
     terminalPanelId?: string | undefined;
   }
 ): Promise<void> {
-  const mode = options.mode ?? project.defaultTaskSpawnMode ?? "terminal-tab";
   const beginCtx = {
-    mode,
+    mode: "background" as const,
     projectRootPath: project.projectRootPath,
     taskId,
     terminalPanelId: options.terminalPanelId ?? project.terminalPanelId,
@@ -238,7 +215,7 @@ async function spawnTaskWithInputFlow(
       return;
     }
     const resultCtx = {
-      mode,
+      mode: "background" as const,
       runId: "runId" in result ? result.runId : undefined,
       status: result.status,
       taskId,
@@ -292,7 +269,6 @@ function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
   // 与控制条「重新运行」同语义：未关闭的同任务复用 / 顶替旧 run，不另开 tab。
   return spawnTaskWithInputFlow(project, item.id, {
     forceRestart: true,
-    mode: project.defaultTaskSpawnMode ?? "terminal-tab",
   });
 }
 

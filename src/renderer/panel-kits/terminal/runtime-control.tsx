@@ -1,6 +1,7 @@
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { formatDurationShort } from "@pier/ui/format.tsx";
+import { useMinSpinVisual } from "@pier/ui/hooks/use-min-spin.ts";
 import { Spinner } from "@pier/ui/spinner.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
@@ -35,22 +36,26 @@ import {
 } from "./runtime-status.tsx";
 
 function ActionButton({
+  busy = false,
   className,
   disabled,
   icon: Icon,
   label,
   loading = false,
   onClick,
+  spin = false,
   testId,
   tone = "default",
   variant = "ghost",
 }: {
+  busy?: boolean;
   className?: string;
   disabled?: boolean;
   icon: LucideIcon;
   label: string;
   loading?: boolean;
   onClick(): Promise<void> | void;
+  spin?: boolean;
   testId?: string;
   tone?: "default" | "muted";
   variant?: "destructive" | "ghost";
@@ -59,6 +64,7 @@ function ActionButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          aria-busy={busy || loading || undefined}
           aria-label={label}
           className={className}
           data-testid={testId}
@@ -72,7 +78,11 @@ function ActionButton({
           {loading ? (
             <Spinner aria-hidden="true" data-icon="inline-start" />
           ) : (
-            <Icon aria-hidden="true" data-icon="inline-start" />
+            <Icon
+              aria-hidden="true"
+              className={cn(spin && "animate-spin")}
+              data-icon="inline-start"
+            />
           )}
         </Button>
       </TooltipTrigger>
@@ -101,6 +111,9 @@ export function TerminalRuntimeControl({
   const [pendingAction, setPendingAction] = useState<
     "close" | "restart" | "stop" | null
   >(null);
+  const restartPending = pendingAction === "restart";
+  // 视觉下限：快速重启至少让用户看到按钮响应；不延迟禁用态。整段运行仍由左侧状态点负责。
+  const spinRestart = useMinSpinVisual(restartPending);
 
   const run =
     runs.find((candidate) => candidate.runId === selectedRunId) ?? runs[0];
@@ -280,14 +293,15 @@ export function TerminalRuntimeControl({
         )}
         {!active || run.status === "running" ? (
           <ActionButton
+            busy={restartPending}
             className={cn(
               "text-action-accent hover:bg-action-accent/10 hover:text-action-accent"
             )}
             disabled={pendingAction !== null}
             icon={RotateCcw}
             label={t("terminal.runtimeControl.restart")}
-            loading={pendingAction === "restart"}
             onClick={restart}
+            spin={spinRestart}
             testId="terminal-runtime-control-restart"
           />
         ) : null}
