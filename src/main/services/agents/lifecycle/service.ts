@@ -285,7 +285,6 @@ export function createAgentLifecycleService(
         return fail(agentId, action, "timeout", {
           runId,
           commandPreview: planned.preview,
-          errorDetail: result.stderr || undefined,
         });
       }
       if (result.packageManagerMissing) {

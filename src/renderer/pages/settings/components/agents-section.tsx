@@ -25,6 +25,7 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { Fragment, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
+import { formatLifecycleBatchFailureLine } from "@/pages/settings/components/agent-lifecycle-format.ts";
 import { AgentRow } from "@/pages/settings/components/agent-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
@@ -261,14 +262,14 @@ function AgentsToolbar() {
         return showAppAlert({
           title: t("settings.agents.list.updateAllPartial"),
           body: failures
-            .map((f) => {
-              const code = f.errorCode ?? "command_failed";
-              const msg = t(`settings.agents.lifecycle.errors.${code}`);
-              const detail = f.errorDetail?.trim();
-              return detail
-                ? `${f.agentId}: ${msg} (${detail})`
-                : `${f.agentId}: ${msg}`;
-            })
+            .map((f) =>
+              formatLifecycleBatchFailureLine(t, {
+                agentLabel: getAgentCatalogEntry(f.agentId)?.label ?? f.agentId,
+                errorCode: f.errorCode,
+                errorDetail: f.errorDetail,
+                commandPreview: f.commandPreview,
+              })
+            )
             .join("\n"),
         });
       })
