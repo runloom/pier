@@ -26,9 +26,15 @@ interface ThemeState {
   theme: ThemePreference;
 }
 
-export function resolveTheme(preference: ThemePreference): ResolvedTheme {
+export function resolveTheme(
+  preference: ThemePreference,
+  systemDark?: boolean
+): ResolvedTheme {
   if (preference === "light" || preference === "dark") {
     return preference;
+  }
+  if (typeof systemDark === "boolean") {
+    return systemDark ? "dark" : "light";
   }
   const prefersDark =
     typeof window !== "undefined" &&
@@ -60,11 +66,13 @@ function applyDocumentTheme(resolved: ResolvedTheme): void {
  *
  * 失败 (preload 未 ready / native addon 未装) 时静默 — 终端只是色板没跟上, 不
  * 影响 DOM 主题应用; 不能让 IPC 错误拖垮整个主题切换.
+ *
+ * setNativeChrome 的第一参是偏好（含 system），不是已解析 light/dark。
+ * 把 themeSource 钉成 light/dark 会锁死 Chromium prefers-color-scheme。
  */
 let pendingTerminalApply: {
   colors: TerminalColors;
-  presetId: StylePresetId;
-  resolved: ResolvedTheme;
+  themeSource: ThemePreference;
 } | null = null;
 let scheduledTerminalFrame: number | null = null;
 
@@ -87,7 +95,7 @@ function flushPendingTerminalApply(): void {
   try {
     window.pier?.terminal?.applyTheme?.(pending.colors);
     window.pier?.theme
-      ?.setNativeChrome?.(pending.resolved, pending.colors.background)
+      ?.setNativeChrome?.(pending.themeSource, pending.colors.background)
       ?.catch(() => undefined);
   } catch (err) {
     console.error("[theme.store] applyTerminalColors failed:", err);
@@ -96,13 +104,14 @@ function flushPendingTerminalApply(): void {
 
 function applyTerminalColors(
   presetId: StylePresetId,
-  resolved: ResolvedTheme
+  resolved: ResolvedTheme,
+  themeSource: ThemePreference
 ): void {
   try {
     const shiki = getShikiTheme(presetId, resolved);
     const colors = deriveTerminalColors(shiki, resolved);
     syncTerminalSurface(colors.background, colors.foreground);
-    pendingTerminalApply = { colors, presetId, resolved };
+    pendingTerminalApply = { colors, themeSource };
   } catch (err) {
     console.error("[theme.store] deriveTerminalColors failed:", err);
     return;
@@ -132,7 +141,7 @@ export function applyThemeVisual(
   const resolved = resolveTheme(themePreference);
   applyTokens({ presetId, resolved });
   applyDocumentTheme(resolved);
-  applyTerminalColors(presetId, resolved);
+  applyTerminalColors(presetId, resolved, themePreference);
   // 同步 store 视觉态，让 DiffWorkerHost / appearance 订阅方（markdown 代码块、
   // mermaid、git diff）在命令面板 hover 预览时也跟随。不写 theme preference
   // （accept 才经 setTheme 落盘）；dismiss 再调一次本函数还原。
@@ -164,7 +173,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
     const resolved = resolveTheme(theme);
     applyTokens({ presetId: stylePresetId, resolved });
     applyDocumentTheme(resolved);
-    applyTerminalColors(stylePresetId, resolved);
+    applyTerminalColors(stylePresetId, resolved, theme);
     set({ theme, resolvedTheme: resolved, stylePresetId });
   },
 
@@ -175,7 +184,11 @@ export const useThemeStore = create<ThemeState>((set) => ({
       const currentPreset = useThemeStore.getState().stylePresetId;
       applyTokens({ presetId: currentPreset as StylePresetId, resolved });
       applyDocumentTheme(resolved);
-      applyTerminalColors(currentPreset as StylePresetId, resolved);
+      applyTerminalColors(
+        currentPreset as StylePresetId,
+        resolved,
+        merged.theme as ThemePreference
+      );
       set({
         theme: merged.theme as ThemePreference,
         resolvedTheme: resolved,
@@ -203,7 +216,11 @@ export const useThemeStore = create<ThemeState>((set) => ({
       const currentResolved = useThemeStore.getState().resolvedTheme;
       applyTokens({ presetId: nextPreset, resolved: currentResolved });
       syncThemeHead({ resolved: currentResolved });
-      applyTerminalColors(nextPreset, currentResolved);
+      applyTerminalColors(
+        nextPreset,
+        currentResolved,
+        useThemeStore.getState().theme
+      );
       set({
         stylePresetId: nextPreset,
       });
@@ -239,7 +256,7 @@ function attachPreferencesListener(): void {
     const resolved = resolveTheme(nextTheme);
     applyTokens({ presetId: nextPreset, resolved });
     applyDocumentTheme(resolved);
-    applyTerminalColors(nextPreset, resolved);
+    applyTerminalColors(nextPreset, resolved, nextTheme);
     useThemeStore.setState({
       resolvedTheme: resolved,
       stylePresetId: nextPreset,
@@ -287,27 +304,44 @@ function attachVisualPreviewListener(): void {
   visualPreviewListenerAttached = true;
 }
 
+function applyFollowedSystemTheme(systemDark: boolean): void {
+  if (useThemeStore.getState().theme !== "system") {
+    return;
+  }
+  const resolved = resolveTheme("system", systemDark);
+  const { resolvedTheme, stylePresetId } = useThemeStore.getState();
+  if (resolved === resolvedTheme) {
+    return;
+  }
+  applyTokens({ presetId: stylePresetId, resolved });
+  applyDocumentTheme(resolved);
+  applyTerminalColors(stylePresetId, resolved, "system");
+  useThemeStore.setState({ resolvedTheme: resolved });
+}
+
 function attachSystemListener(): void {
   if (systemListenerAttached || typeof window === "undefined") {
     return;
   }
   const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
-  if (!mq) {
-    return;
-  }
-  const onChange = (): void => {
-    if (useThemeStore.getState().theme !== "system") {
-      return;
-    }
-    const resolved = resolveTheme("system");
-    const { stylePresetId } = useThemeStore.getState();
-    applyTokens({ presetId: stylePresetId, resolved });
-    applyDocumentTheme(resolved);
-    applyTerminalColors(stylePresetId, resolved);
-    useThemeStore.setState({ resolvedTheme: resolved });
+  const onMedia = (event: MediaQueryListEvent): void => {
+    applyFollowedSystemTheme(event.matches);
   };
-  mq.addEventListener("change", onChange);
-  detachSystemListener = () => mq.removeEventListener("change", onChange);
+  if (mq) {
+    mq.addEventListener("change", onMedia);
+  }
+  const detachAppearance = window.pier?.theme?.onSystemAppearance?.(
+    (payload) => {
+      if (typeof payload?.shouldUseDarkColors !== "boolean") {
+        return;
+      }
+      applyFollowedSystemTheme(payload.shouldUseDarkColors);
+    }
+  );
+  detachSystemListener = () => {
+    mq?.removeEventListener("change", onMedia);
+    detachAppearance?.();
+  };
   systemListenerAttached = true;
 }
 

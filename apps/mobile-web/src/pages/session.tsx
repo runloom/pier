@@ -1,6 +1,6 @@
 /**
  * S1 会话页：terminal.screen 前台轮询 + waiting 态审批条（仅智能体）。
- * 寻址一律按 panelId：先查 agents，未命中回退终端族 panels。
+ * 寻址按 panelId + windowId（panelId 跨窗不唯一）；深链缺 window 时须恰好一命中。
  * 变更 / 文件入口携带该会话 cwd（三面共用身份）。
  */
 import { useEffect, useState } from "react";
@@ -9,6 +9,7 @@ import { TerminalScreen } from "../components/terminal-screen.tsx";
 import { TopBar } from "../components/top-bar.tsx";
 import { PierMobileClientError } from "../lib/client-types.ts";
 import { openChangesSynced } from "../lib/open-changes.ts";
+import { findUniqueScoped } from "../lib/panel-scope.ts";
 import { isTerminalComponent } from "../lib/projectable-panels.ts";
 import { navigate, useHashRoute } from "../lib/routes.ts";
 import { getMobileClient, refreshSnapshot } from "../lib/session.ts";
@@ -22,22 +23,36 @@ export function SessionPage() {
   const [respondError, setRespondError] = useState<string | null>(null);
 
   const panelId = route.page === "session" ? route.panelId : null;
+  const routeWindowId = route.page === "session" ? route.windowId : undefined;
   const agent =
     panelId === null
       ? null
-      : (snapshot?.agents.find((entry) => entry.panelId === panelId) ?? null);
+      : findUniqueScoped(
+          snapshot?.agents ?? [],
+          panelId,
+          routeWindowId,
+          (entry) => entry
+        );
   const panel =
     panelId === null
       ? null
-      : (snapshot?.panels.find((entry) => entry.panelId === panelId) ?? null);
+      : findUniqueScoped(
+          snapshot?.panels ?? [],
+          panelId,
+          routeWindowId,
+          (entry) => entry
+        );
   const isPlainTerminal =
     agent === null && panel !== null && isTerminalComponent(panel.component);
   const sessionOk = agent !== null || isPlainTerminal;
+  const sessionWindowId = agent?.windowId ?? panel?.windowId;
 
   const activity =
     agent !== null && snapshot !== null
-      ? (snapshot.activity.find((entry) => entry.panelId === agent.panelId) ??
-        null)
+      ? (snapshot.activity.find(
+          (entry) =>
+            entry.panelId === agent.panelId && entry.windowId === agent.windowId
+        ) ?? null)
       : null;
   const waiting = activity?.status === "waiting";
   const interactionId = activity?.pendingInteractionId ?? null;
@@ -82,11 +97,12 @@ export function SessionPage() {
     setRespondError(null);
     getMobileClient()
       .command({
-        // 面板寻址：裸 panelId，宿主解析当前窗口（respond 契约两形态之一）。
+        // 裸 panelId + windowId：panelId 跨窗不唯一。
         agentRef: agent.panelId,
         interactionId,
         key,
         type: "agent.attention.respond",
+        windowId: agent.windowId,
       })
       .then(() => {
         setStale(false);
@@ -135,7 +151,13 @@ export function SessionPage() {
           文件
         </button>
       </nav>
-      <TerminalScreen client={getMobileClient()} panelId={panelId} />
+      <TerminalScreen
+        client={getMobileClient()}
+        panelId={panelId}
+        {...(sessionWindowId === undefined
+          ? {}
+          : { windowId: sessionWindowId })}
+      />
       {respondError !== null && (
         <p className="px-4 py-2 text-red-400 text-xs" role="alert">
           {respondError}

@@ -157,6 +157,24 @@ describe("TerminalScreen（T1 终端投影）", () => {
     );
   });
 
+  it("terminal.screen 命令携带 windowId 以消歧跨窗同 panelId", async () => {
+    const client = await connectClient();
+    render(<TerminalScreen client={client} panelId="panel-1" windowId="w2" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("terminal-screen").textContent).toContain(
+        "hello pier"
+      );
+    });
+    const screenFrame = (lastSocket?.sent ?? [])
+      .map((data) => JSON.parse(data) as { command?: Record<string, unknown> })
+      .find((frame) => frame.command?.type === "terminal.screen");
+    expect(screenFrame?.command).toMatchObject({
+      panelId: "panel-1",
+      type: "terminal.screen",
+      windowId: "w2",
+    });
+  });
+
   it("文案不出现「切回才刷新」（与 visibility 行为一致的语义）", async () => {
     const client = await connectClient();
     render(<TerminalScreen client={client} panelId="panel-1" />);

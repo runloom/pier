@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMobileWebStore } from "../../../apps/mobile-web/src/lib/store.ts";
 
 vi.mock("../../../apps/mobile-web/src/components/terminal-screen.tsx", () => ({
-  TerminalScreen: (props: { panelId: string }) => (
-    <pre data-testid="terminal-screen">{props.panelId}</pre>
+  TerminalScreen: (props: { panelId: string; windowId?: string }) => (
+    <pre data-testid="terminal-screen" data-window={props.windowId}>
+      {props.panelId}
+    </pre>
   ),
 }));
 
@@ -42,7 +44,7 @@ describe("SessionPage", () => {
   beforeEach(async () => {
     commandMock.mockReset();
     commandMock.mockResolvedValue({ gitRootPath: "/repo", panelId: "rp-1" });
-    window.location.hash = "#/session?panel=p-shell";
+    window.location.hash = "#/session?panel=p-shell&window=w1";
     useMobileWebStore.setState({
       snapshot: snapshot({
         agents: [
@@ -157,7 +159,7 @@ describe("SessionPage", () => {
   });
 
   it("智能体会话仍渲染审批条", async () => {
-    window.location.hash = "#/session?panel=p-agent";
+    window.location.hash = "#/session?panel=p-agent&window=w1";
     const { SessionPage } = await import(
       "../../../apps/mobile-web/src/pages/session.tsx"
     );
@@ -167,5 +169,115 @@ describe("SessionPage", () => {
     expect(decodeURIComponent(window.location.hash)).toBe(
       "#/files?root=/repo/agent"
     );
+  });
+
+  it("跨窗同 panelId 时按 window 绑定等待态，不误绑另一窗", async () => {
+    window.location.hash = "#/session?panel=p-agent&window=w2";
+    useMobileWebStore.setState({
+      snapshot: snapshot({
+        agents: [
+          {
+            agentId: "codex",
+            cwd: "/repo/w1",
+            panelId: "p-agent",
+            windowId: "w1",
+          },
+          {
+            agentId: "claude",
+            cwd: "/repo/w2",
+            panelId: "p-agent",
+            windowId: "w2",
+          },
+        ],
+        activity: [
+          {
+            kind: "agent",
+            panelId: "p-agent",
+            pendingInteractionId: "ix-w1",
+            status: "waiting",
+            windowId: "w1",
+          },
+          {
+            kind: "agent",
+            panelId: "p-agent",
+            pendingInteractionId: "ix-w2",
+            status: "waiting",
+            windowId: "w2",
+          },
+        ],
+        panels: [
+          {
+            panelId: "p-agent",
+            windowId: "w1",
+            component: "terminal",
+            cwd: "/repo/w1",
+          },
+          {
+            panelId: "p-agent",
+            windowId: "w2",
+            component: "terminal",
+            cwd: "/repo/w2",
+          },
+        ],
+      }),
+    });
+    const { SessionPage } = await import(
+      "../../../apps/mobile-web/src/pages/session.tsx"
+    );
+    render(<SessionPage />);
+    expect(
+      screen.getByTestId("terminal-screen").getAttribute("data-window")
+    ).toBe("w2");
+    expect(screen.getByTestId("approval-bar")).toBeDefined();
+    fireEvent.click(screen.getByTestId("approval-key-enter"));
+    expect(commandMock).toHaveBeenCalledWith({
+      agentRef: "p-agent",
+      interactionId: "ix-w2",
+      key: "enter",
+      type: "agent.attention.respond",
+      windowId: "w2",
+    });
+    fireEvent.click(screen.getByTestId("session-nav-files"));
+    expect(decodeURIComponent(window.location.hash)).toBe(
+      "#/files?root=/repo/w2"
+    );
+  });
+
+  it("跨窗同 panelId 且深链无 window 时 fail-closed，不打开会话", async () => {
+    window.location.hash = "#/session?panel=p-agent";
+    useMobileWebStore.setState({
+      snapshot: snapshot({
+        agents: [
+          {
+            agentId: "codex",
+            panelId: "p-agent",
+            windowId: "w1",
+          },
+          {
+            agentId: "claude",
+            panelId: "p-agent",
+            windowId: "w2",
+          },
+        ],
+        panels: [
+          {
+            panelId: "p-agent",
+            windowId: "w1",
+            component: "terminal",
+          },
+          {
+            panelId: "p-agent",
+            windowId: "w2",
+            component: "terminal",
+          },
+        ],
+      }),
+    });
+    const { SessionPage } = await import(
+      "../../../apps/mobile-web/src/pages/session.tsx"
+    );
+    render(<SessionPage />);
+    expect(screen.queryByTestId("terminal-screen")).toBeNull();
+    expect(screen.getByText(/会话不在当前快照中/)).toBeDefined();
   });
 });

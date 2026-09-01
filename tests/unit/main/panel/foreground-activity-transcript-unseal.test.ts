@@ -202,6 +202,36 @@ describe("transcript 软封解封", () => {
     aggregator.dispose();
   });
 
+  it("空 turnId 的 hook error 可被空 turnId 的 hook ToolStart 解封", () => {
+    const aggregator = createForegroundActivityAggregator();
+    ingest(aggregator, event("SessionStart"), HOOK);
+    expect(ingest(aggregator, event("error"), HOOK)).toBe(true);
+    expect(statusOf(aggregator)).toBe("error");
+    expect(
+      ingest(aggregator, event("ToolStart", { toolUseId: "tool-1" }), HOOK)
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBe("tool");
+    aggregator.dispose();
+  });
+
+  it("带 turnId 的 hook error 仍是硬封", () => {
+    const aggregator = createForegroundActivityAggregator();
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }), HOOK);
+    expect(ingest(aggregator, event("error", { turnId: "turn-1" }), HOOK)).toBe(
+      true
+    );
+    expect(statusOf(aggregator)).toBe("error");
+    expect(
+      ingest(
+        aggregator,
+        event("ToolStart", { toolUseId: "tool-1", turnId: "turn-1" }),
+        HOOK
+      )
+    ).toBe(false);
+    expect(statusOf(aggregator)).toBe("error");
+    aggregator.dispose();
+  });
+
   it("宿主合成终态是硬封，ToolStart 不解封", () => {
     const aggregator = createForegroundActivityAggregator();
     ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }), HOOK);

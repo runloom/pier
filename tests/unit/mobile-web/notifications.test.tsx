@@ -34,6 +34,7 @@ describe("NotificationsPage（N1 点击落会话）", () => {
               id: "n-session",
               kind: "agent.attention",
               panelId: "p-wait",
+              windowId: "w1",
               read: false,
               severity: "warning",
               title: "需要你处理",
@@ -76,7 +77,7 @@ describe("NotificationsPage（N1 点击落会话）", () => {
       expect(screen.getByTestId("notification-open-n-session")).toBeDefined();
     });
     fireEvent.click(screen.getByTestId("notification-open-n-session"));
-    expect(window.location.hash).toBe("#/session?panel=p-wait");
+    expect(window.location.hash).toBe("#/session?panel=p-wait&window=w1");
     expect(
       commandMock.mock.calls.some(
         (call: unknown[]) =>

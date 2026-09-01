@@ -35,8 +35,9 @@ function readFontIndex(): number {
 
 export function TerminalScreen(props: {
   client: PierMobileClient;
-  /** 面板寻址：命令不带窗口，当前窗口由宿主解析。 */
   panelId: string;
+  /** 跨窗消歧；缺省时宿主须恰好一命中，否则 fail-closed。 */
+  windowId?: string;
   intervalMs?: number;
 }) {
   const [screen, setScreen] = useState<TerminalScreenPayload | null>(null);
@@ -86,6 +87,9 @@ export function TerminalScreen(props: {
           await props.client.command<unknown>({
             panelId: props.panelId,
             type: "terminal.screen",
+            ...(props.windowId === undefined
+              ? {}
+              : { windowId: props.windowId }),
           })
         );
         if (alive) {
@@ -121,7 +125,7 @@ export function TerminalScreen(props: {
       stopPolling();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [props.client, props.panelId, props.intervalMs]);
+  }, [props.client, props.panelId, props.windowId, props.intervalMs]);
 
   return (
     <section

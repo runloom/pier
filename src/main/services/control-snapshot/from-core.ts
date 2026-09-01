@@ -2,7 +2,10 @@
  * 从 PierCoreServices 构造 ControlSnapshotSources（单一接线，避免 app.snapshot 与
  * local-control 漏字段）。
  */
-import { makeAgentRef } from "@shared/contracts/agent/runtime-index.ts";
+import {
+  makeAgentRef,
+  parseAgentRef,
+} from "@shared/contracts/agent/runtime-index.ts";
 import type { ControlSnapshotPayload } from "@shared/contracts/local-control/control-snapshot.ts";
 import type { PierCoreServices } from "../../app-core/command-router-services.ts";
 import { listPanels } from "../../app-core/commands/panel.ts";
@@ -19,6 +22,8 @@ function mapNotificationPointer(item: {
   agentRef?: string | undefined;
   panelRef?: { panelId: string } | undefined;
 }) {
+  const parsed = item.agentRef ? parseAgentRef(item.agentRef) : null;
+  const panelId = parsed?.panelId ?? item.panelRef?.panelId;
   return {
     id: item.id,
     kind: item.kind,
@@ -27,7 +32,8 @@ function mapNotificationPointer(item: {
     read: item.read,
     ts: item.ts,
     ...(item.agentRef ? { agentRef: item.agentRef } : {}),
-    ...(item.panelRef?.panelId ? { panelId: item.panelRef.panelId } : {}),
+    ...(panelId ? { panelId } : {}),
+    ...(parsed?.windowId ? { windowId: parsed.windowId } : {}),
   };
 }
 

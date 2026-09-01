@@ -1,12 +1,17 @@
+import type { ThemePreference } from "@shared/contracts/preferences.ts";
+import type { ThemeSystemAppearancePayload } from "@shared/contracts/theme/system-appearance.ts";
 import type { ThemeVisualPreviewPayload } from "@shared/contracts/theme/visual-preview.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { NATIVE_CHROME_FALLBACK } from "@shared/theme-colors.ts";
 import { type IpcMain, type IpcMainInvokeEvent, nativeTheme } from "electron";
 import { windowManager } from "../windows/manager.ts";
 
-type ResolvedTheme = keyof typeof NATIVE_CHROME_FALLBACK;
-
 const isMac = process.platform === "darwin";
+let nativeThemeUpdatedAttached = false;
+
+function isThemePreference(value: unknown): value is ThemePreference {
+  return value === "light" || value === "dark" || value === "system";
+}
 
 function isThemeVisualPreviewPayload(
   value: unknown
@@ -19,6 +24,29 @@ function isThemeVisualPreviewPayload(
     typeof candidate.theme === "string" &&
     typeof candidate.stylePresetId === "string"
   );
+}
+
+function fallbackChromeColor(themeSource: ThemePreference): string {
+  if (themeSource === "light" || themeSource === "dark") {
+    return NATIVE_CHROME_FALLBACK[themeSource];
+  }
+  return nativeTheme.shouldUseDarkColors
+    ? NATIVE_CHROME_FALLBACK.dark
+    : NATIVE_CHROME_FALLBACK.light;
+}
+
+function applyNativeChromeColor(color: string): void {
+  if (isMac) {
+    // macOS: opaque BaseWindow 只作为兜底 backing; renderer 透明区域仍通过
+    // transparent WebContentsView 透出 native terminal NSView.
+    for (const win of windowManager.getAll()) {
+      windowManager.setNativeChromeColor(win, color);
+    }
+    return;
+  }
+  for (const win of windowManager.getAll()) {
+    win.setBackgroundColor(color);
+  }
 }
 
 /**
@@ -40,25 +68,36 @@ export function broadcastThemeVisualPreview(
   }
 }
 
+function broadcastSystemAppearance(): void {
+  const payload: ThemeSystemAppearancePayload = {
+    shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
+  };
+  for (const win of windowManager.getAll()) {
+    if (win.webContents.isDestroyed()) {
+      continue;
+    }
+    win.webContents.send(PIER_BROADCAST.THEME_SYSTEM_APPEARANCE, payload);
+  }
+}
+
 export function registerThemeIpc(ipcMain: IpcMain): void {
   ipcMain.handle(
-    "pier:theme:set-native-chrome",
-    (_event, resolved: ResolvedTheme, chromeColor?: string) => {
-      nativeTheme.themeSource = resolved;
-
-      const color = chromeColor ?? NATIVE_CHROME_FALLBACK[resolved];
-
-      if (isMac) {
-        // macOS: opaque BaseWindow 只作为兜底 backing; renderer 透明区域仍通过
-        // transparent WebContentsView 透出 native terminal NSView.
-        for (const win of windowManager.getAll()) {
-          windowManager.setNativeChromeColor(win, color);
-        }
+    PIER.THEME_SET_NATIVE_CHROME,
+    (_event, themeSource: unknown, chromeColor?: unknown) => {
+      if (!isThemePreference(themeSource)) {
         return;
       }
-      for (const win of windowManager.getAll()) {
-        win.setBackgroundColor(color);
+      // 必须写偏好本身（含 system）。写成已解析的 light/dark 会锁死
+      // Chromium prefers-color-scheme，系统外观变化不再到达 renderer。
+      if (nativeTheme.themeSource !== themeSource) {
+        nativeTheme.themeSource = themeSource;
       }
+
+      const color =
+        typeof chromeColor === "string"
+          ? chromeColor
+          : fallbackChromeColor(themeSource);
+      applyNativeChromeColor(color);
     }
   );
 
@@ -68,4 +107,10 @@ export function registerThemeIpc(ipcMain: IpcMain): void {
     }
     broadcastThemeVisualPreview(event.sender, payload);
   });
+
+  if (nativeThemeUpdatedAttached) {
+    return;
+  }
+  nativeTheme.on("updated", broadcastSystemAppearance);
+  nativeThemeUpdatedAttached = true;
 }

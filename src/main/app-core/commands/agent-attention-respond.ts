@@ -1,11 +1,11 @@
 /**
  * agent.attention.respond（M1 移动端审批回写）。
  *
- * 地址两形态（M2 修订：窗口概念不出宿主）：
+ * 地址两形态：
  * - 完整引用 makeAgentRef(windowId, panelId)——桌面 renderer；
- * - 裸 panelId（面板寻址）——移动端。面板 id 随布局持久化、跨窗口迁移
- *   不变；宿主从 FA 快照解析当前窗口，无匹配或歧义（两窗同 id）一律
- *   fail closed 转 interaction_stale。
+ * - 裸 panelId + 可选 windowId——移动端。panelId 跨窗不唯一；带 windowId
+ *   时按二者定位，缺 windowId 时须恰好一命中，否则 fail closed
+ *   转 interaction_stale。
  *
  * 双重门（任一不过 → interaction_stale）：
  * 1. 未决交互注册表 assertCurrent(agentRef, interactionId)；
@@ -68,21 +68,28 @@ function isWaiting(services: PierCoreServices, agentRef: string): boolean {
 }
 
 /**
- * 裸 panelId → 完整 agentRef：从 FA 快照找该面板的唯一 agent 活动。
+ * 裸 panelId（+ 可选 windowId）→ 完整 agentRef。
  * 完整引用原样通过；无匹配或跨窗歧义 → null（fail closed）。
  */
 function resolveRespondRef(
   services: PierCoreServices,
-  raw: string
+  raw: string,
+  windowId: string | undefined
 ): string | null {
   if (parseAgentRef(raw) !== null) {
     return raw;
   }
   try {
     const snapshot = services.foregroundActivity?.snapshot();
-    const matches = (snapshot?.activities ?? []).filter(
-      (activity) => activity.kind === "agent" && activity.panelId === raw
-    );
+    const matches = (snapshot?.activities ?? []).filter((activity) => {
+      if (activity.kind !== "agent" || activity.panelId !== raw) {
+        return false;
+      }
+      if (windowId !== undefined && windowId.length > 0) {
+        return activity.windowId === windowId;
+      }
+      return true;
+    });
     const only = matches.length === 1 ? matches[0] : undefined;
     return only === undefined ? null : makeAgentRef(only.windowId, raw);
   } catch {
@@ -98,7 +105,11 @@ export async function executeAgentAttentionRespondCommand(
   if (command.type !== "agent.attention.respond") {
     return null;
   }
-  const agentRef = resolveRespondRef(services, command.agentRef);
+  const agentRef = resolveRespondRef(
+    services,
+    command.agentRef,
+    command.windowId
+  );
   if (agentRef === null) {
     return failure(
       requestId,

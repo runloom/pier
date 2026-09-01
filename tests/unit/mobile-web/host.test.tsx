@@ -128,9 +128,9 @@ describe("HostPage（H2 可投影面板列表）", () => {
     const terminals = screen.getByTestId("host-group-terminals");
     const terminalButtons = terminals.querySelectorAll("button");
     expect(terminalButtons[0]?.getAttribute("data-testid")).toBe(
-      "panel-p-wait"
+      "panel-w1-p-wait"
     );
-    expect(screen.getByTestId("panel-p-shell").textContent).toContain("zsh");
+    expect(screen.getByTestId("panel-w1-p-shell").textContent).toContain("zsh");
     expect(screen.getByTestId("host-group-changes").textContent).toContain(
       "变更 · wt-b"
     );
@@ -147,29 +147,49 @@ describe("HostPage（H2 可投影面板列表）", () => {
     fireEvent.click(
       within(screen.getByTestId("host-filters")).getByText(/需要你处理/)
     );
-    expect(screen.queryByTestId("panel-p-ready")).toBeNull();
-    expect(screen.getByTestId("panel-p-wait")).toBeDefined();
+    expect(screen.queryByTestId("panel-w1-p-ready")).toBeNull();
+    expect(screen.getByTestId("panel-w1-p-wait")).toBeDefined();
     expect(screen.getByTestId("host-group-changes")).toBeDefined();
   });
 
   it("点变更行携带 gitRoot 并同步聚焦桌面面板；点终端行进会话", () => {
     render(<HostPage />);
-    fireEvent.click(screen.getByTestId("panel-p-git"));
+    fireEvent.click(screen.getByTestId("panel-w1-p-git"));
     expect(commandMock).toHaveBeenCalledWith({
       cwd: "/wt-b",
       type: "git.openReviewPanel",
     });
     expect(window.location.hash).toContain("/changes?cwd=");
     expect(decodeURIComponent(window.location.hash)).toContain("/wt-b");
-    fireEvent.click(screen.getByTestId("panel-p-shell"));
-    expect(window.location.hash).toBe("#/session?panel=p-shell");
+    fireEvent.click(screen.getByTestId("panel-w1-p-shell"));
+    expect(window.location.hash).toBe("#/session?panel=p-shell&window=w1");
   });
 
   it("点文档行用 sourcePath 而不是 tab 标题", () => {
     render(<HostPage />);
-    fireEvent.click(screen.getByTestId("panel-p-doc"));
+    fireEvent.click(screen.getByTestId("panel-w1-p-doc"));
     expect(decodeURIComponent(window.location.hash)).toBe(
       "#/files?root=/repo&path=src/notes.md"
     );
+  });
+
+  it("跨窗同 panelId 各占一行，点开会话带 window", () => {
+    useMobileWebStore.setState({
+      snapshot: snapshot({
+        agents: [
+          { agentId: "codex", panelId: "dup", windowId: "w1" },
+          { agentId: "claude", panelId: "dup", windowId: "w2" },
+        ],
+        panels: [
+          { panelId: "dup", windowId: "w1", component: "terminal" },
+          { panelId: "dup", windowId: "w2", component: "terminal" },
+        ],
+      }),
+    });
+    render(<HostPage />);
+    expect(screen.getByTestId("panel-w1-dup")).toBeDefined();
+    expect(screen.getByTestId("panel-w2-dup")).toBeDefined();
+    fireEvent.click(screen.getByTestId("panel-w2-dup"));
+    expect(window.location.hash).toBe("#/session?panel=dup&window=w2");
   });
 });

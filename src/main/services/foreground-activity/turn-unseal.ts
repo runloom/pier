@@ -1,4 +1,5 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
+import { normalizeAgentTurnId } from "./agent-turn-event-semantics.ts";
 import type { HookScope } from "./entry.ts";
 import type { AgentEventEvidenceSource } from "./types.ts";
 
@@ -20,8 +21,10 @@ export function hookEventTimeMs(
 }
 
 /**
- * transcript 推断封账可被同回合新鲜 hook ToolStart 解开；hook / host 终态
- * 仍是硬封。ToolComplete 常为封账前后的迟到收尾，不解封。
+ * transcript 软封可被同回合新鲜 hook ToolStart 解开；无回合身份的 hook
+ * error 也可被空 turnId 的 hook ToolStart 解开（Kimi StopFailure 后继续
+ * 跑工具、且不发 PromptSubmit）。有 turnId 的 hook 终态与 host 终态仍是
+ * 硬封。ToolComplete 不解封。
  */
 export function canUnsealTranscriptTurn(input: {
   at: number;
@@ -31,13 +34,10 @@ export function canUnsealTranscriptTurn(input: {
   scope: HookScope;
 }): boolean {
   const { at, event, eventTurnId, evidenceSource, scope } = input;
-  if (!(scope.turnEnded && scope.terminalEvidenceSource === "transcript")) {
+  if (!scope.turnEnded) {
     return false;
   }
-  if (evidenceSource !== "hook") {
-    return false;
-  }
-  if (event.event !== "ToolStart") {
+  if (evidenceSource !== "hook" || event.event !== "ToolStart") {
     return false;
   }
   // 只挡明确早于封账的旧进展；同时刻（测试同毫秒 ingest、无 ts 的新鲜 hook）放行。
@@ -47,7 +47,15 @@ export function canUnsealTranscriptTurn(input: {
   ) {
     return false;
   }
-  return !(eventTurnId && eventTurnId !== scope.currentTurnId);
+  if (scope.terminalEvidenceSource === "transcript") {
+    return !(eventTurnId && eventTurnId !== scope.currentTurnId);
+  }
+  return (
+    scope.terminalEvidenceSource === "hook" &&
+    scope.terminalEvidence === "error" &&
+    normalizeAgentTurnId(scope.currentTurnId) === undefined &&
+    eventTurnId === undefined
+  );
 }
 
 export function unsealTranscriptTurn(

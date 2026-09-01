@@ -1,8 +1,7 @@
 /**
- * session 路由身份（M2 修订）：路由携带面板稳定 id（panelId）——
- * 布局持久化、跨窗口迁移不变；移动端无窗口概念，宿主解析当前窗口。
- * 与宿主 Web Push 深链 `/session?panel=<panelId>` 同构。
- * 不用 agentId 产品名（多开同款智能体撞车）。
+ * session 路由身份：panelId + windowId。
+ * panelId 跨窗口不唯一；深链可缺 window，打开时须恰好一命中。
+ * 与宿主 Web Push `/session?panel=<panelId>&window=<windowId>` 同构。
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -10,14 +9,30 @@ import {
   routeToHash,
 } from "../../../apps/mobile-web/src/lib/routes.ts";
 
-describe("session 路由（面板寻址）", () => {
+describe("session 路由（面板 + 窗口寻址）", () => {
   it("panelId（含需转义字符）经 hash 往返无损", () => {
     const panelId = "panel 1/α&b";
-    const hash = routeToHash({ page: "session", panelId });
-    expect(parseHash(hash)).toEqual({ page: "session", panelId });
+    const hash = routeToHash({ page: "session", panelId, windowId: "w1" });
+    expect(parseHash(hash)).toEqual({
+      page: "session",
+      panelId,
+      windowId: "w1",
+    });
   });
 
-  it("宿主推送深链同构：/session?panel=<enc(panelId)> 直接可解析", () => {
+  it("宿主推送深链同构：/session?panel=&window= 直接可解析", () => {
+    expect(
+      parseHash(
+        `#/session?panel=${encodeURIComponent("p-1")}&window=${encodeURIComponent("w2")}`
+      )
+    ).toEqual({
+      page: "session",
+      panelId: "p-1",
+      windowId: "w2",
+    });
+  });
+
+  it("仅 panel 的旧深链仍可解析（打开时须恰好一命中）", () => {
     expect(parseHash(`#/session?panel=${encodeURIComponent("p-1")}`)).toEqual({
       page: "session",
       panelId: "p-1",
