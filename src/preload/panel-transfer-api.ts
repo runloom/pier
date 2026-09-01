@@ -1,11 +1,13 @@
 import type {
   PanelTransferBootstrapState,
   PanelTransferOffer,
+  PanelTransferOverlayPreview,
   PanelTransferPlacement,
   PanelTransferRelocateTarget,
   PanelTransferResult,
 } from "@shared/contracts/panel-transfer.ts";
-import { invokePierCommand } from "./ipc-envelope.ts";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 
 /**
  * Preload surface for cross-window panel transfer.
@@ -23,6 +25,9 @@ export interface PierPanelTransferAPI {
   }): Promise<PanelTransferResult>;
   finishDrag(transferId: string): Promise<PanelTransferResult | null>;
   offer(input: PanelTransferOffer): Promise<{ accepted: boolean }>;
+  onOverlayPreview(
+    cb: (preview: PanelTransferOverlayPreview) => void
+  ): () => void;
   ready(transferId: string): Promise<PanelTransferResult | null>;
   relocate(input: {
     transferId: string;
@@ -59,6 +64,8 @@ export function createPanelTransferApi(): PierPanelTransferAPI {
         offer: input,
         type: "panelTransfer.offer",
       }),
+    onOverlayPreview: (cb) =>
+      subscribeIpc(PIER_BROADCAST.PANEL_TRANSFER_OVERLAY_PREVIEW, cb),
     ready: (transferId) =>
       invokePierCommand<PanelTransferResult | null>({
         transferId,

@@ -17,6 +17,7 @@ import type {
   AppNotification,
   NotificationCenterSnapshot,
 } from "@shared/contracts/notification-center.ts";
+import type { PanelTransferOverlayPreview } from "@shared/contracts/panel-transfer.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import type { ProjectSkillsInvalidatedEvent } from "@shared/contracts/project-skills.ts";
 import type { TaskRunsSnapshot } from "@shared/contracts/tasks.ts";
@@ -46,6 +47,12 @@ function broadcastToAllWindows(channel: string, payload: unknown): void {
 
 export function broadcastMruState(state: MruState): void {
   broadcastToAllWindows(PIER_BROADCAST.COMMAND_PALETTE_MRU_CHANGED, state);
+}
+
+export function broadcastPanelTransferOverlayPreview(
+  preview: PanelTransferOverlayPreview
+): void {
+  broadcastToAllWindows(PIER_BROADCAST.PANEL_TRANSFER_OVERLAY_PREVIEW, preview);
 }
 
 export function broadcastTerminalStatusBarPrefs(

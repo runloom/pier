@@ -69,7 +69,9 @@ describe("panel transfer recovery — copy mode", () => {
           { focused: false, id: "w-1", recordId: "record-w1" },
         ]),
         releaseRendererShow: vi.fn(),
+        revealHost: vi.fn(),
         runExclusive: vi.fn(async (op) => op({ token: Symbol("lease") })),
+        setBounds: vi.fn(),
       },
       workspace: {
         clearLayout: vi.fn(async () => undefined),

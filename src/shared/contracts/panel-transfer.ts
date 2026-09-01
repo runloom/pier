@@ -164,6 +164,11 @@ export type PanelTransferPlacement = z.infer<
   typeof panelTransferPlacementSchema
 >;
 
+export {
+  type PanelTransferOverlayPreview,
+  panelTransferOverlayPreviewSchema,
+} from "./panel/transfer-overlay.ts";
+
 const draftMappingSchema = z
   .object({
     sourceKey: draftKeySchema,

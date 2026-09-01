@@ -203,13 +203,18 @@ export function computeTransferNewWindowBounds(
 export function classifyTransferCursor(
   geometry: PanelTransferGeometryPort,
   windows: PanelTransferWindowPort,
-  sourceWindowId: string
+  sourceWindowId: string,
+  ignoreWindowIds?: ReadonlySet<string>
 ) {
   const cursor = geometry.getCursorScreenPoint();
   const infos = windows.list();
   const infoById = new Map(infos.map((info) => [info.id, info]));
+  const ignored = ignoreWindowIds ?? new Set<string>();
 
   const hit = (windowId: string): boolean => {
+    if (ignored.has(windowId)) {
+      return false;
+    }
     const bounds = geometry.getWindowBounds(windowId);
     if (!bounds) {
       return false;

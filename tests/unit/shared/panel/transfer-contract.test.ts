@@ -4,6 +4,7 @@ import {
   PANEL_TRANSFER_TEXT_PREFIX,
   panelTransferBootstrapStateSchema,
   panelTransferOfferSchema,
+  panelTransferOverlayPreviewSchema,
   panelTransferPhaseSchema,
   panelTransferPlacementSchema,
   panelTransferPreparedSourceSchema,
@@ -164,6 +165,58 @@ describe("panelTransferOfferSchema", () => {
           title: "External",
           params: { no: true },
         },
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe("panelTransferOverlayPreviewSchema", () => {
+  it("accepts clear, outside, source, and target previews", () => {
+    expect(
+      panelTransferOverlayPreviewSchema.parse({
+        kind: "clear",
+        transferId: TRANSFER_ID,
+      })
+    ).toEqual({ kind: "clear", transferId: TRANSFER_ID });
+    expect(
+      panelTransferOverlayPreviewSchema.parse({
+        kind: "outside",
+        transferId: TRANSFER_ID,
+      })
+    ).toEqual({ kind: "outside", transferId: TRANSFER_ID });
+    expect(
+      panelTransferOverlayPreviewSchema.parse({
+        kind: "source",
+        transferId: TRANSFER_ID,
+        windowId: "main",
+      })
+    ).toMatchObject({ kind: "source", windowId: "main" });
+    expect(
+      panelTransferOverlayPreviewSchema.parse({
+        clientX: 12.5,
+        clientY: 40,
+        kind: "target",
+        transferId: TRANSFER_ID,
+        windowId: "w-1",
+      })
+    ).toMatchObject({ kind: "target", clientX: 12.5, windowId: "w-1" });
+  });
+
+  it("rejects extra fields and non-finite client points", () => {
+    expect(
+      panelTransferOverlayPreviewSchema.safeParse({
+        kind: "clear",
+        transferId: TRANSFER_ID,
+        extra: true,
+      }).success
+    ).toBe(false);
+    expect(
+      panelTransferOverlayPreviewSchema.safeParse({
+        clientX: Number.NaN,
+        clientY: 0,
+        kind: "target",
+        transferId: TRANSFER_ID,
+        windowId: "w-1",
       }).success
     ).toBe(false);
   });

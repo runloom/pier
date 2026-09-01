@@ -12,6 +12,7 @@ import type {
 } from "@main/services/panel-transfer/types.ts";
 import type { WindowTransitionLease } from "@main/services/window-service.ts";
 import { PanelTransferJournal } from "@main/state/panel-transfer-journal.ts";
+import type { PanelTransferOverlayPreview } from "@shared/contracts/panel-transfer.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const TRANSFER_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -83,7 +84,9 @@ describe("PanelTransferService", () => {
         { focused: false, id: "w-1", recordId: "record-w1" },
       ]),
       releaseRendererShow: vi.fn(),
+      revealHost: vi.fn(),
       runExclusive: runExclusive as never,
+      setBounds: vi.fn(),
     };
     geometry = {
       getCursorScreenPoint: () => cursor,
@@ -147,7 +150,12 @@ describe("PanelTransferService", () => {
     });
   });
 
-  function createService() {
+  function createService(extras?: {
+    broadcastOverlayPreview?: (preview: PanelTransferOverlayPreview) => void;
+    overlayPreviewSchedule?: {
+      interval: (callback: () => void, ms: number) => { dispose(): void };
+    };
+  }) {
     return createPanelTransferService({
       files,
       geometry,
@@ -162,6 +170,7 @@ describe("PanelTransferService", () => {
       userDataDir,
       windows,
       workspace,
+      ...extras,
     });
   }
 
@@ -180,6 +189,46 @@ describe("PanelTransferService", () => {
       })
     ).resolves.toEqual({ accepted: false });
     expect(journal.list()).toEqual([]);
+  });
+
+  it("broadcasts overlay preview while an offer is live and clears on cancel", async () => {
+    const broadcasts: PanelTransferOverlayPreview[] = [];
+    let tick: (() => void) | null = null;
+    cursor.x = 100;
+    cursor.y = 80;
+    const service = createService({
+      broadcastOverlayPreview: (preview) => {
+        broadcasts.push(preview);
+      },
+      overlayPreviewSchedule: {
+        interval: (callback: () => void) => {
+          tick = callback;
+          return {
+            dispose() {
+              tick = null;
+            },
+          };
+        },
+      },
+    });
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    expect(broadcasts.at(-1)).toEqual({
+      kind: "source",
+      transferId: TRANSFER_A,
+      windowId: "main",
+    });
+    cursor.x = 4000;
+    tick?.();
+    expect(broadcasts.at(-1)).toEqual({
+      kind: "outside",
+      transferId: TRANSFER_A,
+    });
+    await service.cancel(source, TRANSFER_A);
+    expect(broadcasts.at(-1)).toEqual({
+      kind: "clear",
+      transferId: TRANSFER_A,
+    });
   });
 
   it("rejects copy offers for non-copyable components", async () => {
@@ -505,7 +554,7 @@ describe("PanelTransferService", () => {
     expect(windows.focus).not.toHaveBeenCalled();
   });
 
-  it("finishDrag outside does not focus the created window (drag semantics)", async () => {
+  it("finishDrag outside focuses the created window (tear-off)", async () => {
     cursor = { x: 5000, y: 5000 }; // outside both windows
     const service = createService();
     const source = caller("main", "record-main", 1);
@@ -513,7 +562,48 @@ describe("PanelTransferService", () => {
     const result = await service.finishDrag(source, TRANSFER_A);
     expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });
     expect(createForTransfer).toHaveBeenCalledOnce();
-    expect(windows.focus).not.toHaveBeenCalled();
+    expect(windows.revealHost).toHaveBeenCalledWith("w-new");
+    expect(windows.focus).toHaveBeenCalledWith("w-new");
+    const showOrder = windows.releaseRendererShow.mock.invocationCallOrder[0];
+    const releaseSource = rendererExecute.mock.calls.findIndex(
+      (call) => call[0]?.type === "panelTransfer.releaseSource"
+    );
+    expect(showOrder).toBeDefined();
+    expect(releaseSource).toBeGreaterThanOrEqual(0);
+    const releaseOrder =
+      rendererExecute.mock.invocationCallOrder[releaseSource];
+    expect(showOrder ?? 0).toBeLessThan(releaseOrder ?? 0);
+  });
+
+  it("overlay outside warms a window that finishDrag reuses", async () => {
+    cursor = { x: 100, y: 80 };
+    let tick: (() => void) | null = null;
+    const service = createService({
+      broadcastOverlayPreview: () => undefined,
+      overlayPreviewSchedule: {
+        interval: (callback: () => void) => {
+          tick = callback;
+          return {
+            dispose() {
+              tick = null;
+            },
+          };
+        },
+      },
+    });
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    cursor = { x: 5000, y: 5000 };
+    tick?.();
+    await vi.waitFor(() => expect(createForTransfer).toHaveBeenCalledOnce());
+    const result = await service.finishDrag(source, TRANSFER_A);
+    expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(createForTransfer).toHaveBeenCalledOnce();
+    expect(windows.setBounds).toHaveBeenCalledWith(
+      "w-new",
+      expect.objectContaining({ height: 800, width: 1200 })
+    );
+    expect(windows.revealHost).toHaveBeenCalledWith("w-new");
   });
 
   it("tryClaim is unique; second different claim is already_claimed", async () => {

@@ -1,21 +1,9 @@
 /**
- * WindowManager — 多窗口生命周期管理.
- *
- * 从 loomdesk 精简移植: 保留 create/list/focus/close + ID 分配, 去掉 PTY 迁移 /
- * close-guard 两段式 / route pending / reload detach 等 pier 暂不需要的能力.
- *
- *   - create(): 分配 id (首窗口 "main", 后续 w-{N}), 创建 app window, 注册到 Map.
- *   - list(): 返回所有存活窗口的 { id, recordId, focused }.
- *   - focus(): 聚焦/恢复指定窗口.
- *   - close(): 关闭指定窗口.
- *   - onClose(): 关闭回调 (供 main 侧清理).
- *
- * 窗口关闭后自动从 Map 移除并释放 ID; window-all-closed 由 main 侧处理.
+ * WindowManager — multi-window lifecycle (create / list / focus / close).
  */
 import { join } from "node:path";
 import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { WindowOpenMode } from "@shared/contracts/window.ts";
-import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { app, nativeTheme } from "electron";
 import { installDetachedDevToolsHandlers } from "../devtools.ts";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
@@ -40,6 +28,7 @@ import {
   isMac,
   resolveDevIcon,
 } from "./factory.ts";
+import { sendWindowFocusChanged } from "./focus-changed.ts";
 import { WindowIdAllocator } from "./id-allocator.ts";
 import {
   findAppWindowByWebContents,
@@ -56,14 +45,6 @@ import {
 import { createRendererShowGate } from "./renderer-show-gate.ts";
 
 const WINDOW_ID_REGEX = /^(main|w-\d+)$/;
-
-/** Push OS key-window focus to the owning renderer (tab S3 chrome, etc.). */
-function sendWindowFocusChanged(window: AppWindow, focused: boolean): void {
-  if (window.webContents.isDestroyed()) {
-    return;
-  }
-  window.webContents.send(PIER_BROADCAST.WINDOW_FOCUS_CHANGED, { focused });
-}
 
 export interface WindowBounds {
   height?: number;
@@ -136,6 +117,27 @@ class WindowManager {
 
   releaseRendererShow(windowId: string, reason: string): void {
     this.rendererShowGates.get(windowId)?.releaseHold(reason);
+  }
+
+  /**
+   * Tear-off: raise native chrome immediately, even while the renderer-show
+   * hold is still waiting for workspace ready.
+   */
+  revealHost(windowId: string): void {
+    this.rendererShowGates.get(windowId)?.forceReveal();
+  }
+
+  setBounds(windowId: string, bounds: WindowBounds): void {
+    const window = this.windows.get(windowId);
+    if (!window || window.isDestroyed()) {
+      return;
+    }
+    window.host.setBounds({
+      height: bounds.height ?? 800,
+      width: bounds.width ?? 1280,
+      x: bounds.x ?? 0,
+      y: bounds.y ?? 0,
+    });
   }
 
   async destroyForTransfer(

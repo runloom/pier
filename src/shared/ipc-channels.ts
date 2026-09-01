@@ -216,6 +216,11 @@ export const PIER_BROADCAST = {
   COMMENTS_CHANGED: "pier://comments:changed",
   // 插件数据投影变更：宿主仅转发 manifest 已声明键的事件（设计 §4.1）。
   PLUGIN_DATA_CHANGED: "pier://plugin-data:changed",
+  /**
+   * 跨窗面板拖拽的 live 落点预览。payload PanelTransferOverlayPreview；
+   * 全窗广播，各 renderer 按 windowId 决定藏 sticky 层或画目标覆盖层。
+   */
+  PANEL_TRANSFER_OVERLAY_PREVIEW: "pier://panel-transfer:overlay-preview",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];
