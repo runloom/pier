@@ -118,6 +118,10 @@ stay there. Put complex calculations in pure adjacent modules.
   `width` to use the same 3×desktop line as `ArtboardStage`. `ArtboardStage` remains the
   **flow fit-all card** (same chrome as `Mermaid`); it does not capture
   wheel. Do not stack screens as a document inside `Frame`.
+- `WorldStage background` is the studio floor. **Artboard captions** (label /
+  title / description) contrast against that floor. Do not restyle those
+  captions from the canvas; a light floor on a dark app theme is a host
+  concern. Product ink stays inside the frame.
 - Multi-line `AccordionTrigger` content must not rely on underline hover chrome;
   the host Accordion uses a light background hover.
 

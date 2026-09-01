@@ -157,4 +157,33 @@ describe("WorldStage", () => {
     expect(stage?.style.width).toBe("336px");
     expect(stage?.style.height).toBe("220px");
   });
+
+  it("remaps Artboard caption ink against a light world floor", () => {
+    render(
+      <WorldStage background="#d8cfc0">
+        <Artboard
+          description="点书名打开。去掉要确认。"
+          label="F1"
+          title="书籍"
+        >
+          <p>books</p>
+        </Artboard>
+      </WorldStage>
+    );
+    const stage = document.querySelector(
+      "[data-canvas-stage='world']"
+    ) as HTMLElement | null;
+    expect(stage?.style.getPropertyValue("--pier-world-caption")).toBe(
+      "#171717"
+    );
+    expect(stage?.style.getPropertyValue("--pier-world-caption-muted")).toBe(
+      "#525252"
+    );
+    expect(screen.getByText("书籍").style.color).toContain(
+      "--pier-world-caption"
+    );
+    expect(screen.getByText("点书名打开。去掉要确认。").style.color).toContain(
+      "--pier-world-caption-muted"
+    );
+  });
 });

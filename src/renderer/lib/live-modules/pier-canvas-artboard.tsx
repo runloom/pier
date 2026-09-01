@@ -21,7 +21,8 @@ import {
   useState,
 } from "react";
 import { openHtmlWorldPreview } from "@/stores/content-preview.store.ts";
-import { Text } from "./pier-canvas-layout.ts";
+import { ArtboardCaption } from "./pier-canvas-artboard-caption.tsx";
+import { worldStageCaptionVars } from "./pier-canvas-world-ink.ts";
 
 const DEFAULT_ARTBOARD_WIDTH = 1280;
 const DEFAULT_ARTBOARD_HEIGHT = 800;
@@ -343,6 +344,7 @@ export function WorldStage({
     declared.height !== undefined || envelope?.height !== undefined
       ? Math.max(declared.height ?? 0, envelope?.height ?? 0)
       : undefined;
+  const captionInk = worldStageCaptionVars(background);
   return (
     <div
       className={className}
@@ -361,6 +363,7 @@ export function WorldStage({
         padding: `${padding}px`,
         position: "relative",
         width: planeWidth,
+        ...(captionInk ?? {}),
       }}
     >
       {children}
@@ -415,27 +418,6 @@ export function Artboard({
     width: widthProp,
   });
   const heading = title ?? label ?? "Artboard";
-  const caption =
-    label && title ? (
-      <div
-        style={{
-          alignItems: "baseline",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-          minWidth: 0,
-        }}
-      >
-        <Text className="font-mono text-muted-foreground text-xs">{label}</Text>
-        <Text as="h3" className="font-medium text-sm">
-          {title}
-        </Text>
-      </div>
-    ) : (
-      <Text as="h3" className="font-medium text-sm">
-        {heading}
-      </Text>
-    );
 
   return (
     <section
@@ -450,23 +432,12 @@ export function Artboard({
         width,
       }}
     >
-      <div
-        data-slot="artboard-caption"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-          maxWidth: 720,
-          minWidth: 0,
-        }}
-      >
-        {caption}
-        {description ? (
-          <Text className="text-muted-foreground text-xs leading-relaxed">
-            {description}
-          </Text>
-        ) : null}
-      </div>
+      <ArtboardCaption
+        description={description}
+        heading={heading}
+        label={label}
+        title={title}
+      />
       <div
         data-slot="artboard-frame"
         style={{
