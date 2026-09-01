@@ -2,7 +2,7 @@
 export const settingsLspRow = {
   lspHostSectionTitle: "言語サービス（ホスト）",
   lspHostSectionDesc:
-    "Pier が言語サーバーを起動するかどうかです。言語認識とハイライトは内蔵です。サーバーは PATH 上のツールから起動します。ツールが無いときは、対応するファイルを開くとエディタの状態チップにインストールコマンドが出ます。「エディタの言語機能」は Files エディタがこれらのサービスを使うかどうかだけを制御します。",
+    "Pier が言語サーバーを起動するかどうかです。言語認識とハイライトは内蔵です。無いサーバーは下の一覧に出ます。対応するファイルを開くと、エディタの状態チップにもインストールコマンドが出ます。「エディタの言語機能」はファイルエディタがこれらのサービスを使うかどうかだけを制御します。",
   lspEnabled: "言語サーバーを実行",
   lspEnabledDesc:
     "オフにすると、どのプロジェクトでも補完や診断のプロセスは始まりません。",
@@ -25,18 +25,19 @@ export const settingsLspRow = {
     "エージェントの作業ツリーでも言語サーバーを起動します。作業ツリーが増えると負荷も増えます。",
   lspAdvancedTitle: "リソースと上限",
   lspAdvancedDesc: "多くの環境では初期値のままで問題ありません。",
-  lspToolsTitle: "ローカルツール",
+  lspToolsTitle: "このパソコンの言語サーバー",
   lspToolsDesc:
-    "この Mac の言語サーバーを読み取り専用で確認します。無いツールは自分でインストールしてください（PATH）。Pier はダウンロードしません。",
-  lspToolsLoading: "ローカルツールを確認中…",
-  lspToolsEmpty: "ツールの状態を読み込めませんでした",
+    "補完、定義へ移動、診断は、このパソコンにある言語サーバーを使います。無いものは自分でインストールしてください。Pier は代行してダウンロードしません。",
+  lspToolsLoading: "言語サーバーを確認中…",
+  lspToolsEmpty: "言語サーバーを確認できませんでした",
   lspToolsEmptyDesc:
     "少し待ってもう一度試すか、Pier を再起動してこのページを開き直してください。",
-  lspToolsNone: "一覧にするローカルツールがありません",
-  lspToolsNoneDesc: "いま確認できるものはありません。",
+  lspToolsNone: "一覧にする言語サーバーがありません",
+  lspToolsNoneDesc: "いま確認できる言語サーバーはありません。",
   lspToolsStatusBundled: "内蔵",
-  lspToolsStatusAvailable: "PATH 上",
-  lspToolsStatusMissing: "見つかりません",
+  lspToolsStatusAvailable: "インストール済み",
+  lspToolsStatusMissing: "未インストール",
+  lspToolsInstallLabel: "インストール",
   lspToolsCopyInstall: "{{name}} のインストールコマンドをコピー",
   lspToolsCopied: "コピーしました",
   lspToolsCopyFailed: "インストールコマンドをコピーできませんでした",

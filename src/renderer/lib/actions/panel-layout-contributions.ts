@@ -165,7 +165,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       },
       id: "pier.panel.keepOpen",
       menuHidden: (invocation) => !isPreviewFileTab(invocation),
-      sortOrder: 3,
+      sortOrder: 1,
       surfaces: ["dockview-tab"],
       titleKey: "contextMenu.action.keepOpen",
     },

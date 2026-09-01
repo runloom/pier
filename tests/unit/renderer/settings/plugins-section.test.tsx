@@ -372,7 +372,7 @@ describe("PluginsSection", () => {
     });
     render(<PluginsSection />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Disable pier.git" }));
+    fireEvent.click(screen.getByRole("switch", { name: "pier.git" }));
 
     await waitFor(() => {
       expect(window.pier.plugins.disable).toHaveBeenCalledWith("pier.git");

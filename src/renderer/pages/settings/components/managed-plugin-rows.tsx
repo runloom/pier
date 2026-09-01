@@ -2,6 +2,7 @@ import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Item,
+  ItemActions,
   ItemContent,
   ItemDescription,
   ItemTitle,
@@ -14,11 +15,7 @@ import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { rejectFailedManagedPluginOperation } from "./managed-plugin-operation.ts";
-import {
-  type ContributionCounts,
-  capabilityPermissionLabel,
-  contributionCountItemsFromCounts,
-} from "./plugin-row.tsx";
+import { PluginEnableSwitch } from "./plugin-row.tsx";
 
 /**
  * Row helpers for `ManagedPluginsSection`.
@@ -230,30 +227,6 @@ export function ManagedRowExtraActions({
   );
 }
 
-function ContributionCountsInline({
-  counts,
-}: {
-  counts: ContributionCounts | undefined;
-}): JSX.Element {
-  const t = useT();
-  if (!counts) return <span />;
-  const items = contributionCountItemsFromCounts(counts, t);
-  // 无贡献项时不渲染占位文案:这行信息对用户没有行动价值,纯噪声。
-  if (items.length === 0) {
-    return <span />;
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
-      {items.map(({ Icon, id, label }) => (
-        <span className="inline-flex items-center gap-1" key={id}>
-          <Icon aria-hidden className="size-3.5" />
-          {label}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 /** Minimal row for a plugin known only by the catalog (bundled/available). */
 export function AvailableManagedRow({
   row,
@@ -269,24 +242,15 @@ export function AvailableManagedRow({
   const t = useT();
   const display = resolveRowDisplay(row);
   const { pending, run } = usePluginOp(display.name, onRefresh);
-  // 权限透明度契约：安装前向用户展示该插件要什么能力（人话标签）。
-  const permissionSummary =
-    row.permissions && row.permissions.length > 0
-      ? t("settings.plugins.permissionSummary", {
-          list: row.permissions
-            .map((p) => capabilityPermissionLabel(t, p))
-            .join(", "),
-        })
-      : null;
   return (
     <Item
       className="rounded-none border-0 px-(--card-spacing)"
       data-testid={`plugin-row-${row.id}`}
       role="listitem"
     >
-      <ItemContent className="min-w-0 gap-1.5">
-        <div className="flex w-full items-center justify-between gap-2">
-          <ItemTitle className="min-w-0">
+      <ItemContent className="min-w-0 gap-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <ItemTitle className="min-w-0 max-w-full">
             <Package
               aria-hidden
               className="size-4 shrink-0 text-muted-foreground"
@@ -298,37 +262,30 @@ export function AvailableManagedRow({
           </span>
         </div>
         {display.description ? (
-          <p className="text-muted-foreground text-xs">{display.description}</p>
+          <ItemDescription className="text-xs">
+            {display.description}
+          </ItemDescription>
         ) : null}
-        {permissionSummary ? (
-          <p
-            className="text-muted-foreground text-xs"
-            data-testid={`plugin-permissions-${row.id}`}
-          >
-            {permissionSummary}
-          </p>
-        ) : null}
-        <div className="flex w-full flex-wrap items-center justify-between gap-2">
-          <ContributionCountsInline counts={row.contributionCounts} />
-          <Button
-            disabled={pending || mutationsLocked}
-            onClick={() => {
-              const v = row.update?.version;
-              run(
-                win?.managedPlugins?.install(row.id),
-                "install",
-                v ? { version: v } : undefined
-              );
-            }}
-            size="sm"
-            type="button"
-            variant="default"
-          >
-            <Spinner pending={pending} />
-            {t("settings.plugins.action.install")}
-          </Button>
-        </div>
       </ItemContent>
+      <ItemActions className="shrink-0">
+        <Button
+          disabled={pending || mutationsLocked}
+          onClick={() => {
+            const v = row.update?.version;
+            run(
+              win?.managedPlugins?.install(row.id),
+              "install",
+              v ? { version: v } : undefined
+            );
+          }}
+          size="sm"
+          type="button"
+          variant="default"
+        >
+          <Spinner pending={pending} />
+          {t("settings.plugins.action.install")}
+        </Button>
+      </ItemActions>
     </Item>
   );
 }
@@ -353,61 +310,53 @@ export function UnavailableManagedRow({
 }): JSX.Element {
   const t = useT();
   const display = resolveRowDisplay(row);
-  const statusKey = row.desired.enabled ? "runtimeUnavailable" : "disabled";
-  const actionKey = row.desired.enabled ? "disable" : "enable";
   const version = row.desired.version ?? row.effective?.version;
+  const description = row.desired.enabled
+    ? t("settings.plugins.runtimeUnavailableDescription")
+    : display.description;
   return (
     <Item
       className="rounded-none border-0 px-(--card-spacing)"
       data-testid={`plugin-row-${row.id}`}
       role="listitem"
     >
-      <ItemContent className="min-w-0 gap-1.5">
-        <div className="flex w-full items-center justify-between gap-2">
-          <ItemTitle className="min-w-0">
+      <ItemContent className="min-w-0 gap-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <ItemTitle className="min-w-0 max-w-full">
             <Package
               aria-hidden
               className="size-4 shrink-0 text-muted-foreground"
             />
             <span className="truncate">{display.name}</span>
-            <Badge variant={row.desired.enabled ? "destructive" : "outline"}>
-              {t(`settings.plugins.status.${statusKey}`)}
-            </Badge>
+            {row.desired.enabled ? (
+              <Badge variant="destructive">
+                {t("settings.plugins.status.runtimeUnavailable")}
+              </Badge>
+            ) : null}
           </ItemTitle>
           <span className="shrink-0 text-muted-foreground text-xs">
             {version ? `v${version}` : "—"}
           </span>
         </div>
-        <ItemDescription className="text-xs">
-          {row.desired.enabled
-            ? t("settings.plugins.runtimeUnavailableDescription")
-            : display.description}
-        </ItemDescription>
-        <div className="flex w-full flex-wrap items-center justify-between gap-2">
-          <ContributionCountsInline counts={row.contributionCounts} />
-          <div className="flex flex-wrap items-center gap-2">
-            <ManagedRowExtraActions
-              mutationsLocked={mutationsLocked}
-              officialMutationsAllowed={officialMutationsAllowed}
-              onRefresh={onRefresh}
-              row={row}
-              win={win}
-            />
-            <Button
-              aria-label={t(`settings.plugins.action.${actionKey}Plugin`, {
-                name: display.name,
-              })}
-              disabled={pending || mutationsLocked}
-              onClick={onToggle}
-              size="sm"
-              type="button"
-              variant={row.desired.enabled ? "outline" : "default"}
-            >
-              {t(`settings.plugins.action.${actionKey}`)}
-            </Button>
-          </div>
-        </div>
+        {description ? (
+          <ItemDescription className="text-xs">{description}</ItemDescription>
+        ) : null}
       </ItemContent>
+      <ItemActions className="shrink-0">
+        <ManagedRowExtraActions
+          mutationsLocked={mutationsLocked}
+          officialMutationsAllowed={officialMutationsAllowed}
+          onRefresh={onRefresh}
+          row={row}
+          win={win}
+        />
+        <PluginEnableSwitch
+          checked={row.desired.enabled}
+          disabled={pending || mutationsLocked}
+          name={display.name}
+          onToggle={onToggle}
+        />
+      </ItemActions>
     </Item>
   );
 }

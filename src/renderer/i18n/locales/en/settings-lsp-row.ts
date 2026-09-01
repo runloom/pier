@@ -2,7 +2,7 @@
 export const settingsLspRow = {
   lspHostSectionTitle: "Language services (host)",
   lspHostSectionDesc:
-    "Whether Pier starts language-server processes. Language recognition and highlighting are built in; servers run from tools on your PATH. If a tool is missing, open a matching file — the editor status chip shows the install command. “Editor language features” above only controls whether the Files editor uses these services.",
+    "Whether Pier starts language-server processes. Language recognition and highlighting are built in. Missing servers are listed below; opening a matching file also shows an install command in the editor status chip. “Editor language features” above only controls whether the Files editor uses these services.",
   lspEnabled: "Run language servers",
   lspEnabledDesc:
     "When off, no completions or diagnostics processes start for any project.",
@@ -24,18 +24,19 @@ export const settingsLspRow = {
     "Start language servers in agent worktrees too. Extra worktrees use more resources.",
   lspAdvancedTitle: "Resources and limits",
   lspAdvancedDesc: "Defaults are fine for most setups.",
-  lspToolsTitle: "Local tools",
+  lspToolsTitle: "Language servers on this computer",
   lspToolsDesc:
-    "Read-only check of language servers on this machine. Install missing tools yourself (PATH); Pier does not download them.",
-  lspToolsLoading: "Checking local tools…",
-  lspToolsEmpty: "Could not load tool status",
+    "Completions, go-to-definition, and diagnostics use language servers already on this computer. Install any that are missing; Pier does not download them.",
+  lspToolsLoading: "Checking language servers…",
+  lspToolsEmpty: "Couldn't check language servers",
   lspToolsEmptyDesc:
     "Try again in a moment, or restart Pier and reopen this page.",
-  lspToolsNone: "No local tools to list",
-  lspToolsNoneDesc: "Nothing is available to check right now.",
+  lspToolsNone: "No language servers to list",
+  lspToolsNoneDesc: "Nothing to check right now.",
   lspToolsStatusBundled: "Built-in",
-  lspToolsStatusAvailable: "On PATH",
-  lspToolsStatusMissing: "Not found",
+  lspToolsStatusAvailable: "Installed",
+  lspToolsStatusMissing: "Not installed",
+  lspToolsInstallLabel: "Install",
   lspToolsCopyInstall: "Copy install command for {{name}}",
   lspToolsCopied: "Copied",
   lspToolsCopyFailed: "Couldn't copy the install command",

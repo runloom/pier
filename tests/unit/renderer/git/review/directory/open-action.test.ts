@@ -281,9 +281,9 @@ describe("registerGitReviewOpenDirectoryAction", () => {
     expect(terminalIds).not.toContain(GIT_REVIEW_OPEN_DIRECTORY_COMMAND_ID);
   });
 
-  it("groups with Open File, not with copy or Finder", () => {
+  it("sorts after review/view groups, not with copy or Finder", () => {
     const action = actionRegistry.get(GIT_REVIEW_OPEN_DIRECTORY_COMMAND_ID);
-    expect(action?.metadata?.group).toBe("1_open");
+    expect(action?.metadata?.group).toBe("5_open");
     expect(action?.metadata?.sortOrder).toBe(1);
   });
 });

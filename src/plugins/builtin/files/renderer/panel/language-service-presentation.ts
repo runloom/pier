@@ -337,7 +337,7 @@ function errorPresentation(
           )
         : t(
             "filePanel.languageService.nextStep.installOfficialTools",
-            "Install the language server for this file type on your PATH (see Settings → Files → Local tools), then restart Pier."
+            "Install the language server for this file type (see Settings → Files → Language servers on this computer), then restart Pier."
           ),
       title: t(
         "filePanel.languageService.title.error.serverUnavailable",

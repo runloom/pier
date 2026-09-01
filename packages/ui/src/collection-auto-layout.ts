@@ -24,12 +24,6 @@ export const COLLECTION_QUOTA_ITEM_MIN_WIDTH = "12rem";
 /** 设置页配额组：更宽单项，避免窄挤。 */
 export const COLLECTION_QUOTA_SETTINGS_ITEM_MIN_WIDTH = "14rem";
 
-/**
- * Settings language-tool tiles: name + status, optional command / version.
- * Sized for two columns in the Files settings pane; a narrow pane wraps to one.
- */
-export const COLLECTION_LSP_TOOL_ITEM_MIN_WIDTH = "18rem";
-
 export function widgetDensityFor(size: {
   h: number;
   w: number;

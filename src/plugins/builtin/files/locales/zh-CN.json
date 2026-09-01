@@ -199,7 +199,7 @@
     "filePanel.languageService.nextStep.waitOrRestart": "可等待自动重试；若反复失败，请重启 Pier。",
     "filePanel.languageService.nextStep.focusEditor": "点击编辑器即可恢复语言功能。",
     "filePanel.languageService.nextStep.installThenRestart": "在终端运行下方安装命令，然后重启 Pier。",
-    "filePanel.languageService.nextStep.installOfficialTools": "在本机 PATH 安装此文件类型的语言服务器（见「设置 → Files → 本机工具」），然后重启 Pier。",
+    "filePanel.languageService.nextStep.installOfficialTools": "请安装此文件类型的语言服务器（见「设置 → 文件 → 本机语言服务器」），然后重启 Pier。",
     "filePanel.languageService.nextStep.adjustLimit": "关闭其他项目标签，或在「设置 → 文件」提高语言服务数量上限。",
     "filePanel.languageService.nextStep.reinstallOrRestart": "重启 Pier；若仍失败，请重新安装语言服务器。",
     "filePanel.languageService.nextStep.restartApp": "重启 Pier，然后重新打开文件。",
