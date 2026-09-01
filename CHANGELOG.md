@@ -9,6 +9,10 @@
 - **根 README 支持中英日韩。** GitHub 默认仍是简体中文；顶部可切换 English、日本語、한국어。
 - **CLI 使用手册支持中英日韩。** GitHub 入口 `.pier/canvases/pier-cli-user-manual/README.md` 默认仍是简体中文；顶部可切换 English、日本語、한국어。应用内 Canvas 仍为中文。
 
+### Changed
+
+- **`/pier-canvas` 未指定壳时由智能体按 skill 推断。** 宿主只注入 `locale=`，不按关键词打 `mode` / `recipe` / `content`。界面稿走画板，决策稿走阅读流；显式参数仍优先；光敲 `/pier-canvas` 仍是决策稿。
+
 ## [0.1.35] - 2026-08-31
 
 ### Added
