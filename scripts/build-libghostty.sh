@@ -94,16 +94,69 @@ fi
 echo "[+] 依赖 OK（zig $ZIG_VER, git, xcodebuild, xcrun metal, lipo, ar, ranlib）"
 
 # --------- 拉源码（幂等）---------
+# GitHub 偶发 Recv failure / Connection reset。clone 重试三次；仍失败则
+# 复用旁路已有 checkout（主仓 / 其它 worktree 的同名目录）。fetch 失败但
+# 本地已有 tag 时继续，避免一次 RST 打断整次构建。
+local_repo_fallback() {
+    local name=$1
+    local candidate
+    local saved
+    saved=$(shopt -p nullglob)
+    shopt -s nullglob
+    for candidate in \
+        "${PIER_ROOT}/../../pier/${name}" \
+        "${PIER_ROOT}/../${name}" \
+        "${PIER_ROOT}/../"*"/$(basename "$name")"; do
+        if [ -d "${candidate}/.git" ]; then
+            eval "$saved"
+            (cd "$candidate" && pwd)
+            return 0
+        fi
+    done
+    eval "$saved"
+    return 1
+}
+
 sync_repo() {
     local url=$1
     local dir=$2
     local ref=$3
+    local attempt
+    local fallback
     if [ ! -d "$dir/.git" ]; then
         echo "[+] clone $url → $dir"
-        git clone --branch "$ref" "$url" "$dir"
+        rm -rf "$dir"
+        attempt=1
+        while [ "$attempt" -le 3 ]; do
+            if git clone --branch "$ref" "$url" "$dir"; then
+                break
+            fi
+            echo "[!] clone 失败（第 ${attempt}/3 次）"
+            rm -rf "$dir"
+            if [ "$attempt" -eq 3 ]; then
+                fallback=$(local_repo_fallback "$(basename "$dir")" || true)
+                if [ -n "${fallback:-}" ]; then
+                    echo "[+] GitHub 不可达，改从本地副本 clone：$fallback"
+                    git clone --branch "$ref" "$fallback" "$dir"
+                    git -C "$dir" remote set-url origin "$url"
+                    break
+                fi
+                echo "[!] clone $url 失败（Connection reset 多为 GitHub 瞬时断连，请重跑）"
+                exit 1
+            fi
+            sleep $((attempt * 3))
+            attempt=$((attempt + 1))
+        done
     else
         echo "[+] fetch $dir @ $ref"
-        (cd "$dir" && git fetch --force --no-tags origin "refs/tags/$ref:refs/tags/$ref" 2>&1 | tail -3)
+        if ! (cd "$dir" && git fetch --force --no-tags origin "refs/tags/$ref:refs/tags/$ref"); then
+            if (cd "$dir" && git rev-parse --verify --quiet "$ref^{commit}" >/dev/null); then
+                echo "[!] fetch 失败，继续用本地 $ref"
+            else
+                echo "[!] fetch $ref 失败且本地没有该 tag"
+                exit 1
+            fi
+        fi
     fi
     (cd "$dir" && git reset --hard "$ref" && git clean -fd) >/dev/null
 }
