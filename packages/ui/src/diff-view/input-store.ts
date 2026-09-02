@@ -198,6 +198,8 @@ function sameFileInput(
     previous.lineStats?.additions === next.lineStats?.additions &&
     previous.lineStats?.deletions === next.lineStats?.deletions &&
     previous.patch === next.patch &&
+    previous.diffFiles?.oldContents === next.diffFiles?.oldContents &&
+    previous.diffFiles?.newContents === next.diffFiles?.newContents &&
     previous.stageControl?.busy === next.stageControl?.busy &&
     previous.stageControl?.canDiscard === next.stageControl?.canDiscard &&
     previous.stageControl?.pendingAction === next.stageControl?.pendingAction &&

@@ -8,6 +8,8 @@ import { parseChangeBlocksFromPatch } from "@shared/git-patch-hunk.ts";
 
 export function patchDocument(options: {
   readonly entryKey: string;
+  readonly newContents?: string;
+  readonly oldContents?: string;
   readonly patch: string;
   readonly revision?: string;
   readonly sectionKey?: string;
@@ -18,7 +20,15 @@ export function patchDocument(options: {
     entryKey: options.entryKey,
     kind: "ok",
     revision: options.revision ?? `revision:${options.entryKey}`,
-    sections: [patchSection(options.patch, sectionKey, options.stageState)],
+    sections: [
+      patchSection(
+        options.patch,
+        sectionKey,
+        options.stageState,
+        options.oldContents,
+        options.newContents
+      ),
+    ],
     surfaceSections: surfaceSectionsFor(
       sectionKey,
       options.stageState ?? "unstaged"
@@ -29,7 +39,9 @@ export function patchDocument(options: {
 function patchSection(
   patch: string,
   sectionKey: string,
-  stageState: GitReviewStageState | null = "unstaged"
+  stageState: GitReviewStageState | null = "unstaged",
+  oldContents?: string,
+  newContents?: string
 ): GitReviewFileDocumentOk["sections"][number] {
   return {
     changeBlocks: parseChangeBlocksFromPatch(patch).map((block) => ({
@@ -49,6 +61,9 @@ function patchSection(
     kind: "patch",
     patch,
     sectionKey,
+    ...(oldContents === undefined || newContents === undefined
+      ? {}
+      : { newContents, oldContents }),
   };
 }
 

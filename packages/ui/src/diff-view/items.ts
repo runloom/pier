@@ -1,5 +1,6 @@
-import { type FileDiffMetadata, processFile } from "@pierre/diffs";
+import type { FileDiffMetadata } from "@pierre/diffs";
 import type { CodeViewItem } from "@pierre/diffs/react";
+import { parsePatchFileDiff } from "./file-diff/from-patch.ts";
 import { estimateFileDiff, noticeFileDiff } from "./file-diff/placeholders.ts";
 import { buildHunkActionAnnotations } from "./hunk-annotations.ts";
 import { buildImageDiffAnnotation } from "./image-diff/annotation.ts";
@@ -11,6 +12,8 @@ import {
 } from "./review/annotation-anchors.ts";
 import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 import { itemCacheKeyOf } from "./review/drift-cache-key.ts";
+import { buildUnresolvedConflictAnnotation } from "./unresolved-conflict/annotation.ts";
+import { createUnresolvedConflictFileDiff } from "./unresolved-conflict/file-diff.ts";
 
 export {
   estimateFileDiff,
@@ -68,7 +71,7 @@ export type PierDiffViewItemKind =
   | "loaded"
   | "error"
   | "ready-notice"
-  /** Merge conflict body; render via PierUnresolvedConflictView, not CodeView. */
+  /** Merge conflict body; CodeView file chrome + UnresolvedFile annotation. */
   | "conflict"
   /** Raster image comparison; render via image-diff annotation, not text hunks. */
   | "image";
@@ -125,8 +128,16 @@ export interface PierDiffReviewDriftThread {
 export interface PierDiffViewItem {
   readonly cacheKey: string;
   readonly changeControls?: readonly PierDiffViewChangeControl[];
-  /** Conflict body for PierUnresolvedConflictView (not CodeView). */
+  /** Conflict body for the CodeView file-level annotation. */
   readonly conflict?: PierDiffViewConflictBody;
+  /**
+   * Full old/new text for Pierre expand of collapsed unmodified lines.
+   * Omit with a hunk-only patch so `isPartial` stays true.
+   */
+  readonly diffFiles?: {
+    readonly newContents: string;
+    readonly oldContents: string;
+  };
   /** File-level / drifted threads under the file header. */
   readonly driftComments?: readonly PierDiffReviewDriftThread[];
   readonly fileDisplay?: PierDiffViewFileDisplay;
@@ -213,13 +224,40 @@ export function toCodeViewItem(
           ? {}
           : { prevName: input.fileDisplay.previousPath }),
       });
+    } else if (kind === "conflict") {
+      const estimated =
+        input.conflict?.contentsDigest.startsWith("estimate:") === true;
+      if (estimated || !input.fileDisplay) {
+        fileDiff = estimateFileDiff(input);
+      } else {
+        fileDiff = createUnresolvedConflictFileDiff({
+          cacheKey: input.cacheKey,
+          name: input.fileDisplay.path,
+          type: fileDisplayType(input.fileDisplay.status),
+          ...(input.fileDisplay.previousPath === undefined
+            ? {}
+            : { prevName: input.fileDisplay.previousPath }),
+        });
+      }
     } else if (kind === "loaded") {
-      fileDiff = parsedFileDiff(input);
+      fileDiff = applyFileDisplay(
+        parsePatchFileDiff({
+          cacheKey: input.cacheKey,
+          id: input.id,
+          patch: input.patch,
+          ...(input.diffFiles === undefined
+            ? {}
+            : { diffFiles: input.diffFiles }),
+          ...(input.fileDisplay === undefined
+            ? {}
+            : { fileName: input.fileDisplay.path }),
+        }),
+        input.fileDisplay
+      );
     } else if (kind === "estimate") {
       fileDiff = estimateFileDiff(input);
     } else {
-      // ready-notice / error / conflict：CodeView 只作占位；冲突真体由
-      // PierUnresolvedConflictView 渲染，禁止误把 conflict 当 patch。
+      // ready-notice / error：CodeView 只作占位。
       fileDiff = noticeFileDiff(input);
     }
     const version = (previous?.version ?? -1) + 1;
@@ -230,6 +268,22 @@ export function toCodeViewItem(
     const imageAnnotations =
       kind === "image" && input.imageDiff !== undefined
         ? buildImageDiffAnnotation(fileDiff.type, input.imageDiff)
+        : undefined;
+    const conflictEstimate =
+      kind === "conflict" &&
+      (input.conflict?.contentsDigest.startsWith("estimate:") ?? true);
+    const conflictAnnotations =
+      kind === "conflict" &&
+      input.conflict !== undefined &&
+      input.fileDisplay !== undefined &&
+      !conflictEstimate
+        ? buildUnresolvedConflictAnnotation(fileDiff.type, {
+            conflict: input.conflict,
+            path: input.fileDisplay.path,
+            ...(input.stateNotice === undefined
+              ? {}
+              : { stateNotice: input.stateNotice }),
+          })
         : undefined;
     // 文件级 drift 折叠区 annotation（lineNumber: 0，首个 hunk 前渲染）。
     const driftAnnotations = buildDriftAnnotations(
@@ -243,12 +297,14 @@ export function toCodeViewItem(
     const annotations =
       hunkAnnotations === undefined &&
       imageAnnotations === undefined &&
+      conflictAnnotations === undefined &&
       driftAnnotations === undefined &&
       inlineThreadAnnotations === undefined
         ? undefined
         : [
             ...(hunkAnnotations ?? []),
             ...(imageAnnotations ?? []),
+            ...(conflictAnnotations ?? []),
             ...(driftAnnotations ?? []),
             ...(inlineThreadAnnotations ?? []),
           ];
@@ -257,8 +313,9 @@ export function toCodeViewItem(
       kind === "ready-notice" ||
       kind === "error" ||
       kind === "estimate" ||
-      kind === "conflict" ||
+      conflictEstimate ||
       (kind !== "image" &&
+        kind !== "conflict" &&
         fileDiff.splitLineCount === 0 &&
         fileDiff.unifiedLineCount === 0);
     const item: PierDiffCodeViewItem = {
@@ -368,92 +425,4 @@ export function toCodeViewItems(
     }
   }
   return { cache: nextCache, errors, items };
-}
-
-function parsedFileDiff(input: PierDiffViewItem): FileDiffMetadata {
-  if (input.patch === null) {
-    throw new Error(`Pierre diff item has no patch: ${input.id}`);
-  }
-  const parsed = processFile(input.patch, {
-    cacheKey: input.cacheKey,
-    isGitDiff: true,
-    throwOnError: true,
-  });
-  if (!parsed) {
-    throw new Error(`Pierre did not parse diff item: ${input.id}`);
-  }
-  // processFile 无 oldFile/newFile 时 isPartial=true：patch 只有 hunk 片段行缓冲
-  // （Pierre 官方语义）。Pier Review 不接 loadDiffFiles，不得假装全文缓冲：
-  // 若把 isPartial 清成 false，高亮路径会 expandedHunks:true 展开 collapsedBefore，
-  // OOB 读到 undefined 再 value += undefined → 字面 "undefinedundefined…"。
-  // 此处只校验 hunk 内 +/-/context 索引落在缓冲内；保持 isPartial。
-  return applyFileDisplay(
-    assertPatchHunkBuffersCovered(parsed),
-    input.fileDisplay
-  );
-}
-
-/**
- * 校验 patch-only FileDiff 的 hunk 行缓冲完整。
- * **保持 isPartial**（金标准：片段 patch ≠ 全文）。
- * - 0 hunk：合法空正文（mode-only 等），不 throw
- * - 有 hunk 但索引越界：throw → error notice
- *
- * @deprecated 旧名 markSelfContainedPatchComplete 曾错误清 isPartial；请改用本函数。
- */
-export function assertPatchHunkBuffersCovered(
-  fileDiff: FileDiffMetadata
-): FileDiffMetadata {
-  if (fileDiff.hunks.length === 0) {
-    return fileDiff;
-  }
-  if (!patchLineBuffersCoverHunks(fileDiff)) {
-    throw new Error(
-      `Pierre patch line buffers do not cover hunks: ${fileDiff.name || fileDiff.cacheKey || "unknown"}`
-    );
-  }
-  return fileDiff;
-}
-
-/** @deprecated Use {@link assertPatchHunkBuffersCovered}. */
-export function markSelfContainedPatchComplete(
-  fileDiff: FileDiffMetadata
-): FileDiffMetadata {
-  return assertPatchHunkBuffersCovered(fileDiff);
-}
-
-/** true = 每个 hunk 的行索引落在 addition/deletion 缓冲内。0 hunk 视为 true。 */
-function patchLineBuffersCoverHunks(fileDiff: FileDiffMetadata): boolean {
-  for (const hunk of fileDiff.hunks) {
-    for (const content of hunk.hunkContent) {
-      if (content.type === "context") {
-        const endAdd = content.additionLineIndex + content.lines;
-        const endDel = content.deletionLineIndex + content.lines;
-        if (
-          endAdd > fileDiff.additionLines.length ||
-          endDel > fileDiff.deletionLines.length
-        ) {
-          return false;
-        }
-        continue;
-      }
-      if (content.type === "change") {
-        if (
-          content.additions > 0 &&
-          content.additionLineIndex + content.additions >
-            fileDiff.additionLines.length
-        ) {
-          return false;
-        }
-        if (
-          content.deletions > 0 &&
-          content.deletionLineIndex + content.deletions >
-            fileDiff.deletionLines.length
-        ) {
-          return false;
-        }
-      }
-    }
-  }
-  return true;
 }

@@ -132,6 +132,39 @@ describe("GitReviewToolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     expect(onRefresh).toHaveBeenCalledOnce();
   });
+
+  it("hides split/unified on merge-changes and still lets wrap and collapse run", () => {
+    const onToggleCollapseAll = vi.fn();
+    const setViewOptions = vi.fn();
+    renderToolbar(
+      <GitReviewToolbar
+        allCollapsed={false}
+        context={context}
+        onRefresh={vi.fn()}
+        onToggleCollapseAll={onToggleCollapseAll}
+        refreshing={false}
+        setViewOptions={setViewOptions}
+        showDiffStyle={false}
+        viewOptions={{ diffStyle: "split", wrapLines: false }}
+      />
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Switch to side-by-side view" })
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Switch to inline view" })
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "Wrap lines" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Collapse all files" })
+    ).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Wrap lines" }));
+    expect(setViewOptions).toHaveBeenCalledWith({ wrapLines: true });
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all files" }));
+    expect(onToggleCollapseAll).toHaveBeenCalledOnce();
+  });
 });
 
 describe("GitReviewSurfaceSwitcher", () => {

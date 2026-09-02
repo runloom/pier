@@ -14,6 +14,7 @@ import {
   shouldRenderDiffLineStats,
 } from "./presentation.ts";
 import { DiffHeaderActions } from "./stage-button.tsx";
+import { isUnresolvedConflictCacheKey } from "./unresolved-conflict/file-diff.ts";
 
 export function LiveHeaderPrefix({
   inputStore,
@@ -83,9 +84,11 @@ export function LiveHeaderMetadata({
   const loading =
     input !== undefined && pierDiffItemPresentation(input) === "loading";
   // 已解析 hunk 优先；estimate 用 index numstat 首屏齐刷（loading 时仍显示）
-  const fromHunks = isImageDiffCacheKey(item.fileDiff.cacheKey)
-    ? { additions: 0, deletions: 0 }
-    : fileDiffLineStats(item.fileDiff);
+  const fromHunks =
+    isImageDiffCacheKey(item.fileDiff.cacheKey) ||
+    isUnresolvedConflictCacheKey(item.fileDiff.cacheKey)
+      ? { additions: 0, deletions: 0 }
+      : fileDiffLineStats(item.fileDiff);
   const fromIndex = input?.lineStats;
   const { additions, deletions } = shouldRenderDiffLineStats(fromHunks)
     ? fromHunks

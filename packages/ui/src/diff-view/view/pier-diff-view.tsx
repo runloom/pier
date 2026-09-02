@@ -54,6 +54,7 @@ export function PierDiffView({
   appearance,
   items: inputs,
   imageDiff,
+  unresolvedConflict,
   labels,
   driftCommentLabels,
   inlineReviewHandlers,
@@ -238,6 +239,8 @@ export function PierDiffView({
       ...(onHunkAction === undefined ? {} : { onHunkAction }),
       overflow,
       ...(imageDiff === undefined ? {} : { imageDiff }),
+      ...(onOpenFile === undefined ? {} : { onOpenFile }),
+      ...(unresolvedConflict === undefined ? {} : { unresolvedConflict }),
       ...(reviewCommentsById === undefined ? {} : { reviewCommentsById }),
       scheduleRenderWindowReport,
       ...(inlineReviewHandlers === undefined ? {} : { inlineReviewHandlers }),
@@ -432,7 +435,9 @@ export function PierDiffView({
       options={options}
       {...(onHunkAction ||
       inlineReviewHandlers !== undefined ||
-      onGutterReviewActivate
+      onGutterReviewActivate ||
+      imageDiff !== undefined ||
+      unresolvedConflict !== undefined
         ? { renderAnnotation }
         : {})}
       renderHeaderMetadata={renderHeaderMetadata}

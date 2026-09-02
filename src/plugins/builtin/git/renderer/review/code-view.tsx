@@ -36,6 +36,7 @@ import { pluginText } from "../plugin-text.ts";
 import { usePluginLanguage } from "../use-plugin-language.ts";
 import { openGitReviewDiffContextMenu } from "./diff-context-menu.ts";
 import { resolveGitReviewLiveCopyTarget } from "./diff-open-target.ts";
+import { useReviewUnresolvedConflictHost } from "./document/conflict-host.tsx";
 import { ReviewErrorEmpty, ReviewLoading } from "./feedback.tsx";
 import type {
   GitReviewMutationLease,
@@ -208,6 +209,15 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       ...(gitRootPath === undefined ? {} : { gitRootPath }),
     });
 
+    const unresolvedConflict = useReviewUnresolvedConflictHost({
+      context,
+      contextId,
+      items: displayItems,
+      mutationLocked: mutationAuthorityBlocked,
+      ...(gitRootPath === undefined ? {} : { gitRootPath }),
+      ...(onMutationCommitted === undefined ? {} : { onMutationCommitted }),
+    });
+
     const setDiffHandle = useCallback(
       (handle: PierDiffViewHandle | null) => {
         handleRef.current = handle;
@@ -378,6 +388,9 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                 imageDiff={imageDiff}
                 items={displayItems}
                 labels={diffLabels}
+                {...(unresolvedConflict === undefined
+                  ? {}
+                  : { unresolvedConflict })}
                 {...(driftCommentLabels === undefined
                   ? {}
                   : { driftCommentLabels })}
