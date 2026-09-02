@@ -54,32 +54,6 @@ export function actionRank(
     : { tier: "frecency", score };
 }
 
-export type GroupRank =
-  | { tier: "frecency"; maxScore: number }
-  | { tier: "fallback"; order: number };
-
-export function groupRank(
-  actions: readonly Action[],
-  frecencyMap: ReadonlyMap<string, number>
-): GroupRank {
-  let maxScore = Number.NEGATIVE_INFINITY;
-  for (const a of actions) {
-    const s = frecencyMap.get(a.id);
-    if (s != null && s > maxScore) {
-      maxScore = s;
-    }
-  }
-  if (maxScore > Number.NEGATIVE_INFINITY) {
-    return { tier: "frecency", maxScore };
-  }
-  const category =
-    actions[0]?.metadata?.categoryKey ?? actions[0]?.category ?? "";
-  return {
-    tier: "fallback",
-    order: CATEGORY_META[category]?.order ?? UNKNOWN_ORDER,
-  };
-}
-
 export function compareActions(
   a: Action,
   b: Action,
@@ -107,28 +81,6 @@ export function compareActions(
   }
   if (ra.tier === "fallback" && rb.tier === "fallback") {
     return ra.sortOrder - rb.sortOrder; // 小 sortOrder 在前
-  }
-  return 0;
-}
-
-export function compareGroups(
-  ga: readonly Action[],
-  gb: readonly Action[],
-  frecencyMap: ReadonlyMap<string, number>
-): number {
-  const ra = groupRank(ga, frecencyMap);
-  const rb = groupRank(gb, frecencyMap);
-  if (ra.tier === "frecency" && rb.tier === "fallback") {
-    return -1;
-  }
-  if (ra.tier === "fallback" && rb.tier === "frecency") {
-    return 1;
-  }
-  if (ra.tier === "frecency" && rb.tier === "frecency") {
-    return rb.maxScore - ra.maxScore;
-  }
-  if (ra.tier === "fallback" && rb.tier === "fallback") {
-    return ra.order - rb.order;
   }
   return 0;
 }

@@ -428,6 +428,13 @@ section 根节点下的裸子节点。
 权威规格：[`docs/superpowers/specs/2026-08-31-context-menu-order-gold-standard.md`](docs/superpowers/specs/2026-08-31-context-menu-order-gold-standard.md)。  
 检查点：`tests/unit/renderer/context-menu/order-governance.test.ts`、`tests/unit/renderer/context-menu/order-sketches.test.ts`、`tests/unit/renderer/context-menu/order-sketches-composed.test.ts`。
 
+### 命令列表分组标题
+
+命令面板空态与新建菜单共用同一套标题规则：标题只表示该块有多条同类命令；1 条不写标题；相邻无标题组合并；分类顺序稳定。使用频次只出现在命令面板「最近」块（新建菜单不设）。`pier.agent.start.*` ≥ 2 时抽成「智能体」子组。有查询的搜索结果与 Quick Pick section 不套本规则。
+
+权威规格：[`docs/superpowers/specs/2026-09-02-command-list-heading-gold-standard.md`](docs/superpowers/specs/2026-09-02-command-list-heading-gold-standard.md)。  
+检查点：`tests/unit/renderer/command-list-group-heading-governance.test.ts`、`tests/unit/command/present-groups.test.ts`。
+
 ### 审查打开项目目录
 
 从 git 审查进入 Files **项目目录标签**（只有树、不打开文档）走宿主 `context.files.openProjectDirectory`，与 `openInEditor` 同构。git 不得 import files 插件；不得抢审查主点击；不得把「打开目录」放进 `GitReviewToolbar` 或审查顶栏芯片。在场入口是树 / diff / 审查 tab 右键「打开目录」。审查树「打开文件」与「打开目录」同在 `5_open`（暂存 / 展开之后、复制路径 / 在访达中显示之前）；diff「跳转到源码」仍在 `1_open`。tab 只在 `pier.git.changes` 上显示，打开该次审查 git 根。组序以「右键菜单顺序」金标准为准。

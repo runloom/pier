@@ -30,12 +30,15 @@ import {
 } from "@/components/common/command-palette/quick-pick-view.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import type { Action } from "@/lib/actions/types.ts";
-import {
-  groupActionsForPalette as groupActionsForPaletteImpl,
-  rankActionsForPalette as rankActionsForPaletteImpl,
-} from "@/lib/command-palette/action-search.ts";
+import { rankActionsForPalette as rankActionsForPaletteImpl } from "@/lib/command-palette/action-search.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
-import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
+import {
+  COMMAND_PALETTE_RECENTS_LIMIT,
+  commandListCategoryLabel,
+  comparePaletteItems,
+  PALETTE_CATEGORY_ORDER,
+  presentCommandListGroups,
+} from "@/lib/command-palette/present-groups.ts";
 import type { QuickPickItem } from "@/lib/command-palette/types.ts";
 import { useCommandPointerSelectionGate } from "@/lib/command-palette/use-command-pointer-selection-gate.ts";
 import { useCommandPaletteCommandsSelection } from "@/lib/command-palette/use-commands-selection.ts";
@@ -64,9 +67,17 @@ export function CommandPalette() {
   const groups = useMemo(
     () =>
       normalizedQuery.length === 0
-        ? groupActionsForPaletteImpl(actions, frecencyMap, normalizedQuery)
+        ? presentCommandListGroups(actions, {
+            categoryLabel: (category) =>
+              commandListCategoryLabel(category, (key) => t(key)),
+            categoryOrder: PALETTE_CATEGORY_ORDER,
+            frecencyMap,
+            itemCompare: comparePaletteItems,
+            recentLabel: t("commandPalette.recent"),
+            recentsLimit: COMMAND_PALETTE_RECENTS_LIMIT,
+          })
         : [],
-    [actions, frecencyMap, normalizedQuery]
+    [actions, frecencyMap, normalizedQuery, t]
   );
   const rankedActions = useMemo(
     () =>
@@ -393,12 +404,6 @@ export function CommandPalette() {
       />
     ) : (
       <CommandsView
-        categoryHeading={(category) => {
-          const meta = CATEGORY_META[category];
-          return meta
-            ? t(`commandPalette.category.${meta.labelKey}`)
-            : category;
-        }}
         groups={groups}
         keybindingLabels={keybindingLabels}
         onExecute={handleExecuteAction}

@@ -1,61 +1,12 @@
 import i18next from "i18next";
 import type { Action } from "@/lib/actions/types.ts";
 import {
-  compareActions,
-  compareGroups,
-} from "@/lib/command-palette/frecency.ts";
-import {
   buildActionSearchDocument,
   rankActionSearchDocuments,
 } from "@/lib/search/action.ts";
 
-export interface ActionGroup {
-  actions: Action[];
-  category: string;
-}
-
 export function actionCategoryKey(action: Action): string {
   return action.metadata?.categoryKey ?? action.category;
-}
-
-export function groupActionsForPalette(
-  actions: readonly Action[],
-  frecencyMap: ReadonlyMap<string, number>,
-  query: string
-): ActionGroup[] {
-  const normalizedQuery = query.trim();
-  if (normalizedQuery.length > 0) {
-    return [
-      {
-        actions: rankActionsForPalette(
-          actions,
-          frecencyMap,
-          normalizedQuery,
-          new Map()
-        ),
-        category: "Search",
-      },
-    ];
-  }
-
-  const map = new Map<string, Action[]>();
-  for (const action of actions) {
-    const category = actionCategoryKey(action);
-    const list = map.get(category) ?? [];
-    list.push(action);
-    map.set(category, list);
-  }
-  const groups = Array.from(map.entries()).map(([category, list]) => ({
-    category,
-    actions: list,
-  }));
-
-  for (const g of groups) {
-    g.actions.sort((a, b) => compareActions(a, b, frecencyMap));
-  }
-  return groups.sort((ga, gb) =>
-    compareGroups(ga.actions, gb.actions, frecencyMap)
-  );
 }
 
 export function rankActionsForPalette(

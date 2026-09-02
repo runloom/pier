@@ -5,6 +5,7 @@ export const commandPalette = {
   loading: "読み込み中…",
   inputFailed: "送信できませんでした。もう一度お試しください",
   searchResults: "結果",
+  recent: "最近",
   agents: {
     launchFailed: "エージェントを起動できませんでした。もう一度お試しください",
     noAgentDetected: "使えるエージェントがありません",
@@ -29,6 +30,7 @@ export const commandPalette = {
     panel: "パネル",
     terminal: "ターミナル",
     window: "ウインドウ",
+    agent: "エージェント",
   },
   action: {
     toggleCommandPalette: "コマンドパレットを表示",

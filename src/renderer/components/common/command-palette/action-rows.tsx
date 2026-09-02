@@ -1,12 +1,19 @@
-import { CommandGroup, CommandItem } from "@pier/ui/command.tsx";
+import {
+  CommandGroup,
+  CommandItem,
+  CommandSeparator,
+} from "@pier/ui/command.tsx";
 import { Kbd } from "@pier/ui/kbd.tsx";
 import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { AGENT_START_COMMAND_PREFIX } from "@shared/commands.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { Settings } from "lucide-react";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { Action } from "@/lib/actions/types.ts";
-import type { ActionGroup } from "@/lib/command-palette/action-search.ts";
+import {
+  commandListItemValue,
+  type PresentedCommandGroup,
+} from "@/lib/command-palette/present-groups.ts";
 
 export function SearchResultsView({
   actions,
@@ -37,32 +44,31 @@ export function SearchResultsView({
 }
 
 export function CommandsView({
-  categoryHeading,
   groups,
   keybindingLabels,
   onExecute,
 }: {
-  categoryHeading: (category: string) => string;
-  groups: readonly ActionGroup[];
+  groups: readonly PresentedCommandGroup[];
   keybindingLabels: ReadonlyMap<string, string>;
   onExecute: (action: Action) => Promise<void>;
 }): ReactNode {
   return (
     <>
       {groups.map((group) => (
-        <CommandGroup
-          heading={categoryHeading(group.category)}
-          key={group.category}
-        >
-          {group.actions.map((action) => (
-            <ActionCommandItem
-              action={action}
-              key={action.id}
-              keybindingLabels={keybindingLabels}
-              onExecute={onExecute}
-            />
-          ))}
-        </CommandGroup>
+        <Fragment key={group.id}>
+          <CommandGroup heading={group.heading ?? undefined}>
+            {group.actions.map((action) => (
+              <ActionCommandItem
+                action={action}
+                key={commandListItemValue(group.id, action.id)}
+                keybindingLabels={keybindingLabels}
+                onExecute={onExecute}
+                value={commandListItemValue(group.id, action.id)}
+              />
+            ))}
+          </CommandGroup>
+          {group.separatorAfter ? <CommandSeparator /> : null}
+        </Fragment>
       ))}
     </>
   );
@@ -91,10 +97,12 @@ export function ActionCommandItem({
   action,
   keybindingLabels,
   onExecute,
+  value,
 }: {
   action: Action;
   keybindingLabels: ReadonlyMap<string, string>;
   onExecute: (action: Action) => Promise<void>;
+  value?: string;
 }): ReactNode {
   const Icon = action.metadata?.iconComponent ?? Settings;
   const shortcut = keybindingLabels.get(action.id);
@@ -113,7 +121,7 @@ export function ActionCommandItem({
           );
         });
       }}
-      value={action.id}
+      value={value ?? action.id}
     >
       {useAgentIcon ? (
         <AgentActionIcon actionId={action.id} />

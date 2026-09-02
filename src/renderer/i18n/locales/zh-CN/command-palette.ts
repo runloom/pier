@@ -5,6 +5,7 @@ export const commandPalette = {
   loading: "加载中…",
   inputFailed: "无法提交，请重试",
   searchResults: "搜索结果",
+  recent: "最近",
   agents: {
     launchFailed: "无法启动智能体，请重试",
     noAgentDetected: "未检测到可用智能体",
@@ -29,6 +30,7 @@ export const commandPalette = {
     panel: "面板",
     terminal: "终端",
     window: "窗口",
+    agent: "智能体",
   },
   action: {
     toggleCommandPalette: "显示命令面板",

@@ -2,7 +2,7 @@
  * Tab 栏 add 按钮 — 同源锚定创建器.
  *
  * 数据源: actionRegistry.list("create-menu"), 与命令面板共享同一套
- * action 注册、frecency 排序、搜索算法和行渲染.
+ * action 注册、搜索算法和行渲染. 空态不按 frecency 整组提前.
  *
  * 与 Cmd+Shift+P 的唯一区别:
  *   - 位置: 锚定在 "+" 按钮旁, 而非屏幕中央
@@ -45,8 +45,10 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { ActionCommandItem } from "@/components/common/command-palette/action-rows.tsx";
-import { groupCreateActions } from "@/components/workspace/add-panel-create-menu.ts";
+import {
+  ActionCommandItem,
+  CommandsView,
+} from "@/components/common/command-palette/action-rows.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import {
   actionRegistry,
@@ -56,7 +58,12 @@ import {
 import { resolveActionShortcutChord } from "@/lib/actions/shortcut-hint.ts";
 import type { Action, ActionInvocation } from "@/lib/actions/types.ts";
 import { rankActionsForPalette } from "@/lib/command-palette/action-search.ts";
-import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
+import {
+  CREATE_MENU_CATEGORY_ORDER,
+  commandListCategoryLabel,
+  compareCreateMenuItems,
+  presentCommandListGroups,
+} from "@/lib/command-palette/present-groups.ts";
 import { useCommandPointerSelectionGate } from "@/lib/command-palette/use-command-pointer-selection-gate.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import {
@@ -175,9 +182,16 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   const groups = useMemo(
     () =>
       normalizedQuery.length === 0
-        ? groupCreateActions(allCreateActions, frecencyMap)
+        ? presentCommandListGroups(allCreateActions, {
+            categoryLabel: (category) =>
+              commandListCategoryLabel(category, (key) => t(key)),
+            categoryOrder: CREATE_MENU_CATEGORY_ORDER,
+            itemCompare: compareCreateMenuItems,
+            recentLabel: t("commandPalette.recent"),
+            recentsLimit: 0,
+          })
         : [],
-    [allCreateActions, frecencyMap, normalizedQuery]
+    [allCreateActions, normalizedQuery, t]
   );
   const ranked = useMemo(
     () =>
@@ -259,11 +273,6 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
     }
   };
 
-  const categoryHeading = (category: string) => {
-    const meta = CATEGORY_META[category];
-    return meta ? t(`commandPalette.category.${meta.labelKey}`) : category;
-  };
-
   const renderListBody = () => {
     if (normalizedQuery.length > 0) {
       if (ranked.length === 0) {
@@ -284,21 +293,13 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
         </CommandGroup>
       );
     }
-    return groups.map((group) => (
-      <CommandGroup
-        heading={categoryHeading(group.category)}
-        key={group.category}
-      >
-        {group.actions.map((action) => (
-          <ActionCommandItem
-            action={action}
-            key={action.id}
-            keybindingLabels={keybindingLabels}
-            onExecute={executeAction}
-          />
-        ))}
-      </CommandGroup>
-    ));
+    return (
+      <CommandsView
+        groups={groups}
+        keybindingLabels={keybindingLabels}
+        onExecute={executeAction}
+      />
+    );
   };
   return (
     <div className="flex h-full items-center justify-center px-1">
