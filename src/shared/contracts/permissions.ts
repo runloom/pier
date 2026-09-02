@@ -202,6 +202,8 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "worktree:read",
     "window:read",
     "panel:read",
+    // 聚焦既有面板（panel.focus）；其余 panel:control 命令不在画布白名单。
+    "panel:control",
     "terminal:read",
     "plugin:read",
     "plugin:action",
@@ -209,6 +211,8 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "git:read",
     "file:read",
     "notification:read",
+    // 画布 chrome：卡片号在系统浏览器打开原 issue（app.openExternal）。
+    "external:open",
   ],
   // 沙箱轨插件主体：静态默认为零，能力完全来自 manifest（deny-by-default）。
   "plugin-principal": [],

@@ -29,6 +29,15 @@ export const DEFAULT_RENDERER_LABELS: MarkdownRendererLabels = {
   openFullscreen: "View fullscreen",
   columnWidthAuto: "Automatic width",
   resizeColumn: "Resize column. Double-click to restore automatic sizing.",
+  appletDisabledTitle: "Applets are off for this document",
+  appletDisabledBody:
+    "Add <!-- pier-applets: enable --> near the top to mount this applet.",
+  appletParseFailedTitle: "Couldn’t read this applet fence",
+  appletParseFailedBody:
+    "Use JSON with pluginId, appletId, and optional props.",
+  appletMountFailedBody:
+    "Retry. If it still fails, check that the plugin is installed.",
+  appletMountFailedTitle: "Couldn’t mount the applet",
 };
 
 export const DEFAULT_TOC_LABELS: MarkdownPreviewTocLabels = {

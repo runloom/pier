@@ -270,7 +270,7 @@ describe("invokeDeclaredCanvasCommand", () => {
     );
     await mkdir(templates, { recursive: true });
     await writeFile(
-      join(templates, "kanban.canvas.tsx"),
+      join(templates, "notes.canvas.tsx"),
       "export default function Board() { return null }\n"
     );
     await writeFile(
@@ -292,7 +292,7 @@ describe("invokeDeclaredCanvasCommand", () => {
     const spawn = vi.fn(async () => ({ runId: "custom-run" }));
     const outcome = await invokeDeclaredCanvasCommand({
       canvasPath:
-        "resources/system-skills/pier-canvas/templates/kanban.canvas.tsx",
+        "resources/system-skills/pier-canvas/templates/notes.canvas.tsx",
       deps: {
         confirm: vi.fn(async () => true),
         isHomeRoot: async () => false,

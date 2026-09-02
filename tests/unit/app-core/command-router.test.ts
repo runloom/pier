@@ -242,6 +242,7 @@ function services(
 
   return {
     agentDetection: {} as never,
+    externalNavigation: { open: async () => ({ opened: true as const }) },
     gitReview: {} as never,
     comments: {} as never,
     agentRuntimeIndex: {

@@ -262,26 +262,26 @@ describe("useCanvasFile", () => {
     const { readDocument, watch, writeDocument } = installFilesApi({});
     const canvasFile = mountHook(true, {
       directory: "resources/system-skills/pier-canvas/templates",
-      path: "resources/system-skills/pier-canvas/templates/kanban.canvas.tsx",
+      path: "resources/system-skills/pier-canvas/templates/docs.canvas.tsx",
       root: PROJECT_ROOT,
     });
 
-    await expect(canvasFile.read("board.json")).resolves.toEqual({
+    await expect(canvasFile.read("data.json")).resolves.toEqual({
       contents: "{}",
       revision: "rev-1",
     });
     expect(readDocument).toHaveBeenCalledWith({
-      path: "resources/system-skills/pier-canvas/templates/board.json",
+      path: "resources/system-skills/pier-canvas/templates/data.json",
       root: PROJECT_ROOT,
     });
 
-    expect(() => canvasFile.watch("board.json", () => undefined)).not.toThrow();
+    expect(() => canvasFile.watch("data.json", () => undefined)).not.toThrow();
     expect(watch).toHaveBeenCalledWith(PROJECT_ROOT, expect.any(Function));
 
-    await canvasFile.write("board.json", "{}\n", null);
+    await canvasFile.write("data.json", "{}\n", null);
     expect(writeDocument).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: "resources/system-skills/pier-canvas/templates/board.json",
+        path: "resources/system-skills/pier-canvas/templates/data.json",
       })
     );
   });

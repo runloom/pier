@@ -76,10 +76,11 @@ Rules:
 
 ## Recipes (not methodology axes)
 
-`packs/recipes/design` and `packs/recipes/board` are **freeform**
-starters (`recipe=` on `/pier-canvas`). They do not add a fourth axis, do
-not invent overview tabs, and do not replace `design-doc` / `closed-loop`.
-See SKILL.md **Stage selection**.
+`packs/recipes/design` and the `pier.tasks` islands (`task-list`,
+`task-dag`) are **freeform** starters (`recipe=` on `/pier-canvas`).
+The project kanban is the plugin panel, not a canvas recipe. They do
+not add a fourth axis, do not invent overview tabs, and do not replace
+`design-doc` / `closed-loop`. See SKILL.md **Stage selection**.
 
 ## Resolve order
 
@@ -152,7 +153,8 @@ Start from `templates/overview.canvas.tsx`.
 
 `recipe=` is **not** a fourth methodology axis. Packs live under
 `packs/recipes/` and force Workflow B (freeform). Known ids: `design`
-(world mockup), `board` (fill kanban).
+(world mockup), `task-list` / `task-dag` (tracker islands in flow).
+There is no canvas kanban recipe and no local `board.json` ledger.
 
 ## Entry
 

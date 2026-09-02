@@ -14,6 +14,10 @@ import {
   useMemo,
   useState,
 } from "react";
+import {
+  MarkdownAppletFence,
+  markdownAppletsEnabled,
+} from "./applet/fence.tsx";
 import { MarkdownCodeBlock } from "./code-block.tsx";
 import type { MarkdownCodeHighlighter } from "./code-highlighter.ts";
 import { wrapBlocksWithComments } from "./comments/ir-blocks.tsx";
@@ -79,6 +83,7 @@ interface MarkdownIrRendererProps {
   initialAnchor: string | undefined;
   initialAnchorRequestId: string | undefined;
   labels: MarkdownRendererLabels;
+  liveModules?: RendererPluginContext["liveModules"] | undefined;
   onJumpToSource?: ((offset: number) => void) | undefined;
   onOpenExternal: (url: string) => void;
   onOpenInternal: ((target: MarkdownInternalTarget) => void) | undefined;
@@ -107,6 +112,16 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
     }
     return map;
   }, [props.pagination.pages]);
+  const appletsEnabled = useMemo(
+    () =>
+      props.pagination.pages.some((page) =>
+        page.blocks.some(
+          (block) =>
+            block.kind === "html" && markdownAppletsEnabled(block.value)
+        )
+      ),
+    [props.pagination.pages]
+  );
   return (
     <MarkdownPaginationView
       activeSearchMatchId={props.activeSearchMatchId}
@@ -135,12 +150,14 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
           footnoteDefinitions,
           headings: props.pagination.headings,
           labels: props.labels,
+          liveModules: props.liveModules,
           onJumpToSource: props.onJumpToSource,
           onOpenAnchor,
           onOpenExternal: props.onOpenExternal,
           onOpenInternal: props.onOpenInternal,
           searchMatchesByNode,
           source: props.source,
+          appletsEnabled,
           wordWrap: props.wordWrap,
         };
         // Top-level only: nested list/quote blocks must not get comment chrome.
@@ -259,6 +276,23 @@ function renderBlock(
       );
     }
     case "code":
+      if (block.lang?.toLowerCase() === "pier-applet") {
+        return (
+          <div
+            {...sourceBlockProps(block.range, context, {
+              className: "md-applet",
+            })}
+          >
+            <MarkdownAppletFence
+              disk={context.source}
+              enabled={context.appletsEnabled}
+              labels={context.labels}
+              liveModules={context.liveModules}
+              source={block.value}
+            />
+          </div>
+        );
+      }
       if (block.lang?.toLowerCase() === "mermaid" && context.charts) {
         return (
           <div

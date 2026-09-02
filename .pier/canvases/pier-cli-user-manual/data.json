@@ -573,6 +573,13 @@
             "description": "查看单个插件详情。"
           },
           {
+            "id": "plugins-applets",
+            "name": "plugins applets",
+            "status": "shipped",
+            "synopsis": "pier plugins applets [id] --json",
+            "description": "列出已安装插件的画布积木（applets）与 propsSchema，供编写期发现。"
+          },
+          {
             "id": "plugins-enable",
             "name": "plugins enable",
             "status": "blocked",

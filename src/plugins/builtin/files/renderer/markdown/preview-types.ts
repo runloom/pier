@@ -43,6 +43,7 @@ export interface MarkdownPreviewProps {
   initialAnchor?: string | undefined;
   initialAnchorRequestId?: string | undefined;
   labels?: MarkdownRendererLabels | undefined;
+  liveModules?: RendererPluginContext["liveModules"] | undefined;
   onContextMenu?:
     | ((event: ReactMouseEvent<HTMLDivElement>) => void)
     | undefined;

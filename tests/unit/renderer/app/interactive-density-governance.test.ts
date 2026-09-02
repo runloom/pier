@@ -107,6 +107,12 @@ describe("interactive density governance", () => {
     }
   });
 
+  it("does not lock Select popper viewport height to the trigger", () => {
+    const select = source("packages/ui/src/select.tsx");
+    expect(select).not.toContain("h-(--radix-select-trigger-height)");
+    expect(select).toContain("min-w-(--radix-select-trigger-width)");
+  });
+
   it("does not let command quick-pick restore the old oversized padding", () => {
     const quickPick = source(
       "src/renderer/components/common/command-palette/quick-pick-view.tsx"

@@ -12,6 +12,7 @@ const LOCALE_ROOTS = [
   join(ROOT, "src", "plugins", "builtin", "files", "locales"),
   join(ROOT, "src", "plugins", "builtin", "git", "locales"),
   join(ROOT, "src", "plugins", "builtin", "memory", "locales"),
+  join(ROOT, "packages", "plugin-tasks", "applets", "copy"),
 ] as const;
 
 /** 中文用户串禁用实现词 / 中英混用。只扫字符串值，不扫 key。 */
@@ -136,7 +137,8 @@ function isChineseLocalePath(filePath: string): boolean {
   return (
     relativePath.includes("/zh-CN/") ||
     relativePath.endsWith("/zh-CN.json") ||
-    relativePath.endsWith("zh-CN.json")
+    relativePath.endsWith("zh-CN.json") ||
+    relativePath.endsWith("/zh-CN.ts")
   );
 }
 
@@ -145,7 +147,8 @@ function isEnglishLocalePath(filePath: string): boolean {
   return (
     relativePath.includes("/en/") ||
     relativePath.endsWith("/en.json") ||
-    relativePath.endsWith("en.json")
+    relativePath.endsWith("en.json") ||
+    relativePath.endsWith("/en.ts")
   );
 }
 
@@ -157,7 +160,9 @@ function isJapaneseOrKoreanLocalePath(filePath: string): boolean {
     relativePath.endsWith("/ja.json") ||
     relativePath.endsWith("/ko.json") ||
     relativePath.endsWith("ja.json") ||
-    relativePath.endsWith("ko.json")
+    relativePath.endsWith("ko.json") ||
+    relativePath.endsWith("/ja.ts") ||
+    relativePath.endsWith("/ko.ts")
   );
 }
 
@@ -351,6 +356,7 @@ describe("user-facing copy governance", () => {
       join(ROOT, "packages", "plugin-grok", "plugin.json"),
       join(ROOT, "packages", "plugin-ssh", "plugin.json"),
       join(ROOT, "packages", "plugin-agent-splits", "plugin.json"),
+      join(ROOT, "packages", "plugin-tasks", "plugin.json"),
     ];
     const offenders = manifests.flatMap((manifestPath) => {
       const parsed = JSON.parse(readFileSync(manifestPath, "utf8")) as {

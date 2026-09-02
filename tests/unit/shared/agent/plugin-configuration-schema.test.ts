@@ -274,3 +274,36 @@ describe("pluginManifestSchema — canvasActions", () => {
     ).toBe(false);
   });
 });
+
+describe("pluginManifestSchema — applets", () => {
+  it("applets 缺省为 undefined", () => {
+    expect(pluginManifestSchema.parse(manifestWith()).applets).toBeUndefined();
+  });
+
+  it("rejects applet ids without the plugin prefix", () => {
+    expect(
+      pluginManifestSchema.safeParse({
+        ...manifestWith(),
+        applets: [
+          {
+            entry: "applets/board/index.applet.tsx",
+            id: "board",
+          },
+        ],
+      }).success
+    ).toBe(false);
+  });
+
+  it("accepts prefixed applet contributions", () => {
+    const parsed = pluginManifestSchema.parse({
+      ...manifestWith(),
+      applets: [
+        {
+          entry: "applets/tracker-board/index.applet.tsx",
+          id: "pier.sample.tracker-board",
+        },
+      ],
+    });
+    expect(parsed.applets?.[0]?.id).toBe("pier.sample.tracker-board");
+  });
+});

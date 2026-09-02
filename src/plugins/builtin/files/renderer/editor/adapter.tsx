@@ -192,6 +192,7 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         // of prior ready IR cannot flash the previous file's content.
         key={props.documentId}
         labels={props.markdownLabels}
+        liveModules={props.markdownLiveModules}
         onContextMenu={props.onMarkdownPreviewContextMenu}
         onJumpToSource={props.onJumpToSource}
         onToggleTask={onToggleTask}

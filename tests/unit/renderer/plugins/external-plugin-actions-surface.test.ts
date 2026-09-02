@@ -72,6 +72,61 @@ describe("external plugin action registration", () => {
     expect(actionRegistry.get("pier.test-actions-surface.go")).toBeUndefined();
   });
 
+  it("forwards command invocation context to the plugin action", async () => {
+    const context = createExternalRendererPluginContext(
+      externalEntry([{ id: "pier.test-actions-surface.go", title: "Go" }]),
+      noopBridge,
+      () => []
+    );
+    const invoke = vi.fn();
+    context.actions.register({
+      id: "pier.test-actions-surface.go",
+      invoke,
+      surfaces: ["command-palette", "create-menu"],
+      title: "Go",
+    });
+    await actionRegistry.get("pier.test-actions-surface.go")?.handler({
+      sourcePanelGroupId: "group-1",
+      sourcePanelContext: {
+        contextId: "ctx",
+        projectRootPath: "/tmp/project",
+        source: "command",
+        updatedAt: 1,
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith({
+      sourcePanelContext: {
+        contextId: "ctx",
+        projectRootPath: "/tmp/project",
+        source: "command",
+        updatedAt: 1,
+      },
+      sourcePanelGroupId: "group-1",
+    });
+  });
+
+  it("can put a panel-open action on the create menu", () => {
+    const context = createExternalRendererPluginContext(
+      externalEntry([{ id: "pier.test-actions-surface.go", title: "Go" }]),
+      noopBridge,
+      () => []
+    );
+    context.actions.register({
+      category: "panel",
+      id: "pier.test-actions-surface.go",
+      invoke: () => undefined,
+      surfaces: ["command-palette", "create-menu"],
+      title: "Go",
+    });
+
+    expect(
+      actionRegistry.list("create-menu").map((action) => action.id)
+    ).toContain("pier.test-actions-surface.go");
+    expect(
+      actionRegistry.list("command-palette").map((action) => action.id)
+    ).toContain("pier.test-actions-surface.go");
+  });
+
   it("awaits async actions so a later quick pick keeps the command stack", async () => {
     const context = createExternalRendererPluginContext(
       externalEntry([{ id: "pier.test-actions-surface.pick", title: "Pick" }]),
@@ -115,5 +170,38 @@ describe("external plugin action registration", () => {
     await expect(
       actionRegistry.get("pier.test-actions-surface.fail")?.handler()
     ).rejects.toThrow("action failed");
+  });
+
+  it("refuses panels.open without panel:open", () => {
+    const entry = externalEntry([]);
+    entry.manifest.panels = [
+      {
+        id: "pier.test-actions-surface.board",
+        permissions: [],
+        title: "Board",
+      },
+    ];
+    const context = createExternalRendererPluginContext(
+      entry,
+      noopBridge,
+      () => []
+    );
+    expect(() =>
+      context.panels.open("pier.test-actions-surface.board")
+    ).toThrow(/panel:open/);
+  });
+
+  it("rejects undeclared applets", () => {
+    const context = createExternalRendererPluginContext(
+      externalEntry([]),
+      noopBridge,
+      () => []
+    );
+    expect(() =>
+      context.applets.render({
+        appletId: "missing",
+        projectRootPath: "/tmp/project",
+      })
+    ).toThrow(/undeclared applet/);
   });
 });

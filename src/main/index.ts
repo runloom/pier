@@ -1,6 +1,6 @@
 import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { createLocalControlRegistrationOwner } from "./adapters/cli/local-control/registration.ts";
 import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
 import { registerPeerUidFromNativeAddon } from "./adapters/cli/register-peer-uid-native.ts";
@@ -68,7 +68,6 @@ import {
 } from "./menu/window-actions.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
-import { createExternalNavigationService } from "./services/external-navigation.ts";
 import { abortMissingSingleInstanceLock } from "./startup-diagnostics.ts";
 import { reconcileOrphanedBackgroundProcesses } from "./state/background-task-process-ledger.ts";
 import { flushPairingState } from "./state/pairing-store.ts";
@@ -290,10 +289,9 @@ if (gotTheLock) {
       registerWindowIpc(ipcMain);
       registerCommandIpc(ipcMain);
       registerExternalNavigationIpc(ipcMain, {
-        service: createExternalNavigationService({
-          now: Date.now,
-          openExternal: (url) => shell.openExternal(url),
-        }),
+        // Same instance as the app.openExternal command path so the nonce
+        // replay guard covers both entrances.
+        service: appCore.services.externalNavigation,
         windowForSender: (sender) => windowManager.fromWebContents(sender),
       });
       registerFileSaveTargetIpc(ipcMain);

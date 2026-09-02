@@ -68,6 +68,7 @@ export const REQUIRED_SHIPPED_COMMAND_NAMES = [
   "preferences read",
   "plugins list",
   "plugins inspect",
+  "plugins applets",
   "agents catalog",
   "agents list",
   "agents get",

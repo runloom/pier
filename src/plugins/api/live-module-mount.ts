@@ -28,6 +28,8 @@ export class LiveModuleMountError extends Error {
 export interface MountLiveModuleOptions {
   /** Runtime render / host error callback (React boundary + explicit mount). */
   onError?: ((error: Error) => void) | undefined;
+  /** Props forwarded to a React default-export component. */
+  props?: Record<string, unknown> | undefined;
   /**
    * Wrap the canvas element before rendering (React only). Canvases mount in a
    * dedicated React root, so host context providers must be injected here.
@@ -115,9 +117,9 @@ function unmountLiveRoot(el: HTMLElement, root: Root): void {
  * React's "synchronously unmount a root while React was already rendering"
  * race and can leave the previous canvas painted.
  */
-export function mountLiveModule(
+export function mountLiveModule<P = Record<string, unknown>>(
   el: HTMLElement,
-  Comp: ComponentType,
+  Comp: ComponentType<P>,
   options: MountLiveModuleOptions = {}
 ): LiveModuleUnmount {
   const previous = liveRoots.get(el);
@@ -131,15 +133,7 @@ export function mountLiveModule(
     },
   });
   liveRoots.set(el, root);
-  const inner = createElement(Comp);
-  const wrapped = options.wrap ? options.wrap(inner) : inner;
-  root.render(
-    createElement(
-      LiveModuleErrorBoundary,
-      { onError: options.onError },
-      wrapped
-    )
-  );
+  renderLiveModuleTree(root, Comp, options);
   let closed = false;
   return () => {
     if (closed) {
@@ -150,6 +144,43 @@ export function mountLiveModule(
       unmountLiveRoot(el, root);
     });
   };
+}
+
+/**
+ * Re-render an already-mounted React live module with new props. Plugin applets
+ * change `provider` / `repo` on source switch; tearing down the root recompiles
+ * and feels like a stall. Returns false when `el` has no live root.
+ */
+export function updateLiveModule<P = Record<string, unknown>>(
+  el: HTMLElement,
+  Comp: ComponentType<P>,
+  options: MountLiveModuleOptions = {}
+): boolean {
+  const root = liveRoots.get(el);
+  if (!root) {
+    return false;
+  }
+  renderLiveModuleTree(root, Comp, options);
+  return true;
+}
+
+function renderLiveModuleTree<P>(
+  root: Root,
+  Comp: ComponentType<P>,
+  options: MountLiveModuleOptions
+): void {
+  const inner = createElement(
+    Comp as ComponentType<Record<string, unknown>>,
+    options.props ?? null
+  );
+  const wrapped = options.wrap ? options.wrap(inner) : inner;
+  root.render(
+    createElement(
+      LiveModuleErrorBoundary,
+      { onError: options.onError },
+      wrapped
+    )
+  );
 }
 
 /**

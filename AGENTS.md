@@ -284,10 +284,11 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
    装饰 SVG。hover tooltip / 点击选点仍可用。
 4. **业务高亮 ≠ focus。** 短时反馈用轻量 `ring-1 ring-ring/40`（或阴影）；禁止与 focus 环共用 `ring-primary/50` 粗描边。
 5. **`tabIndex={0}` 白名单**（产品源码；新增必须在治理测试里登记理由）：
-   - 图片预览画布（缩放/平移快捷键）
-   - 图片 diff 左右滑动条（`role="slider"`，方向键调整对比比例）
-   - dockview panel tab 内容（标签激活）
-   - 设置「项目」列表行（`role="button"` 打开项目；须处理 Enter/Space）
+ - 图片预览画布（缩放/平移快捷键）
+ - 图片 diff 左右滑动条（`role="slider"`，方向键调整对比比例）
+ - dockview panel tab 内容（标签激活）
+ - 设置「项目」列表行（`role="button"` 打开项目；须处理 Enter/Space）
+ - 任务 applet 卡片/列表行（applet 视图 spec 键盘契约：focus ring；「移动到列」走菜单）
 6. **`role="button"` 的非 button 元素**必须同时具备：键盘激活（Enter/Space）、
    `tabIndex={0}`、以及可见的 `focus-visible` 环（或复用已带 ring 的 `Item` 等原语）。
    能改成真正 `<button>` / `Button` 时优先改。
@@ -526,8 +527,9 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 
 - Manifest：`dataProjections` 声明可投影只读键；`canvasActions` 声明画布可调用的 RPC 方法名。纪律链与 `panels` 同款：未声明键一律拒绝。
 - 读：`pluginData.snapshot` → 插件 RPC `projection.<key>`；renderer 经 `useHostSnapshot("plugin:<pluginId>/<key>")` 订阅广播，类型为 `unknown`，画布本地收窄。禁止 `useCodexAccounts` 一类插件 hook，禁止把三家 snapshot DTO 写进 `pier/canvas` sdk。
-- Watch 租约：`pluginData.watchStart` / `watchStop` 按 `(pluginId, key)` 引用计数；首次 start 调可选 `projection.<key>.watch`，归零 `unwatch`；handler 不存在则忽略。
+- Watch 租约：`pluginData.watchStart` / `watchStop` 按 **全键（基键 + 规范化 params）** 计数；声明校验按基键。`useHostSnapshot("plugin:<id>/<key>?repo=…")` 把 query 拆成 params。禁止把 `?` 后整串当投影键。
 - 写：仅 `pluginAction.invoke` `{ pluginId, key, payload? }`，方法名即声明键（不加 `projection.` 前缀）。能力 `plugin:action`；宿主命令路径不出现业务键字符串。
+- **Applets**：`manifest.applets` 声明源码积木（id 必须带插件前缀）。画布 `import X from "@pier-applet/<pluginId>/<appletId>"`；编译围栏第二根是 applet 目录。`.applet.tsx` 不是 live-module canvas 入口后缀。类型文件由 `scripts/generate-canvas-applet-types.mjs` 生成到 `.pier/types/applets.d.ts`，不启动宿主也能 typecheck。authoring 发现走 `pier plugins applets [id]`（`plugin.applets`，`cli-local`）。
 - Chrome：`settings.open` `{ section?: string }` 打开宿主设置（插件 CRUD / OAuth 仍在设置页，Canvas 不复制登录流）。`usageData.refresh` 刷新宿主用量聚合。
 - 宿主聚合 hook 只读：`useActivityOverview` / `useSystemResources` / `useCostOverview`。`useSystemResources` 不可删：`useHostSnapshot("resources")` 不含 `cpuHistory`。禁止再为插件加第四个 hook。
 - 格式化函数进 `pier/canvas` VALUE 导出（`formatPercent` / `formatBytes` 等），不是组件。
