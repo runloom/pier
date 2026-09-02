@@ -12,6 +12,10 @@ import type { AppWindow } from "../../windows/app-window.ts";
 import { findInternalWindowId } from "../../windows/identity.ts";
 import { foregroundActivityService } from "../foreground-activity.ts";
 import { cancelInitialTerminalInput } from "./create-post-actions.ts";
+import {
+  releaseTerminalCwdForwarding,
+  retainTerminalCwdForwarding,
+} from "./cwd-forwarding.ts";
 import { recordRendererTerminalRoute } from "./debug.ts";
 import { terminalFocusCoordinator } from "./focus-coordinator.ts";
 import type { NativeAddon } from "./native-addon.ts";
@@ -66,6 +70,11 @@ export function tryAcknowledgeTransferSourceClose(input: {
   }
   terminalFocusCoordinator.surfaceWillClose(input.win, input.panelId);
   cancelInitialTerminalInput(input.panelId);
+  releaseTerminalCwdForwarding(
+    windowRecordIdFor(input.win),
+    input.win.id,
+    input.panelId
+  );
   return true;
 }
 
@@ -148,6 +157,9 @@ export function registerTerminalTransferGuardIpc(opts: {
       // 面板关闭时清 initial-input gate 的 pending 定时器，防止 pty 已死
       // 但 fallback timer 仍尝试注入到不存在的 panel。
       cancelInitialTerminalInput(panelId);
+      if (options?.reason !== "relaunch") {
+        releaseTerminalCwdForwarding(sessionScope, win.id, panelId);
+      }
       addon?.closeTerminal(nativePanelId);
       try {
         await removeTerminalPanelSession(sessionScope, panelId);
@@ -174,7 +186,9 @@ export function registerTerminalTransferGuardIpc(opts: {
     // 仅在有明确 active 集合时 GC session。空数组常见于 layout 应用前/中，
     // 此时删 running+resume 会毁掉可恢复会话；单 panel 关闭已走 removeSession。
     if (activeIds.length > 0) {
-      retainTerminalPanelSessions(windowRecordIdFor(win), retainActiveIds, {
+      const sessionScope = windowRecordIdFor(win);
+      retainTerminalCwdForwarding(sessionScope, retainActiveIds);
+      retainTerminalPanelSessions(sessionScope, retainActiveIds, {
         isLeased: isLeasedPanel,
       }).catch((err) => {
         console.error("[pier-terminal-session-gc] failed:", err);

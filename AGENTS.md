@@ -413,6 +413,13 @@ section 根节点下的裸子节点。
 - `contextId` 由 `worktreeKey` 稳定派生，用于面板上下文身份；任务、终端和插件上下文不再依赖额外 `projectId`。
 - 主体不维护 `Project` 注册表，也不把 `projectId` 作为跨模块外键；需要项目粒度能力时优先使用 `projectRootPath` / `gitRoot` / `worktreeRoot`。
 
+### 终端面板 git 身份
+
+终端 OSC 7 与状态栏 git 芯片共用一份身份：**只有 `PanelContext.gitRoot`**，只由 `resolvePanelContextForPath` 写入。同 cwd 且本会话已解析且未失效则不解析、不广播（避免每个提示符闪底栏）。`.git` 创建/删除只作失效信号，禁止 `stat(.git)` 或魔法节流当第二套身份。`worktreeRoot` 只驱动独立工作树徽章，不得点亮分支/变更/同步芯片。
+
+权威规格：[`docs/superpowers/specs/2026-09-02-terminal-git-identity-gold-standard.md`](docs/superpowers/specs/2026-09-02-terminal-git-identity-gold-standard.md)。  
+检查点：`tests/unit/main/terminal/cwd-identity/governance.test.ts`、`tests/unit/main/terminal/cwd-forwarding.test.ts`、`tests/unit/main/git/identity-discovery.test.ts`。
+
 ### 右键菜单顺序
 
 右键第一项必须是该表面该目标的主工作，且不把人带离当前工作。同组 `menuHidden` 之后禁止让「打开目录 / 在访达中显示」继承第一名（面包屑这种只有路径动作的表面除外）。按表面家族排：审查树 = 暂存优先；Files 树 = 新建优先；文档/终端 = 复制粘贴优先；标签关闭在最后。菜单位置稳定，不用 MRU。
