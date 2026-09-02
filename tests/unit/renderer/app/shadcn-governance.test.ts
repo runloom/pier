@@ -16,6 +16,8 @@ const SOURCE_ROOTS = [
 const RAW_BUTTON_OWNERS = new Set([
   // Markdown outline tick / hover list uses raw buttons for Notion-style rail geometry.
   "src/plugins/builtin/files/renderer/markdown/preview-toc.tsx",
+  // Preview git bars are a 6px left gutter; Button chrome cannot fit the stroke.
+  "src/plugins/builtin/files/renderer/markdown/git-bars/rail.tsx",
   // LSP hover card action chips use raw buttons for dense tooltip chrome.
   "src/plugins/builtin/files/renderer/lsp/hover-card-parts.tsx",
   // Content-search hit rows use Item asChild for full-row hit targets.

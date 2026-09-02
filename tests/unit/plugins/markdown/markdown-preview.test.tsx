@@ -107,6 +107,25 @@ describe("MarkdownPreview", () => {
     ).toHaveLength(1);
   });
 
+  it("stamps source lines on thematic breaks so git bars can land", async () => {
+    const { container } = render(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-hr-source"
+        source={source}
+        value={"Before\n\n---\n\nAfter"}
+      />
+    );
+    const rule = await waitFor(() => {
+      const node = container.querySelector('[data-slot="separator"]');
+      expect(node).toBeTruthy();
+      return node as HTMLElement;
+    });
+    expect(rule.getAttribute("data-source-line")).toBe("3");
+    expect(rule.getAttribute("data-source-end-line")).toBe("3");
+  });
+
   it("renders a sanitized GitHub-style HTML title block", async () => {
     const openExternal = vi.fn();
     const openInternal = vi.fn();

@@ -390,7 +390,13 @@ function renderBlock(
       // MarkdownTableView owns .md-table-wrap (scroll container + drag line).
       return <MarkdownTableView block={block} context={context} />;
     case "thematicBreak":
-      return <Separator className="md-hr" />;
+      return (
+        <Separator
+          {...sourceBlockProps(block.range, context, {
+            className: "md-hr",
+          })}
+        />
+      );
     case "html":
       return renderMarkdownHtmlBlock(block.value, {
         ...markdownHtmlRenderEnv({
@@ -413,8 +419,10 @@ function renderBlock(
         const title = block.attributes.title?.trim();
         return (
           <Alert
-            className="md-callout"
-            data-directive={block.name}
+            {...sourceBlockProps(block.range, context, {
+              className: "md-callout",
+              "data-directive": block.name,
+            })}
             variant={block.name === "danger" ? "destructive" : "default"}
           >
             {title ? <AlertTitle>{title}</AlertTitle> : null}
@@ -425,20 +433,35 @@ function renderBlock(
         );
       }
       return (
-        <aside className="md-aside" data-directive={block.name}>
+        <aside
+          {...sourceBlockProps(block.range, context, {
+            className: "md-aside",
+            "data-directive": block.name,
+          })}
+        >
           {renderBlocks(block.blocks, context)}
         </aside>
       );
     }
     case "leafDirective":
       return (
-        <div className="md-p" data-directive={block.name}>
+        <div
+          {...sourceBlockProps(block.range, context, {
+            className: "md-p",
+            "data-directive": block.name,
+          })}
+        >
           {renderInlines(block.children, context)}
         </div>
       );
     case "footnoteDefinition":
       return (
-        <div className="md-footnote" id={`footnote-${block.identifier}`}>
+        <div
+          {...sourceBlockProps(block.range, context, {
+            className: "md-footnote",
+            id: `footnote-${block.identifier}`,
+          })}
+        >
           <span className="font-mono text-muted-foreground">
             [{block.label}]
           </span>
@@ -447,7 +470,11 @@ function renderBlock(
       );
     case "unsupported":
       return (
-        <pre className="md-raw">
+        <pre
+          {...sourceBlockProps(block.range, context, {
+            className: "md-raw",
+          })}
+        >
           <MarkdownSearchText
             activeMatchId={context.activeSearchMatchId}
             matches={searchMatchesFor(context, "unsupported", block.range)}
