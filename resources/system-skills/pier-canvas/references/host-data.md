@@ -8,9 +8,37 @@ Do not invent domain components (`AccountsCard`, `UsageMeter`, `Kpi`) or a
 
 ```ts
 const plugins = await host.invoke({ type: "plugin.list" })
-const inspect = await host.invoke({ type: "plugin.inspect", id: "pier.codex" })
-// inspect.manifest.dataProjections / canvasActions
+const inspect = await host.invoke({ type: "plugin.inspect", id: "pier.tasks" })
+// inspect.manifest.dataProjections / canvasActions / applets
 ```
+
+`plugin.list`, `plugin.inspect`, and `plugin.applets` are available to the desktop renderer and the local CLI (`cli-local`). Canvases can also inspect. Use `pier plugins applets [id] --json` for authoring discovery: applet `id`, `title`, and `propsSchema`. Markdown fences (` ```pier-applet `) need `<!-- pier-applets: enable -->` in the same document.
+
+Prefer a declared applet over copying source. Applets live in the
+plugin package (`manifest.applets`). Discover with
+`pier plugins applets [id] --json`. Do not copy applet implementations
+into this skill or into `.pier/canvases`.
+
+Daily tracking is the `pier.tasks` panel (⌘N). On a canvas or in
+markdown, mount **list / DAG islands** — not a second kanban:
+
+```ts
+import TaskList from "@pier-applet/pier.tasks/task-list"
+import TaskGraph from "@pier-applet/pier.tasks/task-dag"
+```
+
+````md
+<!-- pier-applets: enable -->
+
+```pier-applet
+{ "pluginId": "pier.tasks", "appletId": "task-list" }
+```
+````
+
+The host compiles `@pier-applet/<pluginId>/<appletId>` behind a second
+fence root (the applet directory). `.applet.tsx` is not a canvas entry
+suffix. Markdown fences need `<!-- pier-applets: enable -->` and mount
+as island cards.
 
 ## Read
 
@@ -127,6 +155,12 @@ const output = await host.invoke({ type: "run.output", runId: outcome.runId })
 The template uses `cat graph.json` so the command output *is* the graph
 (offline closed loop). Replace that string with the orchestrator CLI when
 you have one.
+
+## Markdown applet fence
+
+Preview-only. Add `<!-- pier-applets: enable -->` near the top of that
+document, then a `pier-applet` fence with JSON `{ pluginId, appletId, props }`.
+Documents without the comment render a short “applets are off” note.
 
 ## Hard bans
 

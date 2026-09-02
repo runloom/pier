@@ -44,6 +44,22 @@ function overrideElementFromPoint(value: () => Element | null): () => void {
   };
 }
 
+function overrideElementsFromPoint(
+  value: (x: number, y: number) => Element[]
+): () => void {
+  const original = document.elementsFromPoint;
+  Object.defineProperty(document, "elementsFromPoint", {
+    configurable: true,
+    value,
+  });
+  return () => {
+    Object.defineProperty(document, "elementsFromPoint", {
+      configurable: true,
+      value: original,
+    });
+  };
+}
+
 describe("Sortable", () => {
   it("calls onReorder with the new order after a vertical handle drag", () => {
     const onReorder = vi.fn();
@@ -97,6 +113,24 @@ describe("Sortable", () => {
     fireEvent.pointerUp(window, { clientY: 130, pointerId: 1 });
     expect(document.querySelector("[data-slot='dnd-ghost']")).toBeNull();
     expect(onReorder).toHaveBeenCalledWith(["b", "c", "a"]);
+  });
+
+  it("does not start a drag from the text inside a button", () => {
+    const onReorder = vi.fn();
+    const { getByRole } = render(
+      <Sortable items={["card"]} onReorder={onReorder}>
+        {() => <button type="button">#48</button>}
+      </Sortable>
+    );
+    const label = getByRole("button", { name: "#48" }).firstChild;
+    if (!label) {
+      throw new Error("missing button label");
+    }
+    fireEvent.pointerDown(label, { button: 0, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientY: 130, pointerId: 1 });
+    expect(document.querySelector("[data-slot='dnd-ghost']")).toBeNull();
+    fireEvent.pointerUp(window, { clientY: 130, pointerId: 1 });
+    expect(onReorder).not.toHaveBeenCalled();
   });
 
   it("drops onto a plain Droppable without firing the source onReorder", () => {
@@ -201,5 +235,105 @@ describe("Sortable", () => {
     expect(onReorder).not.toHaveBeenCalled();
     expect(onTargetReorder).not.toHaveBeenCalled();
     expect(document.querySelector("[data-slot='dnd-gap']")).toBeNull();
+  });
+
+  it("commits the painted gap index even if drop-time row rects have shifted", () => {
+    const onDropItem = vi.fn();
+    const { container, getAllByLabelText } = render(
+      <div>
+        <Droppable id="todo">
+          <Sortable items={["card"]} onReorder={() => undefined}>
+            {(id, item) => (
+              <div>
+                {item.handle}
+                {id}
+              </div>
+            )}
+          </Sortable>
+        </Droppable>
+        <Droppable id="done">
+          <Sortable
+            items={["x", "y"]}
+            onDropItem={onDropItem}
+            onReorder={() => undefined}
+          >
+            {(id) => <span>{id}</span>}
+          </Sortable>
+        </Droppable>
+      </div>
+    );
+    const targetRows = [
+      ...container.querySelectorAll(
+        '[data-droppable-id="done"] [data-sortable-id]'
+      ),
+    ];
+    targetRows.forEach((row, index) => {
+      mockRect(row, index * 50);
+    });
+    const done = document.querySelector('[data-droppable-id="done"]');
+    if (!done) {
+      throw new Error("missing done droppable");
+    }
+    const restore = overrideElementFromPoint(() => done);
+    const handle = getAllByLabelText("Drag")[0];
+    if (!handle) {
+      restore();
+      return;
+    }
+    fireEvent.pointerDown(handle, { button: 0, clientY: 0, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 50, clientY: 40, pointerId: 1 });
+    expect(document.querySelector("[data-slot='dnd-gap']")).toBeTruthy();
+    targetRows.forEach((row, index) => {
+      mockRect(row, 80 + index * 50);
+    });
+    fireEvent.pointerUp(window, { clientX: 50, clientY: 40, pointerId: 1 });
+    restore();
+    expect(onDropItem).toHaveBeenCalledWith("card", 1);
+  });
+
+  it("still drops when the floating ghost sits under the pointer", () => {
+    const onDropItem = vi.fn();
+    const { getAllByLabelText } = render(
+      <div>
+        <Droppable id="todo">
+          <Sortable items={["card"]} onReorder={() => undefined}>
+            {(id, item) => (
+              <div>
+                {item.handle}
+                {id}
+              </div>
+            )}
+          </Sortable>
+        </Droppable>
+        <Droppable id="done">
+          <Sortable
+            items={["parked"]}
+            onDropItem={onDropItem}
+            onReorder={() => undefined}
+          >
+            {(id) => <span>{id}</span>}
+          </Sortable>
+        </Droppable>
+      </div>
+    );
+    const done = document.querySelector('[data-droppable-id="done"]');
+    if (!done) {
+      throw new Error("missing done droppable");
+    }
+    const handle = getAllByLabelText("Drag")[0];
+    if (!handle) {
+      return;
+    }
+    fireEvent.pointerDown(handle, { button: 0, clientX: 10, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 200, clientY: 10, pointerId: 1 });
+    const ghost = document.querySelector("[data-slot='dnd-ghost']");
+    const ghostHit = ghost?.querySelector("*") ?? ghost;
+    if (!(ghostHit instanceof Element)) {
+      throw new Error("missing drag ghost");
+    }
+    const restore = overrideElementsFromPoint(() => [ghostHit, done]);
+    fireEvent.pointerUp(window, { clientX: 200, clientY: 10, pointerId: 1 });
+    restore();
+    expect(onDropItem).toHaveBeenCalledWith("card", expect.any(Number));
   });
 });

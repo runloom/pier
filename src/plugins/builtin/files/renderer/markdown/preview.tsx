@@ -84,6 +84,7 @@ export function MarkdownPreview({
   errorLabel = "Unable to render Markdown preview.",
   fileResources,
   labels = DEFAULT_RENDERER_LABELS,
+  liveModules,
   initialAnchor,
   initialAnchorRequestId,
   onContextMenu,
@@ -436,6 +437,7 @@ export function MarkdownPreview({
                   initialAnchor={effectiveAnchor}
                   initialAnchorRequestId={effectiveAnchorRequestId}
                   labels={labels}
+                  liveModules={liveModules}
                   onJumpToSource={onJumpToSource}
                   onOpenExternal={openExternal}
                   onOpenInternal={openInternal}

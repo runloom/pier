@@ -17,6 +17,16 @@ export const externalNavigationRequestSchema = z.object({
   url: z.string().min(1).max(16_384),
 });
 
+/**
+ * PierCommand `app.openExternal` — canvas chrome path for opening an https
+ * URL in the system browser (issue links on task views). Renderer surfaces
+ * keep using the activation-gated preload facade instead.
+ */
+export const appOpenExternalCommandSchema = z.object({
+  type: z.literal("app.openExternal"),
+  url: z.string().min(1).max(2048),
+});
+
 export const externalNavigationResultSchema = z.discriminatedUnion("opened", [
   z.object({ opened: z.literal(true) }),
   z.object({

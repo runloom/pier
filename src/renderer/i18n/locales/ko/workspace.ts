@@ -6,14 +6,21 @@ export const workspace = {
       "워크스페이스를 쓸 수 없어 배치를 안전하게 저장하지 못했습니다.",
   },
   pluginPanel: {
+    appletHostUnavailable: "지금은 이 뷰를 표시할 수 없습니다.",
+    appletLoadDetails: "자세히 보기",
+    appletLoadFailed: "작업 뷰를 불러오지 못했습니다",
+    appletLoadFailedBody:
+      "다시 시도하세요. 계속 실패하면 Pier를 다시 시작하세요.",
+    appletLoadRetry: "다시 시도",
+    appletNoProject: "먼저 프로젝트 폴더를 여세요.",
+    crashDescription:
+      "플러그인 UI에 오류가 발생했습니다. 다른 패널은 영향을 받지 않습니다. 플러그인을 비활성화하거나 다시 로드하면 복구됩니다.",
+    crashTitle: "플러그인 패널이 충돌했습니다",
     loadingDescription:
       "플러그인을 불러오는 중입니다. 준비되면 내용이 나타납니다.",
     loadingTitle: "플러그인 패널 불러오는 중",
     missingRendererDescription: "이 플러그인에는 표시할 화면이 없습니다.",
     unavailableTitle: "플러그인 패널을 쓸 수 없습니다",
-    crashTitle: "플러그인 패널이 충돌했습니다",
-    crashDescription:
-      "플러그인 UI에 오류가 발생했습니다. 다른 패널은 영향을 받지 않습니다. 플러그인을 비활성화하거나 다시 로드하면 복구됩니다.",
   },
   startupError: {
     description: "다시 불러와 한 번 더 시도하세요.",

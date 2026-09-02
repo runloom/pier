@@ -49,6 +49,7 @@ export function usage() {
     "  pier worktrees remove <path> [--delete-branch] --json",
     "  pier plugins list --json",
     "  pier plugins inspect <id> --json",
+    "  pier plugins applets [id] --json",
     "  pier plugins enable <id> --json",
     "  pier plugins disable <id> --json",
     "  pier preferences read --json",
@@ -765,6 +766,14 @@ function parsePlugins(action, value, unexpected) {
       id: requireValue(value),
       type: "plugin.inspect",
     };
+  }
+  if (action === "applets") {
+    if (unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+    }
+    return value
+      ? { id: value, type: "plugin.applets" }
+      : { type: "plugin.applets" };
   }
   if (action === "enable" || action === "disable") {
     if (unexpected) {

@@ -17,11 +17,41 @@ export type JsonValue =
  * plugin coupling into a de-facto host API.
  */
 
+export type RendererPluginActionSurface = "command-palette" | "create-menu";
+
+export interface RendererPluginActionInvocation {
+  sourcePanelContext?:
+    | {
+        contextId: string;
+        gitRoot?: string | undefined;
+        projectRootPath: string;
+        worktreeRoot?: string | undefined;
+      }
+    | undefined;
+  sourcePanelGroupId?: string | undefined;
+}
+
 export interface RendererPluginAction {
   category?: string;
   id: string;
-  invoke: () => void | Promise<void>;
+  invoke: (invocation?: RendererPluginActionInvocation) => void | Promise<void>;
+  /**
+   * Where the action appears. Defaults to command palette only.
+   * Include `create-menu` so ⌘N can open a plugin panel.
+   */
+  surfaces?: readonly RendererPluginActionSurface[];
   title: string | (() => string);
+}
+
+export interface RendererPluginPanelOpenOptions {
+  sourcePanelContext?: RendererPluginActionInvocation["sourcePanelContext"];
+  targetGroupId?: string | undefined;
+}
+
+export interface RendererPluginAppletRenderRequest {
+  appletId: string;
+  projectRootPath: string;
+  props?: Record<string, unknown>;
 }
 
 export interface RendererPluginQuickPickItem {
@@ -120,6 +150,16 @@ export interface RendererSettingsPageRegistration {
   id: string;
 }
 
+export interface RendererProjectSettingsRegistration {
+  id: string;
+  render: (props: {
+    isPierHome: boolean;
+    projectRootPath: string;
+  }) => ReactNode;
+  title: () => string;
+  visible?: (props: { isPierHome: boolean }) => boolean;
+}
+
 export type RendererPluginDialogIntent = "default" | "destructive";
 
 export type RendererPluginContentDialogSize = "sm" | "default" | "lg";
@@ -208,6 +248,14 @@ export interface ExternalRendererPluginContext {
     openExternal(url: string): Promise<boolean>;
     openSettings(options?: { section?: string }): void;
   };
+  /**
+   * Mount a declared applet (`manifest.applets`) into plugin UI.
+   * Host compiles `@pier-applet/<pluginId>/<appletId>` — do not bundle
+   * applet source into the plugin renderer.
+   */
+  applets: {
+    render(request: RendererPluginAppletRenderRequest): ReactNode;
+  };
   commandPalette: {
     openQuickPick(quickPick: RendererPluginQuickPick): void;
     updateQuickPick(
@@ -288,7 +336,11 @@ export interface ExternalRendererPluginContext {
     success(message: string, options?: RendererPluginNotificationOptions): void;
   };
   panels: {
+    open(panelId: string, options?: RendererPluginPanelOpenOptions): void;
     register(registration: RendererPluginPanelRegistration): () => void;
+  };
+  projectSettings: {
+    register(registration: RendererProjectSettingsRegistration): () => void;
   };
   rpc: {
     invoke<T = unknown>(method: string, payload?: unknown): Promise<T>;
@@ -303,6 +355,40 @@ export interface ExternalRendererPluginContext {
    */
   terminals: {
     open(request?: TerminalOpenRequest): Promise<TerminalOpenResult>;
+  };
+  /**
+   * Git working-tree facade. Structural mirror of the host worktrees API —
+   * plugin-api stays dependency-free. Requires `worktree:read` / `worktree:write`.
+   */
+  worktrees: {
+    check(request: { path: string }): Promise<{
+      currentPath?: string | undefined;
+      mainPath?: string | undefined;
+      path: string;
+      reason?: string | undefined;
+      status: "supported" | "unsupported";
+    }>;
+    create(request: {
+      base?: string | undefined;
+      branch: string;
+      name: string;
+      path: string;
+      runSetupBeforeReturn?: boolean | undefined;
+    }): Promise<{
+      pendingSetupCommand?: string | undefined;
+      targetPath: string;
+    }>;
+    openTerminal(request: {
+      agentId?: string | undefined;
+      initialCommand?: string | undefined;
+      path: string;
+      taskPrompt?: string | undefined;
+    }): Promise<{ panelId: string }>;
+    remove(request: {
+      currentPath?: string | undefined;
+      deleteBranch?: boolean | undefined;
+      path: string;
+    }): Promise<{ removedPath: string }>;
   };
 }
 

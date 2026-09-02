@@ -142,7 +142,9 @@ function SelectContent({
         <SelectPrimitive.Viewport
           className={cn(
             floatingMenuScrollViewportClassName({ padding: false }),
-            "data-[position=popper]:h-(--radix-select-trigger-height) data-[position=popper]:w-full data-[position=popper]:min-w-(--radix-select-trigger-width)"
+            // Match trigger width as a floor, never its height: a 24px header
+            // trigger like "FL" would otherwise become a one-line capsule.
+            "data-[position=popper]:w-full data-[position=popper]:min-w-(--radix-select-trigger-width)"
           )}
           data-position={position}
           data-scrollbar="overlay"

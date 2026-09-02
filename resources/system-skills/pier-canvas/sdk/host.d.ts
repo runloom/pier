@@ -16,6 +16,7 @@
  * `fields` empty. `domain.exemplar` is the docs command for that domain.
  */
 export type CanvasHostCommandType =
+  | "app.openExternal"
   | "app.snapshot"
   | "app.status"
   | "environment.snapshot"
@@ -38,6 +39,7 @@ export type CanvasHostCommandType =
   | "git.stashList"
   | "notifications.get"
   | "notifications.list"
+  | "panel.focus"
   | "panel.list"
   | "plugin.inspect"
   | "plugin.list"

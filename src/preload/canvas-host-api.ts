@@ -7,6 +7,7 @@ import {
   isCanvasHostCommandAllowed,
   normalizeCanvasHostSnapshotId,
   parsePluginDataWatchTarget,
+  pluginDataCommandPayload,
 } from "@shared/contracts/canvas-host.ts";
 import type { PierCommand } from "@shared/contracts/commands.ts";
 import { PIER } from "@shared/ipc-channels.ts";
@@ -35,7 +36,7 @@ export const canvasHostApi: PierCanvasHostAPI = {
     const pluginTarget = parsePluginDataWatchTarget(channel);
     if (pluginTarget) {
       return invokeCanvasPierCommand({
-        payload: { key: pluginTarget.key, pluginId: pluginTarget.pluginId },
+        payload: pluginDataCommandPayload(pluginTarget),
         type: "pluginData.snapshot",
       });
     }

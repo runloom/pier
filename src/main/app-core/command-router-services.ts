@@ -29,6 +29,7 @@ import type { AppUpdateService } from "../services/app-updates/service.ts";
 import type { CapabilityAuthority } from "../services/capability/authority.ts";
 import type { CommentsService } from "../services/comments/service.ts";
 import type { ControlSnapshotService } from "../services/control-snapshot/service.ts";
+import type { ExternalNavigationService } from "../services/external-navigation.ts";
 import type { FileDraftsService } from "../services/files/drafts-service.ts";
 import type { FileService } from "../services/files/service.ts";
 import type { FileWatchService } from "../services/files/watch-service.ts";
@@ -124,6 +125,8 @@ export interface PierCoreServices {
     }>;
   };
   controlSnapshot?: import("../services/control-snapshot/service.ts").ControlSnapshotService;
+  /** app.openExternal（画布 chrome）；与 preload externalNavigation 同一实例。 */
+  externalNavigation: ExternalNavigationService;
   fileDrafts?: FileDraftsService;
   files?: FileService;
   fileWatch?: FileWatchService;

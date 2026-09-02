@@ -418,6 +418,10 @@
   margin-block: var(--md-space-3);
 }
 
+[data-slot="markdown-prose"] .md-applet {
+  margin-block: var(--md-space-3);
+}
+
 [data-slot="markdown-prose"] sup .md-link {
   font-size: 0.75em;
 }

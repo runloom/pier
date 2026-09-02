@@ -29,6 +29,9 @@ describe("DnD canvas primitives", () => {
     expect(source).toContain('data-slot="dnd-gap"');
     expect(source).toContain("createPortal");
     expect(source).toContain("pointer-events-none");
+    expect(source).toContain("[&_*]:pointer-events-none");
+    expect(source).toContain("elementsFromPoint");
+    expect(source).toContain("[data-slot=dnd-ghost]");
     expect(source).toContain("autoScrollStep");
     expect(source).toContain("onDropItem");
     // Cross-container moves are a single callback (no dual-write races).

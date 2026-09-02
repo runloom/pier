@@ -14,6 +14,7 @@ import { usePanelDescriptorStore } from "../../../stores/panel-descriptor.store.
 import { useWorkspaceStore } from "../../../stores/workspace.store.ts";
 import { flushWorkspaceLayout } from "../../workspace/layout-persistence.ts";
 import { activateWorkspacePanel } from "../../workspace/panel-activation.ts";
+import { withinGroupPosition } from "../../workspace/panel-insert.ts";
 import { scheduleRevealDockviewTabByPanelId } from "../../workspace/tab-visibility.ts";
 import {
   getPluginPanelRegistrations,
@@ -80,9 +81,9 @@ type AssertPluginCapability = (
   capability: PierCapability
 ) => void;
 
-function openPluginPanel(
+export function openPluginPanel(
   panelId: string,
-  options: { context?: PanelContext } = {}
+  options: { context?: PanelContext; targetGroupId?: string } = {}
 ): void {
   const api = useWorkspaceStore.getState().api;
   if (!api) {
@@ -95,7 +96,10 @@ function openPluginPanel(
   const context =
     options.context ??
     descriptorStore.descriptors[panelId]?.context ??
-    resolvePanelPathAnchor({ api }).context;
+    resolvePanelPathAnchor({
+      api,
+      sourcePanelGroupId: options.targetGroupId,
+    }).context;
   const params = {
     ...(registration?.getParams?.() ?? {}),
     ...(context ? { context } : {}),
@@ -112,11 +116,16 @@ function openPluginPanel(
     activateWorkspacePanel(api, existing.id, { reveal: "always" });
     return;
   }
+  const targetGroup = options.targetGroupId
+    ? (api.groups.find((group) => group.id === options.targetGroupId) ?? null)
+    : null;
   api.addPanel({
     id: panelId,
     component: panelId,
     title,
-    position: { direction: "right" },
+    position: targetGroup
+      ? withinGroupPosition(targetGroup)
+      : { direction: "right" },
     ...(hasParams ? { params } : {}),
   });
   scheduleRevealDockviewTabByPanelId(panelId);

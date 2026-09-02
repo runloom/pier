@@ -35,6 +35,12 @@ import type { TaskToggleInput } from "./task-patch.ts";
 
 export interface MarkdownRendererLabels extends MarkdownCodeBlockLabels {
   anchorCopied: string;
+  appletDisabledBody?: string;
+  appletDisabledTitle?: string;
+  appletMountFailedBody?: string;
+  appletMountFailedTitle?: string;
+  appletParseFailedBody?: string;
+  appletParseFailedTitle?: string;
   /** aria-valuetext for auto-width columns (no stored width yet). */
   columnWidthAuto: string;
   completedTask: string;
@@ -54,6 +60,7 @@ export interface MarkdownRendererLabels extends MarkdownCodeBlockLabels {
 export interface MarkdownRenderContext {
   activeSearchMatchId: string | undefined;
   activeSearchPageIndex: number | undefined;
+  appletsEnabled: boolean;
   charts: RendererPluginContext["charts"] | undefined;
   codeHighlighter: MarkdownCodeHighlighter | undefined;
   codeTheme: string;
@@ -67,6 +74,7 @@ export interface MarkdownRenderContext {
   footnoteDefinitions: Map<string, MarkdownBlock[]>;
   headings: readonly MarkdownHeadingSummary[];
   labels: MarkdownRendererLabels;
+  liveModules: RendererPluginContext["liveModules"] | undefined;
   onJumpToSource?: ((offset: number) => void) | undefined;
   onOpenAnchor(anchor: string): void;
   onOpenExternal: (url: string) => void;

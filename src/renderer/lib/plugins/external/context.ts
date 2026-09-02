@@ -6,15 +6,17 @@ import type {
   RendererSettingsPageRegistration as ExternalSettingsPageRegistration,
 } from "@pier/plugin-api/renderer";
 import type { RendererPluginQuickPick as HostPluginQuickPick } from "@plugins/api/renderer.ts";
+import { agentKindSchema } from "@shared/contracts/agent.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
   collectEnabledConfigurationProperties,
   effectiveConfigurationValue,
 } from "@shared/plugin-settings.ts";
 import i18next from "i18next";
+import { createElement } from "react";
 import { toast } from "sonner";
-import { actionRegistry } from "@/lib/actions/registry.ts";
 import { reportPluginSystemEvent } from "@/lib/plugins/notification-report.ts";
+import { getPluginProjectSettingsRegistrations } from "@/lib/plugins/project-settings-registry.ts";
 import {
   closeAppContentDialog,
   openAppContentDialog,
@@ -29,13 +31,23 @@ import {
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { resolvePluginMessage } from "../display.ts";
+import { assertDeclaredContribution } from "../host/assert-contribution.ts";
 import { createPluginCommandPaletteContext } from "../host/command-palette-context.ts";
+import { createPluginProjectSettingsContext } from "../host/project-settings-context.ts";
 import { pluginLifecycleBarriers } from "../lifecycle/barriers.ts";
 import {
   getPluginSettingsPage,
   registerPluginSettingsPage,
 } from "../settings-page-registry.ts";
+import {
+  openDeclaredPluginPanel,
+  registerExternalPluginAction,
+} from "./actions.ts";
 import type { ExternalRendererActivationScope } from "./activation-scope.ts";
+import {
+  declaredAppletId,
+  ExternalPluginAppletMount,
+} from "./applet-mount.tsx";
 
 /**
  * Builds a plugin-scoped `ExternalRendererPluginContext`. The plugin id is
@@ -80,8 +92,22 @@ function assertOwnedKey(entry: PluginRegistryEntry, key: string): void {
   }
 }
 
-function resolveTitle(title: string | (() => string)): string {
-  return typeof title === "function" ? title() : title;
+function assertDeclaredApplet(
+  entry: PluginRegistryEntry,
+  appletId: string
+): string {
+  const pluginId = entry.manifest.id;
+  const normalized = declaredAppletId(pluginId, appletId);
+  const found = (entry.manifest.applets ?? []).some((item) => {
+    const itemId = declaredAppletId(pluginId, item.id);
+    return itemId === normalized || item.id === appletId;
+  });
+  if (!found) {
+    throw new Error(
+      `plugin ${pluginId} tried to render undeclared applet: ${appletId}`
+    );
+  }
+  return normalized;
 }
 
 export function createExternalRendererPluginContext(
@@ -95,6 +121,10 @@ export function createExternalRendererPluginContext(
   const track = (dispose: () => void): (() => void) =>
     scope?.add(dispose) ?? dispose;
   const hostCommandPalette = createPluginCommandPaletteContext();
+  const projectSettings = createPluginProjectSettingsContext(
+    entry,
+    assertDeclaredContribution
+  );
 
   const context: ExternalRendererPluginContext = {
     app: {
@@ -111,29 +141,35 @@ export function createExternalRendererPluginContext(
         return result.opened;
       },
       openSettings: (options) => {
-        useSettingsDialogStore
-          .getState()
-          .openSection(options?.section ?? "appearance");
+        const section = options?.section ?? "appearance";
+        const projectSettings = getPluginProjectSettingsRegistrations().find(
+          (item) => item.id === section
+        );
+        if (projectSettings) {
+          useSettingsDialogStore.setState({
+            projectsTab: projectSettings.id,
+          });
+          useSettingsDialogStore.getState().openSection("projects");
+          return;
+        }
+        useSettingsDialogStore.getState().openSection(section);
       },
     },
     actions: {
       register: (action: ExternalPluginAction) => {
         assertDeclared(entry, "action", action.id);
-        return track(
-          actionRegistry.register({
-            category: action.category ?? "run",
-            id: action.id,
-            // 外部插件动作的入口就是命令面板；不带 surface 会被
-            // actionRegistry.list("command-palette") 过滤而不可见。
-            surfaces: ["command-palette"],
-            title: () => resolveTitle(action.title),
-            handler: () =>
-              Promise.resolve(action.invoke()).catch((err: unknown) => {
-                console.error(`[${pluginId}] action ${action.id} failed:`, err);
-                throw err;
-              }),
-          })
-        );
+        return track(registerExternalPluginAction(pluginId, action));
+      },
+    },
+    applets: {
+      render: (request) => {
+        const appletId = assertDeclaredApplet(entry, request.appletId);
+        return createElement(ExternalPluginAppletMount, {
+          appletId,
+          pluginId,
+          projectRootPath: request.projectRootPath,
+          props: request.props ?? {},
+        });
       },
     },
     configuration: {
@@ -192,6 +228,9 @@ export function createExternalRendererPluginContext(
         }
         return track(registerPluginSettingsPage(pluginId, registration));
       },
+    },
+    projectSettings: {
+      register: (registration) => track(projectSettings.register(registration)),
     },
     dialogs: {
       alert: (options) => {
@@ -295,6 +334,15 @@ export function createExternalRendererPluginContext(
       },
     },
     panels: {
+      open: (panelId, options) => {
+        assertDeclared(entry, "panel", panelId);
+        if (!entry.effectivePermissions.includes("panel:open")) {
+          throw new Error(
+            `plugin capability not granted: ${pluginId}:panel:open`
+          );
+        }
+        openDeclaredPluginPanel(panelId, options);
+      },
       register: (registration: ExternalPluginPanelRegistration) => {
         assertDeclared(entry, "panel", registration.id);
         if (!registration.id.startsWith(`${pluginId}.`)) {
@@ -323,6 +371,52 @@ export function createExternalRendererPluginContext(
           }
           return window.pier.terminals.open(request ?? {});
         }),
+    },
+    worktrees: {
+      check: (request) => {
+        if (!entry.effectivePermissions.includes("worktree:read")) {
+          throw new Error(
+            `plugin capability not granted: ${pluginId}:worktree:read`
+          );
+        }
+        return window.pier.worktrees.check(request);
+      },
+      create: (request) => {
+        if (!entry.effectivePermissions.includes("worktree:write")) {
+          throw new Error(
+            `plugin capability not granted: ${pluginId}:worktree:write`
+          );
+        }
+        return window.pier.worktrees.create(request);
+      },
+      openTerminal: (request) => {
+        if (!entry.effectivePermissions.includes("worktree:write")) {
+          throw new Error(
+            `plugin capability not granted: ${pluginId}:worktree:write`
+          );
+        }
+        const parsedAgent = request.agentId
+          ? agentKindSchema.safeParse(request.agentId)
+          : null;
+        return window.pier.worktrees.openTerminal({
+          path: request.path,
+          ...(parsedAgent?.success ? { agentId: parsedAgent.data } : {}),
+          ...(request.initialCommand === undefined
+            ? {}
+            : { initialCommand: request.initialCommand }),
+          ...(request.taskPrompt === undefined
+            ? {}
+            : { taskPrompt: request.taskPrompt }),
+        });
+      },
+      remove: (request) => {
+        if (!entry.effectivePermissions.includes("worktree:write")) {
+          throw new Error(
+            `plugin capability not granted: ${pluginId}:worktree:write`
+          );
+        }
+        return window.pier.worktrees.remove(request);
+      },
     },
     rpc: {
       invoke: async <T>(method: string, payload?: unknown): Promise<T> => {

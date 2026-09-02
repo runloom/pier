@@ -55,6 +55,14 @@ export const OFFICIAL_BUNDLED_PLUGIN_SPECS: readonly OfficialBundledPluginSpec[]
       id: "pier.claude",
       prodPluginDirName: "pier.claude",
     },
+    {
+      devPackageDir: "packages/plugin-tasks",
+      fallbackId: "pier.tasks",
+      fallbackName: "Task tracker",
+      fallbackVersion: "1.0.0",
+      id: "pier.tasks",
+      prodPluginDirName: "pier.tasks",
+    },
   ];
 
 export function toBundledPluginRegistration(

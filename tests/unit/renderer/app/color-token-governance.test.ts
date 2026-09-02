@@ -387,10 +387,12 @@ describe("color token governance", () => {
   });
 
   // ── Soft status surfaces (Ant Design Alert map tokens) ─────────────
-  // Soft alerts/badges use colorXxxBg + colorXxxBorder + colorXxx for icon.
-  // Title/description stay on neutral foreground (not tinted). Solid
-  // white-on-status contrast is intentionally not required for light seeds
-  // like Ant Design's #faad14 / #52c41a / #1677ff.
+  // Soft alerts/badges use colorXxxBg + colorXxxBorder for surfaces; bg and
+  // border stay on Ant's default-algorithm seeds. Light-theme fg deliberately
+  // deviates to the SAME Ant family's 7/8 steps (#0958d9 / #237804 / #874d00 /
+  // #cf1322): badge text at 11–12px on the tinted bg must clear Tier-1 4.5:1,
+  // and Ant's 6-step seeds (#faad14 on #fffbe6 ≈ 1.5:1) cannot. Dark fg keeps
+  // the Ant dark-algorithm seeds (Tier-3 design decision below).
 
   it("keeps Ant Design soft status map tokens for both themes", () => {
     const globals = readFileSync(
@@ -402,7 +404,7 @@ describe("color token governance", () => {
 
     expect(cssVariable(light, "status-warning-bg")).toBe("#fffbe6");
     expect(cssVariable(light, "status-warning-border")).toBe("#ffe58f");
-    expect(cssVariable(light, "status-warning-fg")).toBe("#faad14");
+    expect(cssVariable(light, "status-warning-fg")).toBe("#874d00");
     expect(cssVariable(light, "warning")).toBe("#faad14");
 
     expect(cssVariable(dark, "status-warning-bg")).toBe("#2b2111");
@@ -413,6 +415,9 @@ describe("color token governance", () => {
     expect(cssVariable(light, "status-info-bg")).toBe("#e6f4ff");
     expect(cssVariable(light, "status-success-bg")).toBe("#f6ffed");
     expect(cssVariable(light, "status-danger-bg")).toBe("#fff2f0");
+    expect(cssVariable(light, "status-info-fg")).toBe("#0958d9");
+    expect(cssVariable(light, "status-success-fg")).toBe("#237804");
+    expect(cssVariable(light, "status-danger-fg")).toBe("#cf1322");
     expect(cssVariable(dark, "status-info-bg")).toBe("#111a2c");
     expect(cssVariable(dark, "status-success-bg")).toBe("#162312");
     expect(cssVariable(dark, "status-danger-bg")).toBe("#2c1618");

@@ -89,6 +89,7 @@ function contextWithSnapshot(snapshot: ClaudeAccountsSnapshot): {
         openSettings: vi.fn(),
       },
       actions: { register: vi.fn(() => () => undefined) },
+      applets: { render: vi.fn(() => null) },
       commandPalette: {
         openQuickPick: vi.fn(),
         updateQuickPick: vi.fn(),
@@ -140,7 +141,10 @@ function contextWithSnapshot(snapshot: ClaudeAccountsSnapshot): {
         })),
         success: vi.fn(),
       },
-      panels: { register: vi.fn(() => () => undefined) },
+      panels: {
+        open: vi.fn(),
+        register: vi.fn(() => () => undefined),
+      },
       rpc: {
         invoke,
         on: vi.fn(() => () => undefined),
@@ -152,6 +156,15 @@ function contextWithSnapshot(snapshot: ClaudeAccountsSnapshot): {
       },
       settingsPages: {
         register: vi.fn(() => () => undefined),
+      },
+      projectSettings: {
+        register: vi.fn(() => () => undefined),
+      },
+      worktrees: {
+        check: vi.fn(),
+        create: vi.fn(),
+        openTerminal: vi.fn(),
+        remove: vi.fn(),
       },
     },
     invokeCalls,

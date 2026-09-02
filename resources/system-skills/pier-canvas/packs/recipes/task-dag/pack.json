@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "task-dag",
+  "axis": "recipe",
+  "title": "Tracker task graph",
+  "description": "Named experimental dependency island bound to the pier.tasks dag projection. Prefer the project panel or list when crossings get high.",
+  "kind": "composition",
+  "stage": "flow",
+  "template": "templates/task-dag.canvas.tsx",
+  "primitives": ["Frame", "useHostSnapshot"],
+  "required": ["repo", "milestone-or-label"],
+  "antiPatterns": [
+    "Opening an unfiltered whole-repository graph",
+    "Scaffolding a full-bleed board canvas; daily tracking is the plugin panel",
+    "Calling GitHub from the canvas",
+    "Treating this as a general drawing canvas",
+    "Copying applet source instead of importing @pier-applet/pier.tasks/task-dag"
+  ],
+  "agentPrompt": "Freeform composition. Root in Frame (flow). Import TaskGraph from @pier-applet/pier.tasks/task-dag and mount it as an island card — the applet defaults to island chrome. Pass repo plus a milestone or label. This view is experimental. Do not copy applet source. Do not import tracker-board. Do not fetch tracker APIs from the canvas. Rewrite every user-visible string into the user's language. See templates/task-dag.canvas.tsx."
+}

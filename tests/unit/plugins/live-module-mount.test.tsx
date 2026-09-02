@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
-import { mountLiveModule } from "@plugins/api/live-module-mount.ts";
+import {
+  mountLiveModule,
+  updateLiveModule,
+} from "@plugins/api/live-module-mount.ts";
 import { act } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -61,5 +64,35 @@ describe("mountLiveModule", () => {
     });
     spy.restore();
     expect(spy.errors.join("\n")).not.toMatch(UNMOUNT_DURING_RENDER);
+  });
+
+  it("updates props on an existing root without remounting", async () => {
+    const el = document.createElement("div");
+    document.body.append(el);
+    function Hello({ name }: { name: string }) {
+      return <span>{name}</span>;
+    }
+    await act(async () => {
+      mountLiveModule(el, Hello, { props: { name: "alpha" } });
+      await Promise.resolve();
+    });
+    expect(el.textContent).toBe("alpha");
+    const node = el.querySelector("span");
+    await act(async () => {
+      expect(updateLiveModule(el, Hello, { props: { name: "beta" } })).toBe(
+        true
+      );
+      await Promise.resolve();
+    });
+    expect(el.textContent).toBe("beta");
+    expect(el.querySelector("span")).toBe(node);
+  });
+
+  it("returns false when the element has no live root", () => {
+    const el = document.createElement("div");
+    function Hello() {
+      return <span>hi</span>;
+    }
+    expect(updateLiveModule(el, Hello)).toBe(false);
   });
 });

@@ -82,6 +82,7 @@ export interface FileEditorAdapterProps {
   markdownInitialAnchor?: string | undefined;
   markdownInitialAnchorRequestId?: string | undefined;
   markdownLabels?: MarkdownRendererLabels | undefined;
+  markdownLiveModules?: RendererPluginContext["liveModules"] | undefined;
   markdownSource?: MarkdownDiskSource | undefined;
   markdownTocLabels?:
     | {

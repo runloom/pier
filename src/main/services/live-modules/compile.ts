@@ -45,6 +45,7 @@ export interface CompileLiveModuleInput {
   allowNodeModules: boolean;
   contentRoot: string;
   entryAbsolutePath: string;
+  extraFenceRoots?: readonly string[];
   forcePreviewBarrel: boolean;
   /** Detected from canvas file suffix; defaults to react. */
   framework: LiveModuleFramework;
@@ -101,6 +102,7 @@ export async function compileLiveModule(
     allowedBarePackages: input.allowedBarePackages,
     contentRoot: input.contentRoot,
     entryAbsolutePath: input.entryAbsolutePath,
+    extraFenceRoots: input.extraFenceRoots,
     forcePreviewBarrel: input.forcePreviewBarrel,
     framework: input.framework,
     previewBarrelAbsolutePath: input.previewBarrelAbsolutePath,
@@ -158,6 +160,7 @@ export async function compileLiveModule(
           getTsconfig,
           graphRef,
           previewBarrelAbsolutePath: input.previewBarrelAbsolutePath,
+          extraFenceRoots: [...(input.extraFenceRoots ?? [])],
           projectRoot: input.projectRoot,
         }),
         createCanvasAssetPlugin({ assetsRef, fenceRoot }),

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "task-list",
+  "axis": "recipe",
+  "title": "Tracker task list",
+  "description": "Named list island bound to the pier.tasks board projection. Same data as the project panel, filtered to a milestone or label.",
+  "kind": "composition",
+  "stage": "flow",
+  "template": "templates/task-list.canvas.tsx",
+  "primitives": ["Frame", "useHostSnapshot"],
+  "required": ["repo", "milestone-or-label"],
+  "antiPatterns": [
+    "Opening an unfiltered whole-repository list",
+    "Scaffolding a full-bleed board canvas; daily tracking is the plugin panel",
+    "Calling GitHub from the canvas",
+    "Copying applet source instead of importing @pier-applet/pier.tasks/task-list"
+  ],
+  "agentPrompt": "Freeform composition. Root in Frame (flow). Import TaskList from @pier-applet/pier.tasks/task-list and mount it as an island card — the applet defaults to island chrome. Pass repo plus a milestone or label. Do not copy applet source. Do not import tracker-board; the project panel is the kanban. Do not fetch tracker APIs from the canvas. Rewrite every user-visible string into the user's language. See templates/task-list.canvas.tsx."
+}

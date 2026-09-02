@@ -108,6 +108,9 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
       actions: {
         register: vi.fn(() => () => undefined),
       },
+      applets: {
+        render: vi.fn(() => null),
+      },
       commandPalette: {
         openQuickPick: vi.fn(),
         updateQuickPick: vi.fn(),
@@ -159,7 +162,10 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
         })),
         success: vi.fn(),
       },
-      panels: { register: vi.fn(() => () => undefined) },
+      panels: {
+        open: vi.fn(),
+        register: vi.fn(() => () => undefined),
+      },
       rpc: {
         invoke,
         on: vi.fn(() => () => undefined),
@@ -171,6 +177,15 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
         open: vi.fn(() =>
           Promise.resolve({ panelId: "terminal-1", windowId: "main" })
         ),
+      },
+      projectSettings: {
+        register: vi.fn(() => () => undefined),
+      },
+      worktrees: {
+        check: vi.fn(),
+        create: vi.fn(),
+        openTerminal: vi.fn(),
+        remove: vi.fn(),
       },
     },
     invokeCalls,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { pierCapabilitySchema } from "./permissions.ts";
+import { pluginAppletContributionSchema } from "./plugin/applets.ts";
 import { pluginConfigurationSchema } from "./plugin/configuration.ts";
 import { pluginLanguageModeContributionSchema } from "./plugin/language-mode.ts";
 import { pluginLanguageServerContributionSchema } from "./plugin/language-server.ts";
@@ -206,6 +207,11 @@ const pluginManifestObjectSchema = z
       .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
       .optional(),
     /**
+     * Optional so hand-written manifests/tests need not list an empty array.
+     * Runtime readers must use `manifest.applets ?? []`.
+     */
+    applets: z.array(pluginAppletContributionSchema).optional(),
+    /**
      * 可投影给 canvas 的只读数据键（设计 §4.1）。未声明键的
      * pluginData.snapshot 一律拒绝——纪律边界与 panels 同链。
      *
@@ -327,6 +333,15 @@ const pluginManifestObjectSchema = z
           code: "custom",
           message: `projectSettings id must start with "${prefix}": ${contribution.id}`,
           path: ["projectSettings", index, "id"],
+        });
+      }
+    }
+    for (const [index, contribution] of (manifest.applets ?? []).entries()) {
+      if (!contribution.id.startsWith(prefix)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `applets id must start with "${prefix}": ${contribution.id}`,
+          path: ["applets", index, "id"],
         });
       }
     }

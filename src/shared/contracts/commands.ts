@@ -14,6 +14,7 @@ import {
   environmentUpdateRequestSchema,
   environmentWorktreeBindingRequestSchema,
 } from "./environment.ts";
+import { appOpenExternalCommandSchema } from "./external-navigation.ts";
 import { fileCommandSchemas } from "./file/commands.ts";
 import { gitCommandSchemas } from "./git/commands.ts";
 import { hostControlCommandSchemas } from "./host/control-commands.ts";
@@ -87,6 +88,7 @@ export type PanelOpenPathEntry = z.infer<typeof panelOpenPathEntrySchema>;
 
 export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("app.status") }),
+  appOpenExternalCommandSchema,
   appCliStatusRequestSchema,
   appCliInstallRequestSchema,
   appCliUninstallRequestSchema,
@@ -284,6 +286,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({
     payload: z.object({
       key: z.string().min(1),
+      params: z.record(z.string().min(1), z.string().min(1)).optional(),
       pluginId: z.string().min(1),
     }),
     type: z.literal("pluginData.snapshot"),
@@ -291,6 +294,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({
     payload: z.object({
       key: z.string().min(1),
+      params: z.record(z.string().min(1), z.string().min(1)).optional(),
       pluginId: z.string().min(1),
     }),
     type: z.literal("pluginData.watchStart"),
@@ -298,6 +302,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({
     payload: z.object({
       key: z.string().min(1),
+      params: z.record(z.string().min(1), z.string().min(1)).optional(),
       pluginId: z.string().min(1),
     }),
     type: z.literal("pluginData.watchStop"),
