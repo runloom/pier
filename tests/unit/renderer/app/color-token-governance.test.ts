@@ -23,6 +23,10 @@ const RAW_COLOR_WHOLE_FILE_OWNERS = new Set([
   // Single owner for Pierre's brand palette and derived editor/theme overlay.
   "src/renderer/lib/theme/pierre-brand-overlay.ts",
   "src/shared/theme-colors.ts",
+  // WorldStage floor captions: host --foreground follows chrome theme and
+  // is unreadable on a light studio floor. This module parses floor CSS
+  // (regex contains rgb()) and emits luminance-derived caption ink.
+  "src/renderer/lib/live-modules/pier-canvas-world-ink.ts",
 ]);
 const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([
   ["packages/ui/src/chart.tsx", /#(?:ccc|fff)\b/gi],

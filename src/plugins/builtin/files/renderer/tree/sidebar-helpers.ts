@@ -23,7 +23,7 @@ import { ensureFilesTreeWatch } from "./watch.ts";
 export function useRegisterFilesTreeInstance(options: {
   instanceId: string;
   openSearch: () => void;
-  projectRoot?: string | null;
+  projectRoot?: string | null | undefined;
   root: string;
   selectedPathsRef: { readonly current: readonly string[] };
   toggleSearch: () => void;
@@ -86,7 +86,7 @@ export interface FileTreeSidebarProps {
   instanceId: string;
   onOpenFile: (entry: FileEntry, options?: { pinned?: boolean }) => void;
   /** 可选项目路径锚点；与 root 不同时用于复制相对路径。 */
-  projectRoot?: string | null;
+  projectRoot?: string | null | undefined;
   root: string;
   /** dockview panel id，供右键布局动作定位来源面板。 */
   sourcePanelId?: string;

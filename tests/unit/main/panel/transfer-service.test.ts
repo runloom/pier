@@ -55,6 +55,7 @@ describe("PanelTransferService", () => {
   let terminal: PanelTransferTerminalPort;
   let rendererExecute: ReturnType<typeof vi.fn>;
   let createForTransfer: ReturnType<typeof vi.fn>;
+  let releaseRendererShow: ReturnType<typeof vi.fn>;
   let runExclusive: ReturnType<typeof vi.fn>;
   let pluginMutation: ReturnType<typeof vi.fn>;
   let now: number;
@@ -70,6 +71,7 @@ describe("PanelTransferService", () => {
       recordId: "record-new",
       windowId: "w-new",
     }));
+    releaseRendererShow = vi.fn();
     runExclusive = vi.fn(async (operation) => operation(lease));
     pluginMutation = vi.fn(async (operation) => operation());
     windows = {
@@ -83,7 +85,7 @@ describe("PanelTransferService", () => {
         { focused: true, id: "main", recordId: "record-main" },
         { focused: false, id: "w-1", recordId: "record-w1" },
       ]),
-      releaseRendererShow: vi.fn(),
+      releaseRendererShow: releaseRendererShow as never,
       revealHost: vi.fn(),
       runExclusive: runExclusive as never,
       setBounds: vi.fn(),
@@ -193,7 +195,7 @@ describe("PanelTransferService", () => {
 
   it("broadcasts overlay preview while an offer is live and clears on cancel", async () => {
     const broadcasts: PanelTransferOverlayPreview[] = [];
-    let tick: (() => void) | null = null;
+    const tick = { run: null as (() => void) | null };
     cursor.x = 100;
     cursor.y = 80;
     const service = createService({
@@ -201,11 +203,11 @@ describe("PanelTransferService", () => {
         broadcasts.push(preview);
       },
       overlayPreviewSchedule: {
-        interval: (callback: () => void) => {
-          tick = callback;
+        interval: (callback: () => void, _ms: number) => {
+          tick.run = callback;
           return {
             dispose() {
-              tick = null;
+              tick.run = null;
             },
           };
         },
@@ -219,7 +221,7 @@ describe("PanelTransferService", () => {
       windowId: "main",
     });
     cursor.x = 4000;
-    tick?.();
+    tick.run?.();
     expect(broadcasts.at(-1)).toEqual({
       kind: "outside",
       transferId: TRANSFER_A,
@@ -564,7 +566,7 @@ describe("PanelTransferService", () => {
     expect(createForTransfer).toHaveBeenCalledOnce();
     expect(windows.revealHost).toHaveBeenCalledWith("w-new");
     expect(windows.focus).toHaveBeenCalledWith("w-new");
-    const showOrder = windows.releaseRendererShow.mock.invocationCallOrder[0];
+    const showOrder = releaseRendererShow.mock.invocationCallOrder[0];
     const releaseSource = rendererExecute.mock.calls.findIndex(
       (call) => call[0]?.type === "panelTransfer.releaseSource"
     );
@@ -577,15 +579,15 @@ describe("PanelTransferService", () => {
 
   it("overlay outside warms a window that finishDrag reuses", async () => {
     cursor = { x: 100, y: 80 };
-    let tick: (() => void) | null = null;
+    const tick = { run: null as (() => void) | null };
     const service = createService({
       broadcastOverlayPreview: () => undefined,
       overlayPreviewSchedule: {
-        interval: (callback: () => void) => {
-          tick = callback;
+        interval: (callback: () => void, _ms: number) => {
+          tick.run = callback;
           return {
             dispose() {
-              tick = null;
+              tick.run = null;
             },
           };
         },
@@ -594,7 +596,7 @@ describe("PanelTransferService", () => {
     const source = caller("main", "record-main", 1);
     await service.offer(source, movableOffer(TRANSFER_A));
     cursor = { x: 5000, y: 5000 };
-    tick?.();
+    tick.run?.();
     await vi.waitFor(() => expect(createForTransfer).toHaveBeenCalledOnce());
     const result = await service.finishDrag(source, TRANSFER_A);
     expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });

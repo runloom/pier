@@ -442,8 +442,8 @@ function fnv1a32(text: string): string {
 }
 
 function patchSidesFingerprint(section: {
-  readonly newContents?: string;
-  readonly oldContents?: string;
+  readonly newContents?: string | undefined;
+  readonly oldContents?: string | undefined;
 }): string {
   if (section.oldContents === undefined || section.newContents === undefined) {
     return "partial";

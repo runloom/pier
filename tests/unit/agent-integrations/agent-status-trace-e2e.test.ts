@@ -165,6 +165,7 @@ describe("智能体状态官方轨迹跨层验收", () => {
         "copilot:interrupted",
         "kimi:completed",
         "kimi:ready",
+        "kimi:waiting",
         "qodercli:interrupted",
         "qodercli:ready",
       ].sort()

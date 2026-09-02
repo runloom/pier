@@ -6,6 +6,7 @@ import { createConnection } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { stdin as stdinStream } from "node:process";
+import { formatCliHumanError } from "./pier-cli-human.js";
 import {
   findWorktreeDevProfile,
   LAUNCH_WAIT_MS,
@@ -15,7 +16,6 @@ import {
   shouldWaitForControlSocket,
   waitForSocket,
 } from "./pier-cli-launch.js";
-import { formatCliHumanError } from "./pier-cli-human.js";
 import {
   hasPierCliOption,
   parsePierCliArgs,

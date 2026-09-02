@@ -227,12 +227,13 @@ export function createUplinkDialer(args: {
         return;
       }
       if (frame.data.type === "pair.request") {
-        handlePairRequest(frame.data.requestId, frame.data.sealedRequest).catch(
+        const requestId = frame.data.requestId;
+        handlePairRequest(requestId, frame.data.sealedRequest).catch(
           (error: unknown) => {
             log("uplink.pair-failed", {
               message: error instanceof Error ? error.message : "unknown",
             });
-            failPairBlind(frame.data.requestId).catch(() => undefined);
+            failPairBlind(requestId).catch(() => undefined);
           }
         );
         return;

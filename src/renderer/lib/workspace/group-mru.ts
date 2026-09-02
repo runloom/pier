@@ -4,7 +4,7 @@
  */
 
 export interface WorkspaceGroupMruApi {
-  activeGroup?: { id?: string } | null;
+  activeGroup?: { id?: string } | null | undefined;
   onDidActiveGroupChange?: (
     listener: (group: { id?: string } | undefined) => void
   ) => { dispose: () => void };

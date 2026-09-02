@@ -31,8 +31,9 @@ describe("worldStageCaptionVars", () => {
   });
 
   it("reads rgb() floors", () => {
-    expect(
-      worldStageCaptionVars("rgb(216, 207, 192)")?.[WORLD_CAPTION_FG]
-    ).toBe("#171717");
+    expect(worldStageCaptionVars("rgb(216, 207, 192)")).toEqual({
+      [WORLD_CAPTION_FG]: "#171717",
+      [WORLD_CAPTION_MUTED]: "#525252",
+    });
   });
 });

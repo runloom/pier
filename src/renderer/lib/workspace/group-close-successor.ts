@@ -78,7 +78,7 @@ export function pickGroupCloseSuccessor<T extends GroupCloseSuccessorCandidate>(
 }
 
 export interface GroupCloseSuccessorGroup {
-  activePanel?: { id: string } | null;
+  activePanel?: { id: string } | null | undefined;
   element?: unknown;
   id?: string;
   panels: readonly { id: string }[];

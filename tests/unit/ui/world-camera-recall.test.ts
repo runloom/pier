@@ -104,7 +104,7 @@ describe("useWorldCamera recall", () => {
         }),
       {
         initialProps: {
-          recall: () => held,
+          recall: (): WorldCameraLookAt | null => held,
           resetKey: "board-a.canvas.tsx",
         },
       }

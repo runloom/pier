@@ -103,10 +103,13 @@ describe("project canvases render", () => {
       );
     }
     render(<Canvas />);
-    fireEvent.click(
-      screen.getAllByRole("button", { name: /办公桌 Mac mini/ })[0]
-    );
-    fireEvent.click(screen.getAllByRole("button", { name: /feat-mobile/ })[0]);
+    const desk = screen.getAllByRole("button", { name: /办公桌 Mac mini/ })[0];
+    const tree = screen.getAllByRole("button", { name: /feat-mobile/ })[0];
+    if (!(desk && tree)) {
+      throw new Error("mobile-web-shell host buttons are missing");
+    }
+    fireEvent.click(desk);
+    fireEvent.click(tree);
     expect(
       document.querySelector("[data-slot='mobile-slide-overlay']")
     ).not.toBeNull();

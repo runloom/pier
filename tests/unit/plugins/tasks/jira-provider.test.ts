@@ -147,7 +147,8 @@ describe("Jira tracker provider", () => {
       { rankBeforeKey: "ENG-9", sortOrder: 150 }
     );
     const transition = calls.find(
-      (item) => item.url.endsWith("/transitions") && item.body.includes("21")
+      (item) =>
+        item.url.endsWith("/transitions") && (item.body ?? "").includes("21")
     );
     const rank = calls.find((item) =>
       item.url.includes("/rest/agile/1.0/issue/rank")

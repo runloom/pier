@@ -163,7 +163,7 @@ describe("context-menu order sketches", () => {
       ...createFilesTreeActions(files, controller),
       ...createFilesEditorActions(files, controller),
       ...createFilesEditorPrefsActions(files),
-      ...createFilesMarkdownPreviewActions(files),
+      ...createFilesMarkdownPreviewActions(files, controller),
       ...createFilesSearchResultActions(files, controller),
       createSearchInFolderAction(files),
       createTreeExpandAllAction(files),

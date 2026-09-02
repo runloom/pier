@@ -177,9 +177,9 @@ export function ColumnHeader({
   kind,
   label,
 }: {
-  count?: number;
+  count?: number | undefined;
   id: string;
-  kind?: string;
+  kind?: string | undefined;
   label: string;
 }) {
   return (

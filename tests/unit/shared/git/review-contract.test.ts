@@ -421,8 +421,8 @@ describe("Git review shared contract", () => {
         status: "conflicted",
         targetPath: "src/app.ts",
         xy: "UD",
-      }).contents
-    ).toBe("keep current\n");
+      })
+    ).toMatchObject({ contents: "keep current\n", kind: "conflict" });
     expect(
       gitReviewFileSectionSchema.safeParse({
         contents: "nope",

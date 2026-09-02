@@ -1,3 +1,4 @@
+import type { PointerEvent as ReactPointerEvent } from "react";
 import {
   cameraLookingAtWorld,
   clampZoom,
@@ -7,6 +8,17 @@ import {
   type WorldSizeBox,
   worldPointAtViewportCenter,
 } from "./canvas-math.ts";
+
+export interface WorldCameraHookInput {
+  enabled?: boolean | undefined;
+  getContentSize: () => WorldSizeBox | null;
+  /** Restore a free look-at for this world (null / omitted → fit). */
+  recall?: (() => WorldCameraLookAt | null) | undefined;
+  resetKey?: string | number | null | undefined;
+  shouldCapturePointer?:
+    | ((event: ReactPointerEvent<HTMLElement>) => boolean)
+    | undefined;
+}
 
 export function sameWorldCamera(
   current: WorldCamera | null,

@@ -403,13 +403,13 @@ export function Artboard({
 }: {
   children?: ReactNode;
   className?: string;
-  description?: string;
+  description?: string | undefined;
   height?: number;
-  label?: string;
+  label?: string | undefined;
   /** `clip` matches Figma clip-content. `scroll` is prototype overflow only. */
   overflow?: "clip" | "scroll";
   preset?: ArtboardPreset;
-  title?: string;
+  title?: string | undefined;
   width?: number;
 }) {
   const { height, width } = resolveArtboardSize({

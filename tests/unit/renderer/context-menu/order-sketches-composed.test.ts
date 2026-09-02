@@ -162,7 +162,7 @@ describe("context-menu composed sketches", () => {
     );
     for (const action of [
       ...createFilesTreeActions(context, controller),
-      ...createFilesMarkdownPreviewActions(context),
+      ...createFilesMarkdownPreviewActions(context, controller),
     ]) {
       actionRegistry.register(action as Action);
     }

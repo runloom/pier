@@ -14,10 +14,10 @@ const MUTED_INK: CSSProperties = {
 };
 
 export function ArtboardCaption(props: {
-  description?: string;
+  description?: string | undefined;
   heading: string;
-  label?: string;
-  title?: string;
+  label?: string | undefined;
+  title?: string | undefined;
 }): ReactNode {
   const heading =
     props.label && props.title ? (

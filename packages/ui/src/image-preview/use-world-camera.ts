@@ -34,6 +34,7 @@ import {
   recalledFreeLookAt,
   sameWorldCamera,
   stampWorldCameraLookAt,
+  type WorldCameraHookInput,
 } from "./world-camera-reset.ts";
 import { useWorldCameraSpacePan } from "./world-camera-space-pan.ts";
 
@@ -47,14 +48,7 @@ export function useWorldCamera({
   recall,
   resetKey,
   shouldCapturePointer,
-}: {
-  enabled?: boolean;
-  getContentSize: () => WorldSizeBox | null;
-  /** Restore a free look-at for this world (null / omitted → fit). */
-  recall?: () => WorldCameraLookAt | null;
-  resetKey?: string | number | null;
-  shouldCapturePointer?: (event: ReactPointerEvent<HTMLElement>) => boolean;
-}) {
+}: WorldCameraHookInput) {
   const viewportRef = useRef<HTMLElement | null>(null);
   const enabledRef = useRef(false);
   const [camera, setCamera] = useState<WorldCamera | null>(null);

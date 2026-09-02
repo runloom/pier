@@ -76,7 +76,7 @@ export function worldStageCaptionVars(
   return {
     [WORLD_CAPTION_FG]: ink.foreground,
     [WORLD_CAPTION_MUTED]: ink.muted,
-  };
+  } as CSSProperties;
 }
 
 export const WORLD_CAPTION_COLOR = `var(${WORLD_CAPTION_FG}, var(--foreground))`;

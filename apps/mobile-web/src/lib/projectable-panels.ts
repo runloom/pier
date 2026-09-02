@@ -2,8 +2,6 @@
  * H2 可投影面板并集：终端族 / git 变更 / files 文档。
  * 无投影协议的 component（Canvas / 设置 / Web 等）不列。
  */
-import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
-import { agentKindSchema } from "@shared/contracts/agent.ts";
 import type { ControlSnapshotPayload } from "@shared/contracts/local-control/control-snapshot.ts";
 import { panelScopeKey } from "./panel-scope.ts";
 import { pathLeaf } from "./worktree-scope.ts";
@@ -51,22 +49,14 @@ export function isFilesDocumentComponent(
   return component === FILES_FILE_PANEL_COMPONENT;
 }
 
-function agentCatalogLabel(agentId: string): string | null {
-  const parsed = agentKindSchema.safeParse(agentId);
-  if (!parsed.success) {
-    return null;
-  }
-  return getAgentCatalogEntry(parsed.data)?.label ?? null;
-}
-
 /**
  * 终端族行标题 = 桌面 tab short。快照 `title` 已是 display.short；
- * 缺席时按 tab 优先级降级：cwd 叶子 → catalog 标签。禁止用产品 id。
+ * 缺席时按 tab 优先级降级：cwd 叶子 → 「终端」。禁止用产品 id。
  */
 export function terminalProjectionLabel(args: {
-  agentId?: string | null;
+  agentId?: string | null | undefined;
   cwd: string | null;
-  tabShort?: string | null;
+  tabShort?: string | null | undefined;
 }): string {
   const tabShort = args.tabShort?.trim();
   if (tabShort) {
@@ -77,10 +67,6 @@ export function terminalProjectionLabel(args: {
     if (leaf.length > 0) {
       return leaf;
     }
-  }
-  const agentId = args.agentId?.trim();
-  if (agentId) {
-    return agentCatalogLabel(agentId) ?? "终端";
   }
   return "终端";
 }
