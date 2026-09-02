@@ -10,6 +10,8 @@ export interface GitIgnoredIndex {
 interface GitIgnoredCacheEntry {
   generation: number;
   index: GitIgnoredIndex;
+  /** 探针失败后的重试时刻；成功命中不设。 */
+  retryAt?: number;
 }
 
 interface GitIgnoredLoad {
@@ -23,6 +25,9 @@ export const EMPTY_GIT_IGNORED_INDEX: GitIgnoredIndex = {
   filePaths: new Set(),
   signature: "",
 };
+
+/** 非 git 根 / 瞬时失败：短 TTL 负缓存，避免每次展开目录都 spawn git。 */
+export const GIT_IGNORED_PROBE_FAILURE_TTL_MS = 30_000;
 
 function normalizeIgnoredEntry(path: string): string {
   return path.replace(/^\.\//, "").replace(/\/{2,}/g, "/");
@@ -82,11 +87,16 @@ export class FilesTreeGitIgnoredIndex {
     this.#context = context;
   }
 
-  current(root: string): GitIgnoredIndex | undefined {
+  current(root: string, now = Date.now()): GitIgnoredIndex | undefined {
     const cached = this.#indexesByRoot.get(root);
-    return cached?.generation === this.#generation(root)
-      ? cached.index
-      : undefined;
+    if (!cached || cached.generation !== this.#generation(root)) {
+      return;
+    }
+    if (cached.retryAt !== undefined && now >= cached.retryAt) {
+      // 过期仍留在 map 里：refresh() 要用它当基线；load() 命中 miss 后覆盖。
+      return;
+    }
+    return cached.index;
   }
 
   invalidate(root: string): void {
@@ -112,8 +122,8 @@ export class FilesTreeGitIgnoredIndex {
         try {
           index = createGitIgnoredIndex(await gitApi.listIgnored(root));
         } catch {
-          // 探针瞬时失败不得缓存空索引：缓存会让 current() 长期把忽略文件
-          // 当可见，且后续 list() 命中缓存不再重试。失败按「无索引」处理。
+          // 瞬时失败与非 git 根都走短 TTL 负缓存，避免每次展开都 spawn；
+          // TTL 到期或 invalidate 后重试。
           probeFailed = true;
           index = EMPTY_GIT_IGNORED_INDEX;
         }
@@ -125,9 +135,13 @@ export class FilesTreeGitIgnoredIndex {
         }
         return this.current(root) ?? EMPTY_GIT_IGNORED_INDEX;
       }
-      if (!probeFailed) {
-        this.#indexesByRoot.set(root, { generation, index });
-      }
+      this.#indexesByRoot.set(root, {
+        generation,
+        index,
+        ...(probeFailed
+          ? { retryAt: Date.now() + GIT_IGNORED_PROBE_FAILURE_TTL_MS }
+          : {}),
+      });
       return index;
     })();
     this.#loadsByRoot.set(root, { generation, promise: load });
@@ -143,7 +157,10 @@ export class FilesTreeGitIgnoredIndex {
   async refresh(
     root: string
   ): Promise<{ changed: boolean; entries: readonly string[] }> {
-    const previous = this.current(root);
+    // 基线取树最后一次可能用过的索引（含已过 TTL 的负缓存、已被 invalidate 的旧代），
+    // 而不是 current()：否则 TTL 到期恰逢 git 事件时会漏掉 reload。
+    // 首次挂载尚无索引时 changed=false——list() 已等待过同一索引，无需再重刷。
+    const previous = this.#indexesByRoot.get(root)?.index;
     this.invalidate(root);
     const next = await this.load(root);
     return {

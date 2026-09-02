@@ -157,6 +157,8 @@ export class FilesTreeVisibilityController {
     this.list = Object.assign(
       async (root: string, options?: { path?: string }) => {
         const showGitIgnoredFiles = this.showsGitIgnoredFiles();
+        // listing 与忽略索引并行；索引命中缓存（成功或短 TTL 负缓存）时不等待，
+        // 未知时必须等一次：否则首帧 / 设置切换 / invalidate 后会把忽略文件当可见。
         const [entries, gitIgnored] = await Promise.all([
           this.#context.files.list(root, options),
           showGitIgnoredFiles

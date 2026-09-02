@@ -271,6 +271,26 @@ export function deriveChangeKind(
 }
 
 /**
+ * standalone 下仍由工作树 watcher 消费的 Git 元数据，但 objects/logs/subtree-cache
+ * 是 init/gc/fetch 风暴源（与 hub `isNoiseEvent` 对齐），一律丢弃等 poll。
+ */
+export function isGitBulkMetadataEvent(
+  rawPath: string,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  const relPath = normalizeWatchEventPath(rawPath, platform);
+  if (!relPath.startsWith(".git/")) {
+    return false;
+  }
+  const inner = relPath.slice(".git/".length);
+  return (
+    inner.startsWith("objects/") ||
+    inner.startsWith("logs/") ||
+    inner.startsWith("subtree-cache/")
+  );
+}
+
+/**
  * standalone watcher 必须自行消费的 Git 元数据事件。
  * hub 挂接完成后这些路径才交给 hub 排他处理；lock/cookie 始终只是协议噪声。
  */

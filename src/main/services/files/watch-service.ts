@@ -1,9 +1,5 @@
-import {
-  accessSync,
-  constants,
-  type FSWatcher,
-  watch as fsWatch,
-} from "node:fs";
+import { type FSWatcher, watch as fsWatch } from "node:fs";
+import { access } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import type {
   FileWatchChange,
@@ -14,6 +10,8 @@ import type {
 const DEFAULT_DEBOUNCE_MS = 250;
 const DEFAULT_MAX_WAIT_MS = 1000;
 const DEFAULT_POLL_MS = 5000;
+/** 一批 flush 里并行探测路径存在性的上限；批量 checkout / 安装不得挤满 libuv 线程池。 */
+export const FILE_WATCH_PROBE_CONCURRENCY = 16;
 
 const NOISE_SEGMENTS = new Set([
   ".git",
@@ -31,10 +29,14 @@ export type FsWatchFn = (
   listener: (eventType: string, filename: string | Buffer | null) => void
 ) => FSWatcher;
 
+export type FileWatchPathExists = (absolutePath: string) => Promise<boolean>;
+
 export interface CreateFileWatchServiceOptions {
   debounceMs?: number;
   fsWatch?: FsWatchFn;
   maxWaitMs?: number;
+  /** 测试 seam；生产用异步 access，禁止在 fs.watch 回调里 sync stat。 */
+  pathExists?: FileWatchPathExists;
   pollMs?: number;
 }
 
@@ -57,9 +59,12 @@ interface RootEntry {
   /** 额外排除段(全订阅方并集);命中即丢事件。 */
   extraExcludes: Set<string>;
   firstPendingAt: number | null;
+  flushing: boolean;
   listeners: Set<RootListener>;
-  pending: Map<string, FileWatchChangeKind>;
+  /** path → 最近一次 fs.watch eventType（rename / change）。分类推迟到 flush。 */
+  pending: Map<string, string>;
   pollTimer: ReturnType<typeof setInterval> | null;
+  resolvedRoot: string;
   timer: ReturnType<typeof setTimeout> | null;
   watcher: FSWatcher | null;
 }
@@ -95,23 +100,60 @@ function toRootRelativePosix(
   return posix;
 }
 
-function mapEventType(
+async function defaultPathExists(absolutePath: string): Promise<boolean> {
+  try {
+    await access(absolutePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function mapEventType(
   root: string,
   path: string,
-  eventType: string
-): FileWatchChangeKind {
-  const absolute = resolve(root, path);
-  let exists = false;
-  try {
-    accessSync(absolute, constants.F_OK);
-    exists = true;
-  } catch {
-    exists = false;
+  eventType: string,
+  pathExists: FileWatchPathExists
+): Promise<FileWatchChangeKind> {
+  if (path === ".") {
+    return "changed";
   }
+  const exists = await pathExists(resolve(root, path));
   if (eventType === "rename") {
     return exists ? "created" : "deleted";
   }
   return exists ? "changed" : "deleted";
+}
+
+/** 按入队顺序分类一批 pending 事件，同时在途探测不超过 FILE_WATCH_PROBE_CONCURRENCY。 */
+async function classifyPending(
+  root: string,
+  snapshot: readonly (readonly [path: string, eventType: string])[],
+  pathExists: FileWatchPathExists
+): Promise<FileWatchChange[]> {
+  const changes = new Array<FileWatchChange>(snapshot.length);
+  let cursor = 0;
+  await Promise.all(
+    Array.from(
+      { length: Math.min(FILE_WATCH_PROBE_CONCURRENCY, snapshot.length) },
+      async () => {
+        while (cursor < snapshot.length) {
+          const index = cursor;
+          cursor += 1;
+          const item = snapshot[index];
+          if (!item) {
+            return;
+          }
+          const [path, eventType] = item;
+          changes[index] = {
+            kind: await mapEventType(root, path, eventType, pathExists),
+            path,
+          };
+        }
+      }
+    )
+  );
+  return changes;
 }
 
 export function createFileWatchService(
@@ -121,27 +163,48 @@ export function createFileWatchService(
   const maxWaitMs = options.maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
   const pollMs = options.pollMs ?? DEFAULT_POLL_MS;
   const watchFn = options.fsWatch ?? fsWatch;
+  const pathExists = options.pathExists ?? defaultPathExists;
   const roots = new Map<string, RootEntry>();
 
-  function flush(entry: RootEntry): void {
+  async function flush(entry: RootEntry): Promise<void> {
     if (entry.timer) {
       clearTimeout(entry.timer);
       entry.timer = null;
     }
-    entry.firstPendingAt = null;
     if (entry.pending.size === 0) {
+      entry.firstPendingAt = null;
       return;
     }
-    const changes: FileWatchChange[] = [...entry.pending.entries()].map(
-      ([path, kind]) => ({ kind, path })
-    );
+    if (entry.flushing) {
+      // 在途 flush 结束后由其 finally 重新排程；保留 firstPendingAt，
+      // 否则持续写入期间 maxWait 会被每次到期的 debounce 重置而永不兜底。
+      return;
+    }
+    entry.firstPendingAt = null;
+    entry.flushing = true;
+    const snapshot = [...entry.pending.entries()];
     entry.pending.clear();
-    // Emit with each subscriber's original root string. Main resolves paths for
-    // fs.watch only; renderer preload filters by the root it subscribed with
-    // (often realpath'd projectRoot). Using resolvedRoot here silently dropped
-    // every event when the two strings differed (trailing form, etc.).
-    for (const entryListener of entry.listeners) {
-      entryListener.listener({ changes, root: entryListener.clientRoot });
+    try {
+      const changes = await classifyPending(
+        entry.resolvedRoot,
+        snapshot,
+        pathExists
+      );
+      if (entry.listeners.size === 0) {
+        return;
+      }
+      // Emit with each subscriber's original root string. Main resolves paths for
+      // fs.watch only; renderer preload filters by the root it subscribed with
+      // (often realpath'd projectRoot). Using resolvedRoot here silently dropped
+      // every event when the two strings differed (trailing form, etc.).
+      for (const entryListener of entry.listeners) {
+        entryListener.listener({ changes, root: entryListener.clientRoot });
+      }
+    } finally {
+      entry.flushing = false;
+      if (entry.pending.size > 0 && entry.listeners.size > 0) {
+        scheduleFlush(entry);
+      }
     }
   }
 
@@ -155,16 +218,12 @@ export function createFileWatchService(
       clearTimeout(entry.timer);
     }
     entry.timer = setTimeout(() => {
-      flush(entry);
+      flush(entry).catch(() => undefined);
     }, delay);
   }
 
-  function enqueue(
-    entry: RootEntry,
-    path: string,
-    kind: FileWatchChangeKind
-  ): void {
-    entry.pending.set(path, kind);
+  function enqueue(entry: RootEntry, path: string, eventType: string): void {
+    entry.pending.set(path, eventType);
     scheduleFlush(entry);
   }
 
@@ -175,7 +234,7 @@ export function createFileWatchService(
     entry.pollTimer = setInterval(() => {
       // Polling fallback cannot invent precise path ops; emit a sentinel
       // changed event on "." so renderer can reload expanded roots.
-      enqueue(entry, ".", "changed");
+      enqueue(entry, ".", "change");
     }, pollMs);
   }
 
@@ -197,7 +256,7 @@ export function createFileWatchService(
           if (!path) {
             return;
           }
-          enqueue(entry, path, mapEventType(root, path, eventType));
+          enqueue(entry, path, eventType);
         }
       );
       entry.watcher.on("error", () => {
@@ -243,9 +302,11 @@ export function createFileWatchService(
         entry = {
           extraExcludes: new Set(),
           firstPendingAt: null,
+          flushing: false,
           listeners: new Set(),
           pending: new Map(),
           pollTimer: null,
+          resolvedRoot,
           timer: null,
           watcher: null,
         };

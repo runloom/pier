@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   GIT_STATUS_ARGS,
   GIT_WORKING_TREE_NUMSTAT_ARGS,
+  numstatWithinStatus,
 } from "../change-summary.ts";
 import { execGit } from "../exec.ts";
 import { parseGitStatus } from "../parsers.ts";
@@ -26,7 +27,6 @@ import { GitWatchPathCache } from "./path-cache.ts";
  * 因此每次非基线刷新都会保守广播，恢复成功后再回到正常签名去重。
  */
 const NUMSTAT_ERROR_SENTINEL = "numstat-unavailable";
-const STATUS_ERROR_SENTINEL = "status-unavailable";
 
 /** 文件系统探测不得耗尽 libuv 队列；迟到操作也最多保留这一批。 */
 const CONTENT_SIGNAL_STAT_CONCURRENCY = 16;
@@ -134,17 +134,13 @@ type WorktreeExecGit = (
 ) => Promise<string>;
 
 /**
- * worktree 签名：以 status/stat 前后夹住 HEAD→working tree numstat，只有两侧
- * 完全一致时才发布可复用原始摘要；随后将 status + numstat + stat 信号拼接后 hash。
- * stat 信号补齐 porcelain 的内容盲区
- *（原 spec 缺口③）：已修改文件继续编辑但增删行数不变时，status/numstat 全文不变，
- * 唯 mtime/size 变——否则 diff 预览漏更新。
- * status、numstat 或整批 stat 信号不可用时，快照标记 `reliable=false`。
- * 基线只记录该结果；后续每次刷新都保守广播，避免固定哨兵让更新永久静默。
- * 恢复成功后重新使用真实签名去重。
- *
- * status 带 --branch(A7)：输出成为 getStatus 所需严格超集；签名和原始三段由同一
- * 返回值绑定，避免同一 gitRoot 退订后立即重订时跨代共享邮箱串线。
+ * worktree 签名：一次 `git status`，stat 信号前后夹住 HEAD→working tree numstat。
+ * 夹心只证明：列出路径的 mtime+size 在 numstat 前后一致，且 numstat ⊆ status
+ * （`numstatWithinStatus`）。两条成立才发 `raw` 给 refresh 预取；否则 assembler 自取。
+ * 已脏文件暂存/取消暂存、窗口内新未跟踪文件不在证明范围内，靠尾随 watcher 重跑。
+ * stat 信号补齐 porcelain 内容盲区：已改文件继续编辑但增删行数不变时，唯 mtime/size 变。
+ * status、numstat 或整批 stat 不可用时 `reliable=false`；基线只记结果，后续每次刷新都保守广播。
+ * status 带 --branch(A7)：输出是 getStatus 所需超集；签名和原始三段由同一返回值绑定。
  */
 export async function defaultWorktreeSnapshot(
   gitRoot: string,
@@ -161,7 +157,8 @@ export async function defaultWorktreeSnapshot(
   } catch {
     return { reliable: false, signature: "" };
   }
-  const hasHead = parseGitStatus(statusOut).branch.oid !== null;
+  const status = parseGitStatus(statusOut);
+  const hasHead = status.branch.oid !== null;
   const statBefore = await changedFilesStatSignal(gitRoot, statusOut, {
     ...(context === undefined ? {} : { signal: context.signal }),
   }).catch(() => STAT_SIGNAL_UNAVAILABLE);
@@ -176,37 +173,25 @@ export async function defaultWorktreeSnapshot(
         return NUMSTAT_ERROR_SENTINEL;
       })
     : "";
-  let statusAfterFailed = false;
-  const statusAfter = await exec(GIT_STATUS_ARGS, {
-    cwd: gitRoot,
-    timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+  const statAfter = await changedFilesStatSignal(gitRoot, statusOut, {
     ...(context === undefined ? {} : { signal: context.signal }),
-  }).catch(() => {
-    statusAfterFailed = true;
-    return STATUS_ERROR_SENTINEL;
-  });
-  const statAfter = statusAfterFailed
-    ? STAT_SIGNAL_UNAVAILABLE
-    : await changedFilesStatSignal(gitRoot, statusAfter, {
-        ...(context === undefined ? {} : { signal: context.signal }),
-      }).catch(() => STAT_SIGNAL_UNAVAILABLE);
+  }).catch(() => STAT_SIGNAL_UNAVAILABLE);
   const coherent =
-    !statusAfterFailed &&
-    statusOut === statusAfter &&
     statBefore === statAfter &&
-    statBefore !== STAT_SIGNAL_UNAVAILABLE;
+    statBefore !== STAT_SIGNAL_UNAVAILABLE &&
+    (numstatFailed || numstatWithinStatus(status.files, workingTreeNumstat));
   const raw =
     numstatFailed || !coherent
       ? undefined
       : {
-          statusOut: statusAfter,
+          statusOut,
           workingTreeNumstat,
         };
   return {
     reliable: !numstatFailed && coherent,
     ...(raw === undefined ? {} : { raw }),
     signature: createHash("sha256")
-      .update(`${statusAfter}\0${workingTreeNumstat}\0${statAfter}`)
+      .update(`${statusOut}\0${workingTreeNumstat}\0${statAfter}`)
       .digest("hex"),
   };
 }

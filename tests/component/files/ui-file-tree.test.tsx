@@ -1129,6 +1129,45 @@ describe("PierFileTree", () => {
     expect(tree.getAllByRole("treeitem")).toHaveLength(1);
   });
 
+  it("stops the pending reveal retry ladder once the tree unmounts", async () => {
+    vi.useFakeTimers();
+    try {
+      const onLoadDirectory = vi.fn<(path: string) => void>();
+      const { unmount } = render(
+        <LazyPierFileTree
+          items={[
+            {
+              kind: "directory",
+              path: "src",
+              hasChildren: true,
+              loadState: "unloaded",
+            },
+          ]}
+          label="Project files"
+          onLoadDirectory={onLoadDirectory}
+          revealPath="src/missing.ts"
+        />
+      );
+
+      // Mount + the first retry steps keep asking for the missing ancestor.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      const callsBeforeUnmount = onLoadDirectory.mock.calls.length;
+      expect(callsBeforeUnmount).toBeGreaterThan(1);
+
+      unmount();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+
+      // A torn-down tree must never keep mutating the caller's directory store.
+      expect(onLoadDirectory).toHaveBeenCalledTimes(callsBeforeUnmount);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("reloads a falsely loaded empty directory when pointer activation expands it", () => {
     const onLoadDirectory = vi.fn<(path: string) => void>();
     const { container } = render(

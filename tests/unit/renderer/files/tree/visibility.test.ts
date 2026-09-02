@@ -1,4 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { GIT_IGNORED_PROBE_FAILURE_TTL_MS } from "@plugins/builtin/files/renderer/tree/git-ignored-index.ts";
 import {
   FilesTreeVisibilityController,
   isDefaultExcludedFileTreePath,
@@ -11,7 +12,7 @@ import {
   FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY,
 } from "@plugins/builtin/files/settings.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const ROOT = "/workspace/pier";
 
@@ -73,6 +74,9 @@ function createContext(options?: {
 }
 
 describe("files tree visibility", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("recognizes VCS internals and OS metadata at any path depth", () => {
     expect(isDefaultExcludedFileTreePath(".git")).toBe(true);
     expect(isDefaultExcludedFileTreePath("packages/demo/.git/config")).toBe(
@@ -152,6 +156,48 @@ describe("files tree visibility", () => {
     expect(paths).toContain(".DS_Store");
   });
 
+  it("hides Git-ignored entries on the very first listing (no visible flash)", async () => {
+    const ignoredLoad = deferred<string[]>();
+    const { context, list, listIgnored } = createContext({
+      ignored: ["dist/"],
+    });
+    listIgnored.mockImplementationOnce(() => ignoredLoad.promise);
+    const controller = new FilesTreeVisibilityController(context);
+
+    let settled = false;
+    const listing = controller.list(ROOT).then((entries) => {
+      settled = true;
+      return entries.map((item) => item.path);
+    });
+    await Promise.resolve();
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+
+    ignoredLoad.resolve(["dist/"]);
+    const paths = await listing;
+    expect(paths).not.toContain("dist");
+    expect(paths).not.toContain("dist/bundle.js");
+  });
+
+  it("re-resolves the ignore index after invalidation instead of listing everything", async () => {
+    const { context, listIgnored } = createContext({
+      ignored: ["dist/"],
+    });
+    const controller = new FilesTreeVisibilityController(context);
+    expect(
+      (await controller.list(ROOT)).map((item) => item.path)
+    ).not.toContain("dist");
+
+    // Settings toggle path (use-visibility): invalidate, then reload the tree.
+    controller.invalidateGitIgnored(ROOT);
+    const paths = (await controller.list(ROOT)).map((item) => item.path);
+
+    expect(paths).not.toContain("dist");
+    expect(paths).not.toContain("dist/bundle.js");
+    expect(controller.isPathVisible(ROOT, "dist/bundle.js")).toBe(false);
+    expect(listIgnored).toHaveBeenCalledTimes(2);
+  });
+
   it("separately hides exact and directory Git ignore matches", async () => {
     const { context, listIgnored } = createContext({
       ignored: ["dist/", ".env"],
@@ -218,7 +264,7 @@ describe("files tree visibility", () => {
   });
 
   it("degrades to default exclusions when Git ignore lookup is unavailable", async () => {
-    const { context } = createContext({
+    const { context, listIgnored } = createContext({
       ignored: new Error("not a Git repository"),
       showGitIgnoredFiles: false,
     });
@@ -229,6 +275,8 @@ describe("files tree visibility", () => {
     expect(paths).toContain("dist");
     expect(paths).toContain(".env");
     expect(paths).not.toContain(".git");
+    await controller.list(ROOT, { path: "src" });
+    expect(listIgnored).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the newest Git ignored index when refreshes resolve out of order", async () => {
@@ -254,5 +302,68 @@ describe("files tree visibility", () => {
     expect(paths).not.toContain("dist");
     expect(paths).not.toContain("dist/bundle.js");
     expect(listIgnored).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a failed Git ignore probe after the negative-cache TTL", async () => {
+    vi.useFakeTimers();
+    const { context, listIgnored } = createContext({
+      ignored: new Error("not a Git repository"),
+      showGitIgnoredFiles: false,
+    });
+    const controller = new FilesTreeVisibilityController(context);
+    expect((await controller.list(ROOT)).map((item) => item.path)).toContain(
+      "dist"
+    );
+    expect(listIgnored).toHaveBeenCalledTimes(1);
+
+    await controller.list(ROOT, { path: "src" });
+    expect(listIgnored).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(GIT_IGNORED_PROBE_FAILURE_TTL_MS);
+    listIgnored.mockResolvedValueOnce(["dist/"]);
+    const paths = (await controller.list(ROOT)).map((item) => item.path);
+    expect(listIgnored).toHaveBeenCalledTimes(2);
+    expect(paths).not.toContain("dist");
+  });
+
+  it("reports a change when a git event follows an expired negative cache", async () => {
+    vi.useFakeTimers();
+    const { context, listIgnored } = createContext({
+      ignored: new Error("not a Git repository"),
+      showGitIgnoredFiles: false,
+    });
+    const controller = new FilesTreeVisibilityController(context);
+    await controller.list(ROOT);
+    // First refresh right after mount: the tree already awaited this index.
+    await expect(controller.refreshGitIgnored(ROOT)).resolves.toMatchObject({
+      changed: false,
+    });
+
+    await vi.advanceTimersByTimeAsync(GIT_IGNORED_PROBE_FAILURE_TTL_MS);
+    listIgnored.mockResolvedValue(["dist/"]);
+    await expect(controller.refreshGitIgnored(ROOT)).resolves.toMatchObject({
+      changed: true,
+      entries: ["dist/"],
+    });
+  });
+
+  it("TTL 到期后 current() 仍保留负缓存基线，git 事件能报 changed", async () => {
+    vi.useFakeTimers();
+    const { context, listIgnored } = createContext({
+      ignored: new Error("not a Git repository"),
+      showGitIgnoredFiles: false,
+    });
+    const controller = new FilesTreeVisibilityController(context);
+    await controller.list(ROOT);
+    expect(controller.isPathVisible(ROOT, "dist")).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(GIT_IGNORED_PROBE_FAILURE_TTL_MS);
+    expect(controller.isPathVisible(ROOT, "dist")).toBe(true);
+
+    listIgnored.mockResolvedValue(["dist/"]);
+    await expect(controller.refreshGitIgnored(ROOT)).resolves.toMatchObject({
+      changed: true,
+      entries: ["dist/"],
+    });
   });
 });

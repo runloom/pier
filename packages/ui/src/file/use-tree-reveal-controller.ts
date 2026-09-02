@@ -14,17 +14,14 @@ import {
   shouldClearRevealUserAbort,
   shouldHonorUserScrollAbort,
 } from "./tree-reveal-policy.ts";
-import {
-  POST_SUCCESS_IDLE_RELEASE_MS,
-  POST_SUCCESS_MAX_HOLD_MS,
-  REVEAL_RETRY_DELAYS_MS,
-} from "./tree-reveal-timing.ts";
+import { REVEAL_RETRY_DELAYS_MS } from "./tree-reveal-timing.ts";
 import type {
   PierDirectoryLoadState,
   PierFileTreeAutoRevealMode,
   PierFileTreeRevealOptions,
 } from "./tree-types.ts";
 import { useTreeActiveFileReveal } from "./use-tree-active-file-reveal.ts";
+import { useTreeRevealTimers } from "./use-tree-reveal-timers.ts";
 
 type FileTreeModel = ReturnType<typeof useFileTree>["model"];
 
@@ -117,44 +114,13 @@ export function useFileTreeRevealController(options: {
    */
   const userAbortedScrollRef = React.useRef(false);
 
-  const releaseIdleTimerRef = React.useRef<number | null>(null);
-  const releaseHardTimerRef = React.useRef<number | null>(null);
-
-  const clearReleaseTimers = React.useCallback(() => {
-    if (releaseIdleTimerRef.current != null) {
-      window.clearTimeout(releaseIdleTimerRef.current);
-      releaseIdleTimerRef.current = null;
-    }
-    if (releaseHardTimerRef.current != null) {
-      window.clearTimeout(releaseHardTimerRef.current);
-      releaseHardTimerRef.current = null;
-    }
-  }, []);
-
-  const scheduleReleaseAfterIdle = React.useCallback(() => {
-    if (releaseIdleTimerRef.current != null) {
-      window.clearTimeout(releaseIdleTimerRef.current);
-    }
-    releaseIdleTimerRef.current = window.setTimeout(() => {
-      releaseIdleTimerRef.current = null;
-      if (pendingRevealRef.current === null) {
-        clearReleaseTimers();
-        releaseProgrammaticScroll();
-      }
-    }, POST_SUCCESS_IDLE_RELEASE_MS);
-  }, [clearReleaseTimers, releaseProgrammaticScroll]);
-
-  const armPostSuccessScrollHold = React.useCallback(() => {
-    clearReleaseTimers();
-    scheduleReleaseAfterIdle();
-    releaseHardTimerRef.current = window.setTimeout(() => {
-      releaseHardTimerRef.current = null;
-      if (pendingRevealRef.current === null) {
-        clearReleaseTimers();
-        releaseProgrammaticScroll();
-      }
-    }, POST_SUCCESS_MAX_HOLD_MS);
-  }, [clearReleaseTimers, releaseProgrammaticScroll, scheduleReleaseAfterIdle]);
+  const {
+    armPostSuccessScrollHold,
+    clearReleaseTimers,
+    clearRevealRetryTimers,
+    scheduleReleaseAfterIdle,
+    scheduleRevealRetry,
+  } = useTreeRevealTimers({ pendingRevealRef, releaseProgrammaticScroll });
 
   const seedRevealExpansionIntent = React.useCallback(
     (path: string, revealOptions?: PierFileTreeRevealOptions) => {
@@ -385,8 +351,9 @@ export function useFileTreeRevealController(options: {
       loadRevealAncestors(path);
       revealRetryGenerationRef.current += 1;
       const generation = revealRetryGenerationRef.current;
+      clearRevealRetryTimers();
       for (const delayMs of REVEAL_RETRY_DELAYS_MS) {
-        window.setTimeout(() => {
+        scheduleRevealRetry(delayMs, () => {
           if (generation !== revealRetryGenerationRef.current) {
             return;
           }
@@ -409,19 +376,21 @@ export function useFileTreeRevealController(options: {
             clearReleaseTimers();
             releaseProgrammaticScroll();
           }
-        }, delayMs);
+        });
       }
       return false;
     },
     [
       autoReveal,
       clearReleaseTimers,
+      clearRevealRetryTimers,
       holdProgrammaticScroll,
       isAutoRevealExcluded,
       loadRevealAncestors,
       markRevealSuccess,
       releaseProgrammaticScroll,
       runReveal,
+      scheduleRevealRetry,
       seedRevealExpansionIntent,
     ]
   );
