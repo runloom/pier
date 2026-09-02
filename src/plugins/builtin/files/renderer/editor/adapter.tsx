@@ -184,6 +184,7 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         contentAnchorRequestId={props.markdownContentAnchorRequestId}
         copyAnchor={props.markdownCopyAnchor}
         copyCode={props.markdownCopyCode}
+        diskRevision={document?.revision ?? undefined}
         errorLabel={props.markdownErrorLabel}
         fileResources={props.markdownFileResources}
         initialAnchor={props.markdownInitialAnchor}
@@ -199,6 +200,7 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         onToggleWordWrap={onToggleWordWrap}
         openExternal={props.openExternal}
         openInternal={props.onOpenMarkdownInternal}
+        panelContext={props.panelContext}
         panelId={props.panelId}
         registerSelectionSelectAllProvider={
           props.registerSelectionSelectAllProvider

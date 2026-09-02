@@ -270,7 +270,10 @@ function LazyMarkdownPage({
   );
   return (
     <section
+      data-markdown-page-rendered={shouldRender ? "true" : "false"}
       data-slot="markdown-page"
+      data-source-end-line={page.range.endLine}
+      data-source-line={page.range.startLine}
       id={page.id}
       ref={rootRef}
       style={shouldRender ? undefined : { minHeight: estimatedHeight }}

@@ -19,6 +19,8 @@ import {
   useMarkdownPreviewCommentsLayer,
 } from "./comments/preview-layer.tsx";
 import { captureMarkdownPreviewAnchor } from "./cross-mode-anchor.ts";
+import { MARKDOWN_GIT_BAR_SLOT_PX } from "./git-bars/layout.ts";
+import { MarkdownPreviewGitBars } from "./git-bars/rail.tsx";
 import { MarkdownIrRenderer } from "./ir-renderer.tsx";
 import {
   MarkdownPreviewArticleLayout,
@@ -79,6 +81,7 @@ export function MarkdownPreview({
   contentAnchorRequestId,
   copyAnchor,
   copyCode,
+  diskRevision,
   onToggleWordWrap,
   onToggleTask,
   errorLabel = "Unable to render Markdown preview.",
@@ -91,6 +94,7 @@ export function MarkdownPreview({
   onJumpToSource,
   openExternal,
   openInternal,
+  panelContext,
   panelId,
   relativeCommentPath,
   registerSelectionSelectAllProvider,
@@ -380,14 +384,17 @@ export function MarkdownPreview({
       >
         <div
           className={cn(
-            "min-h-0 flex-1 overflow-auto outline-none",
+            "relative min-h-0 flex-1 overflow-auto outline-none",
             commentNavigator ? COMMENT_NAVIGATOR_SCROLL_PAD_CLASS : "pb-6"
           )}
           data-scrollbar="stable"
           data-slot="markdown-preview"
           ref={scrollRootRef}
           style={{
-            paddingLeft: MARKDOWN_PREVIEW_SCROLL_PAD_LEFT_PX,
+            paddingLeft:
+              source?.kind === "disk"
+                ? MARKDOWN_PREVIEW_SCROLL_PAD_LEFT_PX + MARKDOWN_GIT_BAR_SLOT_PX
+                : MARKDOWN_PREVIEW_SCROLL_PAD_LEFT_PX,
             // Keep wide (and narrow comfortable) prose clear of the right tick rail.
             paddingRight: hasOutline
               ? MARKDOWN_TOC_CONTENT_INSET_PX
@@ -452,6 +459,14 @@ export function MarkdownPreview({
               </div>
             </MarkdownPreviewArticleLayout>
           ) : null}
+          <MarkdownPreviewGitBars
+            context={commentsContext}
+            diskRevision={diskRevision}
+            panelContext={panelContext}
+            ready={state.status === "ready"}
+            scrollRoot={scrollRoot}
+            source={source}
+          />
         </div>
         {outlineToc ? (
           <MarkdownPreviewOverlayRail

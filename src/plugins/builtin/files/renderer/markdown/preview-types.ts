@@ -2,6 +2,7 @@
  * Markdown preview public props + internal ready/loading state types.
  */
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import type { MarkdownCodeHighlighter } from "./code-highlighter.ts";
 import type { MarkdownPreviewCommentLabels } from "./comments/preview-layer.tsx";
@@ -38,6 +39,8 @@ export interface MarkdownPreviewProps {
   /** Heading anchor copy channel; host owns clipboard + toast/alert feedback. */
   copyAnchor?: ((anchor: string) => Promise<void>) | undefined;
   copyCode?: ((code: string) => Promise<void>) | undefined;
+  /** Files document disk revision; git bars refetch on save. */
+  diskRevision?: string | null | undefined;
   errorLabel?: string | undefined;
   fileResources?: MarkdownFileResources | undefined;
   initialAnchor?: string | undefined;
@@ -53,6 +56,7 @@ export interface MarkdownPreviewProps {
   onToggleWordWrap?: (() => void) | undefined;
   openExternal: (url: string) => void;
   openInternal?: ((target: MarkdownInternalTarget) => void) | undefined;
+  panelContext?: PanelContext | undefined;
   /** Dockview panel instance id — used for select-all provider scope. */
   panelId?: string | undefined;
   registerSelectionSelectAllProvider?:
