@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.1.36] - 2026-09-02
+
 ### Added
 
 - **任务跟踪面板。** 官方插件把 GitHub、Linear、Jira 的事项放到项目面板和画布上。Linear / Jira 按工作流分列并可记住拖放顺序；GitHub 仍按指派归列。
