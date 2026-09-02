@@ -807,3 +807,66 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     await waitFor(() => expect(context.git.getStatus).toHaveBeenCalledTimes(2));
   });
 });
+
+describe("git status item visibility — git identity", () => {
+  afterEach(() => {
+    cleanup();
+    resetGitStatusSessionsForTests();
+  });
+
+  function visibilityOf(
+    itemId: string,
+    context: PanelContext | undefined
+  ): boolean {
+    const { context: pluginContext, registered } = makeContext(true);
+    registerGitStatusItem(pluginContext);
+    const item = registered().find((entry) => entry.id === itemId);
+    if (!item) {
+      throw new Error(`expected ${itemId}`);
+    }
+    return (
+      item.isVisible?.({
+        context,
+        cwd: "/repo",
+        getGroupId: () => null,
+        panelId: "panel-1",
+        title: null,
+      }) ?? true
+    );
+  }
+
+  it("cwd-only context hides git chips", () => {
+    expect(
+      visibilityOf("pier.worktree.status", {
+        contextId: "ctx-home",
+        cwd: "/Users/dev",
+        projectRootPath: "/Users/dev",
+        updatedAt: 1,
+      })
+    ).toBe(false);
+  });
+
+  it("gitRoot alone is enough for the branch chip", () => {
+    expect(
+      visibilityOf("pier.worktree.status", {
+        contextId: "ctx-git",
+        cwd: "/repo",
+        gitRoot: "/repo",
+        projectRootPath: "/repo",
+        updatedAt: 1,
+      })
+    ).toBe(true);
+  });
+
+  it("worktreeRoot alone does not show the branch chip", () => {
+    expect(
+      visibilityOf("pier.worktree.status", {
+        contextId: "ctx-legacy",
+        cwd: "/repo",
+        projectRootPath: "/repo",
+        updatedAt: 1,
+        worktreeRoot: "/repo",
+      })
+    ).toBe(false);
+  });
+});

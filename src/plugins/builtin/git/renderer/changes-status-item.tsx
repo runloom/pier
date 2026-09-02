@@ -9,6 +9,7 @@ import {
 } from "./changes-status-button.tsx";
 import { openGitChangesPanel } from "./review/open.ts";
 import {
+  gitIdentityRoot,
   SHOW_CHANGES_STATUS_KEY,
   useBooleanSetting,
 } from "./status-item-shared.ts";
@@ -22,13 +23,13 @@ export function GitChangesStatusItem({
   pluginContext: RendererPluginContext;
 }): React.ReactElement | null {
   const panelContext = context;
-  const worktreePath = panelContext?.worktreeRoot ?? panelContext?.gitRoot;
-  const statusState = useGitStatus(pluginContext, panelContext?.gitRoot);
+  const gitRoot = gitIdentityRoot(panelContext);
+  const statusState = useGitStatus(pluginContext, gitRoot);
   const showChangesStatus = useBooleanSetting(
     pluginContext,
     SHOW_CHANGES_STATUS_KEY
   );
-  if (!(showChangesStatus && panelContext && worktreePath)) {
+  if (!(showChangesStatus && panelContext && gitRoot)) {
     return null;
   }
   if (statusState.kind !== "loaded") {

@@ -128,7 +128,9 @@ export function deriveStatusFlags(
     hasSync: ahead > 0 || behind > 0,
     hasWorkingChanges: totalChanges > 0,
     isDistinctWorktree: Boolean(
-      context?.worktreeRoot && context.worktreeRoot !== context.gitRoot
+      context?.gitRoot &&
+        context.worktreeRoot &&
+        context.worktreeRoot !== context.gitRoot
     ),
     repoState,
   };
@@ -155,15 +157,18 @@ export function deriveBranchIconKind(
   return "clean";
 }
 
+/** git 状态栏身份路径：只认 `gitRoot`。`worktreeRoot` 只驱动独立工作树徽章。 */
+export function gitIdentityRoot(
+  panelContext: RendererTerminalStatusItemContext["context"]
+): string | null {
+  const root = panelContext?.gitRoot;
+  return root && root.length > 0 ? root : null;
+}
+
 export function isGitStatusBarVisible(
   panelContext: RendererTerminalStatusItemContext["context"]
 ): boolean {
-  return Boolean(
-    panelContext?.worktreeRoot ??
-      (panelContext?.worktreeSupported === false
-        ? undefined
-        : panelContext?.gitRoot)
-  );
+  return gitIdentityRoot(panelContext) != null;
 }
 
 export function isStatusItemSettingEnabled(
