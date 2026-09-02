@@ -64,27 +64,27 @@ function sameReviewSource(
 }
 
 /**
- * 宿主从评论状态栏打开 git changes 面板（core 打开插件 panel 范式，
+ * 宿主打开 git changes 面板的通用入口（core 打开插件 panel 范式，
  * 仿 openFilesDiskPath：检查注册 → 复用已存在同 source 实例 → openPluginPanelInstance）。
+ * 消费方：评论状态栏 / gutter reveal / 移动端 git.openReviewPanel 命令。
  *
- * - git 插件未注册时返回 false（静默 no-op，状态栏点击无反应）。
+ * - git 插件未注册时 ok:false（调用方决定反馈；状态栏静默 no-op）。
  * - 已打开同 source（contextId + gitRootPath + target）时复用实例并激活。
- * - v1 不滚动到具体评论：reveal comment 经事件总线留阶段 F 实现。
  */
-export function openGitChangesForComments(input: {
+export function openGitChangesPanelHost(input: {
   context: PanelContext;
   getGroupId?: (() => string | null) | null;
   pendingReveal?: CommentRevealTarget | null;
-}): boolean {
+}): { ok: boolean; panelId: string | null } {
   if (!getPluginPanelRegistrations().has(GIT_CHANGES_PANEL_COMPONENT_ID)) {
-    return false;
+    return { ok: false, panelId: null };
   }
   const gitRootPath =
     input.context.gitRoot ??
     input.context.worktreeRoot ??
     input.context.projectRootPath;
   if (!gitRootPath) {
-    return false;
+    return { ok: false, panelId: null };
   }
   const source: GitReviewScope = {
     contextId: input.context.contextId,
@@ -119,5 +119,15 @@ export function openGitChangesForComments(input: {
     },
     ...(groupId ? { targetGroupId: groupId } : {}),
   });
-  return result.kind === "opened";
+  const ok = result.kind === "opened";
+  return { ok, panelId: ok ? instanceId : null };
+}
+
+/** 评论/审阅 reveal 的既有布尔门面（v1 不滚动到具体评论：留阶段 F）。 */
+export function openGitChangesForComments(input: {
+  context: PanelContext;
+  getGroupId?: (() => string | null) | null;
+  pendingReveal?: CommentRevealTarget | null;
+}): boolean {
+  return openGitChangesPanelHost(input).ok;
 }

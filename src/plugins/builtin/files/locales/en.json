@@ -18,6 +18,18 @@
     "pier.files.editor.showHover": {
       "title": "Show Symbol Information"
     },
+    "pier.files.editor.selectNextOccurrence": {
+      "title": "Select Next Occurrence"
+    },
+    "pier.files.editor.selectAllOccurrences": {
+      "title": "Select All Occurrences"
+    },
+    "pier.files.editor.addCursorAbove": {
+      "title": "Add Cursor Above"
+    },
+    "pier.files.editor.addCursorBelow": {
+      "title": "Add Cursor Below"
+    },
     "pier.files.revealActiveFileInTree": {
       "title": "Reveal Active File in File Tree"
     }
@@ -63,15 +75,29 @@
     "filePanel.markdown.openFullscreen": "View fullscreen",
     "filePanel.markdown.incompleteTask": "Incomplete task",
     "filePanel.markdown.renderFailed": "Unable to render Markdown preview.",
-    "filePanel.markdown.resizeColumn": "Drag to adjust column display width. Double-click to reset.",
+    "filePanel.markdown.columnWidthAuto": "Automatic width",
+    "filePanel.markdown.jumpToSource": "Jump to source",
+    "filePanel.markdown.resizeColumn": "Drag to adjust column display width. Double-click to restore automatic sizing for the whole table.",
+    "filePanel.markdown.appletDisabledTitle": "Applets are off for this document",
+    "filePanel.markdown.appletDisabledBody": "Add <!-- pier-applets: enable --> near the top to mount this applet.",
+    "filePanel.markdown.appletParseFailedTitle": "Couldn’t read this applet fence",
+    "filePanel.markdown.appletParseFailedBody": "Use JSON with pluginId, appletId, and optional props.",
+    "filePanel.markdown.appletMountFailedTitle": "Couldn’t mount the applet",
+    "filePanel.markdown.appletMountFailedBody": "Retry. If it still fails, check that the plugin is installed.",
     "filePanel.markdown.toc.title": "Outline",
+    "filePanel.markdown.gitBars.track": "Uncommitted changes",
+    "filePanel.markdown.gitBars.added": "Review added change at line {{line}}",
+    "filePanel.markdown.gitBars.modified": "Review edited change at line {{line}}",
+    "filePanel.markdown.gitBars.deleted": "Review deleted change at line {{line}}",
     "filePanel.markdown.measure.comfortable": "Comfortable reading",
     "filePanel.markdown.measure.wide": "Wide reading",
     "filePanel.markdown.appearance.auto": "Match app appearance",
     "filePanel.markdown.appearance.light": "Light reading",
     "filePanel.markdown.appearance.dark": "Dark reading",
     "filePanel.markdown.contextMenuFailed": "Unable to open preview menu",
+    "filePanel.markdown.zoom.controlsLabel": "Text size",
     "filePanel.markdown.zoom.in": "Increase text size",
+    "filePanel.markdown.zoom.level": "Text size",
     "filePanel.markdown.zoom.out": "Decrease text size",
     "filePanel.markdown.zoom.reset": "Reset text size",
     "filePanel.editor.sourceLabel": "Source editor",
@@ -185,7 +211,7 @@
     "filePanel.languageService.nextStep.waitOrRestart": "Wait for the retry, or restart Pier if it keeps failing.",
     "filePanel.languageService.nextStep.focusEditor": "Click in the editor to resume language features.",
     "filePanel.languageService.nextStep.installThenRestart": "Run the install command below in a terminal, then restart Pier.",
-    "filePanel.languageService.nextStep.installOfficialTools": "Install the language server for this file type on your PATH (see Settings → Files → Local tools), then restart Pier.",
+    "filePanel.languageService.nextStep.installOfficialTools": "Install the language server for this file type (see Settings → Files → Language servers on this computer), then restart Pier.",
     "filePanel.languageService.nextStep.adjustLimit": "Close another project tab, or raise the language service limit under Settings → Files.",
     "filePanel.languageService.nextStep.reinstallOrRestart": "Restart Pier. If it keeps failing, reinstall the language server.",
     "filePanel.languageService.nextStep.restartApp": "Restart Pier, then open the file again.",
@@ -320,6 +346,7 @@
     "filePanel.tree.deleteFailed": "Unable to delete",
     "filePanel.tree.copyFailed": "Copy failed",
     "filePanel.tree.pathCopied": "Path copied",
+    "filePanel.tree.noPathToCopy": "Open or select a file first.",
     "filePanel.tree.delete.title": "Delete",
     "filePanel.tree.delete.body": "Delete {{name}}? You can restore it from Trash.",
     "filePanel.tree.delete.confirmLabel": "Delete",
@@ -395,6 +422,10 @@
     "filePanel.editor.action.copy": "Copy",
     "filePanel.editor.action.paste": "Paste",
     "filePanel.editor.action.selectAll": "Select All",
+    "filePanel.editor.action.selectNextOccurrence": "Select Next Occurrence",
+    "filePanel.editor.action.selectAllOccurrences": "Select All Occurrences",
+    "filePanel.editor.action.addCursorAbove": "Add Cursor Above",
+    "filePanel.editor.action.addCursorBelow": "Add Cursor Below",
     "filePanel.editor.action.wordWrap.on": "Word Wrap: On",
     "filePanel.editor.action.wordWrap.off": "Word Wrap: Off",
     "filePanel.editor.clipboardFailed": "Couldn't use clipboard",
@@ -478,6 +509,7 @@
     "filePanel.contentSearch.action.open": "Open",
     "filePanel.contentSearch.action.copyMatch": "Copy Match Line",
     "filePanel.contentSearch.matchCopied": "Match line copied",
+    "filePanel.contentSearch.noHitToCopy": "Select a search result first.",
     "filePanel.contentSearch.contextMenuFailed": "Unable to open menu",
     "filePanel.commentNav.toolbar": "Comments",
     "filePanel.commentNav.position": "Comment {{current}} of {{total}}",

@@ -64,7 +64,11 @@ function toMenuItem(
   // action
   return {
     label: item.label,
-    ...(item.accelerator !== undefined && { accelerator: item.accelerator }),
+    ...(item.accelerator !== undefined && {
+      accelerator: item.accelerator,
+      // 弹出菜单只展示和弦。默认 registerAccelerator 会在 Win/Linux 抢走原生剪贴板。
+      registerAccelerator: false,
+    }),
     enabled: item.enabled ?? true,
     click: (_menuItem: MenuItem) => {
       // 先写系统剪贴板，再回传 actionId。原生菜单 click 时 renderer 选区常已空。

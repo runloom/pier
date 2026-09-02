@@ -6,6 +6,18 @@
 >
 > 前置文档：[2026-06-24 控制平面架构](../../archive/superpowers/specs/2026-06-24-remote-control-mcp-architecture-design.md)、[2026-07-15 agent 运行索引与 attention 设计](2026-07-15-agent-runtime-index-and-attention-design.md)
 >
+> 第十六次修订摘要（2026-09-01）：
+> ⑱ **锁死监督上限，手机不映射面板布局**——桌面审查/文件继续是可停靠面板（多屏监督，含竖屏专看 diff）。手机不把 dockview 实例目录当工作台：H2 主列表是终端族；变更按 git 根给只读快捷入口；文件只从会话工作树进子页。S2 只读 git API，**默认不** `git.openReviewPanel` 抢电脑焦点。不做手机新建终端 / 智能体 / 工作树；未声明投影的插件面板不进手机。空态去电脑上开会话，不加号。视觉：[2026-09-01 移动端 Web 壳视觉与触控语言](2026-09-01-mobile-web-visual-language.md)。
+>
+> 第十五次修订摘要（2026-08-31）：
+> ⑰ **M2 收尾冻结传输模型**——Web 壳生产路径一律经官方会合盲转发密文字节（Happy / VS Code Tunnels / Nabu Casa 一家），不改为「会合云只存地址再直连」。仍指导实现的段落去掉「Pier 默认会合 + 账号」；身份在配对令牌。收尾计划：[M2 闭环收尾](../plans/2026-08-31-mobile-companion-m2-closeout.md)。
+>
+> 第十四次修订摘要（2026-08-31）：
+> ⑯ **桌面一切皆面板；手机工作台不是面板实例目录**——桌面审查/文件保持可停靠面板。H2 列终端族（智能体为叠加层），不是把每块打开的 Files/审查面板投影成一行。S1 普通终端只读读屏；S2/S3 作用域是会话工作树；N1 收件箱点击落会话。§4 增补手机终端产品对标。T2（字节流 + 真终端模拟器）从「M3 增强」提为 **M3 必达**（品类呈现底线；仍不挡核心六条，T1 仍是闭环可用档）。第十六次把这条收口为「不映射布局」。
+>
+> 第十三次修订摘要（2026-08-31）：
+> ⑮ **会合去账号**——M2 会合云不引入用户账号：宿主以身份密钥自证明（hostId = 公钥指纹、挑战签名，无法抢注），设备以宿主担保的通行证准入（relayPass，由设备令牌派生，relay 只见哈希名册）；「官方会合 + 账号」修订为「官方会合（无账号）」，relay 零持久化。账号保留为未来可选叠加层（配额/商业化需要时 additive 引入；`PierAccountRef` / `PierHostRegistration` 转为保留位）。服务端权威设计：[2026-08-31 会合云服务端设计](2026-08-31-mobile-relay-server-design.md)。
+>
 > 第十二次修订摘要：
 > ⑭ **产品词**——产品面统一为「Pier 移动端」，与本文标题一致；不再把客户端角色词写进产品名。
 >
@@ -35,7 +47,7 @@
 > ⑤ **三壳共用协议**——移动端终态是 Web、原生 App、小程序都要能连同一宿主。`mobile-paired` 仍是唯一 client-kind；壳是设备元数据。首壳是 Web，但帧协议 / 信息架构 / T1 终端不得绑死浏览器 API。见 §11.3、D3。
 >
 > 第二次修订摘要（全部经代码库与业界专项核实）：
-> ① **终端投影分级**——初版把「终端 scrollback 投影」写成 M1 能力，核实后宿主唯一读口是 native `readViewportText`（viewport 纯文本，无 scrollback、无色彩、无输出流回调），scrollback 承诺当前无数据来源；业界金标准（Orca 移动端 + VibeTunnel 双样板）是「序列化水合 + 字节流增量 + 客户端真终端模拟器」。现改为 T1 快照档（同网切片即可）→ T2 金标准档（增强，现为 M3，需 native 输出订阅链路），见 §10.1。
+> ① **终端投影分级**——初版把「终端 scrollback 投影」写成 M1 能力，核实后宿主唯一读口是 native `readViewportText`（viewport 纯文本，无 scrollback、无色彩、无输出流回调），scrollback 承诺当前无数据来源；业界金标准（Orca 移动端 + VibeTunnel 双样板）是「序列化水合 + 字节流增量 + 客户端真终端模拟器」。现改为 T1 快照档（同网切片即可）→ T2 金标准档（**M3 必达**，需 native 输出订阅链路），见 §10.1。
 >
 > ② **推送主路径改为标准 Web Push（VAPID）**——自托管 ntfy 在 iOS 上必须经 ntfy.sh 官方 upstream + FCM/APNs 且手机需回连自托管服务器，「自托管 = 自主」叙事在 iOS 不成立；而 iOS 16.4+ 主屏 PWA 已支持标准 Web Push（无需开发者账号/证书），Safari 18.4+ Declarative Web Push 进一步免除 service worker 唤醒。第十次起 Web 壳叫醒并入核心交付（M2），不再单独排成「推送里程碑」。见 §12。
 >
@@ -82,7 +94,7 @@ AI 编码把开发者从「写代码的人」变成「监督智能体的人」�
 
 | # | 环节 | 使用者感知 | 不完整会长什么样 |
 |---|---|---|---|
-| 1 | 配对一次 | 桌面出码，扫一次，绑账号，换长期令牌 | 每次打开都扫码 |
+| 1 | 配对一次 | 桌面出码，扫一次，换长期令牌 | 每次打开都扫码 |
 | 2 | 打开见主机 | 根面是已配对宿主；同网直连、远程经官方会合，路径对用户无感 | 需填写主机地址或自建中继，跨网即离线 |
 | 3 | 投影会话 | 进当前主机 → 看终端、看变更、看只读文件 | 只有列表没有内容，或把聊天当主视图 |
 | 4 | 就地闭环 | 卡在「需要你处理」时，在移动端上批准/回复 | 只能回到桌面操作 |
@@ -91,7 +103,7 @@ AI 编码把开发者从「写代码的人」变成「监督智能体的人」�
 
 增强（可后补，**不挡**上面六条对外交付）：
 
-- T2 金标准终端（色彩、主屏历史、live 字节流）
+- T2 金标准终端（色彩、主屏历史、live 字节流）——**M3 必达**（手机终端品类呈现底线；见 §4.9），不挡核心六条
 - 原生 App 锁屏直答 / Live Activity
 - 小程序壳
 - 远程自由键入（D2，默认关）
@@ -105,10 +117,10 @@ AI 编码把开发者从「写代码的人」变成「监督智能体的人」�
 目标：
 
 - G1 **闭环六条齐才交付**：配对一次 → 打开见主机 → 投影会话 → 就地审批 → 远程会合 → 离开能叫醒。缺一不算。
-- G2 查看**当前主机**的会话终端投影、git diff、只读文件——全部为该机状态投影。没有当前主机时不展示会话面。终端必达档为当前屏幕（T1）；金标准 live 终端（T2）是增强。
+- G2 查看**当前主机上已经在跑的监督面**：会话终端投影、该会话工作树上的只读 git diff、只读文件。没有当前主机时不展示会话面。终端闭环档为当前屏幕（T1）；金标准 live 终端（T2）为 **M3 必达**，不挡核心六条。不是「桌面打开了哪些面板就列哪些」。
 - G3 复用既有控制平面，零业务规则进入适配器。
 - G4 配对授权：扫码配对、按设备吊销即断开已连会话、能力可裁剪。
-- G5 **远程默认官方会合云**：跨网宿主只出站，移动端只连 Pier，用户不填主机地址；换网 / 换地址无感。同网仍直连宿主本网接口。
+- G5 **远程默认官方会合云（无账号）**：跨网宿主只出站；**生产 Web 壳只连 Pier 会合**（HTTPS origin 不得 `ws://` 直连家里 IP）。用户不填主机地址、不注册。换网 / 换地址无感。LAN 监听保留给 dev 切片与未来原生壳。
 - G6 **一协议、三壳**：Web、原生 App、小程序共用同一帧协议、同一信息架构、同一 `mobile-paired` 授权。壳是增强与覆盖，不把核心闭环拆成三套业务。
 
 非目标（v1）：
@@ -123,6 +135,10 @@ AI 编码把开发者从「写代码的人」变成「监督智能体的人」�
 - 不平行维护第二套终端历史：T2 水合必须读 Ghostty 已有主屏 scrollback，禁止磁盘 transcript、禁止与桌面脱节的第二份 ring（对齐 `0108-live-scrollback-limit`）。
 - 不做可写文件管理：文件面只读浏览当前工作树（`file.list` / `file.readText`），不授 `file.write` / `git:write`。
 - 不把活动总览当成根面：没有当前主机就没有会话事实源。
+- **桌面审查 / 文件继续是可停靠面板**（多屏监督，含竖屏专看 diff）。手机不复制这套布局，也不把 dockview 实例当工作台目录。
+- **不做手机新建**：新建终端、新建智能体、新建工作树。空态说明去电脑上开会话，不提供加号。派活是另一条产品（Happy），不是本遥控器的核心。
+- **打开手机 diff 默认不改桌面布局**：不调用 `git.openReviewPanel` 去电脑上 show-or-focus。手机自己读 git / 文件命令。「在电脑上打开」若以后要做，必须是显式动作。
+- **不自动投影插件面板**：没有「可投影」声明的 Canvas / 设置 / 图表等桌面面板，手机上看不见。不能「桌面有什么面板手机就有什么」。
 
 ---
 
@@ -211,9 +227,24 @@ Rust 常驻服务器：「终端活在 herdr 里」，pane 标 working/blocked/i
 
 1. 出门完整 = **产品提供会合点**。四家都是用户已经登录的那朵云；感知是「打开 App」，不是「部署服务器 / 填写主机地址」。
 2. 「知道电脑地址再直连」是 DIY，**不能当默认**。Codex GA 还从「直连本机 WebSocket」改回了官方 relay。
-3. **Pier 从未禁止官方云。** 先前写进 G5/非目标是本文件误加。默认对齐 Codex：官方会合 + 账号；宿主出站，移动端连 Pier。
+3. **Pier 从未禁止官方云。** 先前写进 G5/非目标是本文件误加。默认对齐 Codex 的「官方会合、用户不填 IP」；Pier 会合**无账号**，身份在配对令牌。宿主出站，移动端连 Pier。
 4. 仍不做的是 **云沙箱执行**（Cursor Cloud Agents / Codex cloud 那种把仓库搬进厂商 VM）。会合云只接移动端与已配对桌面宿主，事实源仍是桌面宿主。
 5. Tailscale / 自建网关留给要完全自管的人，作逃生舱，不挡主路径。
+
+#### 4.9 手机终端产品对标（2026-08-31）
+
+调研范围：Moshi、Termius、Blink、Shellow、VibeTunnel、ttyd、sshx、termaway，并对照 Orca / Codex / Cursor 移动端的会话与变更面。
+
+六条共性（修订结论）：
+
+1. **列表粒度 = 全部会话。** 产品首页列的是这台机器上的终端/会话，不是「智能体」表。tmux/mosh/PTY 会话、普通 shell、agent 占用的 pane 出现在同一份列表里。
+2. **智能体是叠加层。** 状态点、需要你处理、审批条叠在会话上；agent 不是列表的唯一身份。只投影 agents 表等于把工作台收成智能体监视器。桌面「一切皆面板」指审查/文件可拆成面板；手机工作台仍以终端族为主，不把每块打开的面板实例列成一行。
+3. **真终端渲染是品类底线。** Moshi（Ghostty GPU）、Blink / Termius / Shellow（VT）、VibeTunnel / ttyd / sshx / termaway（xterm.js 或等价）都在客户端跑模拟器。纯文本快照轮询只出现在 bot 逃生舱，不能当正式终端视图。这是把 T2 提为 **M3 必达** 的依据——T1 仍够核心六条监督闭环，但 M3 必须交字节流 + 真 VT，否则不进入「手机终端」品类。
+4. **变更是两级结构，且作用域是会话。** Moshi 从终端头部进 working-tree diff；Codex / Cursor 按 agent 线程；Orca 按 worktree。没有「全仓浏览器优先」。形态 = 文件列表（状态字母 + 增删）→ 点开单文件 unified diff（懒加载）。只读是主流。
+5. **终端 / 变更 / 文件共用会话身份。** 从某条会话进去的 diff 与文件树，根就是那条会话的 cwd / 工作树，不是主机上的「第一个仓库」。
+6. **输入与锁屏是后排。** 扩展键行、手势、语音、Live Activity / Watch 属于原生壳或 P1 工效；PWA 硬天花板内不做锁屏直答。
+
+对 Pier H2 / S1 / S2 的含义：工作台主列表是终端族（可附带按 git 根的只读变更快捷入口，不是审查面板实例、不是打开中的文档面板）；S1 必须收普通终端；S2/S3 必须带会话 cwd；T2 排入 M3 必达而不是可选项。
 
 ### 5 业界共识模式
 
@@ -222,7 +253,7 @@ Rust 常驻服务器：「终端活在 herdr 里」，pane 标 working/blocked/i
 1. 桌面宿主是唯一事实源；手机是 read-mostly 遥控器（状态投影）。
 2. 手机动作经统一授权入口写回，不复制业务逻辑（控制平权）。
 3. 配对 = 一次性码换长期设备令牌；支持按设备吊销。
-4. **出门完整 = 账号云会合点**（Codex / Claude / Cursor / Copilot / Orca Relay / Happy）：电脑只出站，手机只连厂商已有入口，用户不填家里 IP。开源/自托管产品才把路径交给用户（Tailscale、CF Tunnel、自建网关、纯 LAN）。
+4. **出门完整 = 官方会合点**（Codex / Claude / Cursor / Copilot / Orca Relay / Happy 用账号云；Pier 用无账号官方会合，身份在配对令牌）：电脑只出站，手机只连产品已有入口，用户不填家里 IP。开源/自托管产品才把路径交给用户（Tailscale、CF Tunnel、自建网关、纯 LAN）。
 5. 协议版本化 + 能力广告 + 双侧过旧阻断（Orca/mobile-relay 都这么做）。
 6. 心跳机制区分「真的在干活」和「状态没刷新」。
 7. 推送语义镜像桌面通知，而不是另一套逻辑（blocked/finished/question 三类）。
@@ -275,7 +306,7 @@ graph TB
         NCS --> PA["remotePush 适配器<br/>按壳分叉"]
     end
     subgraph Cloud["Pier 官方会合云 · 核心交付"]
-        RELAY["会合：账号 + 设备配对 + 出站拨号"]
+        RELAY["会合：出站拨号 + 盲转发（无账号）"]
     end
     subgraph Shells["移动端壳 · 同一 mobile-paired"]
         W["Web / PWA · 首壳"]
@@ -285,15 +316,15 @@ graph TB
     W <-->|"同网直连 · 扫码+令牌"| RC
     A <-->|"同网直连"| RC
     RC -->|"出站登记"| RELAY
-    W <-->|"远程 · 账号会话"| RELAY
-    A <-->|"远程 · 账号会话"| RELAY
+    W <-->|"远程 · 设备通行证"| RELAY
+    A <-->|"远程 · 设备通行证"| RELAY
     MP <-->|"远程 · 须 HTTPS"| RELAY
     PA -.->|"Web Push"| W
     PA -.->|"APNs/FCM"| A
     PA -.->|"订阅消息"| MP
 ```
 
-原则继承 2026-06-24 设计：业务能力收敛在本地控制核心，网络适配器只做协议转换。UDS 的 local-control（CLI/MCP 用）与新的 remote-control 并存，共享 router/bus/快照服务。**三壳都是适配器另一侧的客户端，不是三套业务。** 远程时会合云只做账号与拨号转发，**不成为第二份事实源**——快照、git、终端仍只来自已配对宿主。
+原则继承 2026-06-24 设计：业务能力收敛在本地控制核心，网络适配器只做协议转换。UDS 的 local-control（CLI/MCP 用）与新的 remote-control 并存，共享 router/bus/快照服务。**三壳都是适配器另一侧的客户端，不是三套业务。** 远程时会合云只做出站登记与密文转发，**不成为第二份事实源**——快照、git、终端仍只来自已配对宿主。
 
 现有资产锚点（2026-08-26 逐一核实）：
 
@@ -316,8 +347,8 @@ graph TB
 - ③ ~~活动查询命令~~ 已闭合：`app.snapshot` 即活动投影（见上表）。
 - ④ 审批回写命令 `agent.attention.respond`：main 侧代发应答键序到对应终端。**两档动作 + 双重门**——键级动作（Enter/Esc/y/n/数字直译 `sendKeyPress`/`sendText`，用户看着终端投影按，默认档）与语义动作（`approve`/`reject` → per-agent 键序映射，仅对证据矩阵验证过键序的 agent 开放，未验证的 agent 返回 unsupported、UI 隐藏语义按钮）；防伪造/防过期门 = 执行前校验该 agentRef 当前 status 仍为 `waiting`、且携带的 `interactionId` 与当前未决交互一致，不一致返回 `interaction_stale`（避免回合已推进后键序打进错误上下文——herdr verified approvals 的等价物，按 Pier 的 hook 事实源实现）。**不要求授予 `terminal:control`**（自由键入才需要，见 D2）。
 - ⑤ Web 壳（首壳）+ 协议冻结，使 App / 小程序可后补而不改命令语义。同网切片可只跑 Web；**对外核心仍要会合 + 叫醒**。
-- ⑥ **金标准终端的 native 开口**（T2 增强前置，见 §10.1）：GhosttyBridge 增 ① **从已有主屏 buffer 导出带样式快照**（viewport + 用户配置的 scrollback；cell-grid 或 SGR 重建）② surface 级 **PTY 输出 tap**（默认关闭，按 panel 订阅时开启）。main 侧经 event-bus 发布——遵守 2026-06-24 依赖禁令「remote-control 适配器不直连 native-terminal-host」。**禁止**平行磁盘 transcript / 与 Ghostty 脱节的第二份历史 ring。T2 不挡核心六条。
-- ⑦ **官方会合云 + 账号 + 叫醒**（核心交付）：电脑出站拨号、手机按账号列出已配对主机、帧经会合转发；Web 壳在会合 HTTPS 上接通 Web Push。同网切片不依赖此缺口即可开发 1–4；**缺此缺口不得称核心体验完成**。
+- ⑥ **金标准终端的 native 开口**（T2 / M3 必达前置，见 §10.1）：GhosttyBridge 增 ① **从已有主屏 buffer 导出带样式快照**（viewport + 用户配置的 scrollback；cell-grid 或 SGR 重建）② surface 级 **PTY 输出 tap**（默认关闭，按 panel 订阅时开启）。main 侧经 event-bus 发布——遵守 2026-06-24 依赖禁令「remote-control 适配器不直连 native-terminal-host」。**禁止**平行磁盘 transcript / 与 Ghostty 脱节的第二份历史 ring。T2 不挡核心六条。
+- ⑦ **官方会合云（无账号）+ 叫醒**（核心交付）：电脑出站拨号、手机按本机已配对列表 + 会合在线态列出主机、帧经会合盲转发；Web 壳在会合 HTTPS 上接通 Web Push。同网切片不依赖此缺口即可开发 1–4；**缺此缺口不得称核心体验完成**。
 
 ### 9 传输与配对
 
@@ -332,11 +363,11 @@ graph TB
 配对流程：
 
 1. 桌面生成二维码 `{ pairingCode, fingerprint, relayHint }`；配对码一次性、5 分钟有效。同网时可附 `host, port` 供 M1 直连。
-2. 移动端（任意壳）发送 `PierPairingRequest`：校验 code → 注册客户端（capabilities 取 `requestedCapabilities ∩ 允许上限`，并记录 `shell`）→ 下发长期设备令牌。远程路径同时把该设备绑到 **Pier 账号**（同一账号下的移动端才能看见这台宿主）。
+2. 移动端（任意壳）发送 `PierPairingRequest`：校验 code → 注册客户端（capabilities 取 `requestedCapabilities ∩ 允许上限`，并记录 `shell`）→ 下发长期设备令牌。远程路径由宿主把该设备**担保**进会合名册（在册设备才可经会合接入这台宿主，第十三次修订）。
 3. 后续连接持令牌握手；`hello-auth` 增加 `mobile-paired` principal。同网可直连宿主；远程走会合云，**同一令牌、不重扫码**。
 4. 吊销：桌面设备列表移除 → 令牌哈希作废、`tokenEpoch` 递增、会合云同步作废 → **立即断开**该 `deviceId` 在 LAN listener、会合转发和 T2 订阅上的已认证会话。已连连接的下一命令返回 `device_revoked`，不只是等重连时 hello 失败。`PierRemoteSession` 必须带 `deviceId` + `tokenEpoch`。
-5. **配对与网络路径解耦。** 换网、换地址、从局域网切到远程，不重配对。会合云认的是账号 + 设备身份，不是主机地址。手动填地址 / Tailscale 仅作逃生舱。
-6. **Web 壳 origin 唯一：官方会合 HTTPS（PWA）。** 设备令牌与 Web Push 订阅只存在该 origin。同网直连是该 PWA 打开的帧通道（QR 可附 `host, port`），不是另一个网站。宿主同端口托管 SPA 仅 M1 内部切片，生产路径不得把令牌写入 LAN origin。切片期若曾在 LAN origin 打开，须经账号认证一次性迁移并作废 LAN 凭据。验收：同网配对 → 跨网打开同一 PWA → 收到 Web Push，不再扫码。
+5. **配对与网络路径解耦。** 换网、换地址、从局域网切到远程，不重配对。会合云认的是宿主身份密钥 + 设备通行证，不是主机地址。手动填地址 / Tailscale 仅作逃生舱。
+6. **Web 壳 origin 唯一：官方 HTTPS（PWA）。** 设备令牌与 Web Push 订阅只存在该 origin。**Web 壳连接一律经会合（含同网，第十三次修订随 M2 计划 D-1）**：HTTPS 页面被浏览器混合内容策略禁止发起 `ws://`（全浏览器强制、无 workaround），Chrome 147+/Firefox 154 对私网 `wss://` 另有 Local Network Access 权限提示——LAN 直连留给 dev 切片与原生 App 壳（QR 的 `host, port` 字段为其保留）。宿主同端口托管 SPA 降级为 dev-only 分发，生产路径不得把令牌写入 LAN origin。切片期 LAN origin 的存量令牌在 M2 发布时一次性作废（宿主首次 M2 就绪时删除切片期设备记录——等价吊销，`tokenHash` 随记录消失；仅递增 `tokenEpoch` 只断会话、不作废令牌原文，不足以达成本条），用户在官方 origin 重新配对一次。验收：同网配对 → 跨网打开同一 PWA → 收到 Web Push，不再扫码。
 
 威胁模型：M1 目标环境为可信家庭/办公网段，`ws://` + 每设备令牌并在设置页明示边界。M2 走官方会合的 TLS；应用层是否端到端加密见 D4。不可信网络不再要求用户自备 VPN 才能远程。
 
@@ -352,12 +383,14 @@ graph TB
 #### 9.2 远程访问已配对宿主（M2）——官方会合云
 
 > 第九次整理：本文件一度把「不做官方云」写成硬约束，**产品从未这样说过**。远程默认对齐 Codex：Pier 官方会合 + 账号。地址簿 + 直连、自托管中继都只是中途误设的主路径。
+>
+> 服务端实现设计（数据模型 / 帧协议 / 赎回盲传 / 防重放 / 失效模式 / 威胁模型）单一来源：[2026-08-31 会合云服务端设计](2026-08-31-mobile-relay-server-design.md)。本节只锁产品语义与边界。
 
 **产品模型（锁定）：**
 
-1. 使用者有 Pier 账号。桌面与移动端都登录（或扫码时完成绑定）。
+1. **无需账号**（第十三次修订）。宿主以本机身份密钥向会合云自证明；手机凭配对获得的通行证接入——本地存储即身份。
 2. 远程访问打开后：**跨网路径宿主只出站**连会合云，保持在线。不开放公网入站端口，不公布主机地址。同网直连仍走本网接口上的 HTTP/WS（§9），二者不要写成同一句「不开放入站端口」。
-3. 远程打开移动端：看到账号下已配对主机 → 经会合云握手（同一设备令牌）→ 投影该机。不扫码，不填地址。
+3. 远程打开移动端：本机已配对主机列表 + 会合在线态 → 经会合云握手（同一设备令牌）→ 投影该机。不扫码，不填地址。
 4. 宿主换网、换地址、从休眠恢复：重新出站即可。移动端始终连同一个 Pier 入口，**换地址无感**。
 5. 同网仍直连宿主（M1），不必绕云。
 
@@ -375,12 +408,12 @@ sequenceDiagram
         Desk-->>Phone: 出示二维码
         Phone->>Desk: 扫码提交配对
         Desk-->>Phone: 长期设备令牌
-        Phone->>Cloud: 绑定账号与这台主机
+        Note over Cloud,Desk: 宿主经出站连接为该设备担保通行证
     else 本机已有令牌
         alt 同网
             Phone->>Desk: hello 持令牌直连
         else 远程
-            Phone->>Cloud: 账号会话 + 设备令牌
+            Phone->>Cloud: 设备通行证（令牌仍只对宿主出示）
             Cloud->>Desk: 转发到已出站宿主
             Desk-->>Phone: 会话加最新快照
         end
@@ -391,7 +424,7 @@ sequenceDiagram
 
 | 层 | 默认职责 | 不做什么 |
 |---|---|---|
-| 官方会合云 | 账号、设备配对、宿主出站拨号、远程时转发帧 | 不跑代码、不持仓库、不当第二份事实源 |
+| 官方会合云 | 宿主出站准入、设备通行证名册、远程时盲转发帧 | 不跑代码、不持仓库、不当第二份事实源、不引入账号 |
 | 同网直连 | M1 移动端直连宿主 | 不挡远程路径 |
 | DIY 逃生舱 | Tailscale / 用户自建入口 / 手动填主机地址 | 不是打开移动端的默认 |
 
@@ -410,7 +443,7 @@ sequenceDiagram
 
 Pier 路线（M2）：
 
-- **默认 · 官方会合 + 账号**（G5）：宿主出站、移动端连 Pier、用户不填主机地址。实现上会合可以自建集群，也可以背后用隧道基础设施，**用户只看见 Pier**。
+- **默认 · 官方会合（无账号）**（G5，第十三次修订）：宿主出站自证明、移动端持通行证连 Pier、用户不填主机地址也不注册账号。实现上会合可以自建集群，也可以背后用隧道基础设施，**用户只看见 Pier**。
 - **同网直连**：M1 保留；配对令牌两边都能用。
 - **可选 DIY**：已有 Tailscale / 自建网关的人可以不经官方会合。文档提供，设置里可关云。
 - **小程序**：连官方会合的稳定 HTTPS 域名（白名单这一条），不连局域网地址。
@@ -429,13 +462,14 @@ Pier 路线（M2）：
 | 终端屏幕（T1） | `terminal.screen` / `terminal.read`（**viewport 纯文本，`scope:"viewport"`**） | `terminal:read` | M1 |
 | 任务输出尾部 | `run.output/status/list` | `workspace:read` | M1 |
 | 代码变更 | `git.getStatus` / `git.getDiffPatch` | `git:read` | M1 |
+| 在电脑上打开审查（可选，非默认） | `git.openReviewPanel` | `git:read` + `workspace:open` | **不做 v1**；若做必须是显式动作，不能当打开手机 diff 的副作用 |
 | 审批回写 | `agent.attention.respond`（新命令，见缺口④） | `notification:write`（不授 `terminal:control`） | M1 |
-| 终端 live 流（T2） | `terminal.subscribe` / `terminal.unsubscribe`（新，能力广告 `terminal.stream`） | `terminal:read` | M3 增强 |
+| 终端 live 流（T2） | `terminal.subscribe` / `terminal.unsubscribe`（新，能力广告 `terminal.stream`） | `terminal:read` | **M3 必达** |
 | 受控自由输入（可选开） | `terminal.send` / `terminal.key` | `terminal:control` | D2 显式勾选 |
 
 `mobile-paired` 默认能力集修订（现状 `permissions.ts:163-178` 偏宽且有缺）：
 - **加入**：`git:read`（diff 必需）、`notification:write`（标记已读 / focus / 审批回写）。
-- **移出默认**：`window:create/close`、`window:control`、`panel:control`、`terminal:control`——改为配对时用户显式勾选的可选授权；默认集收敛为「只读监视 + 通知写」。
+- **移出默认**：`window:create/close`、`window:control`、`panel:control`、`terminal:control`、`workspace:open`——改为配对时用户显式勾选的可选授权（`workspace:open` 仅当以后做「在电脑上打开」时才授）。默认集收敛为「只读监视 + 通知写」。
 - 落地时同步更新锁定该表的治理测试。
 
 写命令组（`git:*write`、`run.spawn/rerun` 等）v1 一律不授给 `mobile-paired`；`allowedClientKinds` 未列 `mobile-paired` 的命令维持拒绝。`agent.attention.respond` 必须在 `CommandMetadata` 登记 `allowedClientKinds` 含 `mobile-paired`（及桌面 renderer，供同源测试），能力仅 `notification:write`。
@@ -471,7 +505,7 @@ S1 默认面只画审批条（`agent.attention.respond` 的 Enter/Esc/y/n/数字
 - 刷新：会话详情在前台时按 300–500ms 拉一次（与 `control.watch` 的 digest 轮询同量级）；切后台停。
 - **这不是金标准终端**，是现有 API 能支撑的监督闭环最低档。§11 文案按此锁定。
 
-**T2 · 金标准档（增强 · M3，与 Orca/VibeTunnel 同构）**
+**T2 · 金标准档（M3 必达，与 Orca/VibeTunnel 同构）**
 
 三件套一次齐，缺一不可：
 
@@ -489,15 +523,15 @@ T2 的产品承诺才允许 UI 写「终端历史 / 实时输出」。能力广�
 
 ### 11 信息架构（线框）与多壳
 
-> 前一版用深色成品风 HTML + 渲染截图充当「设计稿」，把未定视觉写成了方案。已删除那些截图。本节只锁定信息架构；视觉（色、字体、圆角、底栏 vs 顶栏、品牌）不在本文件决定。
+> 前一版用深色成品风 HTML + 渲染截图充当「设计稿」，把未定视觉写成了方案。已删除那些截图。本节只锁定信息架构。视觉与触控语言另立：[2026-09-01 移动端 Web 壳视觉与触控语言](2026-09-01-mobile-web-visual-language.md)，画板 `.pier/canvases/mobile-web-shell/`（不是第二份信息架构）。
 
 #### 11.1 交互流程：先主机、后投影
 
-规范线框真源：本文 §11（ASCII 树 + 对照表）。**根面是主机。核心闭环必须整条齐（§2.1）。** 原 Canvas 线框 `.pier/canvases/mobile-companion/` 已删除。
+规范线框真源：本文 §11（ASCII 树 + 对照表）。**根面是主机。核心闭环必须整条齐（§2.1）。** 原 Canvas 线框 `.pier/canvases/mobile-companion/` 已删除；现行画板只承载视觉，见上。
 
 ```text
 打开移动端
-  ├─ 本机无令牌 → 未配对（扫码一次，绑账号 + 长期令牌）→ 主机列表
+  ├─ 本机无令牌 → 未配对（扫码一次，换长期令牌）→ 主机列表
   └─ 本机已有令牌 → 主机列表（日常根面，不必再扫码）
         ├─ 同网 → 直连该机工作台
         └─ 远程 → 经官方会合（宿主须已出站）
@@ -514,30 +548,33 @@ T2 的产品承诺才允许 UI 写「终端历史 / 实时输出」。能力广�
 硬规则：
 
 - **闭环六条齐。** 配对、见主机、投影、就地审批、远程可达、离开能叫醒。缺会合或缺叫醒不算核心交付（§2.1）。
-- **配对一次。** 二维码一次性、五分钟有效，换来的是长期设备令牌 + 账号绑定（§9）。之后打开只握手，不扫码。
+- **配对一次。** 二维码一次性、五分钟有效，换来的是长期设备令牌（§9）。之后打开只握手，不扫码。
 - **跨网远程是闭环内的场景，不是增强。** 宿主保持远程访问并出站；移动端打开即见该机，不填地址。宿主休眠或关机才离线。
 - **叫醒属于闭环。** 需要你处理 / 回合结束必须能后台触达；点开落到该会话。不是「有空再做推送」。
 - **没有当前主机，就不渲染会话 / 变更 / 文件。** 已配对但离线，仍停在主机列表。
 - **二维码只出现在桌面。** 无相机时从相册读图，不把「填写主机地址」画进主路径。
-- **会话内三面共用身份。** 终端 / 变更 / 文件挂在当前会话下。文件只读。
-- **线框锁定 IA，不锁定壳 UI。** 建议应用级三键：主机 | 工作台 | 通知。
-- T1 文案只能是「当前屏幕」。T2 是增强。
+- **会话内三面共用身份。** 终端 / 变更 / 文件挂在当前会话下。文件只读。工作台不列打开中的文档面板。
+- **工作台不是桌面面板实例目录。** 主列表是终端族（智能体为叠加层）。变更最多按 git 根给一条只读快捷入口（git 状态，不是 `pier.git.changes` 实例）。无终端时空态去电脑上开会话，不提供新建终端 / 智能体 / 工作树。
+- **打开手机 diff 不改桌面布局。** 只读 `git.getStatus` / `git.getDiffPatch`；默认不 `git.openReviewPanel`。
+- **线框锁定 IA，不锁定壳 UI。** 页面仍是主机 → 该机工作台 → 会话；通知是当前机收件箱。视觉稿不用平级底栏：主机和工作台是父子推入，通知走工作台顶栏铃铛。
+- T1 文案只能是「当前屏幕」。T2 是 **M3 必达**（品类呈现底线，见 §4.9），不挡核心六条。
 - 产品词与桌面一致（智能体 / 工作树 / 需要你处理）。
+- **未声明投影的插件面板不进手机。**
 
 #### 11.2 页面集合与映射
 
-实线 = 核心闭环必有，虚线 = 增强（T2 / 锁屏 / 小程序）。本表只做文字对照。
+实线 = 核心闭环必有，虚线 = 锁屏 / 小程序；T2 为 M3 必达（不在本表虚线里当可选项）。本表只做文字对照。
 
 | 面 | 角色 | 区块 | 事实源 | 动作 |
 |---|---|---|---|---|
 | QR 桌面出码 | 配对权威 | 远程访问开关 → 二维码 → 已配对列表 | `PierPairedDevice` | 开本网监听 / 跨网出站、吊销（断开会话） |
 | H0 未配对 | 仅无令牌 | 说明 + 扫码（无相机读相册） | 无令牌 | 扫码一次 |
-| H1 主机列表 | **日常根面** | 已配对主机 + 连接态 + 自动重连 | 本地令牌 + 账号下的会合在线态 | 选机；同网直连或经云 |
-| H2 主机工作台 | 当前机首页 | 主机条 → 状态过滤 → 该机会话列表 | `app.snapshot` activity/agents | 进会话；过滤 |
-| S1 会话终端 | 会话默认面 | 当前屏幕（T1）→ 审批条（仅 waiting）；附件键与输入仅 D2 | `terminal.screen`；T2 才 `terminal.subscribe` | `agent.attention.respond`；可选 `terminal.send`（D2） |
-| S2 变更预览 | 会话内 | 文件列表 + hunk | `git.getStatus` / `git.getDiffPatch` | 只读 |
-| S3 文件浏览 | 会话内 | 目录 + 预览 | `file.list` / `file.readText` | 只读 |
-| N1 通知 | 当前机收件箱 | 列表（标题/详情/时间/未读点） | NCS `notifications.*` | 标已读 / 叫醒点开落到该会话 |
+| H1 主机列表 | **日常根面** | 已配对主机 + 连接态 + 自动重连 | 本地令牌 + 会合在线态 | 选机；同网直连或经云 |
+| H2 主机工作台 | 当前机首页 | 终端族（状态与审批；智能体为叠加层）；可选「变更 · git 根」只读快捷入口；无文档面板行、无加号；无会话时空态去电脑上开 | 终端快照 + git 状态（按根） | 进会话；可选进该 git 根的 S2；过滤仅终端组 |
+| S1 会话终端 | 会话默认面 | 当前屏幕（T1）；智能体 waiting 时审批条；普通终端只读读屏、无审批条；头部「文件」携带会话 cwd；「变更」仅当会话在 git 仓库内显示（快照 `panels[].gitRoot` 门控，与桌面一致） | `terminal.screen`；T2 才 `terminal.subscribe` | `agent.attention.respond`（仅智能体）；进 S2/S3 子页；可选 `terminal.send`（D2） |
+| S2 变更预览 | 会话内或工作台 git 根快捷入口 | 两级：文件列表（状态字母 + 增删）→ 点开单文件 unified diff 懒加载；作用域 = 该工作树 `gitRoot` | `git.getStatus` / `git.getDiffPatch`（`options.paths`） | 只读；**不**同步打开桌面审查面板 |
+| S3 文件浏览 | 会话内 | 目录 + 预览（根 = 会话工作树） | `file.list` / `file.readText` | 只读 |
+| N1 通知 | 当前机收件箱 | 列表（标题/详情/时间/未读点）；点击落到该会话 | NCS `notifications.*` | 标已读 / 收件箱或叫醒点开落到该会话 |
 
 #### 11.3 三壳：Web · App · 小程序（G6）
 
@@ -559,7 +596,7 @@ T2 的产品承诺才允许 UI 写「终端历史 / 实时输出」。能力广�
 **M1 协议冻结（禁止把后两壳锁死在外；同网切片也必须遵守）：**
 
 1. 帧是 JSON 文本契约，不依赖 `window`、DOM、Service Worker、IndexedDB。
-2. T1（viewport 纯文本）是所有壳的必达终端档；T2 是可选能力广告。
+2. T1（viewport 纯文本）是所有壳的闭环终端档；T2 是 `terminal.stream` 能力广告，Web/App 在 **M3 必达**。
 3. 配对 QR payload `{ pairingCode, fingerprint, relayHint }`；同网可附 `host, port`。不夹 Web-only 字段。
 4. 推送不进帧协议：NCS → `remotePush` 适配器 → 按 `shell` 分叉。
 5. 宿主静态托管的 SPA 只是 Web 壳的一种分发，**且仅 M1 内部切片可用**。App / 小程序各自打包。生产 Web 壳始终加载官方会合 HTTPS；同网连的是帧通道，不是第二个 origin。
@@ -622,9 +659,9 @@ Web 壳实现约束：独立轻量 SPA（React + Tailwind v4，按需 `@pier/ui`
 
 切片是工程顺序，**不是把核心体验拆成可单独对外的不完整切片。** 可交付的第一条产品线是核心六条齐（§2.1）。
 
-- [ ] **M1 · 同网切片（内部）**：适配器 + 配对/令牌/`PierPairedDevice` + Web 先主机后投影（T1 + 审批 + 只读变更/文件）。便于本机开发。**不对用户称产品完成**（缺远程与叫醒）。
-- [ ] **M2 · 核心交付 · 远程 + 叫醒（Web）**：官方会合 + 账号 + 跨网宿主出站 + 唯一 HTTPS origin；`remotePush` / Web Push 接通，需要你处理能点回该会话。至此六条齐，才是可对外的核心体验。同网仍直连本网接口。
-- [ ] **增强 · T2**：native tap + Ghostty 水合 + Web 壳金标准终端（`terminal.stream`）。
+- [x] **M1 · 同网切片（内部）**：适配器 + 配对/令牌/`PierPairedDevice` + Web 先主机后投影（T1 + 审批 + 只读变更/文件）。便于本机开发。**不对用户称产品完成**（缺远程与叫醒）。已交付：0.1.33（主提交 `8c177fa40`），实施计划见 [M1 计划](../plans/2026-08-28-mobile-companion-m1-lan-slice.md)。
+- [ ] **M2 · 核心交付 · 远程 + 叫醒（Web）**：官方会合（无账号）+ 跨网宿主出站 + 唯一 HTTPS origin；`remotePush` / Web Push 接通，需要你处理能点回该会话。至此六条齐，才是可对外的核心体验。生产 Web 壳一律经会合；LAN 监听给 dev / 原生壳。实施计划见 [M2 计划](../plans/2026-08-31-mobile-companion-m2-remote-wake.md)；收尾见 [M2 收尾](../plans/2026-08-31-mobile-companion-m2-closeout.md)。**未完成叫醒真机验收前不得勾选。**
+- [ ] **M3 必达 · T2**：native tap + Ghostty 水合 + Web 壳金标准终端（`terminal.stream`）。依据 §4.9：真终端渲染是手机终端品类底线；不挡核心六条（T1 仍为闭环档）。
 - [ ] **增强 · App 壳**：薄壳 + APNs/FCM + 锁屏闭环。不新写命令。
 - [ ] **增强 · 小程序壳**：微信默认；订阅消息；T1；依赖官方会合 HTTPS。
 
@@ -637,10 +674,10 @@ Web 壳实现约束：独立轻量 SPA（React + Tailwind v4，按需 `@pier/ui`
 | 定位 | read-mostly 遥控器，桌面为事实源（Orca） | 相同：状态投影 + 受控闭环 | 对齐 |
 | 界面 | 各自重排，不复刻桌面（Orca/Happy/relay）；仅 Omnigent 复刻 Web UI | 独立 SPA 重排，禁复刻 dockview | 对齐 |
 | 配对 | 一次性码→设备令牌（Orca/mobile-relay）；公钥挑战（Happy） | 扫码→`PierPairingRequest`→设备令牌；落地须扩展 `PierPairedDevice` | 对齐，契约需补字段 |
-| 地址漂移 | 编辑地址不重配对（Orca） | 会合云认账号+设备，换 IP 无感；手动地址仅逃生舱 | 对齐 Codex |
+| 地址漂移 | 编辑地址不重配对（Orca） | 会合云认宿主身份 + 设备通行证，换 IP 无感；手动地址仅逃生舱 | 对齐 Codex |
 | 协议治理 | 版本化+能力广告+过旧阻断（Orca）；fixture 固化（relay） | 版本化+能力广告（含 `terminal.stream`）；协议测试 | 对齐 |
-| 终端投影 | 水合 + 字节流 + 客户端模拟器（Orca / VibeTunnel） | **T1 闭环必达诚实快照 → T2 增强金标准**（水合读 Ghostty 主屏，禁止平行 transcript） | T1 低于金标准（受 native 缺口约束）；T2 对齐，不挡核心六条 |
-| 出网 | 消费级 = 账号云会合（Codex / Claude / Cursor / Copilot / Orca / Happy） | **默认官方会合 + 账号**（G5）；同网直连；DIY 为逃生舱。不做云沙箱执行 | 第九次：去掉误加的「不做官方云」 |
+| 终端投影 | 水合 + 字节流 + 客户端模拟器（Orca / VibeTunnel） | **T1 闭环必达诚实快照 → T2 M3 必达金标准**（水合读 Ghostty 主屏，禁止平行 transcript） | T1 低于金标准（受 native 缺口约束）；T2 对齐品类底线，不挡核心六条 |
+| 出网 | 消费级 = 官方会合（四家用账号云；Happy 无账号也可自建） | **默认官方会合（无账号）**（G5）；生产 Web 壳一律经会合；LAN 监听给 dev / 原生壳；DIY 为逃生舱。不做云沙箱执行 | 第十五次：钉死盲转发，去掉实现句里的账号 |
 | 推送 | APNs/FCM 直连（Happy）或镜像桌面（Orca） | **核心闭环含叫醒**（会合 HTTPS 上的 Web Push；App 走 APNs）。ntfy 可选 | 叫醒不是附加里程碑 |
 | 写边界 | 差异大：Happy 全控 ↔ relay 文件只读 | 默认只读+通知写；输入显式开；git 写永不 | 取最保守档 |
 | 移动载体 | 原生 App 为主流；少数 PWA；几乎没有官方小程序 | **一协议三壳**：Web 首壳 → App → 小程序；client-kind 仍是 `mobile-paired` | 终态对齐「都要有」；排期拉开，协议不绑死 Web |
@@ -659,14 +696,14 @@ Web 壳实现约束：独立轻量 SPA（React + Tailwind v4，按需 `@pier/ui`
 | D1 | TLS 形态与时机 | 同网切片可用 `ws://`+token。**核心交付必须是官方会合 HTTPS**，否则叫醒与小程序都接不上 |
 | D2 | 远程终端输入权限 | 默认不授 `terminal:control`；设置内显式开「远程输入」并二次确认。审批键级动作走 `agent.attention.respond`，不打开此开关 |
 | D3 | 移动端壳范围 | **三壳都要，不是「PWA 即终态」。** 首壳只交 Web；App / 小程序（默认微信）是增强。线框与帧协议跨壳冻结（§11.3）。叫醒不绑死某一壳——Web 有 Web Push，App/小程序走各自适配器 |
-| D4 | 会合云的账号与加密 | **会合云本身已闭合（做官方云）。** 仍开放：账号形态（邮箱 / Apple / GitHub）；应用层是否 E2E（Codex Noise，云只见密文）还是明文过会合（Claude 把转录放服务器）。不在本决策里重新讨论「要不要官方云」。App 的 APNs/FCM、小程序订阅消息随各自壳立项 |
+| D4 | 会合云的准入与加密 | **已收口（第十三次修订 + M2 计划）**：无账号——宿主身份密钥自证明 + 设备通行证准入；应用层 E2E（PSK+ECDHE 密封，relay 只见密文，服务端设计 §6）。账号仅在未来配额/商业化需要时作为可选叠加层 additive 引入。App 的 APNs/FCM、小程序订阅消息随各自壳立项 |
 | D5 | 活动查询入口 | **已闭合（事实，不再开放）**：`app.snapshot` 已含 activity/agents/notifications/runtimes，共享 revision。不要新增 `activity.snapshot` |
-| D6 | 终端投影档位 | **T1（三壳必达，闭环可用）→ T2（M3，Web/App 增强）**。小程序可不做 T2。禁止把 viewport 快照宣传为 scrollback |
+| D6 | 终端投影档位 | **T1（三壳必达，闭环可用）→ T2（M3 必达，Web/App 真 VT）**。小程序可不做 T2。禁止把 viewport 快照宣传为 scrollback |
 | D7 | 小程序平台 | 默认微信。支付宝/其它不在本方案展开。没有官方会合 HTTPS 则不启动小程序壳 |
 
 ### 17 协议与数据模型全书（冻结面）
 
-实现可以切片，协议与数据模型一次定义全。本节是 M1–M5 全部协议与数据模型的文字单一来源；代码单一来源是 `src/shared/contracts/remote.ts` 与 `src/shared/contracts/local-control/frames.ts`。M1 只实现标注「M1」的子集；标注「M2 冻结」的现在定义、M2 实现。D4（账号形态、应用层是否 E2E）仍开放——一切账号引用走不透明 `accountId`，本节不替 D4 做决定。
+实现可以切片，协议与数据模型一次定义全。本节是 M1–M5 全部协议与数据模型的文字单一来源；代码单一来源是 `src/shared/contracts/remote.ts` 与 `src/shared/contracts/local-control/frames.ts`。M1 只实现标注「M1」的子集；标注「M2 冻结」的现在定义、M2 实现。D4 已收口（第十三次修订）：无账号 + 应用层 E2E；`accountId` 仅为保留位，M2 不实现。
 
 #### 17.1 帧协议（`pier.control/v2`，WS 一条消息 = 一帧）
 
@@ -686,7 +723,7 @@ Web 壳实现约束：独立轻量 SPA（React + Tailwind v4，按需 `@pier/ui`
 #### 17.2 配对传输契约（HTTP，与 WS 同端口）
 
 - `POST /pair`：body 为 `PierPairingRequest { code, requestedCapabilities, shell? }`；200 返回 `PairingRedeemResult { deviceId, deviceToken, grantedCapabilities, tokenEpoch }`；403 返回 `{ reason: "pairing_expired" \| "pairing_invalid" }`。配对码一次性、5 分钟有效；令牌原文只出现在此次响应，宿主只存哈希。
-- QR payload（JSON 文本）：`{ pairingCode, fingerprint, host?, port?, relayHint }`。`relayHint` 在 M1 恒 `null`；`host`/`port` 仅同网直连时附。`fingerprint` = 宿主实例密钥 sha256 前 16 hex，M1 用于肉眼核验；D4 若选 E2E，实例密钥演进为宿主身份密钥，fingerprint 即其指纹。
+- QR payload（JSON 文本）：`{ pairingCode, fingerprint, host?, port?, hostId?, pairSecret?, relayHint }`。`relayHint` 未配置会合时恒 `null`、已配置为会合 wss URL（M2）；`host`/`port` 仅同网直连时附（dev 切片与 App 壳）。M2 起 `fingerprint` = `hostId`（宿主身份公钥 sha256）前 16 hex，同源派生用于肉眼核验；`pairSecret`（32 字节 base64url，仅 QR 带外传递）密封赎回往返，relay 不见令牌；人工输码（无 pairSecret）仅允许 LAN 直连赎回（服务端设计 §5.3）。
 
 #### 17.3 数据模型
 
@@ -694,7 +731,7 @@ Web 壳实现约束：独立轻量 SPA（React + Tailwind v4，按需 `@pier/ui`
 
 | 模型 | 字段 | 备注 |
 |---|---|---|
-| `PierPairedDevice` | deviceId / name / tokenHash / tokenEpoch / capabilities / shell / createdAt / lastSeenAt | 已在 `contracts/remote.ts`。M2 只追加可选 `accountId?`（账号归属），schema 演进只许 additive |
+| `PierPairedDevice` | deviceId / name / tokenHash / tokenEpoch / capabilities / shell / createdAt / lastSeenAt | 已在 `contracts/remote.ts`。可选 `accountId?` 是未来账号层保留位，M2 不写不读 |
 | `PierRemoteSession` | clientId / deviceId / kind / tokenEpoch / capabilities / createdAt / expiresAt? | 已有；每条命令核对 epoch |
 | `PairingState`（磁盘） | devices / pendingPairing { codeHash, expiresAt } \| null / instanceSecret | userData JSON；instanceSecret 首启生成 |
 
@@ -702,8 +739,8 @@ M2 冻结（现在定义、M2 实现）：
 
 | 模型 | 字段 | 语义 |
 |---|---|---|
-| `PierAccountRef` | `accountId: string` | 账号形态开放（D4）；所有引用走不透明 id |
-| `PierHostRegistration` | hostId / accountId / fingerprint / online / lastSeenAt | 会合云注册表条目：宿主出站拨号后置 online；同账号移动端按 accountId 列宿主 |
+| `PierAccountRef` | `accountId: string` | **保留位（未来可选账号层）**：M2 无账号交付，不实现（第十三次修订） |
+| `PierHostRegistration` | hostId / accountId / fingerprint / online / lastSeenAt | **保留位（未来可选账号层）**：M2 会合零持久化，在线态与设备名册为内存担保（服务端设计 §3） |
 | `PierPushHandle` | deviceId / shell / webPush? { endpoint, keys { p256dh, auth } } | 推送句柄按 shell 分叉（§11.4）；app / miniprogram 形态随各壳立项 |
 | `PierRelayEnvelope` | hostId / deviceId / frame | 会合转发信封：frame 为透传的 v2 帧，relay 不解读、不授权；tokenEpoch 核对永远发生在宿主侧 |
 
@@ -713,15 +750,15 @@ M2 冻结（现在定义、M2 实现）：
 
 #### 17.5 会合云边界（M2 实现，语义现在冻结）
 
-1. 宿主出站拨号会合云并注册 `PierHostRegistration`；换网、换地址、休眠恢复后重拨即可，移动端无感（§9.2）。
-2. 移动端以账号会话连会合云 → 按 `accountId` 列出宿主 → 帧包进 `PierRelayEnvelope` 经 relay 透传；hello 里的设备令牌与 M1 同一枚，不重扫码。
+1. 宿主出站自证明上线（内存名册，零持久化）；`PierHostRegistration` 为保留位，M2 不实现。换网、换地址、休眠恢复后重拨即可，移动端无感（§9.2）。
+2. 移动端以本机已配对列表连会合云，会合在线态只作点亮 → 帧包进 `PierRelayEnvelope` 经 relay 透传；hello 里的设备令牌与 M1 同一枚，不重扫码。
 3. relay 只按 `(hostId, deviceId)` 路由：不成为第二份事实源，不持有仓库、终端、凭据。
 4. 叫醒推送不经帧协议：NCS → `remotePush` 适配器 → 按 `PierPushHandle.shell` 分叉（§11.4、§12）。
 
 ### 18 总结
 
-1. **移动端要做的事只有一件**：把桌面宿主的运行态投影到移动端上，并让用户就地闭环。映射状态与控制权，不映射界面，也**不在本方案里定视觉**。
-2. **壳会有三个，业务只有一份。** Web、App、小程序共用 `mobile-paired`、同一帧协议、同一「先主机后投影」线框。首壳只实现 Web；App / 小程序补的是容器、推送适配器和（App）锁屏。小程序生产环境连不上 LAN，所以官方会合 HTTPS 是小程序的硬前置。T1 文本终端是三壳必达档；T2 金标准只要求 Web/App，且不挡核心六条。
+1. **移动端要做的事只有一件**：把桌面宿主**已经在跑**的监督面投影到手机上，并让用户就地闭环。映射状态与控制权，不映射界面与面板布局，也**不在本方案里定视觉**。不做手机开工（新建终端 / 智能体 / 工作树）。
+2. **壳会有三个，业务只有一份。** Web、App、小程序共用 `mobile-paired`、同一帧协议、同一「先主机后投影」线框。首壳只实现 Web；App / 小程序补的是容器、推送适配器和（App）锁屏。小程序生产环境连不上 LAN，所以官方会合 HTTPS 是小程序的硬前置。T1 文本终端是三壳闭环档；T2 金标准是 Web/App 的 **M3 必达**，且不挡核心六条。
 3. **业界共识仍适用**（§5），外加一条 Pier 约束：协议不得绑死浏览器。Happy/Orca 已经证明 App+Web 同协议；小程序是中文市场多出来的壳，增量是稳定 HTTPS 地址 + 订阅消息 + T1，不是新命令面。
-4. **正确思路是核心体验整条齐**（§2.1）：配对、见主机、投影、审批、远程会合、叫醒。官方会合是闭环的运输层。T2 / App / 小程序是增强。仍不做云沙箱执行，也不把「只局域网」当成可交付产品。
-5. **实施**：同网切片（内部）→ **核心交付（会合 + 叫醒）** → T2 → App → 小程序。
+4. **正确思路是核心体验整条齐**（§2.1）：配对、见主机、投影、审批、远程会合、叫醒。官方会合是闭环的运输层。App / 小程序是增强；T2 是 M3 必达（§4.9）。仍不做云沙箱执行，也不把「只局域网」当成可交付产品。
+5. **实施**：同网切片（内部）→ **核心交付（会合 + 叫醒）** → **T2（M3 必达）** → App → 小程序。

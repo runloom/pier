@@ -470,15 +470,13 @@ describe("KeybindingsSection", () => {
     const dispose = actionRegistry.register({
       category: "File",
       handler: vi.fn(),
-      id: "pier.files.copyPathWithRange",
+      id: "pier.files.copyPath",
       surfaces: ["files/editor"],
-      title: () => "复制路径和所选行",
+      title: () => "复制路径",
     });
 
     const { unmount } = render(<KeybindingsSection />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "录制 复制路径和所选行" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "录制 复制路径" }));
     fireEvent.keyDown(window, {
       altKey: true,
       code: "KeyX",
@@ -490,12 +488,12 @@ describe("KeybindingsSection", () => {
       expect(window.pier.preferences.update).toHaveBeenCalledWith({
         userKeymap: [
           {
-            commandId: "-pier.files.copyPathWithRange",
+            commandId: "-pier.files.copyPath",
             keys: "",
             scope: "global",
           },
           {
-            commandId: "pier.files.copyPathWithRange",
+            commandId: "pier.files.copyPath",
             keys: "Mod+Alt+KeyX",
             scope: "panel:pier.files.filePanel",
           },
@@ -511,9 +509,9 @@ describe("KeybindingsSection", () => {
       actionRegistry.register({
         category: "File",
         handler: vi.fn(),
-        id: "pier.files.copyPathWithRange",
+        id: "pier.files.copyPath",
         surfaces: ["files/editor"],
-        title: () => "复制路径和所选行",
+        title: () => "复制路径",
       }),
       actionRegistry.register({
         category: "File",
@@ -525,9 +523,7 @@ describe("KeybindingsSection", () => {
     ];
 
     const { unmount } = render(<KeybindingsSection />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "录制 复制路径和所选行" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "录制 复制路径" }));
     fireEvent.keyDown(window, {
       code: "KeyS",
       ctrlKey: true,

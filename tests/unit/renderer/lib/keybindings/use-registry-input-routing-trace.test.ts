@@ -4,6 +4,7 @@ import type { Action } from "@/lib/actions/types.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import {
   dispatchKeybindingAction,
+  invocationFromKeybindingScope,
   resolveKeybindingAction,
 } from "@/lib/keybindings/use-registry.ts";
 import {
@@ -61,6 +62,19 @@ describe("keybinding input-routing trace", () => {
     });
   });
 
+  it("builds a panel invocation from the keybinding scope", () => {
+    useKeybindingScope.setState({
+      activePanelComponent: "pier.files.searchPanel",
+      activePanelId: "search-1",
+      activePanelKind: "web",
+      overlayStack: ["overlay:command-palette"],
+    });
+    expect(invocationFromKeybindingScope()).toEqual({
+      sourcePanelComponent: "pier.files.searchPanel",
+      sourcePanelId: "search-1",
+    });
+  });
+
   it("records the native-forward route when a registered command dispatches", () => {
     const handler = registerAction(WEB_COMMAND);
     keybindingRegistry.registerDefaults([
@@ -78,6 +92,10 @@ describe("keybinding input-routing trace", () => {
     dispatchKeybindingAction(action, "native-forward");
 
     expect(handler).toHaveBeenCalledOnce();
+    expect(handler).toHaveBeenCalledWith({
+      sourcePanelComponent: "terminal",
+      sourcePanelId: "terminal-1",
+    });
     expect(readTerminalInputRoutingTraceSnapshot().events).toContainEqual(
       expect.objectContaining({
         action: "dispatched",

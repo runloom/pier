@@ -158,7 +158,9 @@ describe("panel transfer recovery matrix", () => {
         { focused: false, id: "w-1", recordId: "record-w1" },
       ]),
       releaseRendererShow: vi.fn(),
+      revealHost: vi.fn(),
       runExclusive: runExclusive as never,
+      setBounds: vi.fn(),
     };
     geometry = {
       getCursorScreenPoint: () => ({ x: 5000, y: 5000 }),

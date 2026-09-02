@@ -6,6 +6,8 @@ import {
   closeGitChangeSummaryFileHandle,
   GIT_WORKING_TREE_NUMSTAT_ARGS,
   gitChangeSummaryStatToken,
+  numstatPaths,
+  numstatWithinStatus,
   readGitUntrackedPathStats,
 } from "@main/services/git/change-summary.ts";
 import { GitExecError } from "@main/services/git/exec.ts";
@@ -562,5 +564,35 @@ describe("buildGitChangeSummary", () => {
       insertions: 2,
       kind: "lineDelta",
     });
+  });
+});
+
+describe("numstat / status coherence", () => {
+  it("extracts inline paths and both sides of rename records", () => {
+    expect(
+      numstatPaths(
+        `${["4\t1\tsrc/a.ts", "-\t-\tassets/logo.png", "3\t1\t"].join("\0")}\0src/old.ts\0src/new.ts\0`
+      )
+    ).toEqual(["src/a.ts", "assets/logo.png", "src/old.ts", "src/new.ts"]);
+    expect(numstatPaths("")).toEqual([]);
+  });
+
+  it("rejects malformed numstat records", () => {
+    expect(numstatPaths("garbage\0")).toBeNull();
+    expect(numstatPaths("3\t1\t\0src/old.ts\0")).toBeNull();
+  });
+
+  it("only accepts numstat paths that status already lists", () => {
+    const files: GitFileStatus[] = [
+      tracked,
+      { index: "R", origPath: "src/old.ts", path: "src/new.ts", worktree: "." },
+    ];
+    expect(numstatWithinStatus(files, "")).toBe(true);
+    expect(numstatWithinStatus(files, "4\t1\tsrc/tracked.ts\0")).toBe(true);
+    expect(numstatWithinStatus(files, "3\t1\t\0src/old.ts\0src/new.ts\0")).toBe(
+      true
+    );
+    expect(numstatWithinStatus(files, "2\t0\tsrc/late.ts\0")).toBe(false);
+    expect(numstatWithinStatus(files, "garbage\0")).toBe(false);
   });
 });

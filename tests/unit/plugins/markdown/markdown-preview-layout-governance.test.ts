@@ -110,7 +110,10 @@ describe("markdown preview layout governance", () => {
     expect(layout).toContain("MARKDOWN_TOC_CONTENT_GAP_PX");
     expect(preview).toContain("MARKDOWN_TOC_CONTENT_INSET_PX");
     expect(preview).toContain("hasOutline");
-    expect(fontScale).toContain("MARKDOWN_PREVIEW_EDGE_INSET_PX");
+    expect(fontScale).toContain("ImagePreviewControls");
+    expect(fontScale).toContain("includeFit={false}");
+    expect(fontScale).not.toContain("rounded-md");
+    expect(fontScale).not.toContain("MARKDOWN_PREVIEW_EDGE_INSET_PX");
     expect(article).toContain("MARKDOWN_TOC_EDGE_INSET_PX");
     expect(toc).not.toContain("MARKDOWN_TOC_PANEL_WIDTH_PX");
     expect(toc).toContain("MARKDOWN_TOC_TICK_HEIGHT_PX");
@@ -153,5 +156,40 @@ describe("markdown preview layout governance", () => {
     expect(toc).not.toContain("rootRect.height * 0.22");
     expect(helpers).toContain('"data-source-end-offset"');
     expect(helpers).toContain('"data-source-offset"');
+    expect(helpers).toContain('"data-source-end-line"');
+    expect(helpers).toContain('"data-source-line"');
+  });
+
+  it("keeps git change bars on the left scroll gutter, not the outline", () => {
+    const preview = readPreview("preview.tsx");
+    const toc = readPreview("preview-toc.tsx");
+    const bars = readFileSync(
+      join(PREVIEW_DIR, "git-bars", "rail.tsx"),
+      "utf8"
+    );
+    const layout = readFileSync(
+      join(PREVIEW_DIR, "git-bars", "layout.ts"),
+      "utf8"
+    );
+    const agents = readFileSync(join(ROOT, "AGENTS.md"), "utf8");
+    expect(agents).toContain("git 变更色条在左侧、随正文滚动");
+    expect(agents).toContain('data-slot="markdown-preview-git-bars"');
+    expect(preview).toContain("MarkdownPreviewGitBars");
+    expect(preview).toContain("MARKDOWN_GIT_BAR_SLOT_PX");
+    expect(preview).toContain('data-slot="markdown-preview"');
+    expect(bars).toContain('data-slot="markdown-preview-git-bars"');
+    expect(bars).toContain("absolute top-0 left-0");
+    expect(bars).toContain("height: 0");
+    expect(bars).toContain("tabIndex={-1}");
+    expect(bars).toContain("[data-slot='markdown-prose']");
+    expect(layout).toContain("export const MARKDOWN_GIT_BAR_SLOT_PX");
+    const pagination = readPreview("pagination-view.tsx");
+    expect(pagination).toContain("data-markdown-page-rendered");
+    const renderer = readPreview("ir-renderer.tsx");
+    expect(renderer).toContain('case "thematicBreak"');
+    expect(renderer).toContain("sourceBlockProps(block.range, context");
+    expect(toc).not.toContain("diff-addition");
+    expect(toc).not.toContain("MarkdownPreviewGitBars");
+    expect(preview).not.toContain("createMinimapExtension");
   });
 });

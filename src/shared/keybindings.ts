@@ -1,5 +1,11 @@
 import type { UserKeymapEntry } from "./contracts/preferences.ts";
 
+/**
+ * Default chords follow the focused surface:
+ * - Terminal: Ghostty / iTerm (split, new tab; do not steal Cmd+C/V/K).
+ * - Code editor: VS Code Mac (next occurrence, multi-cursor, find).
+ * - Workbench-only actions stay global (palette, quick open, close, zoom).
+ */
 export type SharedKeybindingScope =
   | "global"
   | `overlay:${string}`
@@ -62,6 +68,7 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
+    // Files 编辑器「选中全部出现」在 panel 作用域使用同一和弦，文件面板聚焦时优先。
     commandId: "pier.agents.list",
     keys: "Mod+Shift+KeyL",
     scope: "global",
@@ -117,7 +124,7 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
   {
     commandId: "pier.terminal.openAgentComposer",
     keys: "Mod+Shift+KeyI",
-    scope: "global",
+    scope: "panel:terminal",
   },
   // composerAttach shares ⌘⇧A with pier.agent.new: when Rich Input is focused,
   // use-keybindings steals the chord for attach; otherwise agent.new runs.
@@ -173,12 +180,12 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
   {
     commandId: "pier.panel.splitRight",
     keys: "Mod+KeyD",
-    scope: "global",
+    scope: "panel:terminal",
   },
   {
     commandId: "pier.panel.splitDown",
     keys: "Mod+Shift+KeyD",
-    scope: "global",
+    scope: "panel:terminal",
   },
   {
     commandId: "pier.panel.focusNextTab",
@@ -251,14 +258,46 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "panel:pier.files.filePanel",
   },
   {
-    commandId: "pier.files.copyPathWithRange",
+    // VS Code Mac: copyFilePath ⌥⌘C / copyRelativeFilePath ⇧⌥⌘C.
+    // 「复制路径和所选行」不能再用 ⌥⌘C：同一 panel scope 下和弦只能命中一条命令。
+    commandId: "pier.files.copyPath",
     keys: "Mod+Alt+KeyC",
     scope: "panel:pier.files.filePanel",
   },
   {
-    commandId: "pier.git.review.copyPathWithRange",
+    commandId: "pier.files.copyRelativePath",
+    keys: "Mod+Alt+Shift+KeyC",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.files.copyPathWithRange",
+    keys: "Mod+Alt+KeyL",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.git.review.copyPath",
     keys: "Mod+Alt+KeyC",
     scope: "panel:pier.git.changes",
+  },
+  {
+    commandId: "pier.git.review.copyRelativePath",
+    keys: "Mod+Alt+Shift+KeyC",
+    scope: "panel:pier.git.changes",
+  },
+  {
+    commandId: "pier.git.review.copyPathWithRange",
+    keys: "Mod+Alt+KeyL",
+    scope: "panel:pier.git.changes",
+  },
+  {
+    commandId: "pier.files.search.copyPath",
+    keys: "Mod+Alt+KeyC",
+    scope: "panel:pier.files.searchPanel",
+  },
+  {
+    commandId: "pier.files.search.copyRelativePath",
+    keys: "Mod+Alt+Shift+KeyC",
+    scope: "panel:pier.files.searchPanel",
   },
   {
     commandId: "pier.files.editor.goToLine",
@@ -268,6 +307,27 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
   {
     commandId: "pier.files.editor.showHover",
     keys: "Mod+KeyI",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.files.editor.selectNextOccurrence",
+    keys: "Mod+KeyD",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    // 文件面板覆盖全局 pier.agents.list 的同一和弦（VS Code 习惯：⌘⇧L 多光标）。
+    commandId: "pier.files.editor.selectAllOccurrences",
+    keys: "Mod+Shift+KeyL",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.files.editor.addCursorAbove",
+    keys: "Mod+Alt+ArrowUp",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.files.editor.addCursorBelow",
+    keys: "Mod+Alt+ArrowDown",
     scope: "panel:pier.files.filePanel",
   },
 ];
@@ -326,22 +386,61 @@ export function keybindingToElectronAccelerator(keys: string): string {
   return result.join("+");
 }
 
-export function firstAcceleratorForCommand(
+export function isNativeTerminalRoutedScope(
+  scope: SharedKeybindingScope | undefined
+): boolean {
+  const resolved = scope ?? "global";
+  return resolved === "global" || resolved === "panel:terminal";
+}
+
+export function chordHasNonGlobalBinding(
+  keys: string,
+  userKeymap: readonly UserKeymapEntry[] = []
+): boolean {
+  const unbound = new Set(
+    userKeymap
+      .filter((entry) => entry.commandId.startsWith("-"))
+      .map((entry) => entry.commandId.slice(1))
+  );
+  for (const entry of userKeymap) {
+    if (entry.commandId.startsWith("-") || entry.keys !== keys) {
+      continue;
+    }
+    if ((entry.scope ?? "global") !== "global") {
+      return true;
+    }
+  }
+  return DEFAULT_KEYMAP.some(
+    (binding) =>
+      binding.keys === keys &&
+      (binding.scope ?? "global") !== "global" &&
+      !unbound.has(binding.commandId)
+  );
+}
+
+export function firstBindingForCommand(
   commandId: string,
   userKeymap: readonly UserKeymapEntry[] = []
-): string | undefined {
+): SharedKeybindingInput | undefined {
   const unbindId = `-${commandId}`;
   const userBinding = userKeymap.find((entry) => entry.commandId === commandId);
   if (userBinding?.keys) {
-    return keybindingToElectronAccelerator(userBinding.keys);
+    return {
+      commandId,
+      keys: userBinding.keys,
+      scope: (userBinding.scope ?? "global") as SharedKeybindingScope,
+    };
   }
   if (userKeymap.some((entry) => entry.commandId === unbindId)) {
     return;
   }
-  const defaultBinding = DEFAULT_KEYMAP.find(
-    (entry) => entry.commandId === commandId
-  );
-  return defaultBinding
-    ? keybindingToElectronAccelerator(defaultBinding.keys)
-    : undefined;
+  return DEFAULT_KEYMAP.find((entry) => entry.commandId === commandId);
+}
+
+export function firstAcceleratorForCommand(
+  commandId: string,
+  userKeymap: readonly UserKeymapEntry[] = []
+): string | undefined {
+  const binding = firstBindingForCommand(commandId, userKeymap);
+  return binding ? keybindingToElectronAccelerator(binding.keys) : undefined;
 }

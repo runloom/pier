@@ -29,12 +29,7 @@ import type {
   GitReviewMutationTransition,
   GitReviewReadingSurface,
 } from "../reading-surface.ts";
-import {
-  focusConflictItems,
-  isConflictOnlyBody,
-  isConflictSurfaceItem,
-} from "./conflict-focus.ts";
-import { ReviewConflictView } from "./conflict-view.tsx";
+import { resolveReviewDocumentBody } from "./conflict-focus.ts";
 import type { ReviewDocumentProjection } from "./projection.ts";
 import { projectReviewLedger } from "./projection.ts";
 
@@ -129,47 +124,10 @@ export function documentContent(options: {
             options.getSuppressMembershipScrollRestore,
         };
   if (displayProjection.items.length > 0) {
-    const conflictFocusItems = focusConflictItems(
+    const body = resolveReviewDocumentBody(
       displayProjection.items,
-      options.selectedSectionKey ?? null
+      options.emptySurface
     );
-    const codeItems = displayProjection.items.filter(
-      (item) => !isConflictSurfaceItem(item)
-    );
-    const conflictOnly = isConflictOnlyBody(
-      conflictFocusItems.length,
-      codeItems.length
-    );
-    const appearanceForConflict = {
-      codeFontFamily: options.appearance.typography.codeFontFamily,
-      codeFontSize: options.appearance.typography.codeFontSize,
-      codeThemes: options.appearance.codeThemes,
-      colorMode: options.appearance.theme,
-    };
-
-    if (conflictOnly) {
-      return (
-        <div
-          className="relative min-h-0 flex-1"
-          data-git-review-document-content="conflict"
-        >
-          <ReviewConflictView
-            appearance={appearanceForConflict}
-            context={options.context}
-            contextId={options.contextId}
-            gitRootPath={options.gitRootPath}
-            items={conflictFocusItems}
-            mutationBlocked={options.mutationAuthorityBlocked}
-            onMutationCommitted={async (result) => {
-              await options.onMutationCommitted(result);
-            }}
-            {...(options.presentation === undefined
-              ? {}
-              : { presentation: options.presentation })}
-          />
-        </div>
-      );
-    }
 
     return (
       <div
@@ -180,90 +138,73 @@ export function documentContent(options: {
             : "loading"
         }
       >
-        <div className="flex h-full min-h-0 flex-col">
-          {conflictFocusItems.length > 0 ? (
-            <div className="max-h-[45%] shrink-0 border-border border-b">
-              <ReviewConflictView
-                appearance={appearanceForConflict}
-                context={options.context}
-                contextId={options.contextId}
-                gitRootPath={options.gitRootPath}
-                items={conflictFocusItems}
-                mutationBlocked={options.mutationAuthorityBlocked}
-                onMutationCommitted={async (result) => {
-                  await options.onMutationCommitted(result);
-                }}
-                {...(options.presentation === undefined
-                  ? {}
-                  : { presentation: options.presentation })}
-              />
-            </div>
-          ) : null}
-          <div className="min-h-0 flex-1">
-            <ReviewCodeView
-              appearance={options.appearance}
-              context={options.context}
-              contextId={options.contextId}
-              diffRef={options.diffRef}
-              {...(options.entries === undefined
-                ? {}
-                : { entries: options.entries })}
-              {...(options.gitRootPath
-                ? { gitRootPath: options.gitRootPath }
-                : {})}
-              {...(options.driftCommentLabels === undefined
-                ? {}
-                : { driftCommentLabels: options.driftCommentLabels })}
-              items={codeItems.length > 0 ? codeItems : displayProjection.items}
-              {...(options.reviewCommentsById === undefined
-                ? {}
-                : { reviewCommentsById: options.reviewCommentsById })}
-              {...(options.activeReviewEpoch === undefined
-                ? {}
-                : { activeReviewEpoch: options.activeReviewEpoch })}
-              {...(options.activeReviewSlotsByItem === undefined
-                ? {}
-                : {
-                    activeReviewSlotsByItem: options.activeReviewSlotsByItem,
-                  })}
-              {...(options.inlineReviewHandlers === undefined
-                ? {}
-                : {
-                    inlineReviewHandlers: options.inlineReviewHandlers,
-                  })}
-              {...(options.inlineReviewLabels === undefined
-                ? {}
-                : { inlineReviewLabels: options.inlineReviewLabels })}
-              {...(options.inlineReviewThreadById === undefined
-                ? {}
-                : {
-                    inlineReviewThreadById: options.inlineReviewThreadById,
-                  })}
-              mutationAuthorityBlocked={options.mutationAuthorityBlocked}
-              onAcquireMutationAuthority={options.onAcquireMutationAuthority}
-              onFeedbackChange={options.onFeedbackChange}
-              {...(options.onGutterReviewActivate === undefined
-                ? {}
-                : { onGutterReviewActivate: options.onGutterReviewActivate })}
-              {...(options.onDriftCommentActivate === undefined
-                ? {}
-                : { onDriftCommentActivate: options.onDriftCommentActivate })}
-              onItemError={options.onItemError}
-              onMutationCommitted={options.onMutationCommitted}
-              onRenderWindowChange={options.onRenderWindowChange}
-              onRetryItem={handleRetryItem}
-              onScroll={options.onScroll}
-              revisionBySectionId={displayProjection.revisionBySectionId}
-              {...(options.presentation === undefined
-                ? {}
-                : { presentation: options.presentation })}
-              {...(options.sourcePanelId === undefined
-                ? {}
-                : { sourcePanelId: options.sourcePanelId })}
-              {...suppressGetter}
-              suppressMembershipScrollRestore={suppress}
-            />
-          </div>
+        <div className="h-full min-h-0">
+          <ReviewCodeView
+            appearance={options.appearance}
+            context={options.context}
+            contextId={options.contextId}
+            diffRef={options.diffRef}
+            {...(options.entries === undefined
+              ? {}
+              : { entries: options.entries })}
+            {...(options.gitRootPath
+              ? { gitRootPath: options.gitRootPath }
+              : {})}
+            {...(options.driftCommentLabels === undefined
+              ? {}
+              : { driftCommentLabels: options.driftCommentLabels })}
+            items={body.items}
+            {...(options.reviewCommentsById === undefined
+              ? {}
+              : { reviewCommentsById: options.reviewCommentsById })}
+            {...(options.activeReviewEpoch === undefined
+              ? {}
+              : { activeReviewEpoch: options.activeReviewEpoch })}
+            {...(options.activeReviewSlotsByItem === undefined
+              ? {}
+              : {
+                  activeReviewSlotsByItem: options.activeReviewSlotsByItem,
+                })}
+            {...(options.inlineReviewHandlers === undefined
+              ? {}
+              : {
+                  inlineReviewHandlers: options.inlineReviewHandlers,
+                })}
+            {...(options.inlineReviewLabels === undefined
+              ? {}
+              : { inlineReviewLabels: options.inlineReviewLabels })}
+            {...(options.inlineReviewThreadById === undefined
+              ? {}
+              : {
+                  inlineReviewThreadById: options.inlineReviewThreadById,
+                })}
+            mutationAuthorityBlocked={options.mutationAuthorityBlocked}
+            onAcquireMutationAuthority={options.onAcquireMutationAuthority}
+            onFeedbackChange={options.onFeedbackChange}
+            {...(options.onGutterReviewActivate === undefined
+              ? {}
+              : { onGutterReviewActivate: options.onGutterReviewActivate })}
+            {...(options.onDriftCommentActivate === undefined
+              ? {}
+              : { onDriftCommentActivate: options.onDriftCommentActivate })}
+            onItemError={options.onItemError}
+            onMutationCommitted={options.onMutationCommitted}
+            onRenderWindowChange={options.onRenderWindowChange}
+            onRetryItem={handleRetryItem}
+            onScroll={options.onScroll}
+            revisionBySectionId={displayProjection.revisionBySectionId}
+            {...(options.presentation === undefined
+              ? {}
+              : { presentation: options.presentation })}
+            {...(options.selectedSectionKey
+              ? { selectedSectionKey: options.selectedSectionKey }
+              : {})}
+            {...(options.sourcePanelId === undefined
+              ? {}
+              : { sourcePanelId: options.sourcePanelId })}
+            {...suppressGetter}
+            suppressMembershipScrollRestore={suppress}
+          />
         </div>
       </div>
     );

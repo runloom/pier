@@ -146,6 +146,7 @@ export function FileCanvasPreview(props: {
       nonce,
       path: props.path,
       pickMode: comments.pickMode,
+      root: props.root,
       stateKind: state.kind,
       t: props.t,
     }
@@ -244,6 +245,21 @@ export function FileCanvasPreview(props: {
   const softError = state.kind === "ready" ? state.softError : undefined;
   // Error / trust / loading states always present in the reading flow.
   const worldActive = worldStage && showHost;
+  const commentNavigator = nav.commentNavigator.visible ? (
+    <CommentNavigator
+      activeIndex={nav.commentNavigator.activeIndex}
+      clearLabel={nav.commentNavigator.clearLabel}
+      nextLabel={nav.commentNavigator.nextLabel}
+      onClear={nav.commentNavigator.onClear}
+      onNext={nav.commentNavigator.onNext}
+      onPrevious={nav.commentNavigator.onPrevious}
+      onRevealCurrent={nav.commentNavigator.onRevealCurrent}
+      positionLabel={nav.commentNavigator.positionLabel}
+      previousLabel={nav.commentNavigator.previousLabel}
+      toolbarLabel={nav.commentNavigator.toolbarLabel}
+      total={nav.commentNavigator.total}
+    />
+  ) : null;
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: canvas preview is a native context-menu surface with no accurate interactive ARIA role
@@ -256,6 +272,13 @@ export function FileCanvasPreview(props: {
       onContextMenu={onContextMenu}
       ref={previewRootRef}
     >
+      {softError ? (
+        <CanvasSoftErrorBanner
+          message={softError.message}
+          onReload={reload}
+          t={props.t}
+        />
+      ) : null}
       <div
         className={cn(
           "min-h-0 flex-1",
@@ -265,16 +288,6 @@ export function FileCanvasPreview(props: {
         data-slot="file-canvas-scroll"
         ref={shellRef}
       >
-        {softError ? (
-          <div className={cn(worldActive && "absolute inset-x-0 top-0 z-30")}>
-            <CanvasSoftErrorBanner
-              message={softError.message}
-              onReload={reload}
-              t={props.t}
-            />
-          </div>
-        ) : null}
-
         {state.kind === "error" ? (
           <CanvasCompileErrorEmpty
             diagnostics={state.diagnostics}
@@ -345,21 +358,6 @@ export function FileCanvasPreview(props: {
           </div>
         </WorldViewportFrame>
       </div>
-      {nav.commentNavigator.visible ? (
-        <CommentNavigator
-          activeIndex={nav.commentNavigator.activeIndex}
-          clearLabel={nav.commentNavigator.clearLabel}
-          nextLabel={nav.commentNavigator.nextLabel}
-          onClear={nav.commentNavigator.onClear}
-          onNext={nav.commentNavigator.onNext}
-          onPrevious={nav.commentNavigator.onPrevious}
-          onRevealCurrent={nav.commentNavigator.onRevealCurrent}
-          positionLabel={nav.commentNavigator.positionLabel}
-          previousLabel={nav.commentNavigator.previousLabel}
-          toolbarLabel={nav.commentNavigator.toolbarLabel}
-          total={nav.commentNavigator.total}
-        />
-      ) : null}
       {worldActive ? (
         <ImagePreviewControls
           effectiveZoom={camera.effectiveZoom}
@@ -370,6 +368,7 @@ export function FileCanvasPreview(props: {
           zoom={camera.zoom}
         />
       ) : null}
+      {commentNavigator}
     </div>
   );
 }

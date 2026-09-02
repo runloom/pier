@@ -87,6 +87,25 @@ describe("canvas host policy", () => {
     expect(parsePluginDataWatchTarget("resources")).toBeNull();
   });
 
+  it("splits projection scope onto params instead of the base key", () => {
+    expect(
+      parsePluginDataWatchTarget(
+        "plugin:pier.tasks/board?milestone=%E7%BB%93%E7%AE%97&label=req%2Fx"
+      )
+    ).toEqual({
+      key: "board",
+      params: { label: "req/x", milestone: "结算" },
+      pluginId: "pier.tasks",
+    });
+    expect(
+      parsePluginDataWatchTarget("plugin:pier.tasks/board?milestone=结算重构")
+    ).toEqual({
+      key: "board",
+      params: { milestone: "结算重构" },
+      pluginId: "pier.tasks",
+    });
+  });
+
   it("watches snapshot ids on their live broadcast", () => {
     expect(canvasHostLiveChannel("foreground-activity")).toBe(
       PIER_BROADCAST.FOREGROUND_ACTIVITY_CHANGED

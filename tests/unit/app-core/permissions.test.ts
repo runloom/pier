@@ -338,6 +338,15 @@ describe("authorizeCommand", () => {
     }
   });
 
+  it("plugin.applets allows desktop-renderer and cli-local", () => {
+    expect(
+      authorizeCommand({ type: "plugin.applets" }, client("desktop-renderer"))
+    ).toEqual({ ok: true });
+    expect(
+      authorizeCommand({ type: "plugin.applets" }, client("cli-local"))
+    ).toEqual({ ok: true });
+  });
+
   it("plugin.catalog.list allows desktop-renderer and cli-local", () => {
     expect(
       authorizeCommand(
@@ -554,6 +563,38 @@ describe("authorizeCommand", () => {
         client("mobile-paired")
       )
     ).toEqual({ ok: true });
+  });
+
+  it("git.openReviewPanel：desktop-renderer 与 mobile-paired 默认集通过", () => {
+    for (const kind of ["desktop-renderer", "mobile-paired"] as const) {
+      expect(
+        authorizeCommand(
+          { cwd: "/repo", type: "git.openReviewPanel" },
+          client(kind)
+        )
+      ).toEqual({ ok: true });
+    }
+  });
+
+  it("git.openReviewPanel：cli-local kind 被拒；旧配对缺 workspace:open 被拒", () => {
+    const cliResult = authorizeCommand(
+      { cwd: "/repo", type: "git.openReviewPanel" },
+      client("cli-local", ["git:read", "workspace:open"])
+    );
+    expect(cliResult).toEqual({
+      ok: false,
+      reason: "client kind cli-local not allowed for git.openReviewPanel",
+    });
+    // 旧配对设备的能力集在配对时固化，无 workspace:open → 缺能力拒绝
+    expect(
+      authorizeCommand(
+        { cwd: "/repo", type: "git.openReviewPanel" },
+        client("mobile-paired", ["git:read", "panel:read"])
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: workspace:open",
+    });
   });
 
   it("agent.attention.respond：mobile-paired 缺 notification:write 被拒", () => {

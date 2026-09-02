@@ -4,7 +4,7 @@ import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "../../../src/shared/contrac
 describe("mobile-paired 默认能力集（规格 §10）", () => {
   const mobile = DEFAULT_CAPABILITIES_BY_CLIENT_KIND["mobile-paired"];
 
-  it("默认集收敛为只读监视 + 通知写", () => {
+  it("默认集收敛为只读监视 + 通知写 + 审查面板同步打开（workspace:open）", () => {
     expect([...mobile].sort()).toEqual(
       [
         "app:read",
@@ -16,6 +16,8 @@ describe("mobile-paired 默认能力集（规格 §10）", () => {
         "preferences:read",
         "terminal:read",
         "window:read",
+        // S2 变更入口与桌面同步 show-or-focus 审查面板（git.openReviewPanel）
+        "workspace:open",
         "workspace:read",
         "worktree:read",
       ].sort()

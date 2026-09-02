@@ -1,6 +1,10 @@
 import {
+  canonicalizePluginDataParams,
   canvasHostPermissionError,
   canvasHostUnsupportedError,
+  type PluginDataProjectionParams,
+  pluginDataProjectionLeaseId,
+  resolvePluginDataProjectionIdentity,
 } from "@shared/contracts/canvas-host.ts";
 import type {
   PluginRpcInvokeRequest,
@@ -19,12 +23,24 @@ export interface PluginDataProjectionService {
     key: string,
     payload: unknown
   ): Promise<unknown>;
-  /** 主进程命令处理体：声明检查 → rpc 代理。声明缺失抛 permission_denied；bus 失败按 code 映射。 */
-  snapshot(pluginId: string, key: string): Promise<unknown>;
-  /** 插件 rpc 事件过滤转发：仅转发已声明键，payload 原样。返回 dispose。 */
+  /** 主进程命令处理体：声明检查走基键，RPC 载荷带规范化 params。 */
+  snapshot(
+    pluginId: string,
+    key: string,
+    params?: PluginDataProjectionParams
+  ): Promise<unknown>;
+  /** 插件 rpc 事件过滤转发：仅转发已声明基键，信封带 scope。返回 dispose。 */
   tapEvents(): () => void;
-  watchStart(pluginId: string, key: string): Promise<void>;
-  watchStop(pluginId: string, key: string): Promise<void>;
+  watchStart(
+    pluginId: string,
+    key: string,
+    params?: PluginDataProjectionParams
+  ): Promise<void>;
+  watchStop(
+    pluginId: string,
+    key: string,
+    params?: PluginDataProjectionParams
+  ): Promise<void>;
 }
 
 function throwMappedBusError(
@@ -41,8 +57,10 @@ function throwMappedBusError(
   throw canvasHostPermissionError(result.error.message);
 }
 
-function watchLeaseId(pluginId: string, key: string): string {
-  return `${pluginId}\0${key}`;
+function projectionRpcPayload(
+  params?: PluginDataProjectionParams
+): { params: PluginDataProjectionParams } | null {
+  return params ? { params } : null;
 }
 
 export function createPluginDataProjectionService(deps: {
@@ -71,11 +89,12 @@ export function createPluginDataProjectionService(deps: {
   const invokeOptionalWatch = async (
     pluginId: string,
     key: string,
-    op: "unwatch" | "watch"
+    op: "unwatch" | "watch",
+    params?: PluginDataProjectionParams
   ): Promise<void> => {
     const result = await deps.bus.invoke({
       method: `${PROJECTION_METHOD_PREFIX}${key}.${op}`,
-      payload: null,
+      payload: projectionRpcPayload(params),
       pluginId,
     });
     if (result.ok || result.error.code === "not_found") {
@@ -111,15 +130,16 @@ export function createPluginDataProjectionService(deps: {
         pluginId,
       });
     },
-    async snapshot(pluginId, key) {
-      if (!declaredProjection(pluginId, key)) {
+    async snapshot(pluginId, key, params) {
+      const identity = resolvePluginDataProjectionIdentity(key, params);
+      if (!declaredProjection(pluginId, identity.key)) {
         throw canvasHostPermissionError(
-          `plugin ${pluginId} does not declare data projection "${key}"`
+          `plugin ${pluginId} does not declare data projection "${identity.key}"`
         );
       }
       return await invokeMapped({
-        method: `${PROJECTION_METHOD_PREFIX}${key}`,
-        payload: null,
+        method: `${PROJECTION_METHOD_PREFIX}${identity.key}`,
+        payload: projectionRpcPayload(identity.params),
         pluginId,
       });
     },
@@ -133,39 +153,56 @@ export function createPluginDataProjectionService(deps: {
           return;
         }
         const key = event.slice(PROJECTION_METHOD_PREFIX.length);
-        const { pluginId, ...payload } = data;
+        const { params: rawParams, pluginId, ...payload } = data;
         if (!declaredProjection(pluginId, key)) {
           return;
         }
+        const params = canonicalizePluginDataParams(rawParams);
         deps.broadcastToWindows(PIER_BROADCAST.PLUGIN_DATA_CHANGED, {
           ...payload,
           key,
           pluginId,
+          ...(params ? { params } : {}),
         });
       });
     },
-    async watchStart(pluginId, key) {
-      if (!declaredProjection(pluginId, key)) {
+    async watchStart(pluginId, key, params) {
+      const identity = resolvePluginDataProjectionIdentity(key, params);
+      if (!declaredProjection(pluginId, identity.key)) {
         throw canvasHostPermissionError(
-          `plugin ${pluginId} does not declare data projection "${key}"`
+          `plugin ${pluginId} does not declare data projection "${identity.key}"`
         );
       }
-      const id = watchLeaseId(pluginId, key);
+      const id = pluginDataProjectionLeaseId(
+        pluginId,
+        identity.key,
+        identity.params
+      );
       await enqueueWatch(id, async () => {
         const previous = watchCounts.get(id) ?? 0;
         if (previous === 0) {
-          await invokeOptionalWatch(pluginId, key, "watch");
+          await invokeOptionalWatch(
+            pluginId,
+            identity.key,
+            "watch",
+            identity.params
+          );
         }
         watchCounts.set(id, previous + 1);
       });
     },
-    async watchStop(pluginId, key) {
-      if (!declaredProjection(pluginId, key)) {
+    async watchStop(pluginId, key, params) {
+      const identity = resolvePluginDataProjectionIdentity(key, params);
+      if (!declaredProjection(pluginId, identity.key)) {
         throw canvasHostPermissionError(
-          `plugin ${pluginId} does not declare data projection "${key}"`
+          `plugin ${pluginId} does not declare data projection "${identity.key}"`
         );
       }
-      const id = watchLeaseId(pluginId, key);
+      const id = pluginDataProjectionLeaseId(
+        pluginId,
+        identity.key,
+        identity.params
+      );
       await enqueueWatch(id, async () => {
         const previous = watchCounts.get(id) ?? 0;
         if (previous <= 0) {
@@ -174,7 +211,12 @@ export function createPluginDataProjectionService(deps: {
         const next = previous - 1;
         if (next === 0) {
           watchCounts.delete(id);
-          await invokeOptionalWatch(pluginId, key, "unwatch");
+          await invokeOptionalWatch(
+            pluginId,
+            identity.key,
+            "unwatch",
+            identity.params
+          );
           return;
         }
         watchCounts.set(id, next);

@@ -252,6 +252,8 @@
    所有线都落在单元格盒内，横向滚动永不裁切外框——collapse 模型的
    外框由表格绘制，滚动后左右边线会消失（Chrome 已知绘制缺陷）。 */
 [data-slot="markdown-prose"] .md-table-wrap table {
+  width: max-content;
+  max-width: 100%;
   margin-block: 0;
   font-size: 0.9375em;
   /* 数字列对齐（GitHub 表格同款）。 */
@@ -259,6 +261,12 @@
   line-height: 1.5;
   border-spacing: 0;
   border-collapse: separate;
+}
+
+/* 滚动主收敛：shadcn Table 内层 container 默认 overflow-x:auto，会抢走
+   wrap 的横向滚动（wrap.scrollLeft 恒 0，指示线/槽宽语义分叉）。 */
+[data-slot="markdown-prose"] .md-table-wrap [data-slot="table-container"] {
+  overflow-x: visible;
 }
 
 /* shadcn TableRow/TableHeader 自带行级 border-b，separate 模型下会与
@@ -410,6 +418,10 @@
   margin-block: var(--md-space-3);
 }
 
+[data-slot="markdown-prose"] .md-applet {
+  margin-block: var(--md-space-3);
+}
+
 [data-slot="markdown-prose"] sup .md-link {
   font-size: 0.75em;
 }
@@ -427,6 +439,12 @@
   width: 10px;
   touch-action: none;
   cursor: col-resize;
+}
+/* 末列把手不得越过表格右缘：越界的定位盒会给滚动容器制造几像素幻影
+   横向滚动（表格明明未溢出仍能被拖动）。 */
+[data-slot="markdown-prose"] .md-table-wrap th:last-child .md-col-resizer {
+  right: -1px;
+  width: 6px;
 }
 /* hover/focus 直接点亮 th 自身边框（单一线条；伪元素指示线会与 1px 边框
    错开半像素，Retina 下渲染成两条平行竖线）。拖拽期间由 hook 在滚动容器
@@ -452,14 +470,43 @@
 [data-slot="markdown-prose"] .md-heading-group {
   position: relative;
 }
+/* 标题锚点复制：GitHub/Docusaurus 同款「小、弱、稳」——固定 16px、muted
+   底色、hover/聚焦才提前景色并淡入；不随 h1-h6 字号膨胀，不参与选词。
+   垂直对齐用 FontAwesome 配方：1em 盒 + -0.125em 基线偏移，盒心落在
+   baseline+0.375em ≈ CJK/拉丁字形光学中心，任意标题字号都成立
+   （vertical-align: middle 按拉丁 x 高度对齐，对汉字会偏低）。 */
 [data-slot="markdown-prose"] .md-anchor-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1em;
   margin-left: 0.5em;
-  vertical-align: middle;
+  vertical-align: -0.125em;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  border-radius: 0.25rem;
   opacity: 0;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
+}
+[data-slot="markdown-prose"] .md-anchor-copy svg {
+  width: 1rem;
+  height: 1rem;
 }
 [data-slot="markdown-prose"] .md-heading-group:hover .md-anchor-copy,
 [data-slot="markdown-prose"] .md-anchor-copy:focus-visible {
   opacity: 1;
+}
+[data-slot="markdown-prose"] .md-anchor-copy:hover,
+[data-slot="markdown-prose"] .md-anchor-copy:focus-visible {
+  color: var(--foreground);
+}
+/* 键盘聚焦用产品 ring 替代 UA 外框（焦点规范：ring-ring 系 + outline-none）。 */
+[data-slot="markdown-prose"] .md-anchor-copy:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 40%, transparent);
 }
 
 /* Footnote hover popover is portaled to document.body, so it intentionally

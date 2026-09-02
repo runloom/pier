@@ -157,12 +157,19 @@ function unusedPairing(): PairingService {
     authenticate: fail,
     beginPairing: fail,
     cancelPairing: fail,
+    deviceE2eKey: fail,
     ensureReady: fail,
+    getIdentity: () => null,
     listDevices: () => [],
+    listRoster: () => [],
+    onEnroll: () => () => {},
     onRevoke: () => () => {},
     pendingPairing: () => null,
     redeemPairingCode: fail,
+    redeemSealedForRelay: fail,
+    remoteAccessEnabled: fail,
     revokeDevice: fail,
+    setRemoteAccessEnabled: fail,
     touchLastSeen: fail,
   };
 }
@@ -286,7 +293,7 @@ describe("M2-②：PierPairedDevice / pairing store schema 只许 additive 演�
   it("remote.ts 注释锁定 additive-only（Task 4 既有锁跨引用）", () => {
     const source = readFileSync(join(REPO_ROOT, REMOTE_CONTRACTS_PATH), "utf8");
     expect(source).toMatch(/演进只许 additive/u);
-    expect(source).toMatch(/M2 加 accountId/u);
+    expect(source).toMatch(/加 accountId/u);
   });
 
   it("pairing-store.ts 注释锁定 additive 演进（磁盘 schema 侧）", () => {

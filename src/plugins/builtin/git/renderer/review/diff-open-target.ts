@@ -155,14 +155,15 @@ export function resolveGitReviewDiffCopyRange(options: {
 }
 
 /**
- * Shortcut target: path from the selected item (or the sole item). Attach a
- * line span only when that path is the selected item — never mix a leftover
- * selection onto a fallback file.
+ * Shortcut target: diff line selection, else the tree-selected item, else the
+ * sole item. Attach a line span only on the selected item so a leftover
+ * range cannot stick onto another file.
  */
 export function resolveGitReviewLiveCopyTarget(options: {
   readonly gitRootPath: string;
   readonly handle: PierDiffViewHandle | null | undefined;
   readonly items: readonly PierDiffViewItem[];
+  readonly preferredItemId?: string;
 }): {
   endLine?: number;
   gitRootPath: string;
@@ -173,8 +174,13 @@ export function resolveGitReviewLiveCopyTarget(options: {
   const selectedItem = selection
     ? options.items.find((entry) => entry.id === selection.id)
     : undefined;
+  const preferredItem = options.preferredItemId
+    ? options.items.find((entry) => entry.id === options.preferredItemId)
+    : undefined;
   const fallbackItem =
-    selectedItem ?? (options.items.length === 1 ? options.items[0] : undefined);
+    selectedItem ??
+    preferredItem ??
+    (options.items.length === 1 ? options.items[0] : undefined);
   const path = fallbackItem?.fileDisplay?.path;
   if (!path) {
     return null;

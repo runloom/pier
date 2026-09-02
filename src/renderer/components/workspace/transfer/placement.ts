@@ -22,7 +22,9 @@ import type { PanelTransferPlacement } from "@shared/contracts/panel-transfer.ts
 import type { DockviewApi } from "dockview-react";
 
 /** Mirrors dockview-core Droptarget DEFAULT_ACTIVATION_SIZE (20% per axis). */
-const SPLIT_ACTIVATION_PERCENT = 20;
+export const SPLIT_ACTIVATION_PERCENT = 20;
+/** Mirrors dockview-core dropOverlay DEFAULT_SIZE (visible overlay, not hit). */
+export const SPLIT_OVERLAY_SIZE_PERCENT = 50;
 
 interface GroupLike {
   element?: HTMLElement;

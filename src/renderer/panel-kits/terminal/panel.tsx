@@ -449,7 +449,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
                   />
                 ),
                 id: "runtime-controls",
-                onInteractionChange: runtimeControl.setAutoExitPause,
                 phase: runtimeControl.phase,
               }
             : undefined

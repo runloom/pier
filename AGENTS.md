@@ -169,7 +169,9 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 - **说用户动作，不说内部概念。** 反例：「没有可打开的终端选区」；正例：「请先在终端中选中文本。」
 - **失败与空态要带下一步。** 反例：「无项目上下文」；正例：「未打开项目」+「请先打开项目文件夹以浏览文件。」
-- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、Canvas 发现面「物料」（仓库 `.pier/canvases/canvas-kit`，后续官网文档；不要做进设置）、需要你处理（中文不要直出 Needs you）、git（小写；不要写成 Git / GIT；GitHub 等专有名除外）。
+- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、Canvas 发现面「物料」（仓库 `.pier/canvases/canvas-kit`，后续官网文档；不要做进设置）、需要你处理（中文不要直出 Needs you）、git 产品名用全大写 GIT（插件名、设置页标题、命令面板分组头与命令前缀）；正文与说明仍用小写 git，不要写成 Git；GitHub 等专有名除外。界面语言与根 README 的语言集合均为 `SUPPORTED_LOCALES`（`zh-CN` / `en` / `ja` / `ko`）。
+- **根 README 与产品语言集合一致。** `README.md` 为简体中文真源；并列 `README.en.md` / `README.ja.md` / `README.ko.md`。语言标签只用上述四项，不要 `zh` / `zh_CN` / `jp` / `kr`。改中文前门必须同步三份译文。检查点在 `tests/unit/docs/readme-locale-governance.test.ts`。
+- **CLI GitHub 手册同样四语。** `.pier/canvases/pier-cli-user-manual/README.md` 为简体中文真源；并列同目录 `README.en.md` / `README.ja.md` / `README.ko.md`。命令语义仍以同目录 `data.json` 为真源，不要把 `data.json` 复制成四份。应用内 Canvas 暂不按语言分文件。检查点同上。
 - **实现词禁止进入前台主路径文案。** 包括但不限于：选区、上下文、面板参数、耐久性、绑定、运行标识、运行态、renderer、清单预览、hook（首次可写「钩子（hook）」）、tip tree、upstream（应写「上游分支」）。
 - **中文界面少夹英文状态码。** git 状态用「分离头指针 / 合并中 / 变基中」等，不要用 DETACHED / MERGING 全大写码。
 - **fallback 英文与 en locale 同步可读**；改中文时必须核对英文是否同样术语化。
@@ -188,7 +190,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 中文界面出现 Agent、worktree、选区、上下文、耐久性、Needs you、DETACHED、Title Case Git 等 → finding。
 - 业务代码 `toast.*("…")` / `showAppAlert({ title: "…" })` 内联用户串未走 i18n → finding。
 
-检查点在 `tests/unit/renderer/app/user-copy-governance.test.ts`：锁定本节存在，并扫描中英 locale 字符串值中的禁用实现词。
+检查点在 `tests/unit/renderer/app/user-copy-governance.test.ts`：锁定本节存在，并扫描中英日韩 locale 字符串值中的禁用实现词。根 README 四语检查点在 `tests/unit/docs/readme-locale-governance.test.ts`。
 
 ### Markdown 预览大纲布局复用（最高优先级）
 
@@ -201,6 +203,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 3. **共享几何**：顶距比例、细轨槽位宽、浮层面板宽、右边距、底边预留、tick 尺寸只来自 `markdown-preview-toc-layout.ts` 常量 / `markdownOutlineHoverMaxHeightPx` / `markdownOutlineHoverWidthPx` / `markdownTocTickWidthPx`。hover 卡片必须落在预览框内的右侧槽位（`inset-0`），禁止浮层再写 `max-h-[min(70%,…)]` 或另一套 px 公式；禁止 TOC 与布局各自手写 `top-2` / `right-3` / `w-56` 而不读共享常量。
 4. **版心单一来源**：可见行宽由 `[data-slot="markdown-prose"]` 的 `--md-measure`（CSS）决定；舒适档为根 `42rem`（禁止 `ch`）；TS 只允许与 CSS 同值的 `MARKDOWN_COMFORTABLE_MEASURE_REM` 作治理锁定，禁止平行测宽 helper。权威规格：[`docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md`](docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md)。
 5. **默认不遮挡正文**：持久态只显示细轨横线（按 heading depth 变宽，active 高亮并跟随滚动）；完整标题列表仅在 hover / focus-within 淡入，**相对细轨垂直居中**覆盖；槽位宽高按预览框 clamp（`markdownOutlineHoverWidthPx` / `markdownOutlineHoverMaxHeightPx`），禁止卡片溢出 `overflow-hidden` 预览根；有大纲时滚动区右侧使用 `MARKDOWN_TOC_CONTENT_INSET_PX`（宽屏 `100%` 版心也不得压到细轨）；离开即隐藏；浮层无关闭按钮，不提供左右位置切换。Scroll-spy 必须每次滚动重新 query heading DOM（适配懒加载分页），不得缓存节点。
+6. **git 变更色条在左侧、随正文滚动**：磁盘预览用 `data-slot="markdown-preview-git-bars"` 画块级色条，槽位 `MARKDOWN_GIT_BAR_SLOT_PX` 加在评论左缘 **外侧**（不得压评论图标、不得给 TOC tick 上 diff 色、不得复用 CodeMirror minimap / 右侧 overview）。几何只来自 `markdown/git-bars/layout.ts`。点击与源码 gutter 同构：打开变更并 pendingReveal。
 
 反例（禁止）：
 
@@ -228,6 +231,27 @@ Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 外观「文档字体」（`font.store` → `--pier-document-font-family`）；docs 类 Canvas 经
 `DocsShell` 继承同一变量，composition / kit 不得套用。大纲固定右侧细轨 + hover 淡入浮层，
 不提供左右切换或持久收起偏好。
+
+### Markdown 预览表格列宽
+
+权威规格：[`docs/superpowers/specs/2026-08-31-markdown-table-column-width-gold-standard.md`](docs/superpowers/specs/2026-08-31-markdown-table-column-width-gold-standard.md)。
+
+- 静止：`width: max-content; max-width: 100%`。禁止给预览 `<table>` 设 `display: block`。横向滚动只由 `.md-table-wrap` 承担。
+- 拖拽：加法物理（只动被拖列），首次 dirty 必须冻结全列；表宽 = Σ。松手才落盘；Escape 取消。
+- 偏好键：结构键（列数 + 表头），不是全表正文哈希。`(path, key)` 变化须重读并中止拖拽。
+- 禁止：版心磁吸、拖拽中逐帧写盘、百分比随面板缩放。
+
+检查点在 `tests/unit/plugins/markdown/markdown-table-column-width-governance.test.ts`。
+
+### Canvas 画板视口记忆
+
+权威规格：[`docs/superpowers/specs/2026-09-01-canvas-world-camera-memory-gold-standard.md`](docs/superpowers/specs/2026-09-01-canvas-world-camera-memory-gold-standard.md)。
+
+- 意图：未动手则适应窗口并跟随尺寸；用户平移/缩放后自由视口优先。
+- 落盘：`(项目根, 画板路径)` → `localStorage`；自由态存视口中心对准的世界点 + 缩放（`worldX` / `worldY`），适应态只存 `fit`。禁止 nonce、禁止把屏幕平移当真源、**不进 userData**。
+- 热更新与切源码不得抢视口；`free` 改窗口只保世界中心，不重新 fit。
+
+检查点在 `tests/unit/plugins/files/canvas-world-camera-memory-governance.test.ts`。
 
 ### 交互控件密度规范
 
@@ -261,10 +285,11 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
    装饰 SVG。hover tooltip / 点击选点仍可用。
 4. **业务高亮 ≠ focus。** 短时反馈用轻量 `ring-1 ring-ring/40`（或阴影）；禁止与 focus 环共用 `ring-primary/50` 粗描边。
 5. **`tabIndex={0}` 白名单**（产品源码；新增必须在治理测试里登记理由）：
-   - 图片预览画布（缩放/平移快捷键）
-   - 图片 diff 左右滑动条（`role="slider"`，方向键调整对比比例）
-   - dockview panel tab 内容（标签激活）
-   - 设置「项目」列表行（`role="button"` 打开项目；须处理 Enter/Space）
+ - 图片预览画布（缩放/平移快捷键）
+ - 图片 diff 左右滑动条（`role="slider"`，方向键调整对比比例）
+ - dockview panel tab 内容（标签激活）
+ - 设置「项目」列表行（`role="button"` 打开项目；须处理 Enter/Space）
+ - 任务 applet 卡片/列表行（applet 视图 spec 键盘契约：focus ring；「移动到列」走菜单）
 6. **`role="button"` 的非 button 元素**必须同时具备：键盘激活（Enter/Space）、
    `tabIndex={0}`、以及可见的 `focus-visible` 环（或复用已带 ring 的 `Item` 等原语）。
    能改成真正 `<button>` / `Button` 时优先改。
@@ -347,7 +372,7 @@ section 根节点下的裸子节点。
 - 双源迁移已完成：老 `agent-session` broadcast 已下线，此通道是唯一活动广播源
 - 模块内不 import `services/agents/`（agent 只是 activity 的一种 kind，边界单向）
 - Agent 提供方（Provider）原生 session / transcript 只可作为对应适配器内部的兼容输入；宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放
-- **Transcript 终态对账纪律**：原生终态行带回合身份时 `classifyLine` 必须提取为 `turnId`（Grok `prompt_id`、Codex `turn_id`），缺席则丢弃该终态行，禁止空 id + owner 回退；无原生身份的空 `turnId` 终态受 PromptSubmit 文件水位约束（行尾 offset ≤ 该 scope 最近一次 PromptSubmit 时的文件 size 则丢弃；文件截断须清水位）；PromptSubmit 须先完成 transcript observe（写下水位）再 ingest；transcript 封账是软封，可被封账之后、同回合（或空 turnId）的新鲜 hook `ToolStart` 解封（事件 `ts` 若为 epoch 纳秒须先收到毫秒再比 `turnEndedAt`），`ToolComplete` 不解封；hook 终态与宿主合成终态（裸 Esc，`evidenceSource=host`）仍是硬封。检查点：`tests/unit/main/agents/transcript/tail-reconciler.test.ts`、`tests/unit/main/agents/grok/transcript-reconciler.test.ts`、`tests/unit/main/panel/foreground-activity-turn-state-machine.test.ts`、`tests/unit/main/agents/transcript/turn-identity-governance.test.ts`
+- **Transcript 终态对账纪律**：原生终态行带回合身份时 `classifyLine` 必须提取为 `turnId`（Grok `prompt_id`、Codex `turn_id`），缺席则丢弃该终态行，禁止空 id + owner 回退；无原生身份的空 `turnId` 终态受 PromptSubmit 文件水位约束（行尾 offset ≤ 该 scope 最近一次 PromptSubmit 时的文件 size 则丢弃；文件截断须清水位）；PromptSubmit 须先完成 transcript observe（写下水位）再 ingest；transcript 封账是软封，可被封账之后、同回合（或空 turnId）的新鲜 hook `ToolStart` 解封（事件 `ts` 若为 epoch 纳秒须先收到毫秒再比 `turnEndedAt`），`ToolComplete` 不解封；无回合身份（空 turnId）的 hook `error` 也可被后续空 turnId 的 hook `ToolStart` 解封；有 turnId 的 hook 终态与宿主合成终态（裸 Esc，`evidenceSource=host`）仍是硬封。检查点：`tests/unit/main/agents/transcript/tail-reconciler.test.ts`、`tests/unit/main/agents/grok/transcript-reconciler.test.ts`、`tests/unit/main/panel/foreground-activity-turn-state-machine.test.ts`、`tests/unit/main/agents/transcript/turn-identity-governance.test.ts`、`tests/unit/main/panel/foreground-activity-transcript-unseal.test.ts`
 - 命令行 → 智能体身份只走 `src/shared/agent-command-detection.ts` 的 `matchAgentCommand`（OSC 133 C 先验点亮）：词元只来自 catalog 命令字段，产品 id / label 不参与（`cursor .` / `kiro` / `continue` 是启动器或内置命令，不得点亮）；`agent` / `acli` 泛名进 `AGENT_OSC_BIN_DENYLIST`；`qoder` / `qodercn` 合一启动器按 argv 分流 CLI/IDE；安装探测 `expectedBins`（除 denylist）必须能被 OSC 认到。检查点：`tests/unit/agent/command-detection-governance.test.ts`、`tests/unit/agent/command-detection.test.ts` 与 `tests/unit/main/agents/lifecycle/specs.test.ts` 的 expectedBins 词元锁
 
 #### 智能体 CLI 版本检测与更新 — 金标准
@@ -390,9 +415,30 @@ section 根节点下的裸子节点。
 - `contextId` 由 `worktreeKey` 稳定派生，用于面板上下文身份；任务、终端和插件上下文不再依赖额外 `projectId`。
 - 主体不维护 `Project` 注册表，也不把 `projectId` 作为跨模块外键；需要项目粒度能力时优先使用 `projectRootPath` / `gitRoot` / `worktreeRoot`。
 
+### 终端面板 git 身份
+
+终端 OSC 7 与状态栏 git 芯片共用一份身份：**只有 `PanelContext.gitRoot`**，只由 `resolvePanelContextForPath` 写入。同 cwd 且本会话已解析且未失效则不解析、不广播（避免每个提示符闪底栏）。`.git` 创建/删除只作失效信号，禁止 `stat(.git)` 或魔法节流当第二套身份。`worktreeRoot` 只驱动独立工作树徽章，不得点亮分支/变更/同步芯片。
+
+权威规格：[`docs/superpowers/specs/2026-09-02-terminal-git-identity-gold-standard.md`](docs/superpowers/specs/2026-09-02-terminal-git-identity-gold-standard.md)。  
+检查点：`tests/unit/main/terminal/cwd-identity/governance.test.ts`、`tests/unit/main/terminal/cwd-forwarding.test.ts`、`tests/unit/main/git/identity-discovery.test.ts`。
+
+### 右键菜单顺序
+
+右键第一项必须是该表面该目标的主工作，且不把人带离当前工作。同组 `menuHidden` 之后禁止让「打开目录 / 在访达中显示」继承第一名（面包屑这种只有路径动作的表面除外）。按表面家族排：审查树 = 暂存优先；Files 树 = 新建优先；文档/终端 = 复制粘贴优先；标签关闭在最后。菜单位置稳定，不用 MRU。
+
+权威规格：[`docs/superpowers/specs/2026-08-31-context-menu-order-gold-standard.md`](docs/superpowers/specs/2026-08-31-context-menu-order-gold-standard.md)。  
+检查点：`tests/unit/renderer/context-menu/order-governance.test.ts`、`tests/unit/renderer/context-menu/order-sketches.test.ts`、`tests/unit/renderer/context-menu/order-sketches-composed.test.ts`。
+
+### 命令列表分组标题
+
+命令面板空态与新建菜单共用同一套标题规则：标题只表示该块有多条同类命令；1 条不写标题；相邻无标题组合并；分类顺序稳定。使用频次只出现在命令面板「最近」块（新建菜单不设）。`pier.agent.start.*` ≥ 2 时抽成「智能体」子组。有查询的搜索结果与 Quick Pick section 不套本规则。
+
+权威规格：[`docs/superpowers/specs/2026-09-02-command-list-heading-gold-standard.md`](docs/superpowers/specs/2026-09-02-command-list-heading-gold-standard.md)。  
+检查点：`tests/unit/renderer/command-list-group-heading-governance.test.ts`、`tests/unit/command/present-groups.test.ts`。
+
 ### 审查打开项目目录
 
-从 git 审查进入 Files **项目目录标签**（只有树、不打开文档）走宿主 `context.files.openProjectDirectory`，与 `openInEditor` 同构。git 不得 import files 插件；不得抢审查主点击；不得把「打开目录」放进 `GitReviewToolbar` 或审查顶栏芯片。在场入口是树 / diff / 审查 tab 右键「打开目录」：与「打开文件 / 跳转到源码」同组（`1_open`），与复制路径 / 在访达中显示分组（`6_path`）。tab 只在 `pier.git.changes` 上显示，打开该次审查 git 根。
+从 git 审查进入 Files **项目目录标签**（只有树、不打开文档）走宿主 `context.files.openProjectDirectory`，与 `openInEditor` 同构。git 不得 import files 插件；不得抢审查主点击；不得把「打开目录」放进 `GitReviewToolbar` 或审查顶栏芯片。在场入口是树 / diff / 审查 tab 右键「打开目录」。审查树「打开文件」与「打开目录」同在 `5_open`（暂存 / 展开之后、复制路径 / 在访达中显示之前）；diff「跳转到源码」仍在 `1_open`。tab 只在 `pier.git.changes` 上显示，打开该次审查 git 根。组序以「右键菜单顺序」金标准为准。
 
 权威规格：[`docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md`](docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md)。  
 检查点：`tests/unit/renderer/git/review/open-directory-governance.test.ts`。
@@ -426,6 +472,16 @@ section 根节点下的裸子节点。
 - 任务输出面板仍只在堆内保留 replay 尾部（`TaskOutputBuffer`：200K 字符 × 20 任务）。
 - 检查点：`tests/unit/main/terminal/scrollback-governance.test.ts`、
  `native/Tests/GhosttyBridgeTests/TerminalScrollbackLimitTests.swift`
+
+### 终端剪贴板 — 金标准
+
+权威规格：[`docs/superpowers/specs/2026-08-31-terminal-clipboard-gold-standard.md`](docs/superpowers/specs/2026-08-31-terminal-clipboard-gold-standard.md)。
+
+- **种类路由**（`GhosttyTerminal/Host/ClipboardRouting.swift` 单一来源，对齐 Ghostty.app）：只有 standard 触碰 `NSPasteboard.general`；selection（copy-on-select / 中键粘贴 / OSC 52 `s`）住私有 `io.pier.app.terminal.selection`；**未知种类（zig `primary = 2` / OSC 52 `p`）fail-closed 拒绝**（failable init，禁止「非 selection 即 standard」fail-open）。`supports_selection_clipboard = true` 不得改 false（ghostty 会 fallback 直写 standard）。
+- **写入防御**：confirm=true（clipboard-write=ask，Pier 无 authorize-copy UI）fail-closed；**空串拒绝仅限 standard**（空 flavor 读侧等价「无内容」，空白选区 / OSC 52 空载荷不得清系统剪贴板；私有 selection 板接受空写以清陈旧中键内容）。
+- **抑制恢复**：`endClipboardImageSuppress` 还原前必须验证窗口期无其他写入者（文本变化或新光栅 → 保留新内容放弃还原）；禁止无条件回写 begin 快照。
+- **不吞键**：`copy(_:)` / `paste(_:)` / `selectAll(_:)` responder 动作（单派发显式命令）禁止 `hostKeyboardActive` 门禁；环境键事件（`keyDown` / `performKeyEquivalent` 等）门禁必须保留。
+- 检查点：`tests/unit/native/terminal-clipboard-routing.test.ts`、`native/Tests/GhosttyBridgeTests/TerminalClipboardRoutingTests.swift`、`tests/unit/main/preferences/clipboard-image-suppress.test.ts`。
 
 ### 账号域模块迁移：`src/main/services/agent-accounts/` → `pier.codex`
 
@@ -479,8 +535,9 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 
 - Manifest：`dataProjections` 声明可投影只读键；`canvasActions` 声明画布可调用的 RPC 方法名。纪律链与 `panels` 同款：未声明键一律拒绝。
 - 读：`pluginData.snapshot` → 插件 RPC `projection.<key>`；renderer 经 `useHostSnapshot("plugin:<pluginId>/<key>")` 订阅广播，类型为 `unknown`，画布本地收窄。禁止 `useCodexAccounts` 一类插件 hook，禁止把三家 snapshot DTO 写进 `pier/canvas` sdk。
-- Watch 租约：`pluginData.watchStart` / `watchStop` 按 `(pluginId, key)` 引用计数；首次 start 调可选 `projection.<key>.watch`，归零 `unwatch`；handler 不存在则忽略。
+- Watch 租约：`pluginData.watchStart` / `watchStop` 按 **全键（基键 + 规范化 params）** 计数；声明校验按基键。`useHostSnapshot("plugin:<id>/<key>?repo=…")` 把 query 拆成 params。禁止把 `?` 后整串当投影键。
 - 写：仅 `pluginAction.invoke` `{ pluginId, key, payload? }`，方法名即声明键（不加 `projection.` 前缀）。能力 `plugin:action`；宿主命令路径不出现业务键字符串。
+- **Applets**：`manifest.applets` 声明源码积木（id 必须带插件前缀）。画布 `import X from "@pier-applet/<pluginId>/<appletId>"`；编译围栏第二根是 applet 目录。`.applet.tsx` 不是 live-module canvas 入口后缀。类型文件由 `scripts/generate-canvas-applet-types.mjs` 生成到 `.pier/types/applets.d.ts`，不启动宿主也能 typecheck。authoring 发现走 `pier plugins applets [id]`（`plugin.applets`，`cli-local`）。
 - Chrome：`settings.open` `{ section?: string }` 打开宿主设置（插件 CRUD / OAuth 仍在设置页，Canvas 不复制登录流）。`usageData.refresh` 刷新宿主用量聚合。
 - 宿主聚合 hook 只读：`useActivityOverview` / `useSystemResources` / `useCostOverview`。`useSystemResources` 不可删：`useHostSnapshot("resources")` 不含 `cpuHistory`。禁止再为插件加第四个 hook。
 - 格式化函数进 `pier/canvas` VALUE 导出（`formatPercent` / `formatBytes` 等），不是组件。
@@ -516,6 +573,8 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`；覆盖率：`pnpm test:coverage`
 - E2E 测试：优先 `pnpm test:e2e:auto`（见下节）；强制本机仍可用 `pnpm test:e2e`
 - 构建：`pnpm build`（electron-vite build）
+- 会合云本地：`pnpm dev:relay`（默认 `:8787`）；桌面联调 `PIER_RELAY_URL=ws://127.0.0.1:8787 pnpm dev`。操作说明 [`apps/relay/README.md`](apps/relay/README.md)
+- 会合云 / Web 壳发布：tag `relay-v*` / `mobile-web-v*`（与宿主 `v*` 解耦；见 [`docs/release.md`](docs/release.md)）
 - 图标重建：`pnpm build:icons`（修改唯一母版 `build/app-icon-source.svg` 后跑一次；产出 `build/icon.{icns,ico,png}`、`build/icons/*.png` 与正式发布使用的 macOS 26 `build/Assets.car`，并同步更新 `build/Assets.car.inputs`；标准尺寸统一由锁定的 electron-builder 图标工具从 SVG 直接降采样，`sips` 只封装 legacy ICNS，原生资源需 Xcode 26+ `actool`；PierDev 与四类 Helper 仅安装 ICNS，必须移除 `Assets.car` 与 `CFBundleIconName`）
 
 ### E2E 执行优先级（编码助手硬约定）

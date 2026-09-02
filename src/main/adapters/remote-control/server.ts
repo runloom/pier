@@ -175,7 +175,7 @@ export function createRemoteControlServer(
       sendJson(res, 403, { reason: "pairing_invalid" });
       return;
     }
-    const result = pairing.redeemPairingCode(request.data);
+    const result = await pairing.redeemPairingCode(request.data);
     if (!result.ok) {
       throttle.recordFailure(remoteIp);
       sendJson(res, 403, { reason: result.reason });

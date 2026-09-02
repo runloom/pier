@@ -5,15 +5,25 @@
 
 > **2026-08-30 注记**：`FlowGraph` / `layoutFlowGraph` 已从 `pier/canvas` 移除（实现效果不达标；后续 DAG 按具体产品能力重新设计）。本文所有「`FlowGraph` 渲染 DAG」段落在定稿时需替换为新的 DAG 视图方案；`Sortable` / `Droppable`、投影/动作纪律链、信任门等其余底座不受影响。
 
+> **2026-08-31 评审修订**：本设计经四模型对抗评审（含业界 14 家多 agent 任务面调研），共识修正已并入正文：
+> ① **完成语义**改为「PR 合并 / Project Status=Done」解锁下游，`gh issue close` 仅为 PR 关联的自动副作用（§0/§6）；
+> ② 投影增加**需求 scope 参数化**与 `schemaVersion`、`linkedPRs`、`openBlockedByCount`（只数未关闭阻塞者）、`hasCycle` 环检测兜底（§4.4）；
+> ③ `task.startWork` 定案为 **renderer 编排桥**（插件 main 认领 → 事件 → 插件 renderer 复用 worktrees.create/openTerminal facade）+ 幂等 + **认领回写**（§4.6，二轮修订替代原「受控命令」方向）；
+> ④ 事实更新：GHES 3.19+ 已支持依赖边、gh CLI 2.94+ 原生 `--blocked-by`/`--blocking`、依赖边支持跨仓库（§4.7/§10）；
+> ⑤ **视图层升级为 applet 供给体系**（源码级、参数化、含完整逻辑闭环的视图单元），本文 §5 收缩为数据面对接要求，视图设计移交配套文档 [`2026-08-31-canvas-applet-supply-and-task-views-design.md`](2026-08-31-canvas-applet-supply-and-task-views-design.md)；
+> ⑥ 发现性补**固定入口 + 首开脚手架**（入口固定、实体仍是画布，不新增 panel kind，§2.5）；
+> ⑦ 无人值守整图推进第一路径为 **tracker 自动化**，外部编排器（Orca 等）定位可选实验集成（§6）；
+> ⑧ **二轮评审（同日）追加并已行内并入**：完成列 P0 只读（防拖卡绕过 PR 解锁）、投影 scope 全链路（canvas 桥/广播/租约）、工厂式入口（quick pick + scope 向导）、bundled 安装面与 external projectSettings facade 前置、三列启发式、按卡 mutation lane + 乐观保护窗、卡片语义状态 + 消息中心通知、清理工作树、task-dag 实验定位。
+
 ## 0. 结论速览
 
 看板 / 任务管理 / DAG 三类管理能力按「**任务权威源外接 tracker + 机器本地绑定不同步 + canvas 做灵活视图 + agent 用原生工具写**」落地：
 
 - 任务数据（标题、状态、负责人、依赖边、讨论）的存储、同步、协作、权限、通知**全部外置**到 GitHub Issues（默认）/ Linear / Jira，Pier 不建任务台账、不建同步层。
-- 新增一个官方 builtin 插件 `pier.tasks` 做适配：凭据、轮询缓存、数据投影、写动作、本机 overlay。
-- canvas 保持唯一组装层：`tracker-board` 新配方读投影渲染；存量 `board` 配方重定位为「分支作用域内容板」并补 CRUD。
-- 体验闭环三锚点：**拖卡改状态 P0 即可用**（`task.setStatus` 前置）；卡片**「开工」复合动作**（建工作树 + 起 agent + 绑定）；发现性走 skill 意图提议 + 空态直达连接 + 生成即打开（§2.5）。
-- DAG：依赖边存 tracker（GitHub issue dependencies GA 2025-08，`blockedBy == 0` 即就绪），DAG 视图渲染原语**待重设计**（原 `FlowGraph` 已移除，见文首注记），执行推进由 agent 工作循环 + tracker 自动化承担，**调度不进宿主**。
+- 新增一个官方插件 `pier.tasks` 做适配：凭据、轮询缓存、**带需求 scope 的数据投影**、写动作、本机 overlay。形态**已决（2026-08-31）：managed external**，新包 `packages/plugin-tasks`（§11 决策 1）；发布面进 bundled 官方插件清单与打包资源。
+- 视图层由配套设计承载：任务视图（看板/任务列表/DAG）以**源码级 applet** 交付（P0 项目地金样、P2 插件贡献点 + eject），canvas/markdown 是装配面——见 [`2026-08-31-canvas-applet-supply-and-task-views-design.md`](2026-08-31-canvas-applet-supply-and-task-views-design.md)。存量 `board` 配方重定位为「分支作用域内容板」并补 CRUD。
+- 体验闭环三锚点：**拖卡改状态 P0 即可用**（`task.setStatus` 前置；**完成列 P0 只读**——open 列间拖动只改 label，不得经拖卡 close issue）；卡片**「开工」复合动作**（建工作树 + 起 agent + 认领 + 绑定，renderer 编排桥 §4.6）；发现性 = **工厂式固定入口（已有板 quick pick + 新建 scope 向导）+ 首开脚手架** + skill 意图提议（§2.5）。
+- DAG：依赖边存 tracker（GitHub issue dependencies 已 GA，**`openBlockedByCount == 0` 即就绪**——只数未关闭阻塞者），投影带 `hasCycle` 环检测兜底；**完成证据 = PR 合并 / Project Status=Done**；执行推进由 tracker 自动化（主）+ agent 工作循环承担，**调度不进宿主**。
 - 现有 canvas 底座（积木、投影/动作纪律链、信任门）验证有效，**不推倒重来**。
 
 ## 1. 背景与问题
@@ -55,13 +65,13 @@
 | L0 任务权威源 | GitHub Issues（默认）/ Linear / Jira | 不在 Pier |
 | L1 宿主通用底座 | canvas 壳/信任门、`pier/host` 只读面、`useCanvasFile`、`canvasCommand`、插件运行时、`foreground-activity`、`run.*`、`worktree.*` | 现状保持 |
 | L2 任务适配插件 `pier.tasks` | 凭据 + 轮询缓存 + 投影 + 动作 + 本机 overlay + projectSettings | **新增（本设计主体）** |
-| L3 canvas 视图层 | `tracker-board` 新配方；`board` 重定位内容板；DAG 双源 | 改造 |
+| L3 视图层 | 任务视图以 applet 交付（看板/列表/DAG，配套 spec）；`board` 配方重定位内容板；DAG 双源 | 改造 |
 | L4 skill 教学层 | 作用域判据：分支内容→file / 团队任务→tracker / 运行图→编排器 | 改造 |
 
 ### 2.3 用户旅程
 
-- **团队任务看板**：用户在项目设置里连上 repo（凭据自动复用 gh CLI）→ 让 agent 生成 tracker-board canvas，**生成后 agent 立即打开预览面板挂进布局**（随 dockview 布局持久化）→ 板子显示 issues 列/卡、每张卡叠加「绑定的 worktree + agent 活动点」→ **P0 起拖卡即改状态**（`task.setStatus`），其余改数据可找 agent（gh 原生）→ 卡片「开工」一键建 worktree + 起 agent + 自动绑定（P1.5，§4.6）。
-- **任务依赖 DAG**：同一投影的 `dag` 键 → DAG 视图渲染节点（issue）与边（blockedBy）→ 就绪节点高亮（`blockedBy == 0`）→ agent 领就绪任务开 worktree，完成 close issue，下游自动解锁。渲染原语待重设计（见文首注记），投影数据面不受影响。
+- **团队任务看板**：用户在项目设置里连上 repo（凭据自动复用 gh CLI）→ 经**固定入口（命令面板「任务板」/空态按钮）首开自动脚手架**、或让 agent 生成装配画布（≈10 行：嵌 tracker-board applet + 传需求 scope），**生成后立即打开预览面板挂进布局**（随 dockview 布局持久化）→ 板子显示 issues 列/卡、每张卡叠加「绑定的 worktree + agent 活动点 + PR 徽标」→ **P0 起拖卡即改状态**（`task.setStatus`），其余改数据可找 agent（gh 原生）→ 卡片「开工」一键建 worktree + 起 agent + 认领 + 自动绑定（P1.5，§4.6）。
+- **任务依赖 DAG**：同一投影的 `dag` 键 → DAG 视图渲染节点（issue）与边（blockedBy）→ 就绪节点高亮（`openBlockedByCount == 0`，只数未关闭阻塞者）→ agent 领就绪任务开 worktree，交 PR，**PR 合并后**下游自动解锁。DAG 渲染以 applet 内纯 TS 布局承载（配套 spec §7），投影数据面不受影响。
 - **分支内容板**（存量场景）：发布 checklist、分支内规划——继续走兄弟文件（`useCanvasFile`），数据随分支评审是特性；模板补 CRUD 后可直接使用。
 
 ### 2.4 非目标
@@ -76,13 +86,14 @@
 
 心智锚点：**「我的 GitHub Issues 在 Pier 里长出了手脚」**——权威数据在用户已有的 tracker（零学习成本、信任边界清晰），Pier 只叠加本地执行力。界面持续回答「这份数据是谁的」：板标题带 repo 名、卡片号点开浏览器原 issue、陈旧时标「数据来自 x 分钟前」。
 
-发现性三钩子（本能力无固定产品入口——canvas 哲学的既定代价，目标画像是重度 agent 用户）：
+发现性四钩子（**2026-08-31 修订**：评审判定「纯靠 skill 提议」发现链断裂——`SKILL.md` 为显式调用模式，无自动触发承载；补固定入口，**入口固定、实体仍是画布**，不新增 panel kind）：
 
-1. **skill 意图提议**：agent 识别任务管理意图（「帮我管理这些任务」）时主动提议生成 tracker-board。
-2. **空态直达**：未连接 tracker 的 `Empty` 带 `settings.open` 动作直达 projectSettings 连接页。
-3. **生成即打开**：agent 生成后立即打开预览面板挂进 dockview 布局（布局持久化，二次启动仍在）。
+1. **固定入口（工厂式，2026-08-31 二轮定案）**：命令面板「任务板」+ 连接后空态按钮——先列**已有板 quick pick**，「新建」走 scope 向导（默认当前 remote，禁止无过滤全仓首板）后脚手架并打开；关板 = 显式删除确认。信任门如实呈现（「将创建并打开任务板」），拒信保留文件并给下一步；已授信项目下近似无感知。
+2. **skill 意图提议**：agent 识别任务管理意图（「帮我管理这些任务」）时主动提议生成 tracker-board（承载机制见配套 spec §8）。
+3. **空态直达**：未连接 tracker 的 `Empty` 带 `settings.open` 动作直达 projectSettings 连接页。
+4. **生成即打开**：脚手架/agent 生成后立即打开预览面板挂进 dockview 布局（布局持久化，二次启动仍在）。
 
-零配置默认：无状态标签时降级两列（进行中/已完成，state+assignee 启发式）；projectSettings 提供「一键创建标准状态标签」；检测到标签自动升级多列。**首跑不得要求用户先去 GitHub 配置。**
+零配置默认（2026-08-31 二轮修订）：无状态标签时**三列启发式**——未指派 open=待办 / 已指派 open=进行中 / closed=**完成（只读列）**；projectSettings 提供「一键创建标准状态标签」，检测到标签自动升级多列。两列（进行中/已完成）方案已否决：待办与进行中混列丢失「从就绪队列领活」的看板主作业，且拖入「已完成」= close issue 会绕过 PR 合并解锁语义。**首跑不得要求用户先去 GitHub 配置。**
 
 ## 3. 总体架构
 
@@ -99,7 +110,7 @@ graph TB
   end
 
   subgraph Main["Pier main 进程"]
-    subgraph Plugin["L2 pier.tasks 插件（builtin）"]
+    subgraph Plugin["L2 pier.tasks 插件（managed external）"]
       CRED["凭据链<br/>gh auth token → safeStorage"]
       PROV["Provider 抽象<br/>github | linear | jira"]
       POLL["轮询器<br/>watch 租约驱动 + 手动刷新"]
@@ -113,9 +124,9 @@ graph TB
 
   subgraph Renderer["Pier renderer"]
     BRIDGE["pier/host 桥<br/>useHostSnapshot / pluginAction.invoke"]
-    subgraph Canvas["L3 canvas（.canvas.tsx 组装）"]
-      BOARD["tracker-board 模板<br/>Droppable/Sortable 列卡"]
-      DAG["DAG 视图<br/>（渲染原语待重设计）"]
+    subgraph Canvas["L3 视图（applet + 薄装配画布）"]
+      BOARD["tracker-board applet<br/>Droppable/Sortable 列卡（装配画布嵌入）"]
+      DAG["task-dag applet<br/>（纯 TS 布局，后置）"]
     end
   end
 
@@ -136,7 +147,7 @@ graph TB
 ### 4.1 模块结构
 
 ```
-src/plugins/builtin/tasks/
+packages/plugin-tasks/src/   # managed external（已决），布局对齐 packages/plugin-codex
 ├── manifest.ts            # dataProjections: ["board","dag"]；canvasActions（setStatus P0，其余 P1）；projectSettings
 ├── main/
 │   ├── index.ts           # 插件 main 入口：注册 projection/action handler
@@ -153,7 +164,7 @@ src/plugins/builtin/tasks/
 └── locales/{en,zh-CN,ja,ko}.json
 ```
 
-纪律：模块不 import `services/agents/`；投影/动作键未在 manifest 声明一律拒绝（既有 `assertDeclaredContribution` 链）。
+纪律：模块不 import `services/agents/`；投影/动作键未在 manifest 声明一律拒绝（main 侧投影服务声明检查）。**前置缺口（2026-08-31 二轮核实）**：managed external 的 renderer 容境现无 `projectSettings.register` facade（仅 builtin 有）——P0 先补 facade + 声明断言 + 生命周期回收；发布面须列入 bundled 官方插件清单与 electron-builder extraResources，否则生产包内固定入口打开的是空板。
 
 ### 4.2 凭据链
 
@@ -176,35 +187,47 @@ flowchart LR
 - 限流：GitHub 认证 REST 5000/h、GraphQL 按点数——单板轮询远低于配额；429/abuse 响应指数退避并在投影里带 `staleSince`。
 - 缓存双层：内存快照（投影即时应答）+ userData 落盘（重启/离线时只读展示，UI 标注「数据来自 {time}」）。
 - 机会主义刷新：绑定 worktree 内 agent 回合结束（main 侧监听 `foreground-activity` 广播）→ 立即拉取一次；动作写成功后同样即时拉取。消除「终端已完成、看板还旧」的感知失真。
+- **手动刷新（2026-08-31 二轮增）**：板顶栏「数据来自 x 分钟前」旁必须有刷新按钮（即时拉取 + 重置轮询计时）；`usageData.refresh` 是用量通道，不得挪用。
+- **通知（P1.5）**：被 watch 的板发生「PR 合并 / 下游任务转就绪」时经宿主消息中心投递（遵循既有投递纪律），用户不盯板也不错过解锁；不建任务级会话台账，停止/重试仍在终端面板。
 
 ### 4.4 投影契约
 
 投影顶层保留键（`payload`/`key`/`pluginId`）遵守既有信封约定；canvas 侧类型 `unknown` 自行收窄（不把 DTO 写进 `pier/canvas` sdk——既有铁律）。
 
+**需求 scope 参数化（2026-08-31 修订，评审 critical）**：投影键支持规范化查询后缀——`board?milestone=<名>` / `board?label=req%2Fx`（canvas 侧 `useHostSnapshot("plugin:pier.tasks/board?milestone=…")`）。manifest 仍只声明基键（`board` / `dag`），宿主按基键校验声明、按完整键计 watch 租约；`pluginData.snapshot` / `watchStart` 契约需扩一个可选 `params`（现实现给投影 handler 传 `null`）。**改动是全链路（2026-08-31 二轮核实）**：canvas 桥的 watch 目标解析现把 `?` 后整串当 key、声明校验按全键、广播按全键过滤、`useHostSnapshot` 组 payload 不带 params——须同步改 `canvas-host.ts` 的 `parsePluginDataWatchTarget`（拆基键 + 规范化 params）、renderer host 桥传参、命令透传与广播信封带 scope，并以「双 scope × 双窗」测试锁定不串台。**过滤在 provider 查询侧完成、截断在过滤之后**——禁止「全仓拉取 + 前端筛」（每列 50 截断会把需求内的卡漏掉）。多项目窗口下 scope 含 `projectRootPath` 派生的 repo 绑定，不同项目不共享同一份投影。
+
 ```ts
-// plugin:pier.tasks/board
+// plugin:pier.tasks/board?milestone=<需求>
 {
-  source: { provider: "github", repo: "owner/name" },
+  schemaVersion: 1,                    // 2026-08-31 增：投影 shape 演进锚点（ejected 视图对账用）
+  source: { provider: "github", repo: "owner/name", scope: { milestone: "结算重构" } },
   updatedAt: string, staleSince?: string,
-  columns: [{ id, title, totalCount, truncated }], // v0: state+label 映射（无标签降级两列）；P3: Projects V2 status
+  canWrite: boolean,                   // P1 增：当前主体动作能力；只读协作者前置禁用拖拽（不要等 403）
+  columns: [{ id, title, totalCount, truncated, readonly? }], // v0: 三列启发式（完成列 readonly）；标签升级多列；P1: Projects V2 可选
   cards: [{
-    key,                               // "gh:owner/name#123"
+    key,                               // "gh:owner/name#123"（完整键；依赖可跨仓，裸 number 不是唯一桥）
     number, title, state, url,
     assignees: string[], labels: string[],
-    milestone?: string | null,         // GitHub 单里程碑标题；canvas 侧筛选用
-    blockedByCount: number,            // 就绪判据：=== 0
+    milestone?: string | null,
+    openBlockedByCount: number,        // 就绪判据：=== 0（只数未关闭阻塞者；GitHub total_blocked_by 含已关闭，不可直用）
+    externalBlockedByCount: number,    // 板外/跨仓阻塞者数：>0 时卡片标「外部阻塞」徽标，不得静默隐藏
+    externalBlockers?: [{ key, repo, number, title, state, url }],  // P1 增：悬停可见谁在挡（只有计数会把用户赶回 GitHub 排查）
+    linkedPRs: [{ number, state, checks? }],  // P1 增：issue→PR→checks 中段；完成证据 = PR 合并
     columnId,
     overlay?: { worktreePath?, panelId?, boundAt }   // 本机 join，跨机自然缺席
   }]
   // 投影默认只含 open issues、每列上限 50（truncated 标记溢出，出口链接去 GitHub 看全量）；
-  // 负责人/label/milestone 细筛在 canvas 侧对投影数据客户端过滤（SDK Select/Input）
+  // 负责人等细筛仍可在视图侧客户端过滤，但需求 scope 必须走投影参数（服务端切片）
 }
 
-// plugin:pier.tasks/dag
+// plugin:pier.tasks/dag?milestone=<需求>
 {
+  schemaVersion: 1,
   source, updatedAt,
-  nodes: [{ key, number, title, state, blockedByCount, url, overlay? }],
-  edges: [{ from, to }]                // from blocks to（blockedBy 反向展开）
+  hasCycle: boolean,                   // 环检测兜底：GitHub 平台校验环、Jira 明确允许环、Linear 不承诺——投影统一拓扑检测
+  cycleKeys: string[],                 // 环上节点：视图亮警告，而非任务静默永不就绪
+  nodes: [{ key, number, title, state, openBlockedByCount, url, overlay? }],
+  edges: [{ from, to }]                // from blocks to（blockedBy 反向展开）；板外边给幽灵节点或外部徽标
 }
 ```
 
@@ -233,7 +256,9 @@ sequenceDiagram
 
 ### 4.5 动作契约与写路径
 
-manifest `canvasActions` 声明键与分期：**P0**——`task.setStatus`（拖卡首日可用，工期换体验的已决取舍见 §10）；**P1**——`task.create`、`task.assign`、`task.close`、`dep.add`、`dep.remove`、`task.bindWorktree`、`task.unbindWorktree`；**P1.5**——`task.startWork`（复合动作，§4.6）。
+manifest `canvasActions` 声明键与分期：**P0**——`task.setStatus`（拖卡首日可用，工期换体验的已决取舍见 §10）；**P1**——`task.create`、`task.assign`、`task.close`、`dep.add`、`dep.remove`、`task.bindWorktree`、`task.unbindWorktree`；**P1.5**——`task.startWork`（复合动作 + 认领回写 + 幂等，§4.6）。
+
+**拖卡边界（2026-08-31 二轮修订）**：P0 列间拖动仅限 open 列之间（改 label）；「完成」列**只读**——拖卡不得 close issue（否则 `openBlockedByCount` 归零，绕过「PR 合并才解锁」）；完成列条件可写推迟 P1（仅 `linkedPRs` 已 merged 或用户显式确认时允许拖入）。**写收敛协议**：写队列**按卡分 lane**（防跨卡队头阻塞）；mutation 后设 5–8 秒乐观保护窗 + 本地 generation，期间丢弃更旧快照（GitHub 写后副本延迟 0.5–3s，否则写后即拉会把卡弹回原列）；同卡连续操作只保留最新意图；失败回滚后续操作进单测。
 
 ```mermaid
 sequenceDiagram
@@ -269,22 +294,24 @@ sequenceDiagram
 
 - 存储：`{userData}/plugins/pier.tasks/overlay/<repoKey>.json`，形如 `{ [issueKey]: { worktreePath, panelId?, boundAt } }`。repoKey 从 remote URL 规范化派生（不建 Project 注册表——既有约定）。
 - 写入：`task.bindWorktree`（绑定既有工作树）与 `task.startWork` 复合动作；读取只在投影 join 时。
-- **`task.startWork`（开工，人体工程学基石）**：卡片一键完成「创建 worktree（宿主 `worktree.create` 命令已存在，复用既有创建流与确认）→ 启动 agent 会话并注入 issue 上下文（编号/标题/链接/验收标准）→ 写 overlay 绑定」。定性为**动作转发**（单次、用户触发、经宿主既有命令面），不是调度器；实现前核实插件侧对 `worktree.create` 与会话启动命令的授权面（`allowedClientKinds`），有缺口则在 P1.5 补受控命令并进治理测试。
+- **`task.startWork`（开工，人体工程学基石）**：卡片一键完成「创建 worktree → 启动 agent 会话并注入 issue 上下文（编号/标题/链接/验收标准）→ **认领回写 tracker**（assign 当前用户或 in-progress label——行业 claim 协议：Copilot「assign 即派工」、Linear delegate 保留 assignee 问责；防两机/两人重复开工）→ 写 overlay 绑定」。定性为**动作转发**（单次、用户触发），不是调度器。**编排桥（2026-08-31 二轮定案）**：插件 main 调不到宿主命令（`authorizeCommand` 默认拒插件主体），但插件 **renderer** 已有 `context.worktrees.create` + `openTerminal({ agentId, taskPrompt })`（git 插件同款 facade）——链路定为：canvas 动作 → `task.startWork` RPC → 插件 main 认领 + 写 overlay → 事件给本窗插件 renderer → 复用既有 facade 建工作树、起 agent 并注入 issue 上下文。**部分成功回滚**（树建了/终端没起/认领已写）进治理测试；不为此新造宿主命令，除非该桥无法满足确认/授权语义。`startWork` 点亮前不得以假按钮上线。**幂等**：已存在有效绑定时按钮变「聚焦会话 / 查看工作树」，不重复创建。「启动全部就绪任务」为一次性扇出（N 次 startWork，用户触发、封顶 N、无等待循环），不构成调度。
 - 悬空降级：worktree 路径不存在（`worktree.check`）→ 投影标 `stale: true`，卡片显示「工作树已移除」，不阻塞渲染。
-- agent 活动点**不进 overlay**：canvas 直订 `useHostSnapshot("foreground-activity")`，按 overlay 的 panelId/worktreePath 在视图层匹配——插件不 import 活动域，边界单向。
+- agent 活动点**不进 overlay**：canvas 直订 `useHostSnapshot("foreground-activity")`，按 overlay 的 panelId/worktreePath 在视图层匹配——插件不 import 活动域，边界单向。**状态映射（2026-08-31 二轮增）**：`waiting`（需要你处理）/`error`/`processing` 须映射为卡片可见语义状态并支持点击聚焦对应面板，不止一个圆点；停止/重试仍留终端面板，不进 applet。
+- **清理工作树（P1.5）**：PR merged/closed 且卡片有 overlay 绑定时提供「清理工作树」入口（宿主既有删除流 + 清 overlay），补齐开工→归档生命周期。
 
 ### 4.7 Provider 抽象与降级
 
-- 接口封在插件内部（`providers/types.ts`），投影 shape 对 canvas 恒定；**不对外输出通用 tracker SDK**（避免二次封装红线）。
-- GitHub：issues + dependencies（GA）+ sub-issues；每 issue 每类依赖上限 50，超大图用 sub-issues 分层。
-- GHES：dependencies 截至 2025-11 未支持 → 探测降级为 label 约定边（`blocked-by:#N`）或引导用 Linear/Jira。
-- Linear（P3）：`issueRelations`（blocks/blocked-by 一等公民）；Jira（P3）：`issuelinks` 类型化链接。
+- 接口封在插件内部（`providers/types.ts`），投影 shape 对 canvas 恒定；**不对外输出通用 tracker SDK**（避免二次封装红线）。Provider 必须声明 **capabilities 矩阵**（依赖边有无、列语义来源 label/status/project、可否建需求容器等），缺什么显式降级什么，不承诺三家完全同构 CRUD/DAG。
+- GitHub：issues + dependencies（GA，支持**跨仓库**边 `owner/repo#123`，平台侧有环校验）+ sub-issues；**层级（sub-issues，树）与依赖（dependencies，DAG）是两套关系，分开消费**——前者做需求分组，后者进 `dag` 投影。每 issue 每类依赖上限 50，超大图用 sub-issues 分层。**gh CLI 2.94+（2026-06）原生支持 `--blocked-by`/`--blocking` 及 `--json blockedBy,blocking`**——agent 写路径做版本探测，老版本回退 `gh api graphql`（skill 附模板）。
+- GHES：**3.19+ 已支持 dependencies**（REST 端点已入 GHES 3.21 文档）→ label 约定边（`blocked-by:#N`）降级链仅针对更老版本。
+- Linear（P3）：`issueRelations`（blocks/blocked-by 一等公民，不承诺防环）；Jira（P3）：`issuelinks` 类型化链接（**明确允许环**、一次 REST 只能加一条、link type 管理员可改名）——环检测统一由投影层兜底（§4.4 `hasCycle`），不依赖任何平台防环。
+- 需求容器映射：GitHub milestone / `req/*` label / 父 issue + sub-issues；Linear Project；Jira Epic。需求管理重的团队常见**混合形态**（需求层 Linear/Jira + 开发任务层 GitHub，官方双向同步打通）——Pier 只盯工程侧一头，provider 无需切换。
 
 ## 5. 技术设计 B：canvas 视图层与配方
 
 ### 5.1 `tracker-board` 配方（新增）
 
-- 模板即 P0 金样：`resources/system-skills/pier-canvas/templates/tracker-board.canvas.tsx` + 配方 `packs/recipes/tracker-board/pack.json`（`stage: fill`）。**不**落 `.pier/canvases/tracker-board/`——仓库 canvases 只留 canvas-kit / pier-cli-user-manual / smoke（见 `.pier/canvases/README.md`）。agent 按用户项目生成后立即打开预览。
+- **2026-08-31 修订**：视图实现改由 **applet** 承载（源码级、参数化、含数据消费/乐观更新/空态错误态的完整闭环单元），applet 契约、供给（P0 项目地 `lib/` 金样、P2 插件贡献点 + eject）、产生环节（固定入口 + 脚手架）与装配面见配套设计 [`2026-08-31-canvas-applet-supply-and-task-views-design.md`](2026-08-31-canvas-applet-supply-and-task-views-design.md)。模板 `templates/tracker-board.canvas.tsx` 收缩为**薄装配示例**（≈10 行：import applet + 传 scope props）+ 配方 `packs/recipes/tracker-board/pack.json`（`stage: fill`）。**不**落 `.pier/canvases/tracker-board/`——仓库 canvases 只留 canvas-kit / pier-cli-user-manual / smoke（见 `.pier/canvases/README.md`）。
 - 组装：根 `<Stack fill>`；列 `Droppable` + 卡 `Sortable`（复用现有 DnD 积木）；数据 `useHostSnapshot("plugin:pier.tasks/board")` 收窄渲染；活动点双订阅 foreground-activity。
 - 状态面：投影 `status` 为 loading/error/ready 三态 + 无凭据 `Empty` 引导（「未连接任务系统。请在设置 → 项目中连接」，文案进 locale）；`staleSince` 显示数据时间。写失败用壳内 `Alert`（不要 `showAppAlert`）。
 - P0 交互：拖卡改状态可用（`task.setStatus`，乐观更新/失败回滚）；卡片标题点开浏览器原 issue（心智锚：数据在 GitHub）；筛选控件（负责人/label/milestone，`Select`/`Input` 客户端过滤投影数据——卡片带 `milestone`）+ 列溢出「在 GitHub 查看全部」出口；「开工」按钮 P1.5 点亮。
@@ -292,7 +319,7 @@ sequenceDiagram
 
 ### 5.2 DAG 视图（**阻塞：渲染原语待重设计**）
 
-- 原方案（`FlowGraph` + `layoutFlowGraph`，节点按 state 着色、就绪高亮、位置拖拽持久化兄弟 JSON）随 FlowGraph 于 2026-08-30 移除而失效。本节在定稿前须给出新的「具体 DAG 能力」方案（产品决策：不再以通用画图原语形态提供）；投影 `dag` 键的数据面设计不受影响。
+- 原方案（`FlowGraph` + `layoutFlowGraph`，节点按 state 着色、就绪高亮、位置拖拽持久化兄弟 JSON）随 FlowGraph 于 2026-08-30 移除而失效。**2026-08-31 解法**：DAG 布局以**纯 TS 实现内嵌 task-dag applet**（分层布局约百行、SVG 渲染；React 编译围栏禁 node_modules，不引第三方图库）——宿主不再重建通用画图原语，僵局解除。task-dag 从首发清单**后置**（前置条件：tracker-board applet 跑通 + 投影 `dag` 键 `hasCycle`/幽灵节点语义落地）。
 - 计划层 / 执行层分工原则保留：**任务依赖 DAG（计划层）读 tracker 投影；运行图（执行层）走编排器 loopback / `run.*`**。两张图不混。原 orchestration 配方已随 FlowGraph 删除。
 
 ### 5.3 存量配方改造
@@ -303,22 +330,26 @@ sequenceDiagram
 
 ### 5.4 skill 教学
 
-- `SKILL.md` 新增「作用域判据」节：分支内容 → `useCanvasFile`；团队任务/依赖 → `plugin:pier.tasks/*` 投影；运行图 → 编排器。recipe 表加 `tracker-board` 行。
+- `SKILL.md` 新增「作用域判据」节：分支内容 → `useCanvasFile`；团队任务/依赖 → `plugin:pier.tasks/*` 投影；运行图 → 编排器。recipe 表加 `tracker-board` 行（薄装配形态）。**applet 优先工作流与 authoring 期发现通道**（`plugin.inspect` 是 canvas 运行时 API，agent 在终端 authoring 期读不到 propsSchema——需 CLI 侧发现输出）见配套 spec §8。
 - 物料登记：`src/renderer/lib/canvas-materials/catalog-entries.ts` + `settings-materials` 四语 locale；仍无领域组件行（登记的是配方/物料，不是 `<Kanban>` 组件）。
-- 意图钩子：skill 教 agent 识别任务管理意图时主动提议 tracker-board，生成后立即打开预览面板（发现性钩子 ①③，§2.5）。
+- 意图钩子：skill 教 agent 识别任务管理意图时主动提议 tracker-board，生成后立即打开预览面板（发现性钩子 ②④，§2.5）——注意 `SKILL.md` 现为显式调用模式（`disable-model-invocation: true`），「主动提议」的承载机制在配套 spec §8 给出，不得假设 skill 自动进上下文。
 
 ## 6. DAG 执行闭环（无宿主调度器）
 
+**完成语义（2026-08-31 修订，评审 critical）**：解锁下游的判据是 **PR 合并（closingIssuesReferences 自动 close issue）或 Project Status=Done**，不是 agent 自行 `gh issue close`——worker 自报完成可能只是产出了未合并代码，提前解锁会错误放行下游。无人值守整图推进的**第一路径是 tracker 自动化**（Jira Automation 已把 Copilot/Cursor/Claude 列为原生 action step；GitHub Actions / Linear triage 同构）；外部编排器（Orca + orca-dag viewer 自驱 coordinator）定位为**可选实验集成**（同赛道产品 + 社区调度器，供应风险自担；§10 原否决维持），官方文档不指名依赖。
+
 ```mermaid
 flowchart TB
-  T["tracker：issues + blockedBy 边"] --> R{"就绪集<br/>open 且 blockedByCount == 0"}
-  R -->|"v0：agent 工作循环"| A["agent 领任务<br/>gh 查询 → 开 worktree → 实现"]
-  R -->|"v1：tracker 自动化"| AUTO["Jira automation / GitHub Actions<br/>issue 解锁 → 自动指派 agent"]
-  A --> PR["PR 合并 / issue close"]
+  T["tracker：issues + blockedBy 边"] --> R{"就绪集<br/>open 且 openBlockedByCount == 0<br/>（hasCycle 时视图亮警告）"}
+  R -->|"人工：看板/DAG 点「开工」<br/>或「启动全部就绪」一次性扇出"| A["agent 认领 + 开 worktree<br/>→ 实现 → 交 PR"]
+  R -->|"无人值守（主路径）：tracker 自动化<br/>issue 解锁 → 自动指派 agent"| AUTO["Jira Automation / GitHub Actions / Linear triage"]
+  R -.->|"可选实验：外部编排器"| EXP["Orca 等 viewer 自驱派发<br/>→ worker 交 PR"]
+  A --> PR["PR 合并（自动 close issue）"]
   AUTO --> PR
+  EXP -.-> PR
   PR --> T
-  T -.->|轮询| V["Pier canvas：DAG 视图就绪高亮（原语待重设计）<br/>+ 本机 agent 活动叠加"]
-  V -.->|"「开工」= task.startWork 复合转发<br/>建 worktree+起 agent+绑定（非调度）"| T
+  T -.->|轮询| V["Pier 视图（applet）：就绪高亮<br/>+ 本机 agent 活动点 + PR 徽标"]
+  V -.->|"「开工」= task.startWork 复合转发<br/>建 worktree+起 agent+认领+绑定（非调度）"| T
 ```
 
 ## 7. 改造与删除清单
@@ -327,10 +358,11 @@ flowchart TB
 
 | 项 | 路径 |
 |---|---|
-| 任务适配插件 | `src/plugins/builtin/tasks/**`（manifest/main/renderer/locales） |
-| tracker-board 模板（P0 金样） | `resources/system-skills/pier-canvas/templates/tracker-board.canvas.tsx` |
-| tracker-board 配方 | `resources/system-skills/pier-canvas/packs/recipes/tracker-board/pack.json` |
-| 治理测试 | `tests/unit/plugins/tasks/`（manifest 声明链、投影 shape、凭据不泄漏）；对齐 plugin-data-projections 既有模式 |
+| 任务适配插件 | `packages/plugin-tasks/**`（managed external 已决，布局对齐 `packages/plugin-codex`）+ bundled 官方插件清单与 electron-builder extraResources 注册 |
+| tracker-board applet（P0 金样，视图实现） | 官方模板经脚手架放入项目 `.pier/canvases/lib/tracker-board.applet.tsx`（供给与 eject 见配套 spec §5） |
+| tracker-board 薄装配模板 + 配方 | `resources/system-skills/pier-canvas/templates/tracker-board.canvas.tsx`（≈10 行）+ `packs/recipes/tracker-board/pack.json` |
+| 固定入口 + 脚手架 | 命令面板「任务板」/ 空态按钮 → 首开生成装配画布并打开（配套 spec §6） |
+| 治理测试 | `tests/unit/plugins/tasks/`（manifest 声明链、投影 shape + scope 参数、凭据不泄漏）；对齐 plugin-data-projections 既有模式 |
 
 ### 7.2 修改
 
@@ -358,11 +390,11 @@ canvas 壳/信任门/热重载、`Sortable`/`Droppable`/`useCanvasFile`/`canvasC
 
 | 期 | 内容 | 解锁 | 量级 |
 |---|---|---|---|
-| P0 | 插件骨架 + GitHub 投影（默认过滤/每列上限）+ `task.setStatus` 动作 + tracker-board **模板**（拖卡/筛选/空态直达/生成即开，不落仓库 canvases）+ projectSettings（零配置列默认） | 板子出数据且**拖卡可用**；agent gh 写回流 | 约一周 |
-| P1 | 其余 canvasActions（create/assign/close/dep.*）+ 写队列完备 | 全量交互写 | 3-5 天 |
-| P1.5 | 本机 overlay + `task.startWork` 开工复合动作 + 活动点叠加 + 机会主义刷新 | 「看板即驾驶舱」闭环 | 3-4 天 |
-| P2 | 存量配方改造（board **模板**补 CRUD + 重定位 + skill + 物料登记；不重建 `.pier/canvases/kanban/`） | 内容板可直接使用；教法闭环 | 2-3 天，可与 P0 并行 |
-| P3 | Linear/Jira provider + Projects V2 status 列 + GHES 降级 | 生态扩展 | 按需 |
+| P0 | `packages/plugin-tasks` 骨架（含 bundled 安装面 + external projectSettings facade 前置）+ GitHub 投影（**scope 全链路参数化 + schemaVersion**，服务端过滤后截断）+ `task.setStatus`（open 列间；**完成列只读**；按卡 lane + 乐观保护窗）+ tracker-board **applet**（三列启发式/键盘移动/手动刷新）+ **工厂式入口/脚手架** | 板子出数据且**拖卡可用**；agent gh 写回流 | 约 2 周 |
+| P1 | 其余 canvasActions（create/assign/close/dep.*）+ 投影补 `linkedPRs` / `hasCycle` / `externalBlockers` / `canWrite` + **PR 合并解锁判据** + 完成列条件可写 + **Projects V2 绑定可选项** + task-list applet + 批量/键盘完善 | 全量交互写；补齐 issue→PR→checks 中段 | 5-7 天 |
+| P1.5 | **renderer 编排桥**（main 认领 + overlay → 事件 → renderer 复用 worktrees.create/openTerminal，部分成功回滚测试）+ `task.startWork`（幂等）+ 卡片语义状态映射 + 消息中心通知 + 清理工作树入口 + 「启动全部就绪」一次性扇出 + 机会主义刷新 | 「看板即驾驶舱」闭环 | 4-5 天 |
+| P2 | 存量配方改造（board 模板补 CRUD + 重定位 + skill + 物料登记）∥ **applet 插件贡献点**（`manifest.applets` + 引用解析 + eject；前置条件：投影契约在真实使用中稳定；设计见配套 spec §5.2） | 内容板可用；视图供给制升级 | 见配套 spec |
+| P3 | Linear/Jira provider + 老 GHES 降级 + task-dag applet（**实验定位**，设布局质量退出条件）+ markdown 只读嵌入（配套 spec §6.3） | 生态扩展 | 按需 |
 
 ## 9. 治理检查点
 
@@ -380,18 +412,25 @@ canvas 壳/信任门/热重载、`Sortable`/`Droppable`/`useCanvasFile`/`canvasC
 - **已否决：绑定 Orca 等外部编排器作为任务状态所有者**。编排器是同赛道产品；「运行图 viewer」与任务依赖 DAG 的计划/执行分工原则见 §5.2（原 orchestration 配方已随 FlowGraph 删除）。
 - **已否决：宿主任务台账 / SDK 领域组件 `<Kanban>`**。铁律 + 业界证伪（react-beautiful-dnd 废弃、商业黑盒组件定制墙）。
 - **已决：凭据复用 gh CLI 须显式授权**，不静默读取。
-- **已决：v0 列语义用 state+label 映射**，Projects V2 status 推迟 P3（GraphQL 复杂度与 Project 依赖）。
+- **已决（2026-08-31 更新）：v0 列语义用三列启发式**（未指派 open / 已指派 open / closed 只读），Projects V2 绑定提前为 **P1 可选项**（团队已用网页板时消除双写不对齐）。
 - **已决：`task.setStatus` 前置 P0**——P0 工期从数天增至约一周，换「长得像看板就能拖」的首日体验；只读板违反看板第一直觉。
 - **已决：`task.startWork` 定性为动作转发**（用户触发的单次复合，经宿主既有命令面），不触碰「不做调度器」铁律；插件命令授权面缺口在 P1.5 补齐并进治理测试。
-- **已决：零配置优先**——无标签降级两列 + 一键创建标准标签，首跑不得强制用户先配置 GitHub。
-- **残留风险**：GitHub 依赖边 GHES 不可用（降级链 §4.7）；每类 50 边上限（sub-issues 分层）；轮询实时性秒~分钟级（可接受，后续可评估 webhook→本地转发器，但引入公网面，默认不做）；官方 GitHub MCP 写依赖边有缺口（agent 走 `gh api graphql` 无碍）。
+- **已决：零配置优先**——无标签三列启发式（完成列只读）+ 一键创建标准标签，首跑不得强制用户先配置 GitHub。
+- **已决（2026-08-31 二轮）：P0 完成列只读**——拖卡不得 close issue，完成写入以 PR 证据为前提（P1 条件可写）；否则首日体验就推翻「PR 合并才解锁」。
+- **已决（2026-08-31 评审并入）：完成证据 = PR 合并 / Project Status=Done**，`issue close` 只是 PR 关联的自动副作用，不作解锁判据（worker 自报完成 ≠ 验收）。
+- **已决（2026-08-31）：开工必须认领**——`startWork` 回写 assignee / in-progress label（行业 claim 协议），叠加幂等（已绑定 → 聚焦会话）；落地走 renderer 编排桥（§4.6），不新造宿主命令。
+- **已决（2026-08-31）：投影按需求 scope 切片**（服务端过滤后截断），禁止「全仓拉取 + 前端筛」——每列 50 截断会丢需求内的卡。
+- **已否决（2026-08-31）：宿主级成品视图 applet**（activity / cost / git 等）——与「不设官方成品模板」hard ban 及工作台拆除金标准冲突；宿主域继续 hook + 积木教学，applet 供给只有插件级与项目级（配套 spec §5.3）。
+- **已否决（2026-08-31）：markdown fence 的 `src` 任意路径变体**——打开文档即执行任意项目代码，项目信任被追溯放宽；只保留「仅 id 引用已安装插件 applet + 显式启用 + 只读」形态且后置 P3（配套 spec §6.3）。
+- **残留风险（2026-08-31 更新）**：每类 50 边上限（sub-issues 分层缓解）；轮询实时性秒~分钟级——30-120s 滞后可能诱发滞后拖卡，UI 强制「数据来自 x 分钟前」+ 写后回读收敛，后续可评估 webhook→本地转发器（引入公网面，默认不做）。~~GHES 依赖边不可用~~ 已过时（3.19+ 支持，§4.7）；~~gh 写依赖边须 graphql~~ 已过时（gh 2.94+ 原生 flags，老版本回退模板）。
 
 ## 11. 开放决策点
 
 | # | 决策 | 建议 |
 |---|---|---|
-| 1 | 插件形态：builtin `pier.tasks` vs managed external | builtin 孵化，稳定后按 `pier.codex` 路径外迁 |
-| 2 | GitHub 凭据：复用 gh CLI vs 自建 OAuth app | 复用 gh CLI（显式授权） |
-| 3 | v0 列语义：label/state vs Projects V2 | label/state 起步 |
+| 1 | 插件形态：builtin `pier.tasks` vs managed external | **已决（2026-08-31）：managed external**，新包 `packages/plugin-tasks` 对齐 `pier.codex`；决定性证据：builtin 容境仅有 `configuration`（RPC/secrets/paths 只在 external 容境）；前置：external projectSettings facade + bundled 安装面 |
+| 2 | GitHub 凭据：复用 gh CLI vs 自建 OAuth app | 复用 gh CLI（显式授权）；补 token 双份生命周期治理（失效清除、登出清 userData 缓存） |
+| 3 | v0 列语义：label/state vs Projects V2 | **已决（2026-08-31）**：零配置三列启发式（完成列只读）起步 + 板标题明示「列按标签映射」；Projects V2 绑定为 **P1** projectSettings 可选项 |
 | 4 | 产品词：Issue 中文界面用词（议题/任务） | 「任务」（与智能体/工作树同级的产品词，避免直出英文） |
 | 5 | kanban 模板 CRUD（P2）是否与 P0 并行 | 并行（互不依赖） |
+| 6 | applet 相关决策（产品词、propsSchema 格式、deprecated 治理、目录规范） | 见配套 spec [`2026-08-31-canvas-applet-supply-and-task-views-design.md`](2026-08-31-canvas-applet-supply-and-task-views-design.md) §13 |

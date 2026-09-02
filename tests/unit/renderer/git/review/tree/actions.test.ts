@@ -160,13 +160,13 @@ describe("git review tree actions", () => {
     expect(ids).toContain("pier.git.review.unstageFile");
     expect(ids).not.toContain(GIT_REVIEW_OPEN_FILE_COMMAND_ID);
     expect(menuSketch(directoryMenu)).toEqual([
-      "pier.git.review.openDirectory",
-      "|",
       "pier.git.review.stageFile",
       "pier.git.review.unstageFile",
       "|",
       "pier.git.review.expandAll",
       "pier.git.review.collapseFolders",
+      "|",
+      "pier.git.review.openDirectory",
       "|",
       "pier.git.review.copyPath",
       "pier.git.review.copyRelativePath",
@@ -189,12 +189,12 @@ describe("git review tree actions", () => {
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     });
     expect(menuSketch(groupRootMenu)).toEqual([
-      "pier.git.review.openDirectory",
-      "|",
       "pier.git.review.stageFile",
       "|",
       "pier.git.review.expandAll",
       "pier.git.review.collapseFolders",
+      "|",
+      "pier.git.review.openDirectory",
     ]);
     expect(collectActionIds(groupRootMenu)).not.toContain(
       "pier.git.review.copyPath"
@@ -207,7 +207,7 @@ describe("git review tree actions", () => {
     );
   });
 
-  it("orders review / view / path groups for file rows", () => {
+  it("orders review, then open file/directory, then path for file rows", () => {
     const fileMenu = buildMenuEntries(GIT_REVIEW_TREE_ITEM_SURFACE, {
       metadata: {
         contextId: "ctx",
@@ -224,11 +224,11 @@ describe("git review tree actions", () => {
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     });
     expect(menuSketch(fileMenu)).toEqual([
-      GIT_REVIEW_OPEN_FILE_COMMAND_ID,
-      "pier.git.review.openDirectory",
-      "|",
       "pier.git.review.stageFile",
       "pier.git.review.discardFile",
+      "|",
+      GIT_REVIEW_OPEN_FILE_COMMAND_ID,
+      "pier.git.review.openDirectory",
       "|",
       "pier.git.review.copyPath",
       "pier.git.review.copyRelativePath",

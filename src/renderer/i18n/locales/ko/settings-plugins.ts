@@ -12,15 +12,6 @@ export const settingsPlugins = {
   },
   runtimeUnavailableDescription:
     "이 플러그인은 설치됐지만 지금은 불러오지 않았습니다. Pier를 재시작하고, 계속되면 다시 설치하세요.",
-  contributionSummary: {
-    command: "명령 {{count}}개",
-    commands: "명령 {{count}}개",
-    none: "기여 없음",
-    panel: "패널 {{count}}개",
-    panels: "패널 {{count}}개",
-    terminalStatusItem: "터미널 상태 항목 {{count}}개",
-    terminalStatusItems: "터미널 상태 항목 {{count}}개",
-  },
   permissionLabels: pluginPermissions,
   loadingTitle: "플러그인 불러오는 중",
   loadingDescription: "플러그인 목록을 읽는 중…",
@@ -35,8 +26,6 @@ export const settingsPlugins = {
   errorTitle: "플러그인을 불러올 수 없습니다",
   openSettings: "설정",
   openSettingsPlugin: "{{name}} 설정 열기",
-  permissionSummary: "권한: {{list}}",
-  permissionSummaryNone: "특별한 권한 없음",
   source: {
     builtin: "내장",
     local: "로컬",

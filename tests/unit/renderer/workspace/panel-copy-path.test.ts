@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
 import {
   directoryPathFromContext,
+  isFilesDiskTab,
   resolvePanelCopyPath,
+  resolvePanelCopyRelativePath,
 } from "@/lib/actions/panel-copy-path.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";
+import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
@@ -19,6 +22,16 @@ function collectActionIds(
     }
   }
   return ids;
+}
+
+function acceleratorFor(
+  entries: ReturnType<typeof buildMenuEntries>,
+  id: string
+): string | undefined {
+  const item = entries.find(
+    (entry) => entry.type === "action" && entry.id === id
+  );
+  return item?.type === "action" ? item.accelerator : undefined;
 }
 
 function makeContext(cwd: string) {
@@ -202,6 +215,142 @@ describe("panel copy path (tab menu)", () => {
       surface: "dockview-tab",
     });
     expect(writeText).toHaveBeenCalledWith("/repo/app");
+  });
+
+  it("copies a file tab relative path and hides it on directory tabs", async () => {
+    useWorkspaceStore.getState().setApi({
+      panels: [
+        {
+          id: "file-1",
+          params: {
+            context: makeContext("/repo"),
+            source: { kind: "disk", path: "src/a.ts", root: "/repo" },
+          },
+          view: { contentComponent: "pier.files.filePanel" },
+        },
+        {
+          id: "terminal-1",
+          params: { context: makeContext("/repo/packages/ui") },
+          view: { contentComponent: "terminal" },
+        },
+      ],
+    } as never);
+    usePanelDescriptorStore.getState().upsert("file-1", {
+      context: makeContext("/repo"),
+      display: { short: "a.ts" },
+    });
+
+    expect(
+      resolvePanelCopyRelativePath({
+        sourcePanelId: "file-1",
+        surface: "dockview-tab",
+      })
+    ).toBe("src/a.ts");
+    expect(
+      isFilesDiskTab({
+        sourcePanelId: "file-1",
+        surface: "dockview-tab",
+      })
+    ).toBe(true);
+    expect(
+      collectActionIds(
+        buildMenuEntries("dockview-tab", {
+          sourcePanelId: "file-1",
+          surface: "dockview-tab",
+        })
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        "pier.panel.copyPath",
+        "pier.panel.copyRelativePath",
+      ])
+    );
+
+    expect(
+      resolvePanelCopyRelativePath({
+        sourcePanelId: "terminal-1",
+        surface: "dockview-tab",
+      })
+    ).toBeUndefined();
+    expect(
+      collectActionIds(
+        buildMenuEntries("dockview-tab", {
+          sourcePanelContext: makeContext("/repo/packages/ui"),
+          sourcePanelId: "terminal-1",
+          surface: "dockview-tab",
+        })
+      )
+    ).not.toContain("pier.panel.copyRelativePath");
+
+    const action = actionRegistry.get("pier.panel.copyRelativePath");
+    await action?.handler({
+      sourcePanelId: "file-1",
+      surface: "dockview-tab",
+    });
+    expect(writeText).toHaveBeenCalledWith("src/a.ts");
+  });
+
+  it("shows copy-path accelerators on file tabs but not terminal directory tabs", () => {
+    keybindingRegistry.registerDefaults([
+      {
+        commandId: "pier.files.copyPath",
+        keys: "Mod+Alt+KeyC",
+        scope: "panel:pier.files.filePanel",
+      },
+      {
+        commandId: "pier.files.copyRelativePath",
+        keys: "Mod+Alt+Shift+KeyC",
+        scope: "panel:pier.files.filePanel",
+      },
+    ]);
+    useWorkspaceStore.getState().setApi({
+      panels: [
+        {
+          id: "file-1",
+          params: {
+            context: makeContext("/repo"),
+            source: { kind: "disk", path: "src/a.ts", root: "/repo" },
+          },
+          view: { contentComponent: "pier.files.filePanel" },
+        },
+        {
+          id: "terminal-1",
+          params: { context: makeContext("/repo/packages/ui") },
+          view: { contentComponent: "terminal" },
+        },
+      ],
+    } as never);
+    usePanelDescriptorStore.getState().upsert("file-1", {
+      context: makeContext("/repo"),
+      display: { short: "a.ts" },
+    });
+    usePanelDescriptorStore.getState().upsert("terminal-1", {
+      context: makeContext("/repo/packages/ui"),
+      display: { short: "ui" },
+    });
+
+    const fileEntries = buildMenuEntries("dockview-tab", {
+      sourcePanelId: "file-1",
+      surface: "dockview-tab",
+    });
+    const terminalEntries = buildMenuEntries("dockview-tab", {
+      sourcePanelContext: makeContext("/repo/packages/ui"),
+      sourcePanelId: "terminal-1",
+      surface: "dockview-tab",
+    });
+
+    expect(acceleratorFor(fileEntries, "pier.panel.copyPath")).toBe(
+      "CmdOrCtrl+Alt+C"
+    );
+    expect(acceleratorFor(fileEntries, "pier.panel.copyRelativePath")).toBe(
+      "CmdOrCtrl+Alt+Shift+C"
+    );
+    expect(
+      acceleratorFor(terminalEntries, "pier.panel.copyPath")
+    ).toBeUndefined();
+    expect(
+      acceleratorFor(terminalEntries, "pier.panel.copyRelativePath")
+    ).toBeUndefined();
   });
 
   it("directoryPathFromContext prefers cwd", () => {

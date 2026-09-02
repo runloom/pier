@@ -30,6 +30,8 @@ extraResources:
     to: bin/pier-cli-path.js
   - from: bin/pier-cli-launch.js
     to: bin/pier-cli-launch.js
+  - from: bin/pier-cli-human.js
+    to: bin/pier-cli-human.js
   - from: bin/pier-control-client.js
     to: bin/pier-control-client.js
   - from: bin/pier-app.sh
@@ -77,6 +79,12 @@ extraResources:
       - 'plugin.json'
   - from: packages/plugin-claude/dist-pkg
     to: plugin-packages/pier.claude
+    filter:
+      - '*.tgz'
+      - '*.tgz.sha256'
+      - 'plugin.json'
+  - from: packages/plugin-tasks/dist-pkg
+    to: plugin-packages/pier.tasks
     filter:
       - '*.tgz'
       - '*.tgz.sha256'

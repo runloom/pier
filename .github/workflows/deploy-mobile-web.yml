@@ -1,0 +1,32 @@
+# 移动端 Web 壳发布：tag mobile-web-v* 触发；先构建产物校验（dry-run），
+# 接入静态托管密钥后再启用 rsync 到官方 origin（服务端设计 §10.3）。
+name: deploy-mobile-web
+
+on:
+  push:
+    tags:
+      - "mobile-web-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:mobile-web
+      # 产物校验：SW 与 manifest 必须随包发布（PWA 叫醒前置）。
+      - name: verify PWA assets
+        run: |
+          test -f out/mobile-web/sw.js
+          test -f out/mobile-web/manifest.webmanifest
+          test -f out/mobile-web/index.html
+      - run: pnpm vitest run tests/unit/mobile-web

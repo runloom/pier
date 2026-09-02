@@ -12,9 +12,14 @@ describe("comment navigator layout governance", () => {
   it("pins the shared bar with absolute bottom, not document flow", () => {
     const navigator = read("packages/ui/src/comments/navigator.tsx");
     expect(navigator).toContain("absolute bottom-4 left-1/2");
+    expect(navigator).toContain("-translate-x-1/2");
+    expect(navigator).not.toContain("left-4");
+    expect(navigator).not.toContain('anchor === "start"');
     expect(navigator).toContain("COMMENT_NAVIGATOR_SCROLL_PAD_CLASS");
     expect(navigator).toContain("viewport-sized, non-scrolling frame");
     expect(navigator).toContain("never inside the scroll root");
+    expect(navigator).toContain('layout === "cluster"');
+    expect(navigator).toContain('role: "toolbar" as const');
   });
 
   it("keeps canvas chrome outside the preview scroll root", () => {
@@ -29,8 +34,11 @@ describe("comment navigator layout governance", () => {
     expect(previewRoot).not.toContain("overflow-auto");
     expect(canvas).toContain('data-slot="file-canvas-scroll"');
     expect(canvas).toContain("COMMENT_NAVIGATOR_SCROLL_PAD_CLASS");
+    expect(canvas).not.toContain("start={commentNavigator}");
+    expect(canvas).not.toContain('anchor={worldActive ? "start" : "center"}');
+    expect(canvas).not.toContain('align="end"');
     expect(canvas).toMatch(
-      /data-slot="file-canvas-scroll"[\s\S]*?<\/div>\s*\{nav\.commentNavigator/
+      /data-slot="file-canvas-scroll"[\s\S]*?<\/div>\s*\{worldActive \?/
     );
   });
 

@@ -1,6 +1,6 @@
 import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { createLocalControlRegistrationOwner } from "./adapters/cli/local-control/registration.ts";
 import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
 import { registerPeerUidFromNativeAddon } from "./adapters/cli/register-peer-uid-native.ts";
@@ -18,6 +18,7 @@ import { formatQuitFailure } from "./app-quit/failure-format.ts";
 import { createAppQuitRendererTransport } from "./app-quit/renderer-transport.ts";
 import { shouldBypassQuitConfirmationForTests } from "./app-quit/test-runtime.ts";
 import { handleMainStartupFailure } from "./app-startup-failure.ts";
+import { startBackgroundSchedulers } from "./background-schedulers.ts";
 import {
   attachPrivilegedProtocolHandlers,
   registerPrivilegedProtocolSchemes,
@@ -67,9 +68,6 @@ import {
 } from "./menu/window-actions.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
-import { createAppUpdateScheduler } from "./services/app-updates/scheduler.ts";
-import { createExternalNavigationService } from "./services/external-navigation.ts";
-import { createGitAutofetchService } from "./services/git/autofetch-service.ts";
 import { abortMissingSingleInstanceLock } from "./startup-diagnostics.ts";
 import { reconcileOrphanedBackgroundProcesses } from "./state/background-task-process-ledger.ts";
 import { flushPairingState } from "./state/pairing-store.ts";
@@ -148,7 +146,8 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
       flushNotificationCenterHistory(),
     ]);
   });
-  // remote-control：先停监听（断开移动端连接）再 flush 配对状态落盘。
+  // remote-control：先停监听与会合拨号（断开移动端连接）再 flush 配对状态落盘。
+  appCore.services.remoteControl?.uplink?.stop();
   await appCore.services.remoteControl?.owner.stop();
   await flushPairingState();
   // Clean quit：在销毁窗口前对 background 任务做 TERM→grace→KILL。
@@ -185,6 +184,7 @@ const appQuitController = createAppQuitController({
     localControlRegistration.close().catch((error: unknown) => {
       appQuitLog.error("failed to close local control before quit", { error });
     });
+    appCore.services.remoteControl?.uplink?.stop();
     appCore.services.remoteControl?.owner.stop().catch((error: unknown) => {
       appQuitLog.error("failed to stop remote control before quit", {
         error,
@@ -285,53 +285,13 @@ if (gotTheLock) {
         }
       });
 
-      const initialPrefs = await appCore.services.preferences.read();
-      let autofetchConfig = {
-        enabled: initialPrefs.gitAutoFetchEnabled,
-        intervalMinutes: initialPrefs.gitAutoFetchIntervalMinutes,
-      };
-      appCore.eventBus.subscribe((event) => {
-        if (event.type === "preferences.changed") {
-          autofetchConfig = {
-            enabled: event.snapshot.gitAutoFetchEnabled,
-            intervalMinutes: event.snapshot.gitAutoFetchIntervalMinutes,
-          };
-        }
-      });
-      const gitAutofetch = createGitAutofetchService({
-        activeRoots: () => appCore.services.gitWatch.activeRoots(),
-        getConfig: () => autofetchConfig,
-        isFocused: () => windowManager.getFocused() !== null,
-        pulse: (gitRoot) => {
-          appCore.services.gitWatch.pulse(gitRoot);
-        },
-      });
-      gitAutofetch.start();
-      const appUpdateScheduler = createAppUpdateScheduler({
-        check: () => appCore.services.appUpdates.check("background"),
-        enabled: !isDev,
-      });
-      appUpdateScheduler.start();
-      app.on("browser-window-focus", () => {
-        gitAutofetch.onFocusGained();
-        appUpdateScheduler.onFocusGained();
-        // 聚焦时重算活跃仓库签名，补回后台门控跳过的 poll。
-        for (const root of appCore.services.gitWatch.activeRoots()) {
-          appCore.services.gitWatch.pulse(root);
-        }
-      });
-      app.on("will-quit", () => {
-        appUpdateScheduler.stop();
-        gitAutofetch.dispose();
-        appCore.services.liveModules?.dispose();
-      });
+      await startBackgroundSchedulers();
       registerWindowIpc(ipcMain);
       registerCommandIpc(ipcMain);
       registerExternalNavigationIpc(ipcMain, {
-        service: createExternalNavigationService({
-          now: Date.now,
-          openExternal: (url) => shell.openExternal(url),
-        }),
+        // Same instance as the app.openExternal command path so the nonce
+        // replay guard covers both entrances.
+        service: appCore.services.externalNavigation,
         windowForSender: (sender) => windowManager.fromWebContents(sender),
       });
       registerFileSaveTargetIpc(ipcMain);

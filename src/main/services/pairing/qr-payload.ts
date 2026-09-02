@@ -11,15 +11,23 @@ import {
 export function buildPairingQrPayload(args: {
   code: string;
   fingerprint: string;
-  host: string;
-  port: number;
+  host?: string;
+  port?: number;
+  /** M2：宿主身份 id（公钥哈希），会合路由用。 */
+  hostId?: string;
+  /** M2：高熵配对密钥（仅 QR 带外传递），赎回密封用。 */
+  pairSecret?: string;
+  /** M2：会合 wss 基址；未配置恒 null。 */
+  relayHint?: string | null;
 }): string {
   const payload: PairingQrPayload = {
     fingerprint: args.fingerprint,
-    host: args.host,
     pairingCode: args.code,
-    port: args.port,
-    relayHint: null,
+    relayHint: args.relayHint ?? null,
+    ...(args.host === undefined ? {} : { host: args.host }),
+    ...(args.port === undefined ? {} : { port: args.port }),
+    ...(args.hostId === undefined ? {} : { hostId: args.hostId }),
+    ...(args.pairSecret === undefined ? {} : { pairSecret: args.pairSecret }),
   };
   return JSON.stringify(payload);
 }

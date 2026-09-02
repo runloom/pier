@@ -207,11 +207,11 @@ describe("live-module-canvas-path", () => {
 
   it("needs the custom content list to treat a non-default canvas as in-project", () => {
     const canvas =
-      "resources/system-skills/pier-canvas/templates/kanban.canvas.tsx";
+      "resources/system-skills/pier-canvas/templates/docs.canvas.tsx";
     const roots = ["resources/system-skills/pier-canvas/templates"];
-    expect(canvasSiblingProjectPath(canvas, "board.json")).toBeNull();
-    expect(canvasSiblingProjectPath(canvas, "board.json", roots)).toBe(
-      "resources/system-skills/pier-canvas/templates/board.json"
+    expect(canvasSiblingProjectPath(canvas, "data.json")).toBeNull();
+    expect(canvasSiblingProjectPath(canvas, "data.json", roots)).toBe(
+      "resources/system-skills/pier-canvas/templates/data.json"
     );
   });
 
@@ -219,9 +219,9 @@ describe("live-module-canvas-path", () => {
     expect(
       canvasScopedSiblingPath(
         "resources/system-skills/pier-canvas/templates",
-        "board.json"
+        "data.json"
       )
-    ).toBe("resources/system-skills/pier-canvas/templates/board.json");
+    ).toBe("resources/system-skills/pier-canvas/templates/data.json");
     expect(canvasScopedSiblingPath("", "data.json")).toBe("data.json");
     expect(canvasScopedSiblingPath(".pier/canvases/demo", "../x")).toBeNull();
   });
@@ -282,5 +282,6 @@ describe("live-module-canvas-path", () => {
     expect(isCanvasFileName(".canvas.tsx")).toBe(false);
     expect(isCanvasFileName("hello.tsx")).toBe(false);
     expect(isCanvasFileName("hello.canvas.ts")).toBe(false);
+    expect(isLiveModuleCanvasFileName("index.applet.tsx")).toBe(false);
   });
 });

@@ -64,6 +64,22 @@ export function statusStackShellTone(
   return best;
 }
 
+function statusStackItemGridClass(
+  hasIcon: boolean,
+  compactAction: boolean
+): string | null {
+  if (hasIcon && compactAction) {
+    return "grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5";
+  }
+  if (hasIcon) {
+    return "grid-cols-[auto_1fr] items-start gap-x-2.5 *:[data-slot=status-icon]:self-start";
+  }
+  if (compactAction) {
+    return "grid-cols-[minmax(0,1fr)_auto] items-center";
+  }
+  return null;
+}
+
 function StatusStackItemRow({
   item,
   dismissLabel,
@@ -73,17 +89,20 @@ function StatusStackItemRow({
 }) {
   const iconKind = TONE_STATUS_ICON[item.tone];
   const showDismiss = item.dismissible === true;
+  const compactAction =
+    item.action !== undefined &&
+    item.description === undefined &&
+    item.body === undefined;
 
   return (
     <div
       className={cn(
         "relative grid w-full gap-0.5 text-left text-foreground text-sm leading-5",
-        iconKind
-          ? "grid-cols-[auto_1fr] items-start gap-x-2.5 *:[data-slot=status-icon]:self-start"
-          : null,
-        // Reserve corner only for dismiss; action lives in its own footer row.
+        statusStackItemGridClass(Boolean(iconKind), compactAction),
+        // Reserve corner only for dismiss; compact action sits on the title row.
         showDismiss ? "pr-10" : null
       )}
+      data-compact-action={compactAction ? "true" : undefined}
       data-slot="status-stack-item"
       data-tone={item.tone}
     >
@@ -114,8 +133,10 @@ function StatusStackItemRow({
       {item.action ? (
         <div
           className={cn(
-            "mt-2 flex flex-wrap items-center justify-end gap-2",
-            iconKind ? "col-start-2" : null
+            compactAction
+              ? "flex items-center justify-end"
+              : "mt-2 flex flex-wrap items-center justify-end gap-2",
+            iconKind && !compactAction ? "col-start-2" : null
           )}
           data-slot="status-stack-item-action"
         >

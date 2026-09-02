@@ -5,11 +5,15 @@ import type {
 } from "@plugins/api/renderer.ts";
 import { z } from "zod";
 import {
+  FILES_EDITOR_ADD_CURSOR_ABOVE_COMMAND_ID,
+  FILES_EDITOR_ADD_CURSOR_BELOW_COMMAND_ID,
   FILES_EDITOR_COPY_COMMAND_ID,
   FILES_EDITOR_CUT_COMMAND_ID,
   FILES_EDITOR_GO_TO_LINE_COMMAND_ID,
   FILES_EDITOR_PASTE_COMMAND_ID,
   FILES_EDITOR_SELECT_ALL_COMMAND_ID,
+  FILES_EDITOR_SELECT_ALL_OCCURRENCES_COMMAND_ID,
+  FILES_EDITOR_SELECT_NEXT_OCCURRENCE_COMMAND_ID,
   FILES_EDITOR_SHOW_HOVER_COMMAND_ID,
   FILES_EDITOR_TOGGLE_WORD_WRAP_COMMAND_ID,
   FILES_FILE_PANEL_ID,
@@ -18,6 +22,12 @@ import { FILES_EDITOR_WORD_WRAP_SETTING_KEY } from "../../settings.ts";
 import { createFilesTranslate, type FilesTranslate } from "../i18n.ts";
 import type { FileEditorController } from "./controller.ts";
 import { createFileEditorSessionId } from "./session-id.ts";
+import {
+  addEditorCursorAbove,
+  addEditorCursorBelow,
+  selectAllEditorOccurrences,
+  selectNextEditorOccurrence,
+} from "./view-operations.ts";
 
 // 编辑器右键基础编辑操作由 editorSessionId 定位具体 view,再用 documentId
 // 防串线;其余载荷(path/ranges/source)由 copyPathWithRange 等 action 自行解析。
@@ -61,7 +71,47 @@ function resolveEditorTarget(
   return parsed.data;
 }
 
+function resolveActiveEditorSession(
+  invocation: RendererPluginActionInvocation | undefined,
+  context: RendererPluginContext
+): string | null {
+  const fromInvocation = resolveEditorTarget(invocation);
+  if (fromInvocation) {
+    return fromInvocation.editorSessionId;
+  }
+  const panelId = context.panels.getActiveInstanceId(FILES_FILE_PANEL_ID);
+  return panelId ? createFileEditorSessionId(panelId) : null;
+}
+
+function viewCommandAction(action: {
+  command: Parameters<FileEditorController["runViewCommand"]>[1];
+  context: RendererPluginContext;
+  controller: FileEditorController;
+  id: string;
+  sortOrder: number;
+  title: () => string;
+}): RendererPluginAction {
+  return {
+    category: "file",
+    handler: async (invocation) => {
+      const editorSessionId = resolveActiveEditorSession(
+        invocation,
+        action.context
+      );
+      if (!editorSessionId) {
+        return;
+      }
+      action.controller.runViewCommand(editorSessionId, action.command);
+    },
+    id: action.id,
+    metadata: { group: "1_navigation", sortOrder: action.sortOrder },
+    surfaces: ["command-palette", "files/editor"],
+    title: action.title,
+  };
+}
+
 function editorAction(action: {
+  displayChord?: string;
   handler: RendererPluginAction["handler"];
   id: string;
   sortOrder: number;
@@ -71,7 +121,11 @@ function editorAction(action: {
     category: "file",
     handler: action.handler,
     id: action.id,
-    metadata: { group: "0_edit", sortOrder: action.sortOrder },
+    metadata: {
+      group: "0_edit",
+      sortOrder: action.sortOrder,
+      ...(action.displayChord ? { displayChord: action.displayChord } : {}),
+    },
     surfaces: ["files/editor"],
     title: action.title,
   };
@@ -90,6 +144,7 @@ export function createFilesEditorActions(
 
   return [
     editorAction({
+      displayChord: "Mod+KeyX",
       id: FILES_EDITOR_CUT_COMMAND_ID,
       sortOrder: 1,
       title: () => t("filePanel.editor.action.cut", "Cut"),
@@ -113,6 +168,7 @@ export function createFilesEditorActions(
       },
     }),
     editorAction({
+      displayChord: "Mod+KeyC",
       id: FILES_EDITOR_COPY_COMMAND_ID,
       sortOrder: 2,
       title: () => t("filePanel.editor.action.copy", "Copy"),
@@ -136,6 +192,7 @@ export function createFilesEditorActions(
       },
     }),
     editorAction({
+      displayChord: "Mod+KeyV",
       id: FILES_EDITOR_PASTE_COMMAND_ID,
       sortOrder: 3,
       title: () => t("filePanel.editor.action.paste", "Paste"),
@@ -159,6 +216,7 @@ export function createFilesEditorActions(
       },
     }),
     editorAction({
+      displayChord: "Mod+KeyA",
       id: FILES_EDITOR_SELECT_ALL_COMMAND_ID,
       sortOrder: 4,
       title: () => t("filePanel.editor.action.selectAll", "Select All"),
@@ -286,6 +344,48 @@ export function createFilesEditorActions(
       title: () =>
         t("filePanel.editor.showHover.title", "Show Symbol Information"),
     },
+    viewCommandAction({
+      command: selectNextEditorOccurrence,
+      context,
+      controller,
+      id: FILES_EDITOR_SELECT_NEXT_OCCURRENCE_COMMAND_ID,
+      sortOrder: 3,
+      title: () =>
+        t(
+          "filePanel.editor.action.selectNextOccurrence",
+          "Select Next Occurrence"
+        ),
+    }),
+    viewCommandAction({
+      command: selectAllEditorOccurrences,
+      context,
+      controller,
+      id: FILES_EDITOR_SELECT_ALL_OCCURRENCES_COMMAND_ID,
+      sortOrder: 4,
+      title: () =>
+        t(
+          "filePanel.editor.action.selectAllOccurrences",
+          "Select All Occurrences"
+        ),
+    }),
+    viewCommandAction({
+      command: addEditorCursorAbove,
+      context,
+      controller,
+      id: FILES_EDITOR_ADD_CURSOR_ABOVE_COMMAND_ID,
+      sortOrder: 5,
+      title: () =>
+        t("filePanel.editor.action.addCursorAbove", "Add Cursor Above"),
+    }),
+    viewCommandAction({
+      command: addEditorCursorBelow,
+      context,
+      controller,
+      id: FILES_EDITOR_ADD_CURSOR_BELOW_COMMAND_ID,
+      sortOrder: 6,
+      title: () =>
+        t("filePanel.editor.action.addCursorBelow", "Add Cursor Below"),
+    }),
   ];
 }
 

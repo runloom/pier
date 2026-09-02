@@ -58,15 +58,16 @@
 
 可写格式:`mcp-servers-json` / `opencode-json` / `codex-toml` / `amp-settings-json` / `goose-yaml` / `hermes-yaml` / `vibe-toml`。**consumesMcp 只表示产品官方吃 MCP**,禁止用 false 顶替「serializer 还没写」。none 表只留没有官方用户级 MCP 的产品。
 
-- 写入规则沿用 v2 serializer 全套纪律:merge-don't-clobber、账本指纹识别本体(引擎/路径升级可重写)、冲突拒写、TOML marker 块。
+- 写入规则沿用 v2 serializer 全套纪律:merge-don't-clobber、账本指纹识别本体(引擎/路径升级可重写)、冲突拒写、TOML marker 块。**未标记但 stdio 身份等价**（command/args 一致、env 一致或皆空、没有我们不会写的额外键）视为本体:补 marker 后写入。JSON/YAML 用整段条目 sha 判定等价;TOML named table 与 Vibe `[[mcp_servers]]` 用同一套字段比较。内联 `mcp_servers = { "pier-memory" = … }` 剥不了 named table,仍拒写。
 - 目标账本从 per-project 收敛为**单机一份** `~/.pier/memory/registry.json`(由适配器推导的目标指纹 + WAL pending,结构同 v2 ledger.targets/pending)。
-- 注册时机:启动幂等收敛(已注册且指纹匹配 → 零写入)+ 智能体新装检测后。这些文件在用户家目录,**不存在 git 跟踪问题,确认门与 tracked 通知整类删除**。
+- 注册时机:启动幂等收敛(已注册且指纹匹配 → 零写入)+ 智能体新装检测后 + 用户显式打开项目记忆开关。这些文件在用户家目录,**不存在 git 跟踪问题,确认门与 tracked 通知整类删除**。
+- `snapshotStatus` / `registryStatus` **只核对**磁盘指纹与账本,不在读路径重放收敛。等价未标记条目由启动/显式开启的 `convergeMemoryRegistry` 收编。
 
 ### 项目级状态(大幅简化)
 
 - `~/.pier/memory/<key>/ledger.json` 只承担 `desiredState`(+ 诊断字段);**缺失即默认启用**——「默认启用」变成纯声明语义,启动扫描/收敛/needs-confirmation 全部删除。
 - 设置页开关 = 写 desiredState;关闭即时生效于**新**会话(运行中的引擎进程不猎杀,下轮会话生效,文案注明)。
-- `snapshotStatus`:全局注册健康(已装 consuming 智能体的目标指纹核对)+ 项目 desiredState + 条目计数。「部分接入」只在全局注册失败/漂移时出现。
+- `snapshotStatus`:全局注册健康(已装 consuming 智能体的目标指纹核对)+ 项目 desiredState + 条目计数。「部分接入」只在全局注册失败/漂移时出现。读路径不写盘。
 
 ### 保留与删除
 

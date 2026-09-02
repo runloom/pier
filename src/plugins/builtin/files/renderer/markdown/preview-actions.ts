@@ -7,6 +7,7 @@ import {
   FILES_MARKDOWN_APPEARANCE_AUTO_COMMAND_ID,
   FILES_MARKDOWN_APPEARANCE_DARK_COMMAND_ID,
   FILES_MARKDOWN_APPEARANCE_LIGHT_COMMAND_ID,
+  FILES_MARKDOWN_JUMP_TO_SOURCE_COMMAND_ID,
   FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID,
   FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID,
 } from "../../manifest.ts";
@@ -64,12 +65,71 @@ function appearanceAction(options: {
   });
 }
 
+/** 面板控制器切面（结构型，避免 markdown/ 反向依赖 editor/ 的完整控制器）。 */
+export interface MarkdownPreviewJumpController {
+  revealOffset(
+    editorSessionId: string,
+    offset: number,
+    documentId?: string
+  ): void;
+  setPanelMode(panelId: string, mode: "source"): void;
+}
+
+/** 右键菜单「跳转到源码」的目标载荷（popup metadata 契约）。 */
+function jumpTarget(invocation?: RendererPluginActionInvocation): {
+  documentId: string | undefined;
+  editorSessionId: string;
+  panelId: string;
+  sourceOffset: number;
+} | null {
+  const metadata = invocation?.metadata;
+  const panelId = invocation?.sourcePanelId;
+  const sourceOffset = metadata?.sourceOffset;
+  const editorSessionId = metadata?.editorSessionId;
+  if (
+    !panelId ||
+    typeof sourceOffset !== "number" ||
+    !Number.isFinite(sourceOffset) ||
+    sourceOffset < 0 ||
+    typeof editorSessionId !== "string" ||
+    editorSessionId.length === 0
+  ) {
+    return null;
+  }
+  const documentId = metadata?.documentId;
+  return {
+    documentId: typeof documentId === "string" ? documentId : undefined,
+    editorSessionId,
+    panelId,
+    sourceOffset,
+  };
+}
+
 export function createFilesMarkdownPreviewActions(
-  context: RendererPluginContext
+  context: RendererPluginContext,
+  controller: MarkdownPreviewJumpController
 ): RendererPluginAction[] {
   const t: FilesTranslate = createFilesTranslate(context);
 
   return [
+    previewAction({
+      // 字典序分段：排在 0_edit（复制/全选）之后、1_reading 偏好之前。
+      group: "0_jump",
+      id: FILES_MARKDOWN_JUMP_TO_SOURCE_COMMAND_ID,
+      sortOrder: 1,
+      title: () => t("filePanel.markdown.jumpToSource", "Jump to source"),
+      menuHidden: (invocation) => jumpTarget(invocation) === null,
+      handler: (invocation) => {
+        const target = jumpTarget(invocation);
+        if (!target) return;
+        controller.setPanelMode(target.panelId, "source");
+        controller.revealOffset(
+          target.editorSessionId,
+          target.sourceOffset,
+          target.documentId
+        );
+      },
+    }),
     previewAction({
       group: "1_reading",
       id: FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID,

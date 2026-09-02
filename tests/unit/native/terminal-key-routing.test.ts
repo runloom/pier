@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { APP_HANDLED_NATIVE_TERMINAL_COMMANDS } from "@shared/commands.ts";
+import { isNativeTerminalRoutedScope } from "@shared/keybindings.ts";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_KEYMAP } from "@/lib/keybindings/defaults.ts";
 
@@ -48,7 +49,7 @@ describe("native terminal key routing", () => {
         DEFAULT_KEYMAP.filter(
           (binding) =>
             nativeTerminalCommandIds.has(binding.commandId) &&
-            (binding.scope ?? "global") === "global"
+            isNativeTerminalRoutedScope(binding.scope)
         ).map((binding) => binding.keys)
       ),
     ].sort();

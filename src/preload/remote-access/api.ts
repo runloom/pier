@@ -16,6 +16,12 @@ export interface RemoteAccessPendingPairing {
   qrPayload: string;
 }
 
+/** M2 跨网远程状态：会合是否配置 + 出站拨号连接态。 */
+export interface RemoteAccessRemoteState {
+  configured: boolean;
+  connectionState: "stopped" | "connecting" | "connected" | "backoff";
+}
+
 export interface RemoteAccessState {
   /** 固定 true：标记响应已跨越脱敏边界（设备列表无 tokenHash）。 */
   boundaryNote: true;
@@ -24,6 +30,8 @@ export interface RemoteAccessState {
   host: string | null;
   pendingPairing: RemoteAccessPendingPairing | null;
   port: number | null;
+  /** M2：会合跨网远程状态（configured=false 时纯 LAN，设置卡隐藏该区）。 */
+  remote: RemoteAccessRemoteState;
 }
 
 /** beginPairing 签发结果：6 位明码配对码只出现在此次响应。 */

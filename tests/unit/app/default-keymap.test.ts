@@ -1,4 +1,8 @@
 import { APP_HANDLED_NATIVE_TERMINAL_COMMANDS } from "@shared/commands.ts";
+import {
+  chordHasNonGlobalBinding,
+  isNativeTerminalRoutedScope,
+} from "@shared/keybindings.ts";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_KEYMAP } from "@/lib/keybindings/defaults.ts";
 import { parseChord } from "@/lib/keybindings/parse.ts";
@@ -97,16 +101,23 @@ describe("DEFAULT_KEYMAP", () => {
     ).toEqual([]);
   });
 
+  it("marks chords that a panel binding shadows as non-global", () => {
+    expect(chordHasNonGlobalBinding("Mod+Shift+KeyL")).toBe(true);
+    expect(chordHasNonGlobalBinding("Mod+Alt+ArrowUp")).toBe(true);
+    expect(chordHasNonGlobalBinding("Mod+Alt+ArrowLeft")).toBe(false);
+    expect(chordHasNonGlobalBinding("Mod+KeyW")).toBe(false);
+  });
+
   it("contains split / focus shortcuts", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.splitRight",
       keys: "Mod+KeyD",
-      scope: "global",
+      scope: "panel:terminal",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.splitDown",
       keys: "Mod+Shift+KeyD",
-      scope: "global",
+      scope: "panel:terminal",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.focusUp",
@@ -261,30 +272,81 @@ describe("DEFAULT_KEYMAP", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.terminal.openAgentComposer",
       keys: "Mod+Shift+KeyI",
-      scope: "global",
+      scope: "panel:terminal",
     });
   });
 
-  it("copies path and selected lines with Mod+Alt+C in Files and Git review panels", () => {
+  it("copies path, relative path, and path-with-range on distinct chords in Files, search, and Git review panels", () => {
     expect(
       DEFAULT_KEYMAP.filter(
         (binding) =>
+          binding.commandId === "pier.files.copyPath" ||
+          binding.commandId === "pier.files.copyRelativePath" ||
           binding.commandId === "pier.files.copyPathWithRange" ||
+          binding.commandId === "pier.files.search.copyPath" ||
+          binding.commandId === "pier.files.search.copyRelativePath" ||
+          binding.commandId === "pier.git.review.copyPath" ||
+          binding.commandId === "pier.git.review.copyRelativePath" ||
           binding.commandId === "pier.git.review.copyPathWithRange" ||
-          binding.keys === "Mod+Alt+KeyC"
+          binding.keys === "Mod+Alt+KeyC" ||
+          binding.keys === "Mod+Alt+Shift+KeyC" ||
+          binding.keys === "Mod+Alt+KeyL"
       )
     ).toEqual([
       {
-        commandId: "pier.files.copyPathWithRange",
+        commandId: "pier.files.copyPath",
         keys: "Mod+Alt+KeyC",
         scope: "panel:pier.files.filePanel",
       },
       {
-        commandId: "pier.git.review.copyPathWithRange",
+        commandId: "pier.files.copyRelativePath",
+        keys: "Mod+Alt+Shift+KeyC",
+        scope: "panel:pier.files.filePanel",
+      },
+      {
+        commandId: "pier.files.copyPathWithRange",
+        keys: "Mod+Alt+KeyL",
+        scope: "panel:pier.files.filePanel",
+      },
+      {
+        commandId: "pier.git.review.copyPath",
         keys: "Mod+Alt+KeyC",
         scope: "panel:pier.git.changes",
       },
+      {
+        commandId: "pier.git.review.copyRelativePath",
+        keys: "Mod+Alt+Shift+KeyC",
+        scope: "panel:pier.git.changes",
+      },
+      {
+        commandId: "pier.git.review.copyPathWithRange",
+        keys: "Mod+Alt+KeyL",
+        scope: "panel:pier.git.changes",
+      },
+      {
+        commandId: "pier.files.search.copyPath",
+        keys: "Mod+Alt+KeyC",
+        scope: "panel:pier.files.searchPanel",
+      },
+      {
+        commandId: "pier.files.search.copyRelativePath",
+        keys: "Mod+Alt+Shift+KeyC",
+        scope: "panel:pier.files.searchPanel",
+      },
     ]);
+  });
+
+  it("does not steal native terminal clipboard chords", () => {
+    const stolen = DEFAULT_KEYMAP.filter(
+      (binding) =>
+        binding.scope === "panel:terminal" &&
+        (binding.keys === "Mod+KeyA" ||
+          binding.keys === "Mod+KeyC" ||
+          binding.keys === "Mod+KeyK" ||
+          binding.keys === "Mod+KeyV" ||
+          binding.keys === "Mod+KeyX")
+    );
+    expect(stolen).toEqual([]);
   });
 
   it("shows symbol information with Mod+I only in Files panels", () => {
@@ -452,7 +514,7 @@ describe("DEFAULT_KEYMAP", () => {
     ).toBe("pier.agents.focusWaiting");
   });
 
-  it("resolves split from a files panel", () => {
+  it("keeps split on the terminal and next-occurrence in the files editor", () => {
     keybindingRegistry.loadUserKeymap([]);
     keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
 
@@ -460,9 +522,64 @@ describe("DEFAULT_KEYMAP", () => {
       activePanelComponent: "pier.files.filePanel",
       overlayStack: [],
     };
+    const terminalScope = {
+      activePanelComponent: "terminal",
+      overlayStack: [],
+    };
     expect(
       keybindingRegistry.resolve(parseChord("Mod+KeyD", false), filesScope)
+    ).toBe("pier.files.editor.selectNextOccurrence");
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyD", false), terminalScope)
     ).toBe("pier.panel.splitRight");
+    expect(
+      keybindingRegistry.resolve(
+        parseChord("Mod+Shift+KeyD", false),
+        filesScope
+      )
+    ).not.toBe("pier.panel.splitDown");
+    expect(
+      keybindingRegistry.resolve(
+        parseChord("Mod+Shift+KeyL", false),
+        filesScope
+      )
+    ).toBe("pier.files.editor.selectAllOccurrences");
+    expect(
+      keybindingRegistry.resolve(
+        parseChord("Mod+Shift+KeyL", false),
+        terminalScope
+      )
+    ).toBe("pier.agents.list");
+    expect(
+      keybindingRegistry.resolve(
+        parseChord("Mod+Alt+ArrowUp", false),
+        filesScope
+      )
+    ).toBe("pier.files.editor.addCursorAbove");
+    expect(
+      keybindingRegistry.resolve(
+        parseChord("Mod+Alt+ArrowDown", false),
+        filesScope
+      )
+    ).toBe("pier.files.editor.addCursorBelow");
+    expect(
+      keybindingRegistry.resolve(
+        parseChord("Mod+Alt+ArrowUp", false),
+        terminalScope
+      )
+    ).toBe("pier.panel.focusUp");
+    expect(
+      keybindingRegistry.resolve(
+        parseChord("Mod+Shift+KeyI", false),
+        filesScope
+      )
+    ).toBeNull();
+    expect(
+      keybindingRegistry.resolve(
+        parseChord("Mod+Shift+KeyI", false),
+        terminalScope
+      )
+    ).toBe("pier.terminal.openAgentComposer");
   });
 
   it("resolves the rerun task shortcut from DEFAULT_KEYMAP", () => {
@@ -495,7 +612,7 @@ describe("DEFAULT_KEYMAP", () => {
     const nativeTerminalAppShortcuts = DEFAULT_KEYMAP.filter(
       (binding) =>
         nativeTerminalCommandIds.has(binding.commandId) &&
-        (binding.scope ?? "global") === "global"
+        isNativeTerminalRoutedScope(binding.scope)
     )
       .map((binding) => binding.keys)
       .sort();

@@ -57,6 +57,45 @@ export function isTabPanelLike(el: HTMLElement): boolean {
   );
 }
 
+const ARTBOARD_FRAME_SLOT = "artboard-frame";
+/** Fill ratio vs the Artboard frame that counts as the whole phone, not a widget. */
+const FRAME_SHELL_AREA_RATIO = 0.9;
+
+/**
+ * Declared `data-pier-comment-id` on an Artboard-filling shell is for pinning
+ * comments on that frame — it must not steal Design Mode picks from inner
+ * controls. Tight regions (hero card, heading, button) are not shells.
+ */
+export function isCanvasFrameShellAnchor(el: HTMLElement): boolean {
+  const slot = el.getAttribute("data-slot")?.trim() ?? "";
+  if (slot === "artboard" || slot === ARTBOARD_FRAME_SLOT) {
+    return true;
+  }
+  const parent = el.parentElement;
+  if (parent?.getAttribute("data-slot")?.trim() === ARTBOARD_FRAME_SLOT) {
+    return true;
+  }
+  const frame = el.closest(`[data-slot='${ARTBOARD_FRAME_SLOT}']`);
+  if (!(frame instanceof HTMLElement) || frame === el) {
+    return false;
+  }
+  const frameRect = frame.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  if (
+    !(
+      frameRect.width > 0 &&
+      frameRect.height > 0 &&
+      elRect.width > 0 &&
+      elRect.height > 0
+    )
+  ) {
+    return false;
+  }
+  const ratio =
+    (elRect.width * elRect.height) / (frameRect.width * frameRect.height);
+  return ratio >= FRAME_SHELL_AREA_RATIO;
+}
+
 export function isCanvasTabTrigger(el: HTMLElement): boolean {
   return (
     el.getAttribute("role") === "tab" ||

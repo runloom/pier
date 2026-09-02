@@ -36,6 +36,7 @@ import { pluginText } from "../plugin-text.ts";
 import { usePluginLanguage } from "../use-plugin-language.ts";
 import { openGitReviewDiffContextMenu } from "./diff-context-menu.ts";
 import { resolveGitReviewLiveCopyTarget } from "./diff-open-target.ts";
+import { useReviewUnresolvedConflictHost } from "./document/conflict-host.tsx";
 import { ReviewErrorEmpty, ReviewLoading } from "./feedback.tsx";
 import type {
   GitReviewMutationLease,
@@ -119,6 +120,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     presentation,
     reviewCommentsById,
     revisionBySectionId,
+    selectedSectionKey,
     sourcePanelId,
     getSuppressMembershipScrollRestore,
     suppressMembershipScrollRestore = false,
@@ -157,6 +159,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     readonly inlineReviewLabels?: PierDiffViewProps["inlineReviewLabels"];
     readonly inlineReviewThreadById?: PierDiffViewProps["inlineReviewThreadById"];
     readonly revisionBySectionId: ReadonlyMap<string, string>;
+    readonly selectedSectionKey?: string | null;
     readonly sourcePanelId?: string;
     readonly getSuppressMembershipScrollRestore?: () => boolean;
     readonly suppressMembershipScrollRestore?: boolean;
@@ -206,6 +209,15 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       ...(gitRootPath === undefined ? {} : { gitRootPath }),
     });
 
+    const unresolvedConflict = useReviewUnresolvedConflictHost({
+      context,
+      contextId,
+      items: displayItems,
+      mutationLocked: mutationAuthorityBlocked,
+      ...(gitRootPath === undefined ? {} : { gitRootPath }),
+      ...(onMutationCommitted === undefined ? {} : { onMutationCommitted }),
+    });
+
     const setDiffHandle = useCallback(
       (handle: PierDiffViewHandle | null) => {
         handleRef.current = handle;
@@ -243,9 +255,12 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
           gitRootPath,
           handle: handleRef.current,
           items: displayItems,
+          ...(selectedSectionKey
+            ? { preferredItemId: selectedSectionKey }
+            : {}),
         })
       );
-    }, [displayItems, gitRootPath, sourcePanelId]);
+    }, [displayItems, gitRootPath, selectedSectionKey, sourcePanelId]);
 
     // Rebuild tooltip/aria labels when host locale switches.
     // biome-ignore lint/correctness/useExhaustiveDependencies: language drives i18n re-read
@@ -373,6 +388,9 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                 imageDiff={imageDiff}
                 items={displayItems}
                 labels={diffLabels}
+                {...(unresolvedConflict === undefined
+                  ? {}
+                  : { unresolvedConflict })}
                 {...(driftCommentLabels === undefined
                   ? {}
                   : { driftCommentLabels })}

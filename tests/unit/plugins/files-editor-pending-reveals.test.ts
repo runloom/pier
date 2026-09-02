@@ -19,7 +19,7 @@ describe("FileEditorPendingReveals", () => {
 
     const session = {
       documentId: "doc-a",
-      currentLine: () => 1,
+      hasView: () => true,
       revealRange: vi.fn(),
     };
     expect(pending.revealRange(session, "s1", "doc-a", 1, 1)).toBe(true);

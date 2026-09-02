@@ -4,7 +4,7 @@
       "aliases": ["git merge", "merge branch", "branch merge"],
       "category": "git",
       "description": "Select a branch and merge it into the current branch.",
-      "title": "git: Merge Branch..."
+      "title": "GIT: Merge Branch..."
     },
     "pier.git.switchBranch": {
       "aliases": [
@@ -19,31 +19,31 @@
       ],
       "category": "git",
       "description": "Switch to a local branch, or create a new branch from the current checkout.",
-      "title": "git: Switch Branch..."
+      "title": "GIT: Switch Branch..."
     },
     "pier.git.mergeAbort": {
       "aliases": ["git merge abort", "abort merge"],
       "category": "git",
       "description": "Abort the current merge operation.",
-      "title": "git: Abort Merge"
+      "title": "GIT: Abort Merge"
     },
     "pier.git.stash": {
       "aliases": ["git stash", "stash save", "git stash save"],
       "category": "git",
       "description": "Stash local changes to modified files.",
-      "title": "git: Stash"
+      "title": "GIT: Stash"
     },
     "pier.git.stashApply": {
       "aliases": ["git stash apply", "apply stash"],
       "category": "git",
       "description": "Select a stash and apply it while keeping it in the stash list.",
-      "title": "git: Apply Stash..."
+      "title": "GIT: Apply Stash..."
     },
     "pier.git.stashDrop": {
       "aliases": ["git stash drop", "drop stash", "delete stash"],
       "category": "git",
       "description": "Select a stash and delete it from the stash list.",
-      "title": "git: Drop Stash..."
+      "title": "GIT: Drop Stash..."
     },
     "pier.git.stashIncludeUntracked": {
       "aliases": [
@@ -54,31 +54,31 @@
       ],
       "category": "git",
       "description": "Stash local changes, including new files.",
-      "title": "git: Stash (Include New Files)"
+      "title": "GIT: Stash (Include New Files)"
     },
     "pier.git.stashPop": {
       "aliases": ["git stash pop", "pop stash", "restore stash"],
       "category": "git",
       "description": "Select a stash, apply it, and remove it from the stash list.",
-      "title": "git: Pop Stash..."
+      "title": "GIT: Pop Stash..."
     },
     "pier.git.rebase": {
       "aliases": ["git rebase", "rebase branch", "rebase onto"],
       "category": "git",
       "description": "Select a branch and rebase the current branch onto it.",
-      "title": "git: Rebase Branch..."
+      "title": "GIT: Rebase Branch..."
     },
     "pier.git.rebaseAbort": {
       "aliases": ["git rebase abort", "abort rebase"],
       "category": "git",
       "description": "Abort the current rebase operation.",
-      "title": "git: Abort Rebase"
+      "title": "GIT: Abort Rebase"
     },
     "pier.git.rebaseContinue": {
       "aliases": ["git rebase continue", "continue rebase"],
       "category": "git",
       "description": "Continue the current rebase operation.",
-      "title": "git: Continue Rebase"
+      "title": "GIT: Continue Rebase"
     },
     "pier.git.cherryPick": {
       "aliases": [
@@ -89,43 +89,43 @@
       ],
       "category": "git",
       "description": "Select a commit and apply it onto the current branch.",
-      "title": "git: Cherry-pick Commit..."
+      "title": "GIT: Cherry-pick Commit..."
     },
     "pier.git.cherryPickAbort": {
       "aliases": ["git cherry-pick abort", "abort cherry-pick"],
       "category": "git",
       "description": "Abort the current cherry-pick operation.",
-      "title": "git: Abort Cherry-pick"
+      "title": "GIT: Abort Cherry-pick"
     },
     "pier.git.cherryPickContinue": {
       "aliases": ["git cherry-pick continue", "continue cherry-pick"],
       "category": "git",
       "description": "Continue the current cherry-pick operation.",
-      "title": "git: Continue Cherry-pick"
+      "title": "GIT: Continue Cherry-pick"
     },
     "pier.git.revert": {
       "aliases": ["git revert", "revert commit"],
       "category": "git",
       "description": "Select a commit and create a new commit that reverts it.",
-      "title": "git: Revert Commit..."
+      "title": "GIT: Revert Commit..."
     },
     "pier.git.revertAbort": {
       "aliases": ["git revert abort", "abort revert"],
       "category": "git",
       "description": "Abort the current revert operation.",
-      "title": "git: Abort Revert"
+      "title": "GIT: Abort Revert"
     },
     "pier.git.revertContinue": {
       "aliases": ["git revert continue", "continue revert"],
       "category": "git",
       "description": "Continue the current revert operation.",
-      "title": "git: Continue Revert"
+      "title": "GIT: Continue Revert"
     },
     "pier.git.commit": {
       "aliases": ["git commit", "commit changes"],
       "category": "git",
       "description": "Commit the current changes. You can include unstaged files and push afterwards.",
-      "title": "git: Commit"
+      "title": "GIT: Commit"
     },
     "pier.git.undoLastCommit": {
       "aliases": [
@@ -140,13 +140,13 @@
       ],
       "category": "git",
       "description": "Undo the last commit while preserving its changes as staged.",
-      "title": "git: Undo Last Commit"
+      "title": "GIT: Undo Last Commit"
     },
     "pier.git.review.openFile": {
       "aliases": ["open file", "open changed file", "review open file"],
       "category": "git",
       "description": "Open this changed file in the editor.",
-      "title": "git: Open File"
+      "title": "GIT: Open File"
     },
     "pier.git.review.openInEditor": {
       "aliases": [
@@ -157,19 +157,19 @@
       ],
       "category": "git",
       "description": "Jump to this change in the source editor, at the matching working-tree line when available.",
-      "title": "git: Jump to Source"
+      "title": "GIT: Jump to Source"
     },
     "pier.git.review.stageFile": {
       "aliases": ["stage file", "git add", "stage changes"],
       "category": "git",
       "description": "Stage the selected file's changes.",
-      "title": "git: Stage"
+      "title": "GIT: Stage"
     },
     "pier.git.review.unstageFile": {
       "aliases": ["unstage file", "git restore --staged", "unstage changes"],
       "category": "git",
       "description": "Unstage the selected file's staged changes.",
-      "title": "git: Unstage"
+      "title": "GIT: Unstage"
     },
     "pier.git.review.discardFile": {
       "aliases": [
@@ -184,7 +184,7 @@
       ],
       "category": "git",
       "description": "Discard local changes, or move new files to Trash.",
-      "title": "git: Discard Changes"
+      "title": "GIT: Discard Changes"
     },
     "pier.git.review.toggleTree": {
       "category": "git",
@@ -205,27 +205,27 @@
       "aliases": ["open directory", "open project folder", "reveal in files"],
       "category": "git",
       "description": "Open this project directory in the Files tree.",
-      "title": "git: Open Directory"
+      "title": "GIT: Open Directory"
     },
     "pier.git.review.copyPath": {
       "category": "git",
       "description": "Copy the absolute path of the selected change.",
-      "title": "git: Copy Path"
+      "title": "GIT: Copy Path"
     },
     "pier.git.review.copyRelativePath": {
       "category": "git",
       "description": "Copy the repository-relative path of the selected change.",
-      "title": "git: Copy Relative Path"
+      "title": "GIT: Copy Relative Path"
     },
     "pier.git.review.copyPathWithRange": {
       "category": "git",
       "description": "Copy the repository-relative path and selected line numbers.",
-      "title": "git: Copy Path and Selected Lines"
+      "title": "GIT: Copy Path and Selected Lines"
     },
     "pier.git.review.revealInFinder": {
       "category": "git",
       "description": "Reveal the selected change in the system file manager.",
-      "title": "git: Reveal in Finder"
+      "title": "GIT: Reveal in Finder"
     },
     "pier.worktree.create": {
       "aliases": [
@@ -291,19 +291,19 @@
       ],
       "category": "git",
       "description": "Fetch the latest remote branch data without changing your working tree.",
-      "title": "git: Fetch"
+      "title": "GIT: Fetch"
     },
     "pier.git.pull": {
       "aliases": ["git pull", "pull", "pull changes", "fast forward"],
       "category": "git",
       "description": "Pull remote changes with fast-forward only.",
-      "title": "git: Pull"
+      "title": "GIT: Pull"
     },
     "pier.git.push": {
       "aliases": ["git push", "push", "push changes"],
       "category": "git",
       "description": "Push local commits to the remote.",
-      "title": "git: Push"
+      "title": "GIT: Push"
     },
     "pier.git.publish": {
       "aliases": [
@@ -315,13 +315,13 @@
       ],
       "category": "git",
       "description": "Push the current branch to the remote and set upstream.",
-      "title": "git: Publish Branch"
+      "title": "GIT: Publish Branch"
     },
     "pier.git.sync": {
       "aliases": ["git sync", "sync", "sync changes", "pull and push"],
       "category": "git",
       "description": "Pull then push to sync with the remote.",
-      "title": "git: Sync"
+      "title": "GIT: Sync"
     },
     "pier.git.viewChanges": {
       "aliases": [
@@ -338,7 +338,7 @@
       ],
       "category": "git",
       "description": "Open the changes review panel for the current repository.",
-      "title": "git: Open Review"
+      "title": "GIT: Open Review"
     }
   },
   "description": "Built-in git command palette and terminal status support.",
@@ -851,6 +851,7 @@
     "ui.reviewCopyPathWithRange": "Copy Path and Selected Lines",
     "ui.reviewTreeCopyRelativePath": "Copy Relative Path",
     "ui.reviewTreePathCopied": "Path copied",
+    "ui.reviewTreeNoPathToCopy": "Open or select a file first.",
     "ui.reviewTreeCopyPathFailed": "Couldn't copy path",
     "ui.reviewTreeRevealInFinder": "Reveal in Finder",
     "ui.reviewTreeRevealFailed": "Couldn't reveal item",
@@ -936,5 +937,5 @@
       "title": "Changes"
     }
   },
-  "name": "git"
+  "name": "GIT"
 }

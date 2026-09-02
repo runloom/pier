@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { SCROLLBAR_SYSTEM_CSS } from "../scrollbar-system.ts";
 import { DIFF_CONTENT_PADDING_BOTTOM_PX } from "./geometry.ts";
+import { UNRESOLVED_CONFLICT_CODE_VIEW_CSS } from "./unresolved-conflict/appearance-css.ts";
 
 /**
  * CodeView unsafeCSS：系统滚动条 + Diff 产品壳。
@@ -375,15 +376,12 @@ ${SCROLLBAR_SYSTEM_CSS}
     left: auto;
     position: relative;
   }
+${UNRESOLVED_CONFLICT_CODE_VIEW_CSS}
 `;
 
 /**
- * Document-level CSS for light-DOM annotation pills (React portals on
- * <diffs-container>). Shadow unsafeCSS cannot style these descendants.
- *
- * Host is marked data-pier-file-host in onPostRender. Pierre renders the code
- * in shadow DOM, so onPostRender also mirrors pointer entry to
- * data-pier-pointer-within; :hover remains a browser fallback.
+ * Light-DOM annotation pills on <diffs-container> (unsafeCSS cannot reach them).
+ * Host is marked data-pier-file-host; pointer-within is mirrored in onPostRender.
  */
 export const PIER_DIFF_LIGHT_DOM_CSS = `
   [data-slot="pier-image-diff"] {

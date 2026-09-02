@@ -19,7 +19,7 @@ export function GitReviewCommitButton({
         runGitCommitCommand(context).catch((error: unknown) => {
           showError(
             context,
-            commandTitle(context, "pier.git.commit", "git: Commit"),
+            commandTitle(context, "pier.git.commit", "GIT: Commit"),
             error
           ).catch(() => undefined);
         });

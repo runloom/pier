@@ -454,18 +454,18 @@ describe("keybinding-preferences.store", () => {
     await initKeybindingPreferences();
     const result = await useKeybindingPreferencesStore
       .getState()
-      .setBinding("pier.files.copyPathWithRange", "Mod+Alt+KeyX");
+      .setBinding("pier.files.copyPath", "Mod+Alt+KeyX");
 
     expect(result.ok).toBe(true);
     expect(pier.update).toHaveBeenCalledWith({
       userKeymap: [
         {
-          commandId: "-pier.files.copyPathWithRange",
+          commandId: "-pier.files.copyPath",
           keys: "",
           scope: "global",
         },
         {
-          commandId: "pier.files.copyPathWithRange",
+          commandId: "pier.files.copyPath",
           keys: "Mod+Alt+KeyX",
           scope: "panel:pier.files.filePanel",
         },
@@ -486,7 +486,7 @@ describe("keybinding-preferences.store", () => {
     await initKeybindingPreferences();
     const result = await useKeybindingPreferencesStore
       .getState()
-      .setBinding("pier.files.copyPathWithRange", "Mod+KeyS");
+      .setBinding("pier.files.copyPath", "Mod+KeyS");
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain("pier.files.save");
@@ -506,7 +506,7 @@ describe("keybinding-preferences.store", () => {
     await initKeybindingPreferences();
     const result = await useKeybindingPreferencesStore
       .getState()
-      .setBinding("pier.panel.splitRight", "Mod+KeyS");
+      .setBinding("pier.panel.closeActive", "Mod+KeyS");
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain("pier.files.save");

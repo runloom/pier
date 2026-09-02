@@ -1,6 +1,7 @@
 # 审查打开项目目录金标准
 
 日期：2026-08-30  
+修订：2026-08-31 — 菜单组序让位给 [`2026-08-31-context-menu-order-gold-standard.md`](./2026-08-31-context-menu-order-gold-standard.md)。「打开目录」在 `5_open`；审查树「打开文件」同组靠前；目录/分组根第一项是暂存，不是打开目录。  
 状态：现行权威  
 作者：待填  
 范围：从 git 审查进入 **Files 项目目录标签**（只含目录树、不打开文档）；宿主跨插件 `openProjectDirectory` 门面与事件总线；审查树 / diff 上下文菜单。审查顶栏 **没有**「打开目录」芯片。  
@@ -111,7 +112,7 @@ git 插件 **不能** 调用 `openProjectFiles`：`dependency-cruiser.config.cjs
 | 意图 | 落点 | 审查主点击 | 审查菜单 | 顶栏 |
 |------|------|------------|----------|------|
 | 读/编这个文件 | 编辑器标签 + 可选行 | 树文件行 = 展示该 diff；diff 标题 = `useGitReviewOpenFile` | 「打开文件」/「跳转到源码」 | 无新按钮 |
-| 浏览这个项目 | 项目目录标签，无文档 | **禁止**改成打开 Files | 「打开目录」（与上一行同组） | **无**（禁止芯片） |
+| 浏览这个项目 | 项目目录标签，无文档 | **禁止**改成打开 Files | 「打开目录」（`5_open`，本树操作之后） | **无**（禁止芯片） |
 | 在访达中显示 | OS | 无 | 「在访达中显示」（路径组） | 无 |
 
 `PierFileTree`（`packages/ui/src/file/tree.tsx`）已保证：`onOpenPath` **只在 `kind === "file"`** 时触发；文件夹点击只展开/折叠。审查 `openSharedTreePath` 继续只滚 diff。禁止改这层。
@@ -120,7 +121,7 @@ git 插件 **不能** 调用 `openProjectFiles`：`dependency-cruiser.config.cjs
 
 | 优先级 | 入口 | 行为 |
 |--------|------|------|
-| **主（在场）** | 审查树文件/目录/分组根、diff 表面、以及 **审查 tab**（`dockview-tab`）的「打开目录」 | **一条**命令。树/diff 按目标收窄：无路径/分组根 → 项目根；文件 → 开树并 **揭示该文件（不开编辑器）**；目录 → 揭示该目录。审查 tab → **该次审查 git 根**（无 path）。与「打开文件 / 跳转到源码」同组，**不要**和复制路径 / 在访达中显示混在一组。tab 项 `menuHidden`，除非 `sourcePanelComponent === pier.git.changes` |
+| **主（在场）** | 审查树文件/目录/分组根、diff 表面、以及 **审查 tab**（`dockview-tab`）的「打开目录」 | **一条**命令。树/diff 按目标收窄：无路径/分组根 → 项目根；文件 → 开树并 **揭示该文件（不开编辑器）**；目录 → 揭示该目录。审查 tab → **该次审查 git 根**（无 path）。组为 `5_open`：在暂存/展开之后，**不要**和复制路径 / 在访达中显示混在一组。tab 项 `menuHidden`，除非 `sourcePanelComponent === pier.git.changes` |
 | **次** | 命令面板已有 `pier.files.openDirectory`（`getActiveContext()` → `projectAnchor`） | 审查聚焦时沿用。**不**新增 git 命令进 palette。`getActiveContext()` 实际返回 **工作区当前面板** 的 descriptor context、**不做插件过滤**。本里程碑 **禁止** 把 getter 改成插件作用域。菜单继续用 `source.gitRootPath` + `panelContextFromReviewGitRoot` |
 | **禁止** | 审查顶栏 Folder + 路径末段芯片；`GitReviewToolbar` 文件夹按钮；终端 / Files 等非审查 tab 出现 `pier.git.review.openDirectory` | 芯片会贴着变更摘要 `+N`。git 命令不得污染其它面板 tab |
 
@@ -137,20 +138,12 @@ git 插件 **不能** 调用 `openProjectFiles`：`dependency-cruiser.config.cjs
 - 产品句：`pluginText(context, "reviewOpenDirectory", "Open Directory")` → zh-CN「打开目录」。
 - `surfaces`: `git/review-tree-item`、`git/review-diff`、`dockview-tab`。**禁止** `"command-palette"`。
 - 审查 tab：目标为 `params.source`（`readGitReviewScope`）的 git 根；找不到再退 `sourcePanelContext.gitRoot`。**不要**用 `cwd`（可能是子目录）。非 `pier.git.changes` tab 不显示。
-- 分组（字典序，空组不占分隔线）：
-
-  | 组 | 项 | 说明 |
-  |----|----|------|
-  | `1_open` | 「打开文件」`sortOrder: 0`（仅树文件）；「跳转到源码」`sortOrder: 0`（仅 diff）；「打开目录」`sortOrder: 1` | 应用内打开。两意图并列，中间无分隔线 |
-  | `1_review` | 暂存 / 取消暂存 / 丢弃 | git 变更。与打开组之间有分隔线 |
-  | `2_view` | 展开文件夹 / 折叠文件夹（仅目录 / 分组根） | |
-  | `6_path` | 复制路径 → 复制相对路径 → 复制路径和所选行（仅 diff）→ 在访达中显示 | OS / 剪贴板。Finder **不得**与「打开目录」同组，避免当成系统文件夹 |
-
-- 树文件：打开文件、打开目录 | 暂存、丢弃 | 复制、访达。
-- 树目录：打开目录 | 暂存… | 展开、折叠 | 复制、访达。
-- 分组根 **没有** `repoPath`：复制/访达 `menuHidden`；打开目录 **必须显示**，目标为项目根。
-- diff：跳转到源码、打开目录 | 复制…、访达。
-- 审查 tab：打开目录（git 根）出现在 `1_open`；其后仍是宿主 tab 的复制地址 / 新建终端 / 拆分 / 关闭。不在 Files / 终端 tab 显示。
+- **组序权威**是 [`2026-08-31-context-menu-order-gold-standard.md`](./2026-08-31-context-menu-order-gold-standard.md)。本表面要点：审查树第一项是暂存/取消暂存，不是打开目录；「打开文件」与「打开目录」同组 `5_open`（0 / 1）；跳转到源码留在 `1_open`；打开目录禁止进 `6_path`。
+- 树文件：暂存、丢弃 | 打开文件、打开目录 | 复制、访达。
+- 树目录：暂存… | 展开、折叠 | 打开目录 | 复制、访达。
+- 分组根 **没有** `repoPath`：复制/访达 `menuHidden`；打开目录 **必须显示**，目标为项目根。顺序：暂存… | 展开、折叠 | 打开目录。
+- diff：复制 / 全选 | 跳转到源码 | （多组：聚焦 / 均分） | 打开目录 | 复制路径 / 访达。git 插件单测只锁打开/路径段。
+- 审查 tab：打开目录（git 根）出现在 `5_open`（拆分 / 窗口之后、关闭之前）。标签不并入 `panel/layout`，没有聚焦/均分。不在 Files / 终端 tab 显示。
 - 「打开文件」继续 `menuHidden: item?.kind !== "file"`。不得把打开目录塞进打开文件的 enabled 条件。
 - 仓库写入期间打开文件 / 打开目录仍可用；暂存 / 丢弃禁用。
 
@@ -520,6 +513,7 @@ files 侧失败文案继续 `filePanel.openDirectory.failed`（已是「无法�
 | K13 | **任何 `params.source.kind` 都不是目录标签** | 今日插件用 `parseFilesDocumentPanelSource`（disk \| untitled）。宿主不得只排除 disk。 |
 | K14 | **本窗 dockview 同步列表；远程 IPC 排除本窗 id** | `window.pier.panels.list()` 无参返回 `{ errors, panels }` 且含当前窗。生结果 `.filter` 或对本窗 `focusInstance` 会丢 K8 揭示。 |
 | K15 | **树注册表键是 groupId，总线仍带 panel id** | 共享 group 视图把树登记在 `group.id`（`group-view.tsx` `instanceId={groupId}`）。把 panel id 当注册表键会 miss；id miss 再 last-root 会命中同 root 的编辑器树并停轮询。监听器每次 `listInstances` 取 `groupId ?? panelId`，`fallbackToRoot: false`。 |
+| K16 | **审查树打开类在 `5_open`，在暂存之后** | 「打开文件」与「打开目录」同组 `5_open`。目录/分组根没有打开文件，第一项仍是暂存。跳转到源码留在 `1_open`。禁止与 `6_path` 同组。组序细节见 2026-08-31 右键菜单顺序金标准。 |
 
 ---
 
@@ -611,8 +605,8 @@ files 侧失败文案继续 `filePanel.openDirectory.failed`（已是「无法�
 - `tests/unit/renderer/files/panel/open-disk-file-panel.test.ts`：打开文件仍只走 disk 总线；改用共享 `identity-hash.ts`
 - `tests/unit/renderer/files/command-palette-surface.test.ts`：`pier.files.openDirectory` 仍仅 palette；git 新命令不得出现在该测试的 files 源码扫描里
 - `tests/unit/renderer/files/terminal-open-url-handler.test.ts`：子目录仍揭示；仓库根 + 已聚焦 = K8 no-op（不再无条件 80ms 揭示）；`files-unregistered` / `invalid-path` toast 不系统打开；`open-failed` 仍可系统打开
-- `tests/unit/renderer/git/review/tree/actions.test.ts`：打开文件仍仅 file 行；分组根仍无 copy/reveal；**新增**分组根有打开目录；文件/目录行有打开目录；`1_open` | `1_review` | `2_view` | `6_path` 分隔与顺序
-- `tests/unit/renderer/git/review/diff/actions.test.ts`：跳转到源码不变；打开目录紧跟其后、与复制/访达之间有分隔线
+- `tests/unit/renderer/git/review/tree/actions.test.ts`：打开文件仍仅 file 行；分组根仍无 copy/reveal；文件/目录/分组根有打开目录；`1_review` | `2_view` | `5_open`（打开文件 + 打开目录） | `6_path`。目录 / 分组根不得以「打开目录」为首项
+- `tests/unit/renderer/git/review/diff/actions.test.ts`：跳转到源码不变；插件段为跳转到源码 | 打开目录 | 复制/访达。多组时宿主布局插在打开组与打开目录之间，见 08-31 组合草图
 - `tests/unit/renderer/git/review/hooks/open-file.test.ts`：**不得改主点击断言**
 - `tests/unit/renderer/git/review/context/from-git-root.test.ts`：菜单继续用该 helper
 - `tests/unit/renderer/git/review/toolbar.test.tsx`：工具栏仍无 Folder / 打开目录
@@ -622,12 +616,12 @@ files 侧失败文案继续 `filePanel.openDirectory.failed`（已是「无法�
 
 ### 新增
 
-- `tests/unit/renderer/git/review/directory/open-action.test.ts`：目标收窄（文件 / 目录 / 分组根 / diff / 无 git 根）；组为 `1_open`
+- `tests/unit/renderer/git/review/directory/open-action.test.ts`：目标收窄（文件 / 目录 / 分组根 / diff / 无 git 根）；组为 `5_open`
 - `tests/unit/renderer/files/project/open-directory-reveal.test.ts`：每次轮询把 panel id 解析成 `groupId`；`fallbackToRoot: false`；缺叶子 reverse 祖先；根级缺失文件直接 root；`explicit` 不硬编码 `expandTarget: false`；**两组同 root**：项目目录 tab vs 编辑器 tab，揭示必须打到目录组的树，不得打到编辑器组
 - `tests/unit/renderer/git/review/open-directory-governance.test.ts`（或 `tests/unit/plugins/review-open-project-directory-governance.test.ts`）：
   - 本文存在且含「一句话终态」「打开目录」「禁止」主点击 / 工具栏 / `FilesDiskPathOpenedEvent`
   - `src/plugins/builtin/git/**` 源码不出现 `@plugins/builtin/files` 或 `open-project.ts`
-  - `pier.git.review.openDirectory` 的 `surfaces` 含 `dockview-tab`、不含 `command-palette`，组为 `1_open` 而非 `6_path`
+  - `pier.git.review.openDirectory` 的 `surfaces` 含 `dockview-tab`、不含 `command-palette`，组为 `5_open` 而非 `1_open` / `6_path`
   - `GitReviewToolbar` 不含 `openProjectDirectory` / `reviewOpenDirectory` / 芯片 testid
   - `changes-panel.tsx` 的 loading/error/empty/documents 仍传 `GitReviewScopeSwitcher`；**无** `GitReviewHeaderIdentity` / chip 文件
   - `files-disk-path-opened.ts` 仍无目录专用字段
@@ -660,7 +654,7 @@ files 侧失败文案继续 `filePanel.openDirectory.failed`（已是「无法�
 | `src/plugins/builtin/files/renderer/tree/reveal.ts` | after-ancestors / last-chance 透传 `fallbackToRoot` |
 | `src/plugins/builtin/files/renderer/open-url/handler.ts` | 目录分支改门面 |
 | `src/plugins/builtin/files/renderer/index.tsx` | 注册监听器 |
-| `src/plugins/builtin/git/renderer/review/directory/open-action.ts` | 命令 id、目标收窄、register（组 `1_open`） |
+| `src/plugins/builtin/git/renderer/review/directory/open-action.ts` | 命令 id、目标收窄、register（组 `5_open`） |
 | `src/plugins/builtin/git/renderer/review/tree-actions.ts` | register 新命令；打开文件改 `1_open` |
 | `src/plugins/builtin/git/renderer/review/diff-actions.ts` | 跳转到源码改 `1_open` |
 | `src/plugins/builtin/git/renderer/changes-panel.tsx` | `headerLeading` 仍为范围切换 |

@@ -17,7 +17,10 @@ import {
 import type { WorkspaceService } from "../services/workspace-service.ts";
 import { windowManager } from "../windows/manager.ts";
 import type { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
-import { broadcastTaskRunsSnapshot } from "./window-broadcasts.ts";
+import {
+  broadcastPanelTransferOverlayPreview,
+  broadcastTaskRunsSnapshot,
+} from "./window-broadcasts.ts";
 
 export function wireAppCoreWindowAndPanelTransfer(input: {
   fileDrafts: FileDraftsService;
@@ -167,6 +170,9 @@ export function wireAppCoreWindowAndPanelTransfer(input: {
   });
 
   panelTransferRef = createPanelTransferService({
+    broadcastOverlayPreview: (preview) => {
+      broadcastPanelTransferOverlayPreview(preview);
+    },
     files: createPanelTransferFilesPort(input.fileDrafts),
     terminal: terminalTransfer,
     geometry: {
@@ -291,7 +297,13 @@ export function wireAppCoreWindowAndPanelTransfer(input: {
       releaseRendererShow: (windowId, reason) => {
         windowManager.releaseRendererShow(windowId, reason);
       },
+      revealHost: (windowId) => {
+        windowManager.revealHost(windowId);
+      },
       runExclusive: (operation) => windowService.runExclusive(operation),
+      setBounds: (windowId, bounds) => {
+        windowManager.setBounds(windowId, bounds);
+      },
     },
     workspace: {
       clearLayout: (recordId) => input.workspace.clearLayout(recordId),

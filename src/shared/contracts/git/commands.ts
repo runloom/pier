@@ -20,6 +20,15 @@ import { gitReviewCommandSchemas } from "./review.ts";
 // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
 export const gitCommandSchemas = [
   z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),
+  /**
+   * 在桌面工作区打开（或聚焦）该仓库的审查面板（show-or-focus，与桌面
+   * 状态栏/命令面板同语义）。移动端 S2 入口经此命令与 PC 同步打开。
+   */
+  z.object({
+    cwd: z.string().min(1),
+    type: z.literal("git.openReviewPanel"),
+    windowId: z.string().min(1).optional(),
+  }),
   ...gitReviewCommandSchemas,
   z.object({ type: z.literal("git.listIgnored"), cwd: z.string().min(1) }),
   z.object({

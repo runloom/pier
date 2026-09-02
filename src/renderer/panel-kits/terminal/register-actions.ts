@@ -56,7 +56,9 @@ async function runTerminalOperation(
 }
 
 function terminalOperationContribution(opts: {
+  displayChord?: string;
   enabled?: (invocation?: ActionInvocation) => boolean;
+  group?: string;
   id: string;
   operation: TerminalOperation;
   sortOrder: number;
@@ -64,8 +66,9 @@ function terminalOperationContribution(opts: {
 }): ActionContribution {
   return {
     categoryKey: "terminal",
+    ...(opts.displayChord ? { displayChord: opts.displayChord } : {}),
     ...(opts.enabled ? { enabled: opts.enabled } : {}),
-    group: "0_edit",
+    group: opts.group ?? "0_edit",
     handler: async (invocation) => {
       const panelId = resolveTerminalPanelId(invocation);
       if (!panelId) {
@@ -88,6 +91,8 @@ function hasPinnedTerminalSelection(invocation?: ActionInvocation): boolean {
 export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   terminalOperationContribution({
     // 无选区禁用；打开菜单时由 panel 钉 selectedText。
+    // 显示 ⌘C/V/A，但不进 keymap（Ghostty 原生处理，禁止抢走）。
+    displayChord: "Mod+KeyC",
     enabled: hasPinnedTerminalSelection,
     id: "pier.terminal.copy",
     operation: "copy",
@@ -95,12 +100,14 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     titleKey: "contextMenu.action.copy",
   }),
   terminalOperationContribution({
+    displayChord: "Mod+KeyV",
     id: "pier.terminal.paste",
     operation: "paste",
     sortOrder: 2,
     titleKey: "contextMenu.action.paste",
   }),
   terminalOperationContribution({
+    displayChord: "Mod+KeyA",
     id: "pier.terminal.selectAll",
     operation: "selectAll",
     sortOrder: 3,
@@ -108,7 +115,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   }),
   {
     categoryKey: "terminal",
-    group: "0_edit",
+    group: "1_find",
     handler: (invocation) => {
       const panelId = resolveTerminalPanelId(invocation);
       if (!panelId) {
@@ -119,15 +126,16 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     iconComponent: Search,
     id: "pier.terminal.search",
     shortcutSourceId: "pier.find",
-    sortOrder: 4,
+    sortOrder: 0,
     surfaces: ["terminal/content"],
     titleKey: "contextMenu.action.find",
     when: "terminal.hasActivePanel",
   },
   terminalOperationContribution({
+    group: "8_clear",
     id: "pier.terminal.clearScreen",
     operation: "clearScreen",
-    sortOrder: 5,
+    sortOrder: 0,
     titleKey: "contextMenu.action.clearScreen",
   }),
   {

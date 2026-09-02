@@ -4,6 +4,8 @@ import type {
   PierClientKind,
 } from "@shared/contracts/permissions.ts";
 import { ASSET_COMMAND_METADATA } from "./asset-metadata.ts";
+import { MOBILE_COMMAND_METADATA } from "./mobile-command-metadata.ts";
+import { PANEL_TRANSFER_COMMAND_METADATA } from "./panel-transfer-metadata.ts";
 
 /** Exhaustive per-command authorization; Record keys cover every PierCommand type. */
 export interface CommandMetadata {
@@ -15,6 +17,11 @@ export interface CommandMetadata {
 
 export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   ...ASSET_COMMAND_METADATA,
+  ...PANEL_TRANSFER_COMMAND_METADATA,
+  "app.openExternal": {
+    allowedClientKinds: ["canvas"],
+    capabilities: ["external:open"],
+  },
   "ai.status": { capabilities: ["ai:invoke"] },
   "ai.generateText": { capabilities: ["ai:invoke"] },
   "environment.project.add": { capabilities: ["environment:write"] },
@@ -142,6 +149,10 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "plugin.disable": { capabilities: ["plugin:write"] },
   "plugin.enable": { capabilities: ["plugin:write"] },
   "plugin.inspect": { capabilities: ["plugin:read"] },
+  "plugin.applets": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["plugin:read"],
+  },
   "plugin.list": { capabilities: ["plugin:read"] },
   "plugin.workspace.plan": {
     allowedClientKinds: ["desktop-renderer", "cli-local"],
@@ -198,32 +209,7 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "notifications.watch": { capabilities: ["notification:read"] },
   "notifications.focus": { capabilities: ["notification:write"] },
   "notifications.mark-read": { capabilities: ["notification:write"] },
-  // M1 审批回写：桌面 + 配对移动端；按键回写属于通知处置闭环（notification:write）。
-  "agent.attention.respond": {
-    allowedClientKinds: ["desktop-renderer", "mobile-paired"],
-    capabilities: ["notification:write"],
-  },
-  // M1 宿主远程访问管理面：配对与启停只许桌面，移动端/CLI 一律不过 kind 门。
-  "remoteAccess.getState": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["remote-access:read"],
-  },
-  "remoteAccess.setEnabled": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["remote-access:control"],
-  },
-  "remoteAccess.beginPairing": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["remote-access:control"],
-  },
-  "remoteAccess.cancelPairing": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["remote-access:control"],
-  },
-  "remoteAccess.revokeDevice": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["remote-access:control"],
-  },
+  ...MOBILE_COMMAND_METADATA,
   // terminal.open 静态只记基础能力；launch 额外能力由 requiredCapabilitiesForCommand 叠加。
   "terminal.open": { capabilities: ["workspace:open"] },
   "terminal.list": { capabilities: ["terminal:read"] },
@@ -299,6 +285,12 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "git.discardChanges": { capabilities: ["git:write"] },
   "git.getDiffPatch": { capabilities: ["git:read"] },
   "git.getStatus": { capabilities: ["git:read"] },
+  // S2 同步开面板：桌面 + 配对移动端；打开面板与 panel.open/terminal.open
+  // 同用 workspace:open（panel:open 是插件 manifest 权限，不是客户端能力）。
+  "git.openReviewPanel": {
+    allowedClientKinds: ["desktop-renderer", "mobile-paired"],
+    capabilities: ["git:read", "workspace:open"],
+  },
   "git.getReviewIndex": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["git:read"],
@@ -466,34 +458,6 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     capabilities: ["workspace:open", "terminal:control"],
   },
   "app.relaunch": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.offer": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.drop": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.finishDrag": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.cancel": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.bootstrap": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.ready": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["window:control"],
-  },
-  "panelTransfer.relocate": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["window:control"],
   },

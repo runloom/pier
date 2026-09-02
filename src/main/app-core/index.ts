@@ -30,6 +30,7 @@ import { createAiService } from "../services/ai/service.ts";
 import { createCanvasTrustService } from "../services/canvas-trust/service.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createCommentsService } from "../services/comments/service.ts";
+import { createShellExternalNavigationService } from "../services/external-navigation.ts";
 import { createFileDraftsService } from "../services/files/drafts-service.ts";
 import { FilePathTransactionLock } from "../services/files/path-transaction-lock.ts";
 import { createFileService } from "../services/files/service.ts";
@@ -415,6 +416,7 @@ function createPierAppCore(): PierAppCore {
       broadcast: broadcastMruState,
     }),
     comments,
+    externalNavigation: createShellExternalNavigationService(),
     fileDrafts,
     files,
     fileWatch: createFileWatchService(),

@@ -100,6 +100,26 @@ function installWorkspaceApi() {
   return { api, terminalCurrent, terminalOther };
 }
 
+function installGitWorkspaceApi() {
+  const gitCurrent = panel("git-current", "pier.git.changes");
+  const api = {
+    activePanel: gitCurrent,
+    groups: [{ panels: [gitCurrent] }],
+    panels: [gitCurrent],
+  };
+  useWorkspaceStore.getState().setApi(api as unknown as DockviewApi);
+  usePanelDescriptorStore.setState({
+    activeId: "git-current",
+    descriptors: {
+      "git-current": {
+        context: context("/Users/dev/ABC/pier"),
+        display: { short: "pier +21 -2" },
+      },
+    },
+  });
+  return { api, gitCurrent };
+}
+
 function installWebWorkspaceApi() {
   const webCurrent = panel("web-current", "file-viewer");
   const terminalOther = panel("terminal-other");
@@ -390,7 +410,6 @@ describe("run actions", () => {
       focus: false,
       forceRestart: true,
       mode: "background",
-      placement: "active-tab",
       projectRootPath: "/Users/dev/ABC/pier",
       taskId: "package-script:test",
       terminalPanelId: "terminal-current",
@@ -398,7 +417,7 @@ describe("run actions", () => {
     expect(quickPick.renderItem).toBeUndefined();
   });
 
-  it("pins a task terminal to the panel group that opened Run Task", async () => {
+  it("uses the invocation source panel as background origin when it is not the active group", async () => {
     installWebWorkspaceApi();
     disposeRunActions = registerRunActions();
 
@@ -420,17 +439,31 @@ describe("run actions", () => {
     await quickPick.onAccept(target);
 
     expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
-      focus: true,
+      focus: false,
       forceRestart: true,
-      placement: "active-tab",
+      mode: "background",
       projectRootPath: "/Users/dev/ABC/pier",
-      targetGroupId: "group-source",
       taskId: "package-script:test",
+      terminalPanelId: "web-current",
     });
   });
 
-  it("falls back to a terminal tab when Run Task is invoked from a non-terminal project panel", async () => {
-    installWebWorkspaceApi();
+  it.each([
+    {
+      install: installWebWorkspaceApi,
+      name: "a file panel",
+      origin: "web-current",
+    },
+    {
+      install: installGitWorkspaceApi,
+      name: "git changes",
+      origin: "git-current",
+    },
+  ] as const)("spawns in the background when Run Task is invoked from $name", async ({
+    install,
+    origin,
+  }) => {
+    install();
     disposeRunActions = registerRunActions();
 
     await actionRegistry.get("pier.run.task")?.handler();
@@ -446,11 +479,12 @@ describe("run actions", () => {
     await quickPick.onAccept(target);
 
     expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
-      focus: true,
+      focus: false,
       forceRestart: true,
-      placement: "active-tab",
+      mode: "background",
       projectRootPath: "/Users/dev/ABC/pier",
       taskId: "package-script:test",
+      terminalPanelId: origin,
     });
     expect(quickPick.renderItem).toBeUndefined();
   });
@@ -580,7 +614,6 @@ describe("run actions", () => {
       forceRestart: true,
       inputs: { pkg: "renderer" },
       mode: "background",
-      placement: "active-tab",
       projectRootPath: "/Users/dev/ABC/pier",
       taskId: "package-script:test",
       terminalPanelId: "terminal-current",

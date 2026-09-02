@@ -4,8 +4,6 @@ import {
   actionRank,
   buildFrecencyMap,
   compareActions,
-  compareGroups,
-  groupRank,
 } from "@/lib/command-palette/frecency.ts";
 
 const day = 86_400_000;
@@ -72,52 +70,6 @@ describe("actionRank", () => {
   });
 });
 
-describe("groupRank", () => {
-  const baseAction = (id: string, category: string) => ({
-    id,
-    category,
-    title: () => id,
-    handler: () => undefined,
-  });
-
-  it("组内任一 action 有 frecency → tier=frecency + maxScore", () => {
-    const actions = [baseAction("a", "view"), baseAction("b", "view")];
-    const map = new Map([
-      ["a", 3],
-      ["b", 7],
-    ]);
-    const r = groupRank(actions, map);
-    expect(r.tier).toBe("frecency");
-    if (r.tier === "frecency") {
-      expect(r.maxScore).toBe(7);
-    }
-  });
-
-  it("组内全无 frecency → tier=fallback + CATEGORY_META.order", () => {
-    const actions = [baseAction("a", "settings")];
-    const r = groupRank(actions, new Map());
-    expect(r.tier).toBe("fallback");
-    // Settings.order = 8 (terminal 分类加入后顺延)
-    if (r.tier === "fallback") {
-      expect(r.order).toBe(8);
-    }
-  });
-
-  it("fallback group order uses metadata.categoryKey over display category", () => {
-    const actions = [
-      {
-        id: "plugin.worktree",
-        category: "Worktree",
-        handler: () => undefined,
-        metadata: { categoryKey: "worktree" as const },
-        title: () => "Create Worktree",
-      },
-    ];
-    const r = groupRank(actions, new Map());
-    expect(r).toEqual({ order: 2, tier: "fallback" });
-  });
-});
-
 describe("compareActions", () => {
   const mkA = (id: string, sortOrder?: number) => ({
     id,
@@ -152,27 +104,5 @@ describe("compareActions", () => {
     ]);
     expect(compareActions(mkA("a", 2), mkA("b", 1), map)).toBeGreaterThan(0);
     expect(compareActions(mkA("a"), mkA("b"), map)).toBeLessThan(0);
-  });
-});
-
-describe("compareGroups", () => {
-  const mkA = (id: string, category: string) => ({
-    id,
-    category,
-    title: () => id,
-    handler: () => undefined,
-  });
-
-  it("frecency 组排在 fallback 组前面", () => {
-    const ga = [mkA("a", "panel")];
-    const gb = [mkA("b", "view")];
-    const map = new Map([["a", 1]]);
-    expect(compareGroups(ga, gb, map)).toBeLessThan(0);
-  });
-
-  it("两个 fallback 组: 按 CATEGORY_META.order 排 (view=0 在前, settings=7 在后)", () => {
-    const view = [mkA("v", "view")];
-    const settings = [mkA("s", "settings")];
-    expect(compareGroups(view, settings, new Map())).toBeLessThan(0);
   });
 });

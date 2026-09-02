@@ -55,6 +55,26 @@ export async function rollForwardAfterRuntimeMoved(input: {
 
   if (record.phase === "runtime-moved" || record.phase === "source-durable") {
     if (record.phase === "runtime-moved") {
+      // Tear-off: show the target as soon as it has the live panel. Source
+      // tab is already visually hidden so this is not a dual-window flash.
+      deps.windows.releaseRendererShow(
+        target.runtimeWindowId,
+        PANEL_TRANSFER_SHOW_HOLD_REASON
+      );
+      if (target.kind === "internal") {
+        try {
+          deps.windows.focus(target.runtimeWindowId);
+        } catch (focusError) {
+          console.error(
+            "[panelTransfer] focus new window failed",
+            `transferId=${transferId}`,
+            `target=${target.runtimeWindowId}`,
+            focusError instanceof Error
+              ? focusError.message
+              : String(focusError)
+          );
+        }
+      }
       // Copy keeps the source tab and its drafts; only move removes the panel.
       if (mode === "move") {
         const release = await deps.renderer.releaseSource({

@@ -10,9 +10,9 @@
 // match `validateManagedPluginPackage` expectations.
 
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { crc32 } from "node:zlib";
 import tar from "tar-stream";
 
@@ -100,6 +100,47 @@ if (existsSync(distDir)) {
       name: `dist/${name}`,
       path: join(distDir, name),
     });
+  }
+}
+
+const applets = Array.isArray(manifest.applets) ? manifest.applets : [];
+const appletMembers = new Set(members.map((member) => member.name));
+
+function addAppletTree(relDir) {
+  const absDir = join(pluginDir, relDir);
+  if (!(existsSync(absDir) && statSync(absDir).isDirectory())) {
+    return;
+  }
+  for (const name of readdirSync(absDir)) {
+    const rel = `${relDir}/${name}`.replaceAll("\\", "/");
+    const abs = join(pluginDir, rel);
+    const info = statSync(abs);
+    if (info.isDirectory()) {
+      addAppletTree(rel);
+      continue;
+    }
+    if (!info.isFile() || appletMembers.has(rel)) {
+      continue;
+    }
+    appletMembers.add(rel);
+    members.push({ name: rel, path: abs });
+  }
+}
+
+if (existsSync(join(pluginDir, "applets"))) {
+  addAppletTree("applets");
+}
+for (const applet of applets) {
+  if (!applet || typeof applet.entry !== "string") {
+    throw new Error("manifest.applets[].entry is required");
+  }
+  const absEntry = join(pluginDir, applet.entry);
+  if (!(existsSync(absEntry) && statSync(absEntry).isFile())) {
+    throw new Error(`missing applet entry ${applet.entry}`);
+  }
+  const entryDir = dirname(applet.entry).replaceAll("\\", "/");
+  if (entryDir !== "." && !entryDir.startsWith("applets")) {
+    addAppletTree(entryDir);
   }
 }
 

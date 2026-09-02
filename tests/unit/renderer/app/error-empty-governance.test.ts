@@ -14,6 +14,9 @@ const FULL_REGION_LOAD_FAILURE_SITES = [
   "packages/plugin-codex/src/renderer/accounts-settings-page.tsx",
   "packages/plugin-grok/src/renderer/accounts-settings-page.tsx",
   "packages/plugin-ssh/src/renderer/hosts-settings-page.tsx",
+  "packages/plugin-tasks/src/renderer/board-panel.tsx",
+  "packages/plugin-tasks/src/renderer/source-setup.tsx",
+  "src/renderer/lib/plugins/external/applet-mount.tsx",
   "src/renderer/pages/settings/components/skills/content-body.tsx",
   "src/plugins/builtin/files/renderer/panel/body.tsx",
   "src/plugins/builtin/files/renderer/preview/canvas-states.tsx",
@@ -36,6 +39,7 @@ describe("full-region error Empty governance", () => {
       const usesEmpty =
         src.includes("ErrorEmpty") ||
         src.includes("CanvasCompileErrorEmpty") ||
+        src.includes("<Empty") ||
         src.includes('data-slot="file-canvas-error-empty"') ||
         src.includes("data-slot='file-canvas-error-empty'");
       expect(usesEmpty, `${rel} should present load failures via Empty`).toBe(
@@ -71,17 +75,63 @@ describe("full-region error Empty governance", () => {
       }
       if (rel.endsWith("canvas-states.tsx")) {
         expect(src).toContain("CanvasCompileErrorEmpty");
-        // Runtime crash titles belong on Empty, not soft Alert banner.
+        expect(src).toContain("ErrorEmpty");
+        // Compile failures and runtime crashes belong on Empty, not soft Alert.
         expect(src).not.toMatch(/CanvasSoftErrorBanner[\s\S]{0,80}isRuntime/);
         expect(src).toMatch(
           /isRuntime[\s\S]{0,200}filePanel\.canvas\.runtimeFailed/
         );
+        expect(src).toContain(
+          "Compile failures and runtime crashes clear the host"
+        );
+        // Warning infobar: Alert layout="infobar", not a padded card.
+        expect(src).toContain('layout="infobar"');
+        expect(src).toContain("AlertAction");
+        expect(src).not.toMatch(/border-border border-b px-4 py-3/);
+        expect(src).not.toMatch(/rounded-none border-x-0 border-t-0/);
       }
       if (rel.endsWith("unavailable-panel.tsx")) {
         expect(src).toContain("ErrorEmpty");
         expect(src).not.toContain("AlertTriangle");
         expect(src).toMatch(/data-slot=["']panel-transfer-unavailable["']/);
       }
+      if (rel.endsWith("applet-mount.tsx")) {
+        expect(src).toContain("ErrorEmpty");
+        expect(src).not.toMatch(
+          /if\s*\(\s*error\s*\)[\s\S]{0,200}<Alert\s+variant=["']destructive["']/
+        );
+      }
+      if (rel.endsWith("board-panel.tsx")) {
+        expect(src).toContain("ErrorEmpty");
+        expect(src).not.toMatch(/EmptyDescription>\{error\}/);
+      }
     }
+  });
+
+  it("task applets use Empty for full-region load failure", () => {
+    for (const rel of [
+      "packages/plugin-tasks/applets/load-error.tsx",
+      "packages/plugin-tasks/applets/tracker-board/view.tsx",
+      "packages/plugin-tasks/applets/task-list/index.applet.tsx",
+      "packages/plugin-tasks/applets/task-dag/index.applet.tsx",
+    ] as const) {
+      const src = readFileSync(join(ROOT, rel), "utf8");
+      expect(src, rel).toMatch(/AppletLoadError|<Empty\b/);
+    }
+  });
+
+  it("canvas compile/import failure never keeps a stale mount via soft Alert", () => {
+    const src = readFileSync(
+      join(
+        ROOT,
+        "src/plugins/builtin/files/renderer/preview/canvas-compile-session.ts"
+      ),
+      "utf8"
+    );
+    expect(src).not.toMatch(
+      /isHotReload && unmountRef\.current && !isRuntimeError/
+    );
+    expect(src).toContain("never a soft Alert");
+    expect(src).toContain("always Empty");
   });
 });

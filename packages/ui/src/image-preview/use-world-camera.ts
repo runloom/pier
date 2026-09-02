@@ -1,6 +1,5 @@
 /**
  * World-stage camera: one `translate + scale`. Math is in `canvas-math.ts`.
- * Document viewers stay on `useZoomPanViewport`.
  */
 import {
   type CSSProperties,
@@ -22,36 +21,34 @@ import {
   PINCH_ZOOM_SENSITIVITY,
   softClampCamera,
   type WorldCamera,
+  type WorldCameraLookAt,
   type WorldSizeBox,
   ZOOM_FACTOR,
   zoomCameraAt,
 } from "./canvas-math.ts";
+import {
+  applyWorldCameraReset,
+  applyWorldCameraViewportResize,
+  type CameraPanSession,
+  lookAtFromCamera,
+  recalledFreeLookAt,
+  sameWorldCamera,
+  stampWorldCameraLookAt,
+  type WorldCameraHookInput,
+} from "./world-camera-reset.ts";
+import { useWorldCameraSpacePan } from "./world-camera-space-pan.ts";
 
 export type WorldCameraZoomLevel = number | "fit";
 
 const INTERACT_IDLE_MS = 200;
 
-interface CameraPanSession {
-  fromEmpty: boolean;
-  moved: boolean;
-  originX: number;
-  originY: number;
-  pointerId: number;
-  startX: number;
-  startY: number;
-}
-
 export function useWorldCamera({
   enabled = true,
   getContentSize,
+  recall,
   resetKey,
   shouldCapturePointer,
-}: {
-  enabled?: boolean;
-  getContentSize: () => WorldSizeBox | null;
-  resetKey?: string | number | null;
-  shouldCapturePointer?: (event: ReactPointerEvent<HTMLElement>) => boolean;
-}) {
+}: WorldCameraHookInput) {
   const viewportRef = useRef<HTMLElement | null>(null);
   const enabledRef = useRef(false);
   const [camera, setCamera] = useState<WorldCamera | null>(null);
@@ -60,13 +57,18 @@ export function useWorldCamera({
   const modeRef = useRef(mode);
   modeRef.current = mode;
   const [panning, setPanning] = useState(false);
-  const [spacePressed, setSpacePressed] = useState(false);
-  const spacePressedRef = useRef(false);
-  spacePressedRef.current = spacePressed;
+  const { spacePressed, spacePressedRef } = useWorldCameraSpacePan(
+    enabled,
+    viewportRef
+  );
   const [interacting, setInteracting] = useState(false);
   const interactTimerRef = useRef(0);
   const panSessionRef = useRef<CameraPanSession | null>(null);
   const wheelPanRef = useRef({ dx: 0, dy: 0, raf: 0 });
+  const recallRef = useRef(recall);
+  recallRef.current = recall;
+  const lookAtRef = useRef<WorldCameraLookAt | null>(null);
+  const appliedResetKeyRef = useRef<string | number | null>(null);
 
   const viewportBox = useCallback((): WorldSizeBox | null => {
     const viewport = viewportRef.current;
@@ -96,52 +98,6 @@ export function useWorldCamera({
     []
   );
 
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-    const onKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (e.code === "Space" || e.key === " ") {
-        const active = document.activeElement;
-        if (isEditableOrControl(active)) {
-          return;
-        }
-        const viewport = viewportRef.current;
-        if (!viewport) {
-          return;
-        }
-        if (
-          document.activeElement === viewport ||
-          viewport.contains(document.activeElement) ||
-          viewport.matches(":hover")
-        ) {
-          e.preventDefault();
-          if (!spacePressedRef.current) {
-            setSpacePressed(true);
-          }
-        }
-      }
-    };
-    const onKeyUp = (e: globalThis.KeyboardEvent) => {
-      if ((e.code === "Space" || e.key === " ") && spacePressedRef.current) {
-        setSpacePressed(false);
-      }
-    };
-    const onBlur = () => {
-      if (spacePressedRef.current) {
-        setSpacePressed(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("blur", onBlur);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("blur", onBlur);
-    };
-  }, [enabled]);
-
   const applyCamera = useCallback(
     (update: (current: WorldCamera) => WorldCamera) => {
       setMode("free");
@@ -152,9 +108,10 @@ export function useWorldCamera({
         const next = update(current);
         const content = getContentSize();
         const viewport = viewportBox();
-        return content && viewport
-          ? softClampCamera(next, content, viewport)
-          : next;
+        const clamped =
+          content && viewport ? softClampCamera(next, content, viewport) : next;
+        stampWorldCameraLookAt(clamped, viewport, lookAtRef);
+        return clamped;
       });
     },
     [getContentSize, viewportBox]
@@ -170,21 +127,49 @@ export function useWorldCamera({
       if (!(content && viewport && content.width > 0 && content.height > 0)) {
         return;
       }
+      const next = fitCamera(content, viewport);
       setMode("fit");
-      setCamera(fitCamera(content, viewport));
+      lookAtRef.current = null;
+      setCamera((current) => sameWorldCamera(current, next));
     },
     [getContentSize, viewportBox]
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey is the world identity trigger
   useLayoutEffect(() => {
-    setMode("fit");
-    modeRef.current = "fit";
     if (!enabled) {
       return;
     }
-    measureFit(true);
-  }, [resetKey]);
+    const identity = resetKey ?? "";
+    if (appliedResetKeyRef.current === identity) {
+      return;
+    }
+    const pendingLookAt = recalledFreeLookAt(recallRef.current?.() ?? null);
+    const viewport = viewportBox();
+    if (
+      pendingLookAt &&
+      !(viewport && viewport.width > 0 && viewport.height > 0)
+    ) {
+      return;
+    }
+    appliedResetKeyRef.current = identity;
+    const result = applyWorldCameraReset({
+      getContentSize,
+      lookAtRef,
+      measureFit,
+      modeRef,
+      recall: recallRef.current,
+      setCamera: (pose) => {
+        setCamera(pose);
+      },
+      setMode,
+      viewportBox,
+    });
+    if (result === "cleared") {
+      setCamera(null);
+      setMode("fit");
+      modeRef.current = "fit";
+    }
+  }, [enabled, getContentSize, measureFit, resetKey, viewportBox]);
 
   useLayoutEffect(() => {
     const becameEnabled = enabled && !enabledRef.current;
@@ -192,7 +177,7 @@ export function useWorldCamera({
     if (!enabled) {
       return;
     }
-    measureFit(becameEnabled);
+    measureFit(becameEnabled && modeRef.current === "fit");
   }, [enabled, measureFit]);
 
   useEffect(() => {
@@ -201,11 +186,20 @@ export function useWorldCamera({
       return;
     }
     const observer = new ResizeObserver(() => {
-      measureFit();
+      applyWorldCameraViewportResize({
+        getContentSize,
+        lookAtRef,
+        measureFit,
+        modeRef,
+        setCamera: (pose) => {
+          setCamera(pose);
+        },
+        viewportBox,
+      });
     });
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [enabled, measureFit]);
+  }, [enabled, getContentSize, measureFit, viewportBox]);
 
   const zoomAtViewportCenter = useCallback(
     (nextScale: number) => {
@@ -412,7 +406,7 @@ export function useWorldCamera({
       }
       setPanning(true);
     },
-    [camera, enabled, shouldCapturePointer]
+    [camera, enabled, shouldCapturePointer, spacePressedRef]
   );
 
   const handlePointerMove = useCallback(
@@ -473,6 +467,8 @@ export function useWorldCamera({
       }
     : undefined;
 
+  const lookAt = lookAtFromCamera(camera, mode, viewportBox());
+
   return {
     adjustZoom,
     camera,
@@ -483,6 +479,7 @@ export function useWorldCamera({
     handlePointerDown,
     handlePointerMove,
     handleWheel,
+    lookAt,
     measureFit,
     panning,
     setZoom,

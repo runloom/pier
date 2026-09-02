@@ -7,6 +7,7 @@ import {
   liveModuleRuntimeUrl,
 } from "@shared/live-module-url.ts";
 import type * as esbuild from "esbuild";
+import { resolvePierAppletCompileEntry } from "./compile-resolve-applet.ts";
 import { diagnosticFromError } from "./diagnostics.ts";
 import {
   assertNotNodeModulesPath,
@@ -69,6 +70,7 @@ export interface ResolvePluginContext {
   entryAbsolutePath: string;
   /** dirname(entryAbsolutePath). */
   entryDir: string;
+  extraFenceRoots: string[];
   /** projectRoot ?? contentRoot. */
   fenceRoot: string;
   forcePreviewBarrel: boolean;
@@ -91,6 +93,41 @@ function canvasSourceLoader(filePath: string): esbuild.Loader {
     return "jsx";
   }
   return "js";
+}
+
+function isWithinCompileFence(
+  candidatePath: string,
+  ctx: ResolvePluginContext
+): boolean {
+  if (
+    isPathWithinRoot(candidatePath, ctx.contentRoot) ||
+    isPathWithinRoot(candidatePath, ctx.fenceRoot)
+  ) {
+    return true;
+  }
+  return ctx.extraFenceRoots.some((root) =>
+    isPathWithinRoot(candidatePath, root)
+  );
+}
+
+function assertInsideCompileFence(
+  candidatePath: string,
+  ctx: ResolvePluginContext,
+  label: string
+): string {
+  const roots = [ctx.projectRoot ?? ctx.fenceRoot, ...ctx.extraFenceRoots];
+  let lastError: unknown;
+  for (const root of roots) {
+    try {
+      return assertPathInsideRoot(candidatePath, root, label);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  throw new Error(`${label} escapes compile fence: ${candidatePath}`);
 }
 
 function addToGraph(
@@ -137,12 +174,7 @@ export function createLiveModuleResolvePlugin(
         build.onLoad(
           { filter: /\.[cm]?[jt]sx?$/, namespace: "file" },
           (args) => {
-            if (
-              !(
-                isPathWithinRoot(args.path, ctx.contentRoot) ||
-                isPathWithinRoot(args.path, ctx.fenceRoot)
-              )
-            ) {
+            if (!isWithinCompileFence(args.path, ctx)) {
               return;
             }
             return {
@@ -194,6 +226,19 @@ export function createLiveModuleResolvePlugin(
 
         if (args.path.startsWith("pier-live://")) {
           return { external: true, path: args.path };
+        }
+
+        if (args.path.startsWith("@pier-applet/")) {
+          const applet = resolvePierAppletCompileEntry(args.path);
+          if (!applet) {
+            return {
+              errors: [{ text: `unknown applet: ${args.path}` }],
+            };
+          }
+          if (!ctx.extraFenceRoots.includes(applet.fenceRoot)) {
+            ctx.extraFenceRoots.push(applet.fenceRoot);
+          }
+          return { path: applet.entryAbsolutePath };
         }
 
         // Solid automatic JSX imports solid-js/jsx-runtime — resolve
@@ -323,11 +368,7 @@ export function createLiveModuleResolvePlugin(
 
         try {
           // Always realpath + project membership (blocks symlink escapes).
-          const real = assertPathInsideRoot(
-            resolved,
-            ctx.projectRoot ?? ctx.fenceRoot,
-            "import"
-          );
+          const real = assertInsideCompileFence(resolved, ctx, "import");
           const isProjectPkg =
             ctx.framework !== "react" &&
             (isFrameworkBarePackage(args.path, ctx.framework) ||

@@ -37,6 +37,7 @@ import {
   readGitReviewPatch,
 } from "./patch.ts";
 import type { ReadGitReviewPatchOptions } from "./patch-contract.ts";
+import { patchSectionContents } from "./patch-sides.ts";
 
 interface BuildGitReviewDocumentOptions {
   readonly budget: GitReviewIndexExecutionBudget;
@@ -262,6 +263,7 @@ function sectionFromMaterial(options: {
     kind: "patch",
     patch: material.patch,
     sectionKey,
+    ...patchSectionContents(material),
   };
 }
 

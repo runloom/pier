@@ -12,15 +12,6 @@ export const settingsPlugins = {
   },
   runtimeUnavailableDescription:
     "このプラグインはインストール済みですが、いまは読み込まれていません。Pier を再起動し、直らなければ入れ直してください。",
-  contributionSummary: {
-    command: "{{count}} 個のコマンド",
-    commands: "{{count}} 個のコマンド",
-    none: "貢献はありません",
-    panel: "{{count}} 個のパネル",
-    panels: "{{count}} 個のパネル",
-    terminalStatusItem: "{{count}} 個のターミナル状態項目",
-    terminalStatusItems: "{{count}} 個のターミナル状態項目",
-  },
   permissionLabels: pluginPermissions,
   loadingTitle: "プラグインを読み込み中",
   loadingDescription: "プラグイン一覧を読み取り中…",
@@ -35,8 +26,6 @@ export const settingsPlugins = {
   errorTitle: "プラグインを読み込めません",
   openSettings: "設定",
   openSettingsPlugin: "{{name}} の設定を開く",
-  permissionSummary: "権限：{{list}}",
-  permissionSummaryNone: "特別な権限なし",
   source: {
     builtin: "内蔵",
     local: "ローカル",

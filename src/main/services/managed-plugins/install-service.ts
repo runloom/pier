@@ -6,6 +6,7 @@ import type {
   ManagedPluginOperationResult,
   OfficialPluginIndex,
 } from "@shared/contracts/plugin/managed.ts";
+import { syncRegisteredCanvasApplets } from "../live-modules/applet-sources.ts";
 import {
   computeSimulateRestartMutation,
   performListCatalogSnapshot,
@@ -174,6 +175,7 @@ export function createManagedPluginInstallService(
       }
     }
     runtimeSourcesSnapshot = sources;
+    syncRegisteredCanvasApplets(sources);
     if (options.onRuntimeSourcesChanged) {
       await options.onRuntimeSourcesChanged(sources);
     }

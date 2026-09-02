@@ -21,6 +21,16 @@ describe("PierCommand schema plugin RPC boundary", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts plugin.applets which IS a legitimate PierCommand", () => {
+    expect(
+      pierCommandSchema.safeParse({ type: "plugin.applets" }).success
+    ).toBe(true);
+    expect(
+      pierCommandSchema.safeParse({ id: "pier.tasks", type: "plugin.applets" })
+        .success
+    ).toBe(true);
+  });
+
   it("accepts plugin.catalog.list which IS a legitimate PierCommand", () => {
     const result = pierCommandSchema.safeParse({ type: "plugin.catalog.list" });
     expect(result.success).toBe(true);

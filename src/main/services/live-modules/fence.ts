@@ -83,7 +83,8 @@ export function isDeniedBareSpecifier(
       specifier === "react-dom" ||
       specifier === "react-dom/client" ||
       specifier === "pier/canvas" ||
-      specifier === "pier/host"
+      specifier === "pier/host" ||
+      specifier.startsWith("@pier-applet/")
     ) {
       return false;
     }

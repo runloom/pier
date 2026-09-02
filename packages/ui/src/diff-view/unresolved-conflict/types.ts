@@ -36,6 +36,8 @@ export interface PierUnresolvedConflictLabels {
   readonly incomingChange: string;
   readonly openFile: string;
   readonly resolving: string;
+  /** CodeView header Plus; only set for marker-free UU/AA. */
+  readonly stageFile?: string;
   /** Collapsed unmodified context templates (`{{count}}`). */
   readonly unmodifiedLine?: string;
   readonly unmodifiedLines?: string;

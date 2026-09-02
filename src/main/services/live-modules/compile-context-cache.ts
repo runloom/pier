@@ -39,6 +39,7 @@ export function esbuildContextKey(input: {
   allowedBarePackages: readonly string[];
   contentRoot: string;
   entryAbsolutePath: string;
+  extraFenceRoots?: readonly string[] | undefined;
   forcePreviewBarrel: boolean;
   framework: string;
   previewBarrelAbsolutePath?: string | undefined;
@@ -58,6 +59,7 @@ export function esbuildContextKey(input: {
     input.forcePreviewBarrel ? "fb1" : "fb0",
     input.previewBarrelAbsolutePath ?? "",
     input.projectRoot ?? "",
+    `efr:${[...(input.extraFenceRoots ?? [])].sort().join(",")}`,
   ].join("::");
 }
 

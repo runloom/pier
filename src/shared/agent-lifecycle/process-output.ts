@@ -7,6 +7,45 @@
 const MAX_ERROR_CHARS = 720;
 const MAX_ERROR_LINES = 10;
 
+/** True when the line is npm echoing our SIGTERM / --force, not a real error. */
+export function isInstallerKillRattleLine(line: string): boolean {
+  const t = line.trim();
+  if (t.length === 0) {
+    return false;
+  }
+  if (/^npm warn using --force\b/i.test(t)) {
+    return true;
+  }
+  if (/^npm error process terminated$/i.test(t)) {
+    return true;
+  }
+  if (/^npm error signal SIG(TERM|KILL|INT)$/i.test(t)) {
+    return true;
+  }
+  if (/^npm error Exit handler never called!$/i.test(t)) {
+    return true;
+  }
+  if (/^npm error This is an error with npm itself\b/i.test(t)) {
+    return true;
+  }
+  if (/^npm error Please report this error at:$/i.test(t)) {
+    return true;
+  }
+  if (/^<?https?:\/\/github\.com\/npm\//i.test(t)) {
+    return true;
+  }
+  if (/^npm error\s+<?https?:\/\/github\.com\/npm\//i.test(t)) {
+    return true;
+  }
+  if (/^npm error A complete log of this run can be found in:/i.test(t)) {
+    return true;
+  }
+  if (/\.npm\/_logs\//i.test(t)) {
+    return true;
+  }
+  return false;
+}
+
 /** True for uv/pip/npm-style progress redraw lines (not real errors). */
 export function isProgressNoiseLine(line: string): boolean {
   const t = line.trim();
@@ -47,7 +86,10 @@ export function sanitizeProcessOutput(
     .replace(/\r/g, "\n")
     .split("\n")
     .map((l) => l.trimEnd())
-    .filter((l) => l.length > 0 && !isProgressNoiseLine(l));
+    .filter(
+      (l) =>
+        l.length > 0 && !isProgressNoiseLine(l) && !isInstallerKillRattleLine(l)
+    );
 
   let out = lines.slice(-maxLines).join("\n").trim();
   if (out.length > maxChars) {

@@ -100,14 +100,16 @@ describe("defaultWorktreeSignature — 变更文件 stat 信号", () => {
 
   it("预取与状态摘要共用一次 HEAD→working tree numstat", async () => {
     const calls: Array<readonly string[]> = [];
+    const statusOut = `${[
+      "# branch.oid abc123",
+      "1 .M N... 100644 100644 100644 a b src/a.ts",
+    ].join("\0")}\0`;
     const snapshot = await defaultWorktreeSnapshot("/repo", async (args) => {
       calls.push(args);
-      return args.includes("status")
-        ? "# branch.oid abc123\0"
-        : "4\t1\tsrc/a.ts\0";
+      return args.includes("status") ? statusOut : "4\t1\tsrc/a.ts\0";
     });
 
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(2);
     expect(calls[0]).toEqual([
       "-c",
       "status.renames=copies",
@@ -133,28 +135,87 @@ describe("defaultWorktreeSignature — 变更文件 stat 信号", () => {
       "-z",
       "HEAD",
     ]);
-    expect(calls[2]).toEqual(calls[0]);
     expect(snapshot.raw).toEqual({
-      statusOut: "# branch.oid abc123\0",
+      statusOut,
       workingTreeNumstat: "4\t1\tsrc/a.ts\0",
     });
   });
 
-  it("status 在 numstat 取样期间变化时不发布可复用摘要", async () => {
+  it("status 热路径只 spawn 一次，不再夹心第二次 status", async () => {
     let statusReads = 0;
     const snapshot = await defaultWorktreeSnapshot("/repo", async (args) => {
       if (args.includes("status")) {
         statusReads += 1;
-        const path = statusReads === 1 ? "src/a.ts" : "src/b.ts";
         return `${[
           "# branch.oid abc123",
-          `1 .M N... 100644 100644 100644 a b ${path}`,
+          "1 .M N... 100644 100644 100644 a b src/a.ts",
         ].join("\0")}\0`;
       }
       return "4\t1\tsrc/a.ts\0";
     });
 
-    expect(statusReads).toBe(2);
+    expect(statusReads).toBe(1);
+    expect(snapshot.raw).toEqual({
+      statusOut: `${[
+        "# branch.oid abc123",
+        "1 .M N... 100644 100644 100644 a b src/a.ts",
+      ].join("\0")}\0`,
+      workingTreeNumstat: "4\t1\tsrc/a.ts\0",
+    });
+  });
+
+  it("numstat 谈到 status 之外的已跟踪文件时不发布可复用摘要", async () => {
+    const snapshot = await defaultWorktreeSnapshot("/repo", async (args) => {
+      if (args.includes("status")) {
+        return `${[
+          "# branch.oid abc123",
+          "1 .M N... 100644 100644 100644 a b src/a.ts",
+        ].join("\0")}\0`;
+      }
+      // src/b.ts 在 status 之后才被改动：单次 status 的 stat 信号覆盖不到它。
+      return `${["4\t1\tsrc/a.ts", "2\t0\tsrc/b.ts"].join("\0")}\0`;
+    });
+
+    expect(snapshot.reliable).toBe(false);
+    expect(snapshot.raw).toBeUndefined();
+    expect(snapshot.signature).not.toBe("");
+  });
+
+  it("numstat 的 rename 旧路径视为 status 已知（origPath 与未配对 D 条目）", async () => {
+    const renameNumstat = "3\t1\t\0src/old.ts\0src/new.ts\0";
+    const paired = await defaultWorktreeSnapshot("/repo", async (args) =>
+      args.includes("status")
+        ? `${[
+            "# branch.oid abc123",
+            "2 R. N... 100644 100644 100644 a b R100 src/new.ts",
+            "src/old.ts",
+          ].join("\0")}\0`
+        : renameNumstat
+    );
+    expect(paired.reliable).toBe(true);
+    expect(paired.raw?.workingTreeNumstat).toBe(renameNumstat);
+
+    const unpaired = await defaultWorktreeSnapshot("/repo", async (args) =>
+      args.includes("status")
+        ? `${[
+            "# branch.oid abc123",
+            "1 D. N... 100644 000000 000000 a 0000000 src/old.ts",
+            "1 A. N... 000000 100644 100644 0000000 b src/new.ts",
+          ].join("\0")}\0`
+        : renameNumstat
+    );
+    expect(unpaired.reliable).toBe(true);
+  });
+
+  it("numstat 记录格式不合法时不发布可复用摘要", async () => {
+    const snapshot = await defaultWorktreeSnapshot("/repo", async (args) =>
+      args.includes("status")
+        ? `${[
+            "# branch.oid abc123",
+            "1 .M N... 100644 100644 100644 a b src/a.ts",
+          ].join("\0")}\0`
+        : "garbage-without-tabs\0"
+    );
     expect(snapshot.reliable).toBe(false);
     expect(snapshot.raw).toBeUndefined();
   });
@@ -188,7 +249,7 @@ describe("defaultWorktreeSignature — 变更文件 stat 信号", () => {
       throw new Error("HEAD numstat must not run without HEAD");
     });
 
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(1);
     expect(snapshot).toMatchObject({
       raw: {
         statusOut: "# branch.oid (initial)\0? new.txt\0",

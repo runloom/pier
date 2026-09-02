@@ -16,6 +16,7 @@ import type { ResolveOriginPanel } from "../adapters/cli/local-control/capabilit
 import type { EffectReceiptStore } from "../adapters/cli/local-control/receipts.ts";
 import type { RemoteControlRegistrationOwner } from "../adapters/remote-control/registration.ts";
 import type { RemoteControlServer } from "../adapters/remote-control/server.ts";
+import type { UplinkDialer } from "../adapters/remote-control/uplink/dialer.ts";
 import type { PendingInteractionRegistry } from "../services/agent-attention/pending-interactions.ts";
 import type { MemoryReconciler } from "../services/agent-managed-assets/reconcile.ts";
 import type { AgentMcpCatalogService } from "../services/agent-mcp-catalog/service.ts";
@@ -28,6 +29,7 @@ import type { AppUpdateService } from "../services/app-updates/service.ts";
 import type { CapabilityAuthority } from "../services/capability/authority.ts";
 import type { CommentsService } from "../services/comments/service.ts";
 import type { ControlSnapshotService } from "../services/control-snapshot/service.ts";
+import type { ExternalNavigationService } from "../services/external-navigation.ts";
 import type { FileDraftsService } from "../services/files/drafts-service.ts";
 import type { FileService } from "../services/files/service.ts";
 import type { FileWatchService } from "../services/files/watch-service.ts";
@@ -50,6 +52,7 @@ import type { ManagedAgentLaunchGate } from "../services/project-skills/launch-g
 import type { PierBindingsChannel } from "../services/project-skills/pier-bindings/index.ts";
 import type { ProjectSkillsService } from "../services/project-skills/service.ts";
 import type { SystemSkillsChannel } from "../services/project-skills/system-skills/index.ts";
+import type { RemotePushService } from "../services/remote-push/service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import type { RuntimeControlService } from "../services/runtime-control/service.ts";
 import type { TaskService } from "../services/tasks/service.ts";
@@ -122,6 +125,8 @@ export interface PierCoreServices {
     }>;
   };
   controlSnapshot?: import("../services/control-snapshot/service.ts").ControlSnapshotService;
+  /** app.openExternal（画布 chrome）；与 preload externalNavigation 同一实例。 */
+  externalNavigation: ExternalNavigationService;
   fileDrafts?: FileDraftsService;
   files?: FileService;
   fileWatch?: FileWatchService;
@@ -184,7 +189,11 @@ export interface PierCoreServices {
   remoteControl?: {
     owner: RemoteControlRegistrationOwner;
     server: RemoteControlServer;
+    /** M2：会合出站拨号（未配置 relay 地址时为 null，纯 LAN 形态）。 */
+    uplink?: UplinkDialer | null;
   };
+  /** M2：Web Push 直发（规格 §12）；随 remote-control 装配。 */
+  remotePush?: RemotePushService;
   rendererCommand: RendererCommandService;
   secrets: SecretsStore;
   /** Bundled Pier system skills (pier-canvas, …). Optional for tests. */

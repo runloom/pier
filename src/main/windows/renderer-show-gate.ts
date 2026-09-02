@@ -7,6 +7,8 @@ const RENDERER_BOOT_TIMEOUT_MS = 15_000;
 
 export interface RendererShowGate {
   cancel(): void;
+  /** Show native chrome without waiting for boot or dropping the show-hold. */
+  forceReveal(): void;
   hasShown(): boolean;
   holdUntilReleased(reason: string): void;
   /** Re-arm boot handshake without navigating (caller loads the app entry). */
@@ -25,6 +27,7 @@ export function createRendererShowGate(input: {
   const { recordId, showInactive, window, windowId } = input;
   let bootChallenge: string | null = null;
   let bootTimer: ReturnType<typeof setTimeout> | null = null;
+  let didForceReveal = false;
   let didShow = false;
   let pendingShow = false;
   const holds = new Set<string>();
@@ -44,6 +47,12 @@ export function createRendererShowGate(input: {
     bootTimer = null;
     clearListeners();
   };
+  const raiseActive = () => {
+    if (process.platform === "darwin") app.focus?.({ steal: true });
+    window.host.show();
+    window.focus();
+    window.webContents.focus();
+  };
   const performShow = () => {
     if (didShow) return;
     didShow = true;
@@ -52,14 +61,13 @@ export function createRendererShowGate(input: {
     if (window.isDestroyed()) return;
     window.webContents.setBackgroundThrottling(true);
     window.host.setOpacity(1);
+    if (didForceReveal) {
+      trace("show", { showMode: "already-revealed" });
+      return;
+    }
     trace("show", { showMode: showInactive ? "inactive" : "active" });
     if (showInactive) window.host.showInactive();
-    else {
-      if (process.platform === "darwin") app.focus?.({ steal: true });
-      window.host.show();
-      window.focus();
-      window.webContents.focus();
-    }
+    else raiseActive();
   };
   const showOnce = () => {
     if (didShow) return;
@@ -136,6 +144,14 @@ export function createRendererShowGate(input: {
 
   return {
     cancel,
+    forceReveal: () => {
+      if (window.isDestroyed()) {
+        return;
+      }
+      didForceReveal = true;
+      window.host.setOpacity(1);
+      raiseActive();
+    },
     hasShown: () => didShow,
     holdUntilReleased: (reason) => {
       holds.add(reason);

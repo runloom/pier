@@ -16,9 +16,18 @@ export interface ActionInvocation {
   surface?: string;
 }
 
+export type ActionShortcutSourceId =
+  | string
+  | ((invocation?: ActionInvocation) => string | undefined);
+
 export interface ActionMetadata {
   aliases?: () => readonly string[];
   categoryKey?: ActionCategoryKey;
+  /**
+   * 仅菜单/命令面板展示用的和弦（"Mod+KeyC"）。不注册进 keymap。
+   * 终端/编辑器原生剪切复制粘贴必须走这条，禁止写进 DEFAULT_KEYMAP。
+   */
+  displayChord?: string;
   /** true = 执行后不计入命令面板 MRU。仅给 clearRecent 这类元命令用 */
   excludeFromMru?: boolean;
   /**
@@ -40,9 +49,9 @@ export interface ActionMetadata {
   menuHidden?: (invocation?: ActionInvocation) => boolean;
   /**
    * 自身没有生效的 keybinding 时，菜单和命令面板展示可借用另一条 command。
-   * 用于菜单 action 与快捷键 action 分离, 但用户需要看到同一个快捷键提示的场景.
+   * 可按 invocation 变化（例如文件标签「复制路径」才借用 Files 的 ⌥⌘C）。
    */
-  shortcutSourceId?: string;
+  shortcutSourceId?: ActionShortcutSourceId;
   sortOrder?: number;
   /**
    * 设置后, 该 action 进同名子菜单. 同 surface 内 submenu() 返回相同字符串的

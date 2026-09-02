@@ -145,6 +145,76 @@ describe("workspace.store panel reveal policy", () => {
     root.remove();
   });
 
+  it("copies file panel source params and pins the split tab", () => {
+    const source = { kind: "disk", path: "src/a.ts", root: "/repo" };
+    const context = { cwd: "/repo", projectRootPath: "/repo" };
+    const filePanel = {
+      api: { setActive: vi.fn() },
+      id: "pier.files.filePanel-1",
+      params: { context, pinned: false, source },
+      title: "a.ts",
+      view: { contentComponent: "pier.files.filePanel" },
+    };
+    const api = {
+      addPanel: vi.fn(),
+      panels: [filePanel],
+    };
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().splitPanel("pier.files.filePanel-1", "right");
+
+    expect(api.addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        component: "pier.files.filePanel",
+        params: {
+          context,
+          pinned: true,
+          source,
+        },
+        title: "a.ts",
+      })
+    );
+  });
+
+  it("does not copy one-shot file reveal or dirty params into the split tab", () => {
+    const source = { kind: "disk", path: "src/a.ts", root: "/repo" };
+    const context = { cwd: "/repo", projectRootPath: "/repo" };
+    const filePanel = {
+      api: { setActive: vi.fn() },
+      id: "pier.files.filePanel-1",
+      params: {
+        canvasRevealAnchor: "comment-1",
+        canvasRevealRequestId: "req-1",
+        context,
+        dirty: true,
+        markdownAnchor: "heading",
+        markdownAnchorRequestId: "req-2",
+        markdownRevealLine: 12,
+        pinned: false,
+        source,
+      },
+      title: "a.ts",
+      view: { contentComponent: "pier.files.filePanel" },
+    };
+    const api = {
+      addPanel: vi.fn(),
+      panels: [filePanel],
+    };
+    useWorkspaceStore.getState().setApi(api as never);
+
+    useWorkspaceStore.getState().splitPanel("pier.files.filePanel-1", "right");
+
+    expect(api.addPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: {
+          context,
+          pinned: true,
+          source,
+        },
+      })
+    );
+  });
+
   it("reveals a split panel target", () => {
     const activePanel = terminalPanel("terminal-1");
     const root = mountHiddenTab("terminal-123");

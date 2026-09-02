@@ -1,4 +1,11 @@
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import {
+  releaseGitIdentityDiscovery,
+  resetGitIdentityDiscoveryForTests,
+  retainGitIdentityDiscovery,
+  syncGitIdentityDiscovery,
+} from "../../services/git/identity-discovery.ts";
+import { panelGitIdentityDigest } from "../../services/panel-context-identity.ts";
 import { resolvePanelContextForPath } from "../../services/panel-context-resolver.ts";
 import { recordRecentPanelContext } from "../../state/panel-context-state.ts";
 import {
@@ -9,11 +16,20 @@ import type { AppWindow } from "../../windows/app-window.ts";
 import { forwardToWindow } from "./forwarding.ts";
 import { windowRecordIdFor } from "./window-scope.ts";
 
-/**
- * Last forwarded cwd keyed by window scope + panelId. Panel ids are not unique
- * across windows, so a bare panelId map would skip the wrong surface.
- */
-const lastForwardedCwdByScope = new Map<string, string>();
+interface CwdForwardScope {
+  alive: boolean;
+  browserWindowId: number;
+  cwd: string;
+  emittedDigest: string | undefined;
+  generation: number;
+  gitRoot: string | undefined;
+  needsEmitDigest: string | undefined;
+  panelId: string;
+  pendingInvalidation: boolean;
+  targetWindow: AppWindow | null;
+}
+
+const scopes = new Map<string, CwdForwardScope>();
 
 function cwdForwardScopeKey(
   sessionScope: string | null,
@@ -23,14 +39,126 @@ function cwdForwardScopeKey(
   return `${sessionScope ?? `bw:${browserWindowId}`}::${panelId}`;
 }
 
+function gitRootOf(
+  context: { gitRoot?: string | undefined } | null | undefined
+): string | undefined {
+  const root = context?.gitRoot;
+  return root && root.length > 0 ? root : undefined;
+}
+
+function forgetScope(scopeKey: string): void {
+  const scope = scopes.get(scopeKey);
+  if (scope) {
+    scope.alive = false;
+    scope.emittedDigest = undefined;
+    scope.generation += 1;
+    scope.needsEmitDigest = undefined;
+    scope.pendingInvalidation = false;
+  }
+  releaseGitIdentityDiscovery(scopeKey);
+}
+
+function refreshScope(scopeKey: string): Promise<void> {
+  const scope = scopes.get(scopeKey);
+  if (!scope?.alive) {
+    return Promise.resolve();
+  }
+  scope.pendingInvalidation = true;
+  return handleTerminalCwdChange(
+    scope.browserWindowId,
+    scope.panelId,
+    scope.cwd,
+    scope.targetWindow
+  ).catch((err: unknown) => {
+    console.error("[pier-cwd-identity] failed:", err);
+  });
+}
+
+function wireDiscovery(scopeKey: string, scope: CwdForwardScope): void {
+  syncGitIdentityDiscovery(scopeKey, {
+    cwd: scope.cwd,
+    gitRoot: scope.gitRoot,
+    onDirty: () => {
+      const current = scopes.get(scopeKey);
+      if (current?.alive) {
+        current.pendingInvalidation = true;
+      }
+    },
+    onInvalidate: () => refreshScope(scopeKey),
+  });
+}
+
+function touchScope(
+  scopeKey: string,
+  browserWindowId: number,
+  panelId: string,
+  cwd: string,
+  targetWindow: AppWindow | null
+): CwdForwardScope {
+  const existing = scopes.get(scopeKey);
+  if (existing) {
+    existing.alive = true;
+    existing.browserWindowId = browserWindowId;
+    existing.cwd = cwd;
+    existing.panelId = panelId;
+    existing.targetWindow = targetWindow;
+    return existing;
+  }
+  const created: CwdForwardScope = {
+    alive: true,
+    browserWindowId,
+    cwd,
+    emittedDigest: undefined,
+    generation: 0,
+    gitRoot: undefined,
+    needsEmitDigest: undefined,
+    panelId,
+    pendingInvalidation: false,
+    targetWindow,
+  };
+  scopes.set(scopeKey, created);
+  return created;
+}
+
 export function resetTerminalCwdForwardingForTests(): void {
-  lastForwardedCwdByScope.clear();
+  scopes.clear();
+  resetGitIdentityDiscoveryForTests();
+}
+
+export function releaseTerminalCwdForwarding(
+  sessionScope: string | null,
+  browserWindowId: number,
+  panelId: string
+): void {
+  forgetScope(cwdForwardScopeKey(sessionScope, browserWindowId, panelId));
+  if (sessionScope) {
+    forgetScope(`bw:${browserWindowId}::${panelId}`);
+  }
+}
+
+export function retainTerminalCwdForwarding(
+  sessionScope: string,
+  activePanelIds: readonly string[]
+): void {
+  const prefix = `${sessionScope}::`;
+  const keep = new Set(
+    activePanelIds.map((panelId) => `${sessionScope}::${panelId}`)
+  );
+  for (const scopeKey of [...scopes.keys()]) {
+    if (scopeKey.startsWith(prefix) && !keep.has(scopeKey)) {
+      forgetScope(scopeKey);
+    }
+  }
+  retainGitIdentityDiscovery(sessionScope, activePanelIds);
 }
 
 /**
- * Shells (and Ghostty shell-integration) often re-emit OSC 7 on every prompt,
- * including empty Enter. Re-resolving git context + broadcasting would make the
- * terminal panel React tree re-render and look like a flash.
+ * OSC 7 often repeats the same cwd on every prompt. Re-resolving and
+ * broadcasting would flash the terminal status bar.
+ *
+ * Same-cwd skips after this session has emitted an identity, unless git-identity
+ * discovery marks the scope dirty. Identity itself only comes from
+ * `resolvePanelContextForPath`.
  */
 export async function handleTerminalCwdChange(
   id: number,
@@ -43,30 +171,81 @@ export async function handleTerminalCwdChange(
       ? windowRecordIdFor(targetWindow)
       : null;
   const scopeKey = cwdForwardScopeKey(sessionScope, id, rawPanelId);
-  const previousCwd =
-    (sessionScope
-      ? peekTerminalPanelContext(sessionScope, rawPanelId)?.cwd
-      : undefined) ?? lastForwardedCwdByScope.get(scopeKey);
-  if (previousCwd === cwd) {
+  const previousContext = sessionScope
+    ? peekTerminalPanelContext(sessionScope, rawPanelId)
+    : undefined;
+  const existing = scopes.get(scopeKey);
+  const previousCwd = existing?.cwd;
+  const scope = touchScope(scopeKey, id, rawPanelId, cwd, targetWindow);
+  if (previousCwd !== undefined && previousCwd !== cwd) {
+    scope.gitRoot = undefined;
+  } else if (scope.gitRoot === undefined) {
+    scope.gitRoot = gitRootOf(previousContext);
+  }
+  wireDiscovery(scopeKey, scope);
+
+  const sameCwd = previousCwd === cwd;
+  const settledThisSession = scope.emittedDigest !== undefined;
+  if (sameCwd && settledThisSession && !scope.pendingInvalidation) {
     return;
   }
+  scope.pendingInvalidation = false;
 
+  const generation = scope.generation + 1;
+  scope.generation = generation;
   const context = await resolvePanelContextForPath(cwd, {
     source: "panel",
   });
-  // A concurrent same-cwd event may have won the race while we resolved.
-  if (lastForwardedCwdByScope.get(scopeKey) === cwd) {
+  if (!scope.alive || scope.generation !== generation) {
     return;
   }
-  lastForwardedCwdByScope.set(scopeKey, cwd);
-  await recordRecentPanelContext(context);
-  if (targetWindow && !targetWindow.isDestroyed() && sessionScope) {
-    await updateTerminalPanelContext(sessionScope, rawPanelId, context);
+
+  const digest = panelGitIdentityDigest(context);
+  const nextGitRoot = gitRootOf(context);
+  scope.gitRoot = nextGitRoot;
+  wireDiscovery(scopeKey, scope);
+  if (scope.emittedDigest === digest) {
+    scope.needsEmitDigest = undefined;
+    return;
   }
-  forwardToWindow(
-    id,
-    PIER_BROADCAST.TERMINAL_CWD_CHANGED,
-    { panelId: rawPanelId, context },
-    "pier-cwd-forward"
-  );
+  const peekDigest = panelGitIdentityDigest(previousContext);
+  if (
+    scope.emittedDigest === undefined &&
+    scope.needsEmitDigest !== digest &&
+    previousContext &&
+    peekDigest === digest
+  ) {
+    scope.emittedDigest = digest;
+    return;
+  }
+
+  try {
+    await recordRecentPanelContext(context);
+    if (!scope.alive || scope.generation !== generation) {
+      return;
+    }
+    if (targetWindow && !targetWindow.isDestroyed() && sessionScope) {
+      await updateTerminalPanelContext(sessionScope, rawPanelId, context);
+      if (!scope.alive || scope.generation !== generation) {
+        return;
+      }
+    }
+    forwardToWindow(
+      id,
+      PIER_BROADCAST.TERMINAL_CWD_CHANGED,
+      { panelId: rawPanelId, context },
+      "pier-cwd-forward"
+    );
+  } catch (err) {
+    if (scope.alive && scope.generation === generation) {
+      scope.needsEmitDigest = digest;
+      scope.pendingInvalidation = true;
+    }
+    throw err;
+  }
+  if (!scope.alive || scope.generation !== generation) {
+    return;
+  }
+  scope.needsEmitDigest = undefined;
+  scope.emittedDigest = digest;
 }

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { execGit } from "@main/services/git/exec.ts";
 import {
   applyRefsSnapshotTable,
+  isGitBulkMetadataEvent,
   isGitMetadataTreeEvent,
   isNoiseTreeEvent,
   isPathInsideWatchRoot,
@@ -127,6 +128,9 @@ describe("createGitWatchService", () => {
     expect(isNoiseTreeEvent("node_modules\\file.ts", "win32")).toBe(true);
     expect(isGitMetadataTreeEvent(".git\\notes.ts", "darwin")).toBe(false);
     expect(isGitMetadataTreeEvent(".git\\HEAD", "win32")).toBe(true);
+    expect(isGitBulkMetadataEvent(".git/objects/pack/foo.pack")).toBe(true);
+    expect(isGitBulkMetadataEvent(".git/HEAD")).toBe(false);
+    expect(isGitBulkMetadataEvent(".git/logs/HEAD")).toBe(true);
   });
 
   it("文件事件触发 debounce 重算签名;变化时通知 listener", async () => {

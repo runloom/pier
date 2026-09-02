@@ -176,7 +176,6 @@ export async function runUninstallUnlocked(
     return fail(agentId, "timeout", {
       runId,
       commandPreview: planned.preview,
-      errorDetail: result.stderr || undefined,
     });
   }
   if (result.packageManagerMissing) {

@@ -2,11 +2,15 @@ import { PIER } from "@shared/ipc-channels.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const ipcInvokeMock = vi.hoisted(() => vi.fn());
+const ipcOnMock = vi.hoisted(() => vi.fn());
+const ipcOffMock = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", () => ({
   ipcRenderer: {
     getMaxListeners: () => 10,
     invoke: ipcInvokeMock,
+    off: ipcOffMock,
+    on: ipcOnMock,
     setMaxListeners: vi.fn(),
   },
 }));
@@ -158,5 +162,17 @@ describe("panelTransfer preload API", () => {
       message: "blocked",
       osCode: "EPERM",
     });
+  });
+
+  it("subscribes overlay preview on the broadcast channel", () => {
+    const api = createPanelTransferApi();
+    const cb = vi.fn();
+    const dispose = api.onOverlayPreview(cb);
+    expect(ipcOnMock).toHaveBeenCalledWith(
+      "pier://panel-transfer:overlay-preview",
+      expect.any(Function)
+    );
+    dispose();
+    expect(ipcOffMock).toHaveBeenCalled();
   });
 });

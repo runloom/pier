@@ -110,13 +110,25 @@
             }
         }
 
+        // Responder actions (Edit menu roles, selection context menu) are
+        // single-dispatch explicit commands: AppKit delivers each action to
+        // exactly one responder on the key window's chain, so an action
+        // handled here was not also handled by the web side. They are
+        // deliberately NOT gated on `hostKeyboardActive` — the coordinator
+        // flag lags first-responder state during focus-routing transitions
+        // (window/panel switch, overlay open/close), and gating silently
+        // swallowed the user's copy/paste (observed as "cross-window paste
+        // is empty"). Accepted trade-off: if first responder ever lingers on
+        // the terminal while a web overlay logically owns the keyboard, an
+        // Edit-menu action lands on this terminal — executing an explicit
+        // command beats dropping it silently. The gate stays on ambient key
+        // events (`keyDown` / `performKeyEquivalent` / `doCommand`), which
+        // do race web overlay key ownership.
         @IBAction open func copy(_: Any?) {
-            guard hostKeyboardActive else { return }
             _ = copySelectedTextToPasteboard()
         }
 
         @IBAction func paste(_: Any?) {
-            guard hostKeyboardActive else { return }
             if let text = NSPasteboard.general.string(forType: .string) {
                 TerminalDebugLog.log(
                     .input,
@@ -127,7 +139,6 @@
         }
 
         @IBAction override open func selectAll(_: Any?) {
-            guard hostKeyboardActive else { return }
             _ = surface?.performBindingAction("select_all")
         }
 

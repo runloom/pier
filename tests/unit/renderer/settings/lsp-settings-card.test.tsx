@@ -89,17 +89,18 @@ describe("LspSettingsCard", () => {
     ).toHaveAttribute("aria-checked", "true");
   });
 
-  it("renders language tools as an auto-fit tile grid in catalog order", async () => {
+  it("renders language servers as a vertical inventory in catalog order", async () => {
     render(<LspSettingsCard />);
 
     const list = await screen.findByTestId("lsp-tools-status-list");
-    expect(list.getAttribute("data-layout")).toBe("auto-fit");
+    expect(list.getAttribute("data-layout")).toBeNull();
     expect(list.querySelector('[data-slot="badge"]')).toBeNull();
     expect(list.textContent).toMatch(/TypeScript[\s\S]*Go[\s\S]*Python/u);
     expect(screen.getByText("npm i -g pyright")).toBeTruthy();
+    expect(screen.getByText("Install")).toBeTruthy();
     expect(screen.getByText("gopls v0.16.1")).toBeTruthy();
-    expect(screen.getByText("Not found")).toBeTruthy();
-    expect(screen.getByText("On PATH")).toBeTruthy();
+    expect(screen.getByText("Not installed")).toBeTruthy();
+    expect(screen.getByText("Installed")).toBeTruthy();
     expect(screen.getByText("Built-in")).toBeTruthy();
   });
 
@@ -122,7 +123,7 @@ describe("LspSettingsCard", () => {
     await waitFor(() => {
       expect(screen.getByTestId("lsp-tools-status-failed")).toBeTruthy();
     });
-    expect(screen.getByText("Could not load tool status")).toBeTruthy();
+    expect(screen.getByText("Couldn't check language servers")).toBeTruthy();
     expect(
       screen.getByText(
         "Try again in a moment, or restart Pier and reopen this page."
@@ -137,10 +138,8 @@ describe("LspSettingsCard", () => {
     await waitFor(() => {
       expect(screen.getByTestId("lsp-tools-status-empty")).toBeTruthy();
     });
-    expect(screen.getByText("No local tools to list")).toBeTruthy();
-    expect(
-      screen.getByText("Nothing is available to check right now.")
-    ).toBeTruthy();
+    expect(screen.getByText("No language servers to list")).toBeTruthy();
+    expect(screen.getByText("Nothing to check right now.")).toBeTruthy();
   });
 
   it("edits the idle release timeout in minutes and persists milliseconds", async () => {

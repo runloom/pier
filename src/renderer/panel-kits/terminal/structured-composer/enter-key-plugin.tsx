@@ -7,16 +7,18 @@ import {
   KEY_ENTER_COMMAND,
 } from "lexical";
 import { useEffect } from "react";
-import { isImePendingLexicalEnter } from "@/lib/keybindings/is-text-input.ts";
+import { shouldDeferImeEnter } from "@/lib/keybindings/ime-composition-gate.ts";
 
 /**
  * Enter → send (parent). Shift/Mod/Alt+Enter → linebreak.
  * Skips when mention menu is open (handled at CRITICAL by MentionPlugin).
  */
 export function EnterKeyPlugin({
+  isImeHeld,
   menuOpenRef,
   onSend,
 }: {
+  isImeHeld: () => boolean;
   menuOpenRef: { current: boolean };
   onSend: () => void;
 }): null {
@@ -28,7 +30,9 @@ export function EnterKeyPlugin({
         KEY_ENTER_COMMAND,
         (event: KeyboardEvent | null) => {
           // Consume so PlainTextPlugin cannot preventDefault mid-IME.
-          if (isImePendingLexicalEnter(event)) {
+          // Do not preventDefault: leftover Enter after compositionend is
+          // still IME commit on some engines (UTF-8 bytes → U+FFFD × 3).
+          if (shouldDeferImeEnter(event, isImeHeld)) {
             return true;
           }
           if (menuOpenRef.current) {
@@ -54,7 +58,7 @@ export function EnterKeyPlugin({
         },
         COMMAND_PRIORITY_HIGH
       ),
-    [editor, menuOpenRef, onSend]
+    [editor, isImeHeld, menuOpenRef, onSend]
   );
 
   return null;

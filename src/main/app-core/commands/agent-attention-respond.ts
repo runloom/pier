@@ -1,6 +1,12 @@
 /**
  * agent.attention.respond（M1 移动端审批回写）。
  *
+ * 地址两形态：
+ * - 完整引用 makeAgentRef(windowId, panelId)——桌面 renderer；
+ * - 裸 panelId + 可选 windowId——移动端。panelId 跨窗不唯一；带 windowId
+ *   时按二者定位，缺 windowId 时须恰好一命中，否则 fail closed
+ *   转 interaction_stale。
+ *
  * 双重门（任一不过 → interaction_stale）：
  * 1. 未决交互注册表 assertCurrent(agentRef, interactionId)；
  * 2. FA 快照中该 agentRef 当前 status === waiting。
@@ -61,6 +67,36 @@ function isWaiting(services: PierCoreServices, agentRef: string): boolean {
   }
 }
 
+/**
+ * 裸 panelId（+ 可选 windowId）→ 完整 agentRef。
+ * 完整引用原样通过；无匹配或跨窗歧义 → null（fail closed）。
+ */
+function resolveRespondRef(
+  services: PierCoreServices,
+  raw: string,
+  windowId: string | undefined
+): string | null {
+  if (parseAgentRef(raw) !== null) {
+    return raw;
+  }
+  try {
+    const snapshot = services.foregroundActivity?.snapshot();
+    const matches = (snapshot?.activities ?? []).filter((activity) => {
+      if (activity.kind !== "agent" || activity.panelId !== raw) {
+        return false;
+      }
+      if (windowId !== undefined && windowId.length > 0) {
+        return activity.windowId === windowId;
+      }
+      return true;
+    });
+    const only = matches.length === 1 ? matches[0] : undefined;
+    return only === undefined ? null : makeAgentRef(only.windowId, raw);
+  } catch {
+    return null;
+  }
+}
+
 export async function executeAgentAttentionRespondCommand(
   requestId: string,
   command: PierCommand,
@@ -69,15 +105,27 @@ export async function executeAgentAttentionRespondCommand(
   if (command.type !== "agent.attention.respond") {
     return null;
   }
+  const agentRef = resolveRespondRef(
+    services,
+    command.agentRef,
+    command.windowId
+  );
+  if (agentRef === null) {
+    return failure(
+      requestId,
+      "interaction_stale",
+      `agent panel not found: ${command.agentRef}`
+    );
+  }
   const registry = services.pendingInteractions;
-  if (!registry?.assertCurrent(command.agentRef, command.interactionId)) {
+  if (!registry?.assertCurrent(agentRef, command.interactionId)) {
     return failure(
       requestId,
       "interaction_stale",
       `interaction not pending: ${command.interactionId}`
     );
   }
-  if (!isWaiting(services, command.agentRef)) {
+  if (!isWaiting(services, agentRef)) {
     return failure(
       requestId,
       "interaction_stale",
@@ -85,12 +133,12 @@ export async function executeAgentAttentionRespondCommand(
     );
   }
   // 过了注册表门的 agentRef 必为 makeAgentRef 产物；parse 失败属防御分支。
-  const ref = parseAgentRef(command.agentRef);
+  const ref = parseAgentRef(agentRef);
   if (!ref) {
     return failure(
       requestId,
       "invalid_command",
-      `malformed agentRef: ${command.agentRef}`
+      `malformed agentRef: ${agentRef}`
     );
   }
   const nativeKey = resolveNativeKey(ref.panelId, ref.windowId);

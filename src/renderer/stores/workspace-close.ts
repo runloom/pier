@@ -5,6 +5,7 @@ import {
   noteHangBreadcrumb,
 } from "@/lib/diagnostics/hang-breadcrumb.ts";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
+import { activateGroupCloseSuccessor } from "@/lib/workspace/group-close-successor.ts";
 import { runPanelCloseGuards } from "@/lib/workspace/panel-close-guards.ts";
 import { activatePanelCloseSuccessor } from "@/lib/workspace/panel-close-successor.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
@@ -19,6 +20,8 @@ export type WorkspaceCloseGet = () => {
   api: DockviewApi | null;
 };
 
+type CloseablePanel = DockviewApi["panels"][number];
+
 function revealSuccessorAfterClosingActive(
   api: DockviewApi,
   closedActive: boolean
@@ -30,6 +33,116 @@ function revealSuccessorAfterClosingActive(
   if (nextId) {
     scheduleRevealDockviewTabByPanelId(nextId);
   }
+}
+
+function activateExistingPanel(
+  api: DockviewApi,
+  panelId: string | undefined
+): void {
+  if (!panelId || api.activePanel?.id === panelId) {
+    return;
+  }
+  api.panels.find((panel) => panel.id === panelId)?.api.setActive();
+}
+
+function otherGroupsRemain(api: DockviewApi): boolean {
+  return (api.groups?.length ?? 0) > 1;
+}
+
+function panelStillOpen(
+  api: DockviewApi,
+  panelId: string | undefined
+): boolean {
+  return Boolean(panelId && api.panels.some((panel) => panel.id === panelId));
+}
+
+/** 关当前聚焦标签：组内邻接/MRU；组内最后一项则组级接手。返回下一手 id。 */
+function prepareFocusedPanelClose(
+  api: DockviewApi,
+  panelId: string
+): string | null {
+  const groupPanels = panelsInSameGroup(api, panelId);
+  const tabSuccessor = activatePanelCloseSuccessor({
+    activePanelId: api.activePanel?.id,
+    closingPanelId: panelId,
+    groupPanels,
+    policy: useWorkspacePreferencesStore.getState().panelCloseFocusPolicy,
+  });
+  if (tabSuccessor) {
+    return tabSuccessor.id;
+  }
+  if (groupPanels.length <= 1 && otherGroupsRemain(api)) {
+    return activateGroupCloseSuccessor(api, panelId);
+  }
+  return null;
+}
+
+function finishPanelCloseFocus(
+  api: DockviewApi,
+  closedWindowActive: boolean,
+  preferredPanelId: string | undefined
+): void {
+  if (closedWindowActive) {
+    activateExistingPanel(api, preferredPanelId);
+    revealSuccessorAfterClosingActive(api, true);
+    return;
+  }
+  activateExistingPanel(api, preferredPanelId);
+}
+
+async function filterCloseablePanels(
+  panels: readonly CloseablePanel[],
+  closingPanelIds: readonly string[]
+): Promise<CloseablePanel[]> {
+  const allowed: CloseablePanel[] = [];
+  for (const panel of panels) {
+    const ok = await runPanelCloseGuards({
+      closingPanelIds,
+      componentId: panel.view.contentComponent,
+      panelId: panel.id,
+      params: panel.params,
+    });
+    if (ok) {
+      allowed.push(panel);
+    }
+  }
+  return allowed;
+}
+
+function removeCloseablePanels(
+  api: DockviewApi,
+  panels: readonly CloseablePanel[]
+): void {
+  for (const panel of panels) {
+    if (panel.view.contentComponent === "terminal") {
+      closeNativeTerminalPanel(panel.id);
+    }
+    api.removePanel(panel);
+  }
+}
+
+function removalsWithLast(
+  panels: readonly CloseablePanel[],
+  lastId: string | undefined
+): CloseablePanel[] {
+  if (!lastId) {
+    return [...panels];
+  }
+  const last = panels.filter((panel) => panel.id === lastId);
+  const rest = panels.filter((panel) => panel.id !== lastId);
+  return [...rest, ...last];
+}
+
+function finishKeptPanelFocus(
+  api: DockviewApi,
+  preservePanelId: string | undefined,
+  keepPanel: CloseablePanel | undefined
+): void {
+  if (panelStillOpen(api, preservePanelId)) {
+    activateExistingPanel(api, preservePanelId);
+    return;
+  }
+  keepPanel?.api.setActive();
 }
 
 export async function closeActivePanel(
@@ -94,20 +207,19 @@ export async function closeActivePanel(
     return true;
   }
   // adjacent：关 active 时先切邻接 tab；recent：交给 dockview 组内 MRU。
-  const closedActive = api.activePanel?.id === panel.id;
-  activatePanelCloseSuccessor({
-    activePanelId: api.activePanel?.id,
-    closingPanelId: panel.id,
-    groupPanels: panelsInSameGroup(api, panel.id),
-    policy: useWorkspacePreferencesStore.getState().panelCloseFocusPolicy,
-  });
+  // 组内最后一项：卸之前激活组级下一手，避免 dockview groups[0]。
+  const preservePanelId = api.activePanel?.id;
+  const closedActive = preservePanelId === panel.id;
+  const preferredPanelId = closedActive
+    ? (prepareFocusedPanelClose(api, panel.id) ?? undefined)
+    : preservePanelId;
   // 主动先发 native close IPC, 再 removePanel；不把 React unmount 当显式关闭.
   // 用 contentComponent 而非 params?.component: 前者是 dockview stable key.
   if (componentId === "terminal") {
     closeNativeTerminalPanel(panel.id);
   }
   api.removePanel(panel);
-  revealSuccessorAfterClosingActive(api, closedActive);
+  finishPanelCloseFocus(api, closedActive, preferredPanelId);
   noteHangBreadcrumb({
     kind: "panel-close",
     phase: "end",
@@ -184,18 +296,16 @@ export async function closePanel(
     return true;
   }
   // 关 inactive：不改 active。关 active：按 panelCloseFocusPolicy 选 successor。
-  const closedActive = api.activePanel?.id === panel.id;
-  activatePanelCloseSuccessor({
-    activePanelId: api.activePanel?.id,
-    closingPanelId: panel.id,
-    groupPanels: panelsInSameGroup(api, panel.id),
-    policy: useWorkspacePreferencesStore.getState().panelCloseFocusPolicy,
-  });
+  const preservePanelId = api.activePanel?.id;
+  const closedActive = preservePanelId === panel.id;
+  const preferredPanelId = closedActive
+    ? (prepareFocusedPanelClose(api, panel.id) ?? undefined)
+    : preservePanelId;
   if (componentId === "terminal") {
     closeNativeTerminalPanel(panel.id);
   }
   api.removePanel(panel);
-  revealSuccessorAfterClosingActive(api, closedActive);
+  finishPanelCloseFocus(api, closedActive, preferredPanelId);
   noteHangBreadcrumb({
     kind: "panel-close",
     phase: "end",
@@ -227,21 +337,10 @@ export async function closeOthers(
     (p) => p.id !== panelId
   );
   const closingPanelIds = toClose.map((p) => p.id);
-  for (const p of toClose) {
-    const allowed = await runPanelCloseGuards({
-      closingPanelIds,
-      componentId: p.view.contentComponent,
-      panelId: p.id,
-      params: p.params,
-    });
-    if (!allowed) {
-      continue;
-    }
-    if (p.view.contentComponent === "terminal") {
-      closeNativeTerminalPanel(p.id);
-    }
-    api.removePanel(p);
-  }
+  const preservePanelId = api.activePanel?.id;
+  const allowed = await filterCloseablePanels(toClose, closingPanelIds);
+  removeCloseablePanels(api, allowed);
+  finishKeptPanelFocus(api, preservePanelId, keepPanel);
 }
 
 export async function closeToTheRight(
@@ -262,21 +361,11 @@ export async function closeToTheRight(
   }
   const toClose = groupPanels.slice(index + 1);
   const closingPanelIds = toClose.map((p) => p.id);
-  for (const p of toClose) {
-    const allowed = await runPanelCloseGuards({
-      closingPanelIds,
-      componentId: p.view.contentComponent,
-      panelId: p.id,
-      params: p.params,
-    });
-    if (!allowed) {
-      continue;
-    }
-    if (p.view.contentComponent === "terminal") {
-      closeNativeTerminalPanel(p.id);
-    }
-    api.removePanel(p);
-  }
+  const keepPanel = groupPanels[index];
+  const preservePanelId = api.activePanel?.id;
+  const allowed = await filterCloseablePanels(toClose, closingPanelIds);
+  removeCloseablePanels(api, allowed);
+  finishKeptPanelFocus(api, preservePanelId, keepPanel);
 }
 
 export async function closeGroup(
@@ -295,23 +384,31 @@ export async function closeGroup(
     return;
   }
   const closingPanelIds = groupPanels.map((p) => p.id);
+  const preservePanelId = api.activePanel?.id;
+  const closedWindowActive = Boolean(
+    preservePanelId && closingPanelIds.includes(preservePanelId)
+  );
+  const allowed = await filterCloseablePanels(groupPanels, closingPanelIds);
+  const willEmptyGroup = allowed.length === groupPanels.length;
+  // 组确实会空且关的是当前焦点时，卸之前切组级下一手；卸完再钉一次，
+  // 抵消 dockview 卸组内活动 tab 时把将死组抢回去、空组落到 groups[0]。
+  const successorId =
+    willEmptyGroup && closedWindowActive && otherGroupsRemain(api)
+      ? activateGroupCloseSuccessor(api, panelId)
+      : null;
   // 批量 removePanel，避免逐个 closePanel 在 sole-group 倒数第二项之后
-  // 触发「最后一 panel 关窗」而中断循环语义。
-  for (const p of groupPanels) {
-    const allowed = await runPanelCloseGuards({
-      closingPanelIds,
-      componentId: p.view.contentComponent,
-      panelId: p.id,
-      params: p.params,
-    });
-    if (!allowed) {
-      continue;
-    }
-    if (p.view.contentComponent === "terminal") {
-      closeNativeTerminalPanel(p.id);
-    }
-    api.removePanel(p);
-  }
+  // 触发「最后一 panel 关窗」而中断循环语义。组内活动 tab 最后卸。
+  removeCloseablePanels(
+    api,
+    removalsWithLast(allowed, closedWindowActive ? preservePanelId : undefined)
+  );
+  finishPanelCloseFocus(
+    api,
+    closedWindowActive && willEmptyGroup,
+    closedWindowActive && willEmptyGroup
+      ? (successorId ?? undefined)
+      : preservePanelId
+  );
   // sole-group 卸完：与 closeAll 对称关窗，不留空 dockview。
   const remaining = get().api?.panels.length ?? 0;
   if (remaining === 0) {

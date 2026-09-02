@@ -14,6 +14,7 @@ import {
   collectRepoHubs,
   defaultFsWatch,
   findNestedWatchRoot,
+  isGitBulkMetadataEvent,
   isGitMetadataTreeEvent,
   isNoiseTreeEvent,
   isPathInsideWatchRoot,
@@ -141,6 +142,9 @@ export function createGitWatchService({
         return;
       }
       if (typeof filename === "string") {
+        if (isGitBulkMetadataEvent(filename)) {
+          return;
+        }
         if (isGitMetadataTreeEvent(filename)) {
           // 锚点解析期间或 standalone 模式没有 hub 代收 Git 元数据事件。
           if (entry.hub !== null) {

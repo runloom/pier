@@ -64,6 +64,8 @@ export function projectReviewDocumentResource(
           section.sectionKey,
           section.patch.length,
           section.changeBlocks.length,
+          section.oldContents?.length ?? -1,
+          section.newContents?.length ?? -1,
         ];
       }
       if (section.kind === "conflict") {
@@ -185,6 +187,12 @@ function projectLoadedReviewDocumentResource(
       }
       if (section.kind === "conflict") {
         const notice = conflictSectionText(context, section, locale);
+        const fileLevelStage =
+          (section.xy === "AA" || section.xy === "UU") &&
+          section.presentation === "file-level" &&
+          section.contents !== null
+            ? { state: "unstaged" as const }
+            : stageControl;
         return [
           {
             cacheKey: JSON.stringify([
@@ -208,7 +216,9 @@ function projectLoadedReviewDocumentResource(
             kind: "conflict" as const,
             ...(lineStats === undefined ? {} : { lineStats }),
             patch: null,
-            ...(stageControl === null ? {} : { stageControl }),
+            ...(fileLevelStage === null
+              ? {}
+              : { stageControl: fileLevelStage }),
             stateNotice: notice,
           },
         ];
@@ -268,8 +278,17 @@ function projectLoadedReviewDocumentResource(
       const driftComments = driftThreads.length > 0 ? driftThreads : undefined;
       return [
         {
-          cacheKey: `git-review-section:${itemId}:${section.patch.length}:${fnv1a32(section.patch)}`,
+          cacheKey: `git-review-section:${itemId}:${section.patch.length}:${fnv1a32(section.patch)}:${patchSidesFingerprint(section)}`,
           ...(changeControls.length === 0 ? {} : { changeControls }),
+          ...(section.oldContents === undefined ||
+          section.newContents === undefined
+            ? {}
+            : {
+                diffFiles: {
+                  newContents: section.newContents,
+                  oldContents: section.oldContents,
+                },
+              }),
           fileDisplay: fileDisplayForSlot(slot),
           id: itemId,
           kind: "loaded",
@@ -325,6 +344,25 @@ function imageSideToView(
 }
 
 /**
+ * Conflict slots prefer a real conflict section over a leftover patch
+ * (soft-retain / mismatched sectionKey). Missing conflict body still
+ * falls through to the shared patch fallback.
+ */
+function fallbackConflictSection(
+  document: Extract<GitReviewDocumentResource, { kind: "loaded" }>["document"],
+  sections: ReadonlyMap<string, (typeof document.sections)[number]>
+): (typeof document.sections)[number] | undefined {
+  const hinted = document.surfaceSections.head;
+  if (hinted !== null) {
+    const fromHead = sections.get(hinted);
+    if (fromHead?.kind === "conflict") {
+      return fromHead;
+    }
+  }
+  return document.sections.find((section) => section.kind === "conflict");
+}
+
+/**
  * soft-retain 跨 stage 时 document.sections 仍是旧 sectionKey。
  * item id 用**当前** slot.sectionKey；正文借用可匹配的旧 section。
  */
@@ -335,6 +373,12 @@ function fallbackSectionForSlot(
 ): (typeof document.sections)[number] | undefined {
   if (sections.size === 0) {
     return;
+  }
+  if (slot.group === "conflict") {
+    const conflictSection = fallbackConflictSection(document, sections);
+    if (conflictSection !== undefined) {
+      return conflictSection;
+    }
   }
   // 优先 surfaceSections 提示
   let surfaceHint: string | null | undefined;
@@ -395,4 +439,14 @@ function fnv1a32(text: string): string {
   }
   // biome-ignore lint/suspicious/noBitwiseOperators: FNV-1a unsigned coerce
   return (hash >>> 0).toString(16);
+}
+
+function patchSidesFingerprint(section: {
+  readonly newContents?: string | undefined;
+  readonly oldContents?: string | undefined;
+}): string {
+  if (section.oldContents === undefined || section.newContents === undefined) {
+    return "partial";
+  }
+  return `${section.oldContents.length}:${section.newContents.length}:${fnv1a32(section.oldContents)}:${fnv1a32(section.newContents)}`;
 }

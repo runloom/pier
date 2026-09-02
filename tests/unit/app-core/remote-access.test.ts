@@ -159,6 +159,28 @@ describe("remoteAccess.* executor 分发", () => {
   });
 });
 
+describe("remoteAccess.setEnabled 持久化", () => {
+  it("开/关都写盘（重启恢复的唯一来源）", async () => {
+    const pairing = await makePairing();
+    const deps = services({ pairing, remoteControl: makeRemoteControl(false) });
+    expect(pairing.remoteAccessEnabled()).toBe(false);
+
+    await executeRemoteAccessCommand(
+      "rp1",
+      { enabled: true, type: "remoteAccess.setEnabled" },
+      deps
+    );
+    expect(pairing.remoteAccessEnabled()).toBe(true);
+
+    await executeRemoteAccessCommand(
+      "rp2",
+      { enabled: false, type: "remoteAccess.setEnabled" },
+      deps
+    );
+    expect(pairing.remoteAccessEnabled()).toBe(false);
+  });
+});
+
 describe("remoteAccess.getState", () => {
   it("未启用：enabled/host/port 镜像 server.state()，空设备与空待决配对", async () => {
     const pairing = await makePairing();
@@ -175,6 +197,7 @@ describe("remoteAccess.getState", () => {
         host: null,
         pendingPairing: null,
         port: null,
+        remote: { configured: false, connectionState: "stopped" },
       },
       ok: true,
       requestId: "r1",
@@ -184,7 +207,9 @@ describe("remoteAccess.getState", () => {
   it("已配对设备列表脱敏：无 tokenHash 字段、无令牌原文", async () => {
     const pairing = await makePairing();
     const issued = pairing.beginPairing({ host: HOST, port: PORT });
-    const redeemed = pairing.redeemPairingCode(redeemRequest(issued.code));
+    const redeemed = await pairing.redeemPairingCode(
+      redeemRequest(issued.code)
+    );
     if (!redeemed.ok) {
       throw new Error("redeem failed");
     }
@@ -350,7 +375,7 @@ describe("remoteAccess.cancelPairing", () => {
       deps
     );
     expect(okData(state).pendingPairing).toBeNull();
-    expect(pairing.redeemPairingCode(redeemRequest(code))).toEqual({
+    expect(await pairing.redeemPairingCode(redeemRequest(code))).toEqual({
       ok: false,
       reason: "pairing_invalid",
     });
@@ -361,7 +386,9 @@ describe("remoteAccess.revokeDevice", () => {
   it("吊销已配对设备：success 且设备列表清空", async () => {
     const pairing = await makePairing();
     const issued = pairing.beginPairing({ host: HOST, port: PORT });
-    const redeemed = pairing.redeemPairingCode(redeemRequest(issued.code));
+    const redeemed = await pairing.redeemPairingCode(
+      redeemRequest(issued.code)
+    );
     if (!redeemed.ok) {
       throw new Error("redeem failed");
     }

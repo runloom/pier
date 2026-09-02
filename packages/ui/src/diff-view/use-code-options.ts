@@ -48,29 +48,15 @@ import type {
 } from "./review/inline-comment-types.ts";
 import { renderReviewAnnotation } from "./review/render-review-annotation.ts";
 import { stabilizeCodeViewStickyPositioning } from "./sticky-stabilize.ts";
+import { createFormatUnmodifiedLines } from "./unresolved-conflict/format-unmodified-lines.ts";
+import { renderUnresolvedConflictAnnotation } from "./unresolved-conflict/host.tsx";
+import type { PierUnresolvedConflictHost } from "./unresolved-conflict/host-types.ts";
+import {
+  clearUnresolvedConflictHost,
+  syncUnresolvedConflictHost,
+} from "./unresolved-conflict/sync-host.ts";
 
-const DEFAULT_UNMODIFIED_LINE = "{{count}} unmodified line";
-const DEFAULT_UNMODIFIED_LINES = "{{count}} unmodified lines";
-
-/**
- * Build `CodeViewOptions.formatUnmodifiedLines` from host i18n templates.
- *
- * Plural selection is `count === 1` only (matches en/zh product needs). Callers
- * that need ICU few/many/zero must pass a pre-resolved formatter themselves via
- * `CodeViewOptions.formatUnmodifiedLines` instead of these templates.
- */
-export function createFormatUnmodifiedLines(labels: {
-  readonly unmodifiedLine?: string | undefined;
-  readonly unmodifiedLines?: string | undefined;
-}): (lines: number) => string {
-  const singular = labels.unmodifiedLine ?? DEFAULT_UNMODIFIED_LINE;
-  const plural = labels.unmodifiedLines ?? DEFAULT_UNMODIFIED_LINES;
-  return (lines: number) => {
-    const safe = Number.isFinite(lines) && lines >= 0 ? Math.floor(lines) : 0;
-    const template = safe === 1 ? singular : plural;
-    return template.replaceAll("{{count}}", String(safe));
-  };
-}
+export { createFormatUnmodifiedLines } from "./unresolved-conflict/format-unmodified-lines.ts";
 
 /**
  * Pierre 默认弹簧在超长列表的远距离导航中约需 0.9s 才进入目标视口。
@@ -119,6 +105,8 @@ export function useDiffViewCodeOptions(options: {
   readonly onHunkAction?: (event: PierHunkActionEvent) => void;
   readonly overflow: "wrap" | "scroll";
   readonly imageDiff?: PierDiffViewImageDiff;
+  readonly onOpenFile?: (itemId: string) => void;
+  readonly unresolvedConflict?: PierUnresolvedConflictHost;
   /** itemId → 该文件 diff 行内评论线程（host 投影后注入）；缺省无评论入口。 */
   readonly reviewCommentsById?: ReadonlyMap<
     string,
@@ -163,6 +151,8 @@ export function useDiffViewCodeOptions(options: {
     onHunkAction,
     overflow,
     imageDiff,
+    onOpenFile,
+    unresolvedConflict,
     reviewCommentsById,
     scheduleRenderWindowReport,
     inlineReviewHandlers,
@@ -262,6 +252,7 @@ export function useDiffViewCodeOptions(options: {
           syncEstimateSkeleton(element, false);
           syncPathTitleChrome(element, true);
           clearImageDiffHost(element);
+          clearUnresolvedConflictHost(element);
         } else {
           markRendered(itemId, context.version, element);
           // 每帧重标 host：Pierre 可能复用 element 但清掉 attribute；
@@ -284,6 +275,7 @@ export function useDiffViewCodeOptions(options: {
               ? context.item.fileDiff.type
               : undefined
           );
+          syncUnresolvedConflictHost(element, cacheKey);
           const isEstimate =
             typeof cacheKey === "string" && cacheKey.startsWith("estimate:");
           if (isEstimate) {
@@ -317,6 +309,7 @@ export function useDiffViewCodeOptions(options: {
               element.removeAttribute(PIER_DIFF_ESTIMATE_ATTR);
               element.removeAttribute("data-pier-pointer-within");
               clearImageDiffHost(element);
+              clearUnresolvedConflictHost(element);
               syncEstimateSkeleton(element, false);
               syncPathTitleChrome(element, true);
             });
@@ -381,6 +374,19 @@ export function useDiffViewCodeOptions(options: {
       if (imageNode !== undefined) {
         return imageNode;
       }
+      const conflictNode = renderUnresolvedConflictAnnotation(metadata, {
+        appearance,
+        host: unresolvedConflict,
+        itemId: item.id,
+        ...(onOpenFile === undefined ? {} : { onOpenFile }),
+        presentation: {
+          diffStyle,
+          wrapLines: overflow === "wrap",
+        },
+      });
+      if (conflictNode !== undefined) {
+        return conflictNode;
+      }
       const reviewNode = renderReviewAnnotation(metadata, {
         driftCommentLabels,
         handlers: inlineReviewHandlers,
@@ -410,8 +416,13 @@ export function useDiffViewCodeOptions(options: {
       inlineReviewLabels,
       inlineReviewThreadById,
       inputStore,
+      appearance,
+      diffStyle,
+      overflow,
       locale,
       onHunkAction,
+      onOpenFile,
+      unresolvedConflict,
     ]
   );
 

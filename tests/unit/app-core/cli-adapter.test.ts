@@ -330,6 +330,27 @@ describe("parsePierCliArgs", () => {
 
     expect(
       asV1(
+        parsePierCliArgs(["plugins", "applets", "--json"], {
+          clientId: "cli-1",
+          requestId: "req-plugin-applets",
+        })
+      ).envelope.command
+    ).toEqual({ type: "plugin.applets" });
+
+    expect(
+      asV1(
+        parsePierCliArgs(["plugins", "applets", "pier.tasks", "--json"], {
+          clientId: "cli-1",
+          requestId: "req-plugin-applets-id",
+        })
+      ).envelope.command
+    ).toEqual({
+      id: "pier.tasks",
+      type: "plugin.applets",
+    });
+
+    expect(
+      asV1(
         parsePierCliArgs(["plugins", "enable", "pier.worktree", "--json"], {
           clientId: "cli-1",
           requestId: "req-plugin-enable",

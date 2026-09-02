@@ -26,6 +26,7 @@ export function GitReviewToolbar({
   responsiveUnified = false,
   setViewOptions,
   showCommit = false,
+  showDiffStyle = true,
   viewOptions,
 }: {
   /** true = 当前为全部折叠，图标显示「展开」。 */
@@ -38,10 +39,16 @@ export function GitReviewToolbar({
   readonly responsiveUnified?: boolean;
   readonly setViewOptions: (patch: Partial<ReviewViewOptions>) => void;
   readonly showCommit?: boolean;
+  /**
+   * Merge-changes body is UnresolvedFile, which has no side-by-side layout.
+   * Hide the split/unified control instead of a dead toggle.
+   */
+  readonly showDiffStyle?: boolean;
   readonly viewOptions: ReviewViewOptions;
 }): React.JSX.Element {
   const split = viewOptions.diffStyle === "split";
   const wrap = viewOptions.wrapLines;
+  const splitUnavailable = responsiveUnified;
   let diffStyleLabel = pluginText(
     context,
     "reviewToolbarSplit",
@@ -73,16 +80,22 @@ export function GitReviewToolbar({
 
   return (
     <div className="flex items-center gap-0.5" data-testid="git-review-toolbar">
-      <ToolbarIconButton
-        disabled={responsiveUnified}
-        label={diffStyleLabel}
-        onClick={() =>
-          setViewOptions({ diffStyle: split ? "unified" : "split" })
-        }
-        pressed={responsiveUnified ? false : split}
-      >
-        {split ? <Columns2 data-icon /> : <Rows3 data-icon />}
-      </ToolbarIconButton>
+      {showDiffStyle ? (
+        <ToolbarIconButton
+          disabled={splitUnavailable}
+          label={diffStyleLabel}
+          onClick={() =>
+            setViewOptions({ diffStyle: split ? "unified" : "split" })
+          }
+          pressed={splitUnavailable ? false : split}
+        >
+          {split && !splitUnavailable ? (
+            <Columns2 data-icon />
+          ) : (
+            <Rows3 data-icon />
+          )}
+        </ToolbarIconButton>
+      ) : null}
       <ToolbarIconButton
         label={wrapLabel}
         onClick={() => setViewOptions({ wrapLines: !wrap })}

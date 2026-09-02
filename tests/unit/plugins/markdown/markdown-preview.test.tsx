@@ -53,6 +53,7 @@ describe("MarkdownPreview", () => {
       <MarkdownPreview
         labels={{
           anchorCopied: "Anchor copied",
+          columnWidthAuto: "Automatic width",
           copiedCode: "Copied",
           copyAnchor: "Copy heading anchor",
           copyCode: "Copy code",
@@ -104,6 +105,25 @@ describe("MarkdownPreview", () => {
     expect(
       container.querySelectorAll('[data-slot="markdown-page"]')
     ).toHaveLength(1);
+  });
+
+  it("stamps source lines on thematic breaks so git bars can land", async () => {
+    const { container } = render(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-hr-source"
+        source={source}
+        value={"Before\n\n---\n\nAfter"}
+      />
+    );
+    const rule = await waitFor(() => {
+      const node = container.querySelector('[data-slot="separator"]');
+      expect(node).toBeTruthy();
+      return node as HTMLElement;
+    });
+    expect(rule.getAttribute("data-source-line")).toBe("3");
+    expect(rule.getAttribute("data-source-end-line")).toBe("3");
   });
 
   it("renders a sanitized GitHub-style HTML title block", async () => {
@@ -423,6 +443,7 @@ describe("MarkdownPreview", () => {
         codeTheme="github-dark"
         copyCode={copyCode}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -770,6 +791,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument: vi.fn() },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -844,6 +866,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument: vi.fn() },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -916,6 +939,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument: vi.fn() },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -967,6 +991,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument: vi.fn() },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -997,7 +1022,7 @@ describe("MarkdownPreview", () => {
       expect(svg?.style.width).toBe("640px");
     });
   });
-  it("stops nested double-click source jumps at the nearest block", async () => {
+  it("keeps plain double-click for text selection and jumps only with Alt", async () => {
     const onJumpToSource = vi.fn();
     render(
       <MarkdownPreview
@@ -1011,7 +1036,11 @@ describe("MarkdownPreview", () => {
     );
 
     const paragraph = await screen.findByText("inner paragraph");
+    // 裸双击 = 原生选词（Zed #60817 同款取舍），不得跳源码。
     fireEvent.doubleClick(paragraph);
+    expect(onJumpToSource).not.toHaveBeenCalled();
+    // ⌥+双击跳源码，且嵌套块停在最近块。
+    fireEvent.doubleClick(paragraph, { altKey: true });
     expect(onJumpToSource).toHaveBeenCalledTimes(1);
     const jumpedOffset = onJumpToSource.mock.calls[0]?.[0] as number;
     expect(jumpedOffset).toBeGreaterThan(0);
@@ -1095,6 +1124,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument: vi.fn() },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -1379,6 +1409,7 @@ describe("MarkdownPreview", () => {
           files: { readDocument },
         }}
         labels={{
+          columnWidthAuto: "Automatic width",
           completedTask: "Completed task",
           anchorCopied: "Anchor copied",
           copiedCode: "Copied",
@@ -1497,8 +1528,10 @@ describe("MarkdownPreview", () => {
         source={source}
         value={"# Title\n\n## Section\n\nParagraph with `code`."}
         zoomLabels={{
+          controlsLabel: "Text size",
           reset: "Reset text size",
           zoomIn: "Increase text size",
+          zoomLevel: "Text size",
           zoomOut: "Decrease text size",
         }}
       />
@@ -1523,7 +1556,7 @@ describe("MarkdownPreview", () => {
     expect(h2.className).not.toContain("border-b");
     expect(container.querySelector("code.md-inline-code")).not.toBeNull();
     expect(
-      container.querySelector('[data-slot="markdown-font-scale"]')
+      container.querySelector('[data-slot="image-preview-controls"]')
     ).not.toBeNull();
     const toc = container.querySelector(
       '[data-slot="markdown-preview-toc"]'

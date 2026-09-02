@@ -48,6 +48,17 @@ describe("PIER_BROADCAST.HOST_CATALOG_CHANGED", () => {
   });
 });
 
+describe("PIER_BROADCAST.PANEL_TRANSFER_OVERLAY_PREVIEW", () => {
+  it("uses pier:// panel-transfer overlay channel and is allowlisted", () => {
+    expect(PIER_BROADCAST.PANEL_TRANSFER_OVERLAY_PREVIEW).toBe(
+      "pier://panel-transfer:overlay-preview"
+    );
+    expect(ALLOWED_RENDERER_CHANNELS).toContain(
+      PIER_BROADCAST.PANEL_TRANSFER_OVERLAY_PREVIEW
+    );
+  });
+});
+
 describe("PIER_BROADCAST.NOTIFICATION_CENTER_MESSAGE_TOAST", () => {
   it("uses dedicated single-window toast channel on the allowlist", () => {
     expect(PIER_BROADCAST.NOTIFICATION_CENTER_MESSAGE_TOAST).toBe(

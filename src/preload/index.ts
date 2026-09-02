@@ -269,12 +269,14 @@ const shellEnvironmentApi: PierShellEnvironmentAPI = {
 };
 
 const themeApi: PierThemeAPI = {
+  onSystemAppearance: (cb) =>
+    subscribeIpc(PIER_BROADCAST.THEME_SYSTEM_APPEARANCE, cb),
   onVisualPreview: (cb) =>
     subscribeIpc(PIER_BROADCAST.THEME_VISUAL_PREVIEW, cb),
   previewVisual: (payload) =>
     ipcRenderer.invoke(PIER.THEME_PREVIEW_VISUAL, payload),
-  setNativeChrome: (resolved, chromeColor) =>
-    ipcRenderer.invoke("pier:theme:set-native-chrome", resolved, chromeColor),
+  setNativeChrome: (themeSource, chromeColor) =>
+    ipcRenderer.invoke(PIER.THEME_SET_NATIVE_CHROME, themeSource, chromeColor),
 };
 
 const workspaceApi: PierWorkspaceAPI = {

@@ -20,6 +20,18 @@ export default defineConfig({
         "tests/support/pier-canvas.ts"
       ),
       "pier/host": resolve(import.meta.dirname, "tests/support/pier-host.ts"),
+      "@pier-applet/pier.tasks/tracker-board": resolve(
+        import.meta.dirname,
+        "packages/plugin-tasks/applets/tracker-board/index.applet.tsx"
+      ),
+      "@pier-applet/pier.tasks/task-list": resolve(
+        import.meta.dirname,
+        "packages/plugin-tasks/applets/task-list/index.applet.tsx"
+      ),
+      "@pier-applet/pier.tasks/task-dag": resolve(
+        import.meta.dirname,
+        "packages/plugin-tasks/applets/task-dag/index.applet.tsx"
+      ),
     },
   },
   test: {

@@ -11,6 +11,8 @@ export const contextMenu = {
     terminalOperationFailed: "터미널 작업에 실패했습니다. 다시 시도하세요",
     copy: "복사",
     copyPath: "경로 복사",
+    copyFilePath: "경로 복사",
+    copyRelativePath: "상대 경로 복사",
     keepOpen: "열린 채로 유지",
     copyToNewWindow: "새 윈도우로 복사",
     copyToTheOtherWindow: "나머지 윈도우로 복사",

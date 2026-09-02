@@ -5,6 +5,7 @@ export const commandPalette = {
   loading: "Loading…",
   inputFailed: "Couldn't submit — try again",
   searchResults: "Results",
+  recent: "Recent",
   agents: {
     launchFailed: "Couldn't start agent — try again",
     noAgentDetected: "No available agent",
@@ -20,7 +21,7 @@ export const commandPalette = {
   },
   category: {
     file: "File",
-    git: "git",
+    git: "GIT",
     view: "View",
     settings: "Settings",
     workspace: "Workspace",
@@ -29,6 +30,7 @@ export const commandPalette = {
     panel: "Panel",
     terminal: "Terminal",
     window: "Window",
+    agent: "Agents",
   },
   action: {
     toggleCommandPalette: "Show Command Palette",

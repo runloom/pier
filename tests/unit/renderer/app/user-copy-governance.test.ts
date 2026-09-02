@@ -12,6 +12,7 @@ const LOCALE_ROOTS = [
   join(ROOT, "src", "plugins", "builtin", "files", "locales"),
   join(ROOT, "src", "plugins", "builtin", "git", "locales"),
   join(ROOT, "src", "plugins", "builtin", "memory", "locales"),
+  join(ROOT, "packages", "plugin-tasks", "applets", "copy"),
 ] as const;
 
 /** 中文用户串禁用实现词 / 中英混用。只扫字符串值，不扫 key。 */
@@ -136,7 +137,8 @@ function isChineseLocalePath(filePath: string): boolean {
   return (
     relativePath.includes("/zh-CN/") ||
     relativePath.endsWith("/zh-CN.json") ||
-    relativePath.endsWith("zh-CN.json")
+    relativePath.endsWith("zh-CN.json") ||
+    relativePath.endsWith("/zh-CN.ts")
   );
 }
 
@@ -145,7 +147,8 @@ function isEnglishLocalePath(filePath: string): boolean {
   return (
     relativePath.includes("/en/") ||
     relativePath.endsWith("/en.json") ||
-    relativePath.endsWith("en.json")
+    relativePath.endsWith("en.json") ||
+    relativePath.endsWith("/en.ts")
   );
 }
 
@@ -157,7 +160,9 @@ function isJapaneseOrKoreanLocalePath(filePath: string): boolean {
     relativePath.endsWith("/ja.json") ||
     relativePath.endsWith("/ko.json") ||
     relativePath.endsWith("ja.json") ||
-    relativePath.endsWith("ko.json")
+    relativePath.endsWith("ko.json") ||
+    relativePath.endsWith("/ja.ts") ||
+    relativePath.endsWith("/ko.ts")
   );
 }
 
@@ -234,6 +239,72 @@ describe("user-facing copy governance", () => {
       "tests/unit/renderer/app/user-copy-governance.test.ts"
     );
     expect(agentContext).toContain("Canvas 发现面「物料」");
+    expect(agentContext).toContain("git 产品名用全大写 GIT");
+  });
+
+  it("uses all-caps GIT for plugin name, command palette group, and command prefixes", () => {
+    const offenders: string[] = [];
+    for (const locale of ["zh-CN", "en", "ja", "ko"] as const) {
+      const palettePath = join(
+        ROOT,
+        "src",
+        "renderer",
+        "i18n",
+        "locales",
+        locale,
+        "command-palette.ts"
+      );
+      if (!/\bgit:\s*"GIT"/.test(readFileSync(palettePath, "utf8"))) {
+        offenders.push(`${projectRelative(palettePath)}: category.git`);
+      }
+
+      const pluginLocalePath = join(
+        ROOT,
+        "src",
+        "plugins",
+        "builtin",
+        "git",
+        "locales",
+        `${locale}.json`
+      );
+      const pluginLocale = JSON.parse(
+        readFileSync(pluginLocalePath, "utf8")
+      ) as {
+        commands?: Record<string, { title?: string }>;
+        name?: string;
+      };
+      if (pluginLocale.name !== "GIT") {
+        offenders.push(`${projectRelative(pluginLocalePath)}: name`);
+      }
+      for (const [id, command] of Object.entries(pluginLocale.commands ?? {})) {
+        const title = command.title;
+        if (
+          typeof title === "string" &&
+          /^git:/i.test(title) &&
+          !title.startsWith("GIT: ")
+        ) {
+          offenders.push(`${projectRelative(pluginLocalePath)}: ${id}`);
+        }
+      }
+    }
+
+    const manifestPath = join(
+      ROOT,
+      "src",
+      "plugins",
+      "builtin",
+      "git",
+      "manifest.ts"
+    );
+    const manifest = readFileSync(manifestPath, "utf8");
+    if (!/\bname:\s*"GIT"/.test(manifest)) {
+      offenders.push(`${projectRelative(manifestPath)}: name`);
+    }
+    if (/title:\s*"git:/.test(manifest)) {
+      offenders.push(`${projectRelative(manifestPath)}: title prefix`);
+    }
+
+    expect(offenders).toEqual([]);
   });
 
   it("keeps Chinese locale string values free of implementation jargon", () => {
@@ -285,6 +356,7 @@ describe("user-facing copy governance", () => {
       join(ROOT, "packages", "plugin-grok", "plugin.json"),
       join(ROOT, "packages", "plugin-ssh", "plugin.json"),
       join(ROOT, "packages", "plugin-agent-splits", "plugin.json"),
+      join(ROOT, "packages", "plugin-tasks", "plugin.json"),
     ];
     const offenders = manifests.flatMap((manifestPath) => {
       const parsed = JSON.parse(readFileSync(manifestPath, "utf8")) as {

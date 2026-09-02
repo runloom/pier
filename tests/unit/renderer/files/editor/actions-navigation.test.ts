@@ -1,7 +1,15 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import { FILES_EDITOR_GO_TO_LINE_COMMAND_ID } from "@plugins/builtin/files/manifest.ts";
+import {
+  FILES_EDITOR_COPY_COMMAND_ID,
+  FILES_EDITOR_CUT_COMMAND_ID,
+  FILES_EDITOR_GO_TO_LINE_COMMAND_ID,
+  FILES_EDITOR_PASTE_COMMAND_ID,
+  FILES_EDITOR_SELECT_ALL_COMMAND_ID,
+  FILES_EDITOR_SELECT_NEXT_OCCURRENCE_COMMAND_ID,
+} from "@plugins/builtin/files/manifest.ts";
 import { createFilesEditorActions } from "@plugins/builtin/files/renderer/editor/actions.ts";
 import type { FileEditorController } from "@plugins/builtin/files/renderer/editor/controller.ts";
+import { selectNextEditorOccurrence } from "@plugins/builtin/files/renderer/editor/view-operations.ts";
 import { describe, expect, it, vi } from "vitest";
 
 function createHarness(result: "applied" | "queued" | "rejected") {
@@ -66,5 +74,60 @@ describe("Files Go to Line action", () => {
     expect(harness.notificationsError).toHaveBeenCalledWith(
       "Unable to jump to that line."
     );
+  });
+});
+
+describe("Files occurrence actions", () => {
+  it("runs select-next on the active file panel session", async () => {
+    const runViewCommand = vi.fn(() => true);
+    const context = {
+      i18n: {
+        t: vi.fn(
+          (_key: string, _values?: unknown, fallback?: string) => fallback ?? ""
+        ),
+      },
+      notifications: { error: vi.fn() },
+      panels: { getActiveInstanceId: vi.fn(() => "panel-1") },
+    } as unknown as RendererPluginContext;
+    const controller = {
+      runViewCommand,
+    } as unknown as FileEditorController;
+    const action = createFilesEditorActions(context, controller).find(
+      (candidate) =>
+        candidate.id === FILES_EDITOR_SELECT_NEXT_OCCURRENCE_COMMAND_ID
+    );
+
+    await action?.handler(undefined);
+
+    expect(runViewCommand).toHaveBeenCalledWith(
+      JSON.stringify(["panel-1"]),
+      selectNextEditorOccurrence
+    );
+  });
+});
+
+describe("Files editor clipboard menu hints", () => {
+  it("shows native clipboard chords without registering keymap ids", () => {
+    const context = {
+      i18n: {
+        t: vi.fn(
+          (_key: string, _values?: unknown, fallback?: string) => fallback ?? ""
+        ),
+      },
+      notifications: { error: vi.fn() },
+      panels: { getActiveInstanceId: vi.fn(() => "panel-1") },
+    } as unknown as RendererPluginContext;
+    const actions = createFilesEditorActions(
+      context,
+      {} as FileEditorController
+    );
+    const byId = Object.fromEntries(
+      actions.map((action) => [action.id, action.metadata?.displayChord])
+    );
+
+    expect(byId[FILES_EDITOR_CUT_COMMAND_ID]).toBe("Mod+KeyX");
+    expect(byId[FILES_EDITOR_COPY_COMMAND_ID]).toBe("Mod+KeyC");
+    expect(byId[FILES_EDITOR_PASTE_COMMAND_ID]).toBe("Mod+KeyV");
+    expect(byId[FILES_EDITOR_SELECT_ALL_COMMAND_ID]).toBe("Mod+KeyA");
   });
 });

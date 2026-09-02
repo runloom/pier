@@ -9,6 +9,7 @@ vi.mock("@/lib/ipc/window-ipc.ts", () => ({
   closeCurrentWindow: closeCurrentWindowMock,
 }));
 
+import { touchGroup } from "@/lib/workspace/group-mru.ts";
 import {
   clearPanelCloseGuards,
   registerPanelCloseGuard,
@@ -43,7 +44,7 @@ function createApi(
   panels: ReturnType<typeof terminalPanel>[],
   groups = [{ panels }]
 ) {
-  return {
+  const api = {
     activeGroup: groups[0] ?? null,
     activePanel: panels[0] ?? null,
     groups,
@@ -52,6 +53,12 @@ function createApi(
     removePanel: vi.fn(),
     totalPanels: panels.length,
   };
+  for (const panel of panels) {
+    panel.api.setActive.mockImplementation(() => {
+      api.activePanel = panel;
+    });
+  }
+  return api;
 }
 
 const context: PanelContext = {
@@ -66,6 +73,14 @@ const context: PanelContext = {
 
 function firstInvocationOrder(fn: { mock: { invocationCallOrder: number[] } }) {
   const order = fn.mock.invocationCallOrder[0];
+  if (order === undefined) {
+    throw new Error("expected mock to be called");
+  }
+  return order;
+}
+
+function lastInvocationOrder(fn: { mock: { invocationCallOrder: number[] } }) {
+  const order = fn.mock.invocationCallOrder.at(-1);
   if (order === undefined) {
     throw new Error("expected mock to be called");
   }
@@ -389,6 +404,221 @@ describe("workspace terminal close lifecycle", () => {
     expect(api.removePanel).toHaveBeenCalledWith(b);
     expect(api.removePanel).not.toHaveBeenCalledWith(other);
     expect(closeCurrentWindowMock).not.toHaveBeenCalled();
+  });
+
+  it("closeGroup activates the MRU remaining group before removing panels", async () => {
+    const closingA = terminalPanel("br-a");
+    const keep = webPanel("tr-keep");
+    const first = webPanel("tl-first");
+    const panels = [first, keep, closingA];
+    const tl = { id: "tl", activePanel: first, panels: [first] };
+    const tr = { id: "tr", activePanel: keep, panels: [keep] };
+    const br = { id: "br", activePanel: closingA, panels: [closingA] };
+    const api = {
+      activeGroup: br,
+      activePanel: closingA,
+      groups: [tl, tr, br],
+      addPanel: vi.fn(),
+      panels,
+      removePanel: vi.fn((panel: { id: string }) => {
+        const index = panels.findIndex((p) => p.id === panel.id);
+        if (index >= 0) {
+          panels.splice(index, 1);
+        }
+      }),
+      totalPanels: 3,
+    };
+
+    useWorkspaceStore.getState().setApi(api as never);
+    touchGroup("tl");
+    touchGroup("tr");
+    touchGroup("br");
+    await useWorkspaceStore.getState().closeGroup("br-a");
+
+    expect(keep.api.setActive).toHaveBeenCalled();
+    expect(first.api.setActive).not.toHaveBeenCalled();
+    expect(firstInvocationOrder(keep.api.setActive)).toBeLessThan(
+      firstInvocationOrder(api.removePanel)
+    );
+    expect(closeCurrentWindowMock).not.toHaveBeenCalled();
+  });
+
+  it("closeGroup re-applies the MRU successor after dockview steals to groups[0]", async () => {
+    const closingActive = terminalPanel("br-active");
+    const closingSibling = webPanel("br-sibling");
+    const keep = webPanel("tr-keep");
+    const first = webPanel("tl-first");
+    const panels = [first, keep, closingActive, closingSibling];
+    const tl = { id: "tl", activePanel: first, panels: [first] };
+    const tr = { id: "tr", activePanel: keep, panels: [keep] };
+    const br = {
+      id: "br",
+      activePanel: closingActive,
+      panels: [closingActive, closingSibling],
+    };
+    const dyingIds = new Set([closingActive.id, closingSibling.id]);
+    const api = {
+      activeGroup: br,
+      activePanel: closingActive,
+      groups: [tl, tr, br],
+      addPanel: vi.fn(),
+      panels,
+      removePanel: vi.fn((panel: { id: string }) => {
+        const index = panels.findIndex((p) => p.id === panel.id);
+        if (index >= 0) {
+          panels.splice(index, 1);
+        }
+        const dyingLeft = panels.filter((p) => dyingIds.has(p.id));
+        api.activePanel = dyingLeft[0] ?? first;
+      }),
+      totalPanels: 4,
+    };
+
+    useWorkspaceStore.getState().setApi(api as never);
+    touchGroup("tl");
+    touchGroup("tr");
+    touchGroup("br");
+    await useWorkspaceStore.getState().closeGroup("br-active");
+
+    expect(api.removePanel).toHaveBeenCalledWith(closingSibling);
+    expect(api.removePanel).toHaveBeenCalledWith(closingActive);
+    expect(lastInvocationOrder(keep.api.setActive)).toBeGreaterThan(
+      lastInvocationOrder(api.removePanel)
+    );
+    expect(first.api.setActive).not.toHaveBeenCalled();
+    expect(closeCurrentWindowMock).not.toHaveBeenCalled();
+  });
+
+  it("closeGroup does not move focus when a close guard is cancelled", async () => {
+    const focused = terminalPanel("g1-focused");
+    const sibling = webPanel("g1-sibling");
+    const keep = webPanel("g2-keep");
+    const panels = [focused, sibling, keep];
+    const g1 = {
+      id: "g1",
+      activePanel: focused,
+      panels: [focused, sibling],
+    };
+    const g2 = { id: "g2", activePanel: keep, panels: [keep] };
+    const api = {
+      activeGroup: g1,
+      activePanel: focused,
+      groups: [g1, g2],
+      addPanel: vi.fn(),
+      panels,
+      removePanel: vi.fn((panel: { id: string }) => {
+        const index = panels.findIndex((p) => p.id === panel.id);
+        if (index >= 0) {
+          panels.splice(index, 1);
+        }
+      }),
+      totalPanels: 3,
+    };
+    registerPanelCloseGuard("terminal", async () => false);
+
+    useWorkspaceStore.getState().setApi(api as never);
+    await useWorkspaceStore.getState().closeGroup("g1-focused");
+
+    expect(keep.api.setActive).not.toHaveBeenCalled();
+    expect(api.removePanel).not.toHaveBeenCalledWith(focused);
+    expect(api.removePanel).toHaveBeenCalledWith(sibling);
+  });
+
+  it("closeGroup of an inactive group does not steal window focus", async () => {
+    const focused = terminalPanel("focused");
+    const otherA = webPanel("other-a");
+    const otherB = webPanel("other-b");
+    const panels = [focused, otherA, otherB];
+    const gFocus = { id: "g-focus", activePanel: focused, panels: [focused] };
+    const gOther = {
+      id: "g-other",
+      activePanel: otherA,
+      panels: [otherA, otherB],
+    };
+    const api = {
+      activeGroup: gFocus,
+      activePanel: focused,
+      groups: [gFocus, gOther],
+      addPanel: vi.fn(),
+      panels,
+      removePanel: vi.fn((panel: { id: string }) => {
+        const index = panels.findIndex((p) => p.id === panel.id);
+        if (index >= 0) {
+          panels.splice(index, 1);
+        }
+        // Simulate dockview activating the dying group.
+        if (panel.id === otherA.id || panel.id === otherB.id) {
+          api.activePanel = otherA;
+        }
+      }),
+      totalPanels: 3,
+    };
+
+    useWorkspaceStore.getState().setApi(api as never);
+    await useWorkspaceStore.getState().closeGroup("other-a");
+
+    expect(focused.api.setActive).toHaveBeenCalled();
+    expect(api.removePanel).toHaveBeenCalledWith(otherA);
+    expect(api.removePanel).toHaveBeenCalledWith(otherB);
+    expect(api.removePanel).not.toHaveBeenCalledWith(focused);
+  });
+
+  it("closes the last tab in a group by activating the remaining group", async () => {
+    const closing = terminalPanel("g1-last");
+    const keep = webPanel("g2-keep");
+    const g1 = { id: "g1", activePanel: closing, panels: [closing] };
+    const g2 = { id: "g2", activePanel: keep, panels: [keep] };
+    const api = createApi([closing, keep], [g1, g2]);
+    api.activeGroup = g1;
+    api.activePanel = closing;
+    api.totalPanels = 2;
+
+    useWorkspaceStore.getState().setApi(api as never);
+    await useWorkspaceStore.getState().closePanel("g1-last");
+
+    expect(keep.api.setActive).toHaveBeenCalledOnce();
+    expect(firstInvocationOrder(keep.api.setActive)).toBeLessThan(
+      firstInvocationOrder(api.removePanel)
+    );
+    expect(closeCurrentWindowMock).not.toHaveBeenCalled();
+  });
+
+  it("closeOthers in an inactive group does not steal window focus", async () => {
+    const focused = terminalPanel("focused");
+    const keep = webPanel("keep");
+    const extra = webPanel("extra");
+    const gFocus = { id: "g-focus", activePanel: focused, panels: [focused] };
+    const gOther = { id: "g-other", activePanel: keep, panels: [keep, extra] };
+    const api = createApi([focused, keep, extra], [gFocus, gOther]);
+    api.activeGroup = gFocus;
+    api.activePanel = focused;
+    api.removePanel = vi.fn(() => {
+      api.activePanel = extra;
+    });
+
+    useWorkspaceStore.getState().setApi(api as never);
+    await useWorkspaceStore.getState().closeOthers("keep");
+
+    expect(focused.api.setActive).toHaveBeenCalled();
+    expect(api.removePanel).toHaveBeenCalledWith(extra);
+    expect(api.removePanel).not.toHaveBeenCalledWith(focused);
+    expect(api.removePanel).not.toHaveBeenCalledWith(keep);
+  });
+
+  it("closeOthers does not steal focus when the active tab's guard is cancelled", async () => {
+    const keep = webPanel("keep");
+    const focused = terminalPanel("focused");
+    const extra = webPanel("extra");
+    const api = createApi([keep, focused, extra]);
+    api.activePanel = focused;
+    registerPanelCloseGuard("terminal", async () => false);
+
+    useWorkspaceStore.getState().setApi(api as never);
+    await useWorkspaceStore.getState().closeOthers("keep");
+
+    expect(keep.api.setActive).not.toHaveBeenCalled();
+    expect(api.removePanel).not.toHaveBeenCalledWith(focused);
+    expect(api.removePanel).toHaveBeenCalledWith(extra);
   });
 
   it("closeGroup closes the window when it empties the last group", async () => {

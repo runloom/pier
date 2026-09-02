@@ -19,7 +19,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { activeTerminalPanelId } from "@/lib/actions/renderer-action-runtime.ts";
-import type { Action } from "@/lib/actions/types.ts";
+import type { Action, ActionInvocation } from "@/lib/actions/types.ts";
 import { noteHangBreadcrumb } from "@/lib/diagnostics/hang-breadcrumb.ts";
 import { recordTerminalInputRoutingTrace } from "@/lib/terminal-debug/input-routing-trace.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
@@ -141,14 +141,28 @@ export function resolveKeybindingAction(
   return action;
 }
 
+export function invocationFromKeybindingScope(): ActionInvocation | undefined {
+  const scope = useKeybindingScope.getState();
+  if (!(scope.activePanelId || scope.activePanelComponent)) {
+    return;
+  }
+  return {
+    ...(scope.activePanelComponent
+      ? { sourcePanelComponent: scope.activePanelComponent }
+      : {}),
+    ...(scope.activePanelId ? { sourcePanelId: scope.activePanelId } : {}),
+  };
+}
+
 export function dispatchKeybindingAction(
   action: Action,
   route: KeybindingDispatchRoute
 ): void {
+  const invocation = invocationFromKeybindingScope();
   // 路径依赖等动作在菜单里禁用；快捷键仍命中并 toast 原因，避免静默无响应。
-  if (action.enabled?.() === false) {
+  if (action.enabled?.(invocation) === false) {
     recordKeybindingDecision("disabled", action.id, route);
-    const reason = action.disabledReason?.();
+    const reason = action.disabledReason?.(invocation);
     if (reason) {
       toast(reason);
     }
@@ -167,7 +181,7 @@ export function dispatchKeybindingAction(
     ...(scope.activePanelId ? { panelId: scope.activePanelId } : {}),
   });
   try {
-    const result = action.handler();
+    const result = action.handler(invocation);
     if (result instanceof Promise) {
       result
         .then(() => {

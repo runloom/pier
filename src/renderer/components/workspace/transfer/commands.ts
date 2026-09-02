@@ -40,6 +40,11 @@ import {
   panelTitleOf,
   pierPanelTransfer,
 } from "./shared.ts";
+import {
+  armPanelTransferTearOffClaim,
+  clearPanelTransferTearOff,
+  hidePanelTransferTearOff,
+} from "./tear-off.ts";
 
 function requireApi(): DockviewApi {
   const api = useWorkspaceStore.getState().api;
@@ -152,6 +157,8 @@ async function handlePrepareSource(
   );
   setFrozenSourceSnapshot(transferId, snapshot, revision);
   setPanelRelocationSuppressed(true);
+  hidePanelTransferTearOff(sourcePanelId, api);
+  armPanelTransferTearOffClaim();
   return snapshot;
 }
 
@@ -248,6 +255,7 @@ async function handleReleaseSource(
   const remainingParams = collectRemainingParams(api, sourcePanelId);
   setPanelRelocationSuppressed(true);
   api.removePanel(panel);
+  clearPanelTransferTearOff();
   if (reg?.kind === "custom" && reg.releaseSource) {
     await reg.releaseSource({
       panelId: sourcePanelId,
@@ -338,6 +346,9 @@ async function handleFinalize(command: FinalizeCommand): Promise<void> {
   }
   clearFrozenSourceSnapshot(transferId);
   setPanelRelocationSuppressed(false);
+  if (outcome === "abort") {
+    clearPanelTransferTearOff();
+  }
   clearFinalizeRecord(transferId);
   // Guard the async transfer-startup boot path: a late gate set for this
   // transfer must not resurrect after release.

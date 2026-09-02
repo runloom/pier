@@ -18,7 +18,12 @@ import {
   type PanelCommandServices,
 } from "./panel.ts";
 import { sameResolvedPath } from "./panel-open-stat.ts";
-import { agentIdFromParams, toLocator } from "./terminal-control.ts";
+import {
+  type AgentPanelIndex,
+  agentIdFromParams,
+  indexAgentIdsByPanel,
+  toLocator,
+} from "./terminal-control.ts";
 import { isTerminalComponent } from "./terminal-locate.ts";
 
 type PanelOpenCommand = Extract<PierCommand, { type: "panel.open" }>;
@@ -33,36 +38,30 @@ export interface PathOpenResult {
   reused: boolean;
 }
 
-function indexAgentByPanel(
-  services: PanelCommandServices
-): Map<string, string> {
-  const map = new Map<string, string>();
+function indexAgentByPanel(services: PanelCommandServices): AgentPanelIndex {
   try {
-    for (const entry of services.agentRuntimeIndex?.listMachine().entries ??
-      []) {
-      if (entry.panelId && entry.agentId) {
-        map.set(entry.panelId, entry.agentId);
-      }
-    }
+    return indexAgentIdsByPanel(
+      services.agentRuntimeIndex?.listMachine().entries ?? []
+    );
   } catch {
-    /* Index optional in tests */
+    return { byScope: new Map(), uniqueByPanel: new Map() };
   }
-  return map;
 }
 
 function isExcludedWorkface(
   panel: {
     id: string;
+    windowId?: string | undefined;
     component?: string | undefined;
     params?: Record<string, unknown> | undefined;
   },
   recordId: string,
-  agents: Map<string, string>
+  agents: AgentPanelIndex
 ): boolean {
   const locator = toLocator(
     {
       id: panel.id,
-      windowId: "",
+      windowId: panel.windowId ?? "",
       component: panel.component,
       params: panel.params,
     },

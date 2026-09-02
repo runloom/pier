@@ -90,6 +90,13 @@ describe("cli user manual governance (canvas canonical)", () => {
   it("产品入口文档指向 Canvas 且不得再引 docs/cli.md", () => {
     for (const path of [
       "README.md",
+      "README.en.md",
+      "README.ja.md",
+      "README.ko.md",
+      ".pier/canvases/pier-cli-user-manual/README.md",
+      ".pier/canvases/pier-cli-user-manual/README.en.md",
+      ".pier/canvases/pier-cli-user-manual/README.ja.md",
+      ".pier/canvases/pier-cli-user-manual/README.ko.md",
       "docs/README.md",
       "docs/development.md",
     ] as const) {

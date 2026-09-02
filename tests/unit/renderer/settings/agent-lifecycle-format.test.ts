@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   formatAgentVersionMeta,
+  formatLifecycleBatchFailureLine,
+  formatLifecycleError,
   formatLifecycleRowFailure,
   isLifecycleSoftFailure,
   lifecycleBusyStatusText,
@@ -14,6 +16,54 @@ const t = ((key: string, opts?: Record<string, unknown>) => {
   }
   return `${key}:${JSON.stringify(opts)}`;
 }) as never;
+
+describe("formatLifecycleError", () => {
+  it("hides npm kill dumps on timeout", () => {
+    expect(
+      formatLifecycleError(t, {
+        errorCode: "timeout",
+        errorDetail:
+          "npm warn using --force Recommended protections disabled.\nnpm error signal SIGTERM",
+        commandPreview: "npm i -g @ampcode/cli@latest --force",
+      })
+    ).toBe("settings.agents.lifecycle.errors.timeout");
+  });
+
+  it("keeps real command failure detail", () => {
+    expect(
+      formatLifecycleError(t, {
+        errorCode: "command_failed",
+        errorDetail: "error: HTTP 403 Forbidden",
+      })
+    ).toContain("HTTP 403");
+  });
+
+  it("drops npm kill rattle from command_failed detail", () => {
+    const formatted = formatLifecycleError(t, {
+      errorCode: "command_failed",
+      errorDetail: [
+        "npm error Exit handler never called!",
+        "npm error code EACCES",
+        "npm error   <https://github.com/npm/cli/issues>",
+      ].join("\n"),
+    });
+    expect(formatted).toContain("EACCES");
+    expect(formatted).not.toContain("Exit handler");
+    expect(formatted).not.toContain("github.com/npm");
+  });
+});
+
+describe("formatLifecycleBatchFailureLine", () => {
+  it("prefixes the product label and omits timeout dumps", () => {
+    expect(
+      formatLifecycleBatchFailureLine(t, {
+        agentLabel: "Amp",
+        errorCode: "timeout",
+        errorDetail: "npm error signal SIGTERM",
+      })
+    ).toBe("Amp: settings.agents.lifecycle.errors.timeout");
+  });
+});
 
 describe("formatAgentVersionMeta", () => {
   it("uses arrow when current and latest differ", () => {

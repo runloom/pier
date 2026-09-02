@@ -106,9 +106,34 @@ export function createMarkdownRendererLabels(
     openFullscreen: t("filePanel.markdown.openFullscreen", "View fullscreen"),
     completedTask: t("filePanel.markdown.completedTask", "Completed task"),
     incompleteTask: t("filePanel.markdown.incompleteTask", "Incomplete task"),
+    columnWidthAuto: t("filePanel.markdown.columnWidthAuto", "Automatic width"),
     resizeColumn: t(
       "filePanel.markdown.resizeColumn",
-      "Drag to adjust column display width. Double-click to reset."
+      "Drag to adjust column display width. Double-click to restore automatic sizing for the whole table."
+    ),
+    appletDisabledTitle: t(
+      "filePanel.markdown.appletDisabledTitle",
+      "Applets are off for this document"
+    ),
+    appletDisabledBody: t(
+      "filePanel.markdown.appletDisabledBody",
+      "Add <!-- pier-applets: enable --> near the top to mount this applet."
+    ),
+    appletParseFailedTitle: t(
+      "filePanel.markdown.appletParseFailedTitle",
+      "Couldn’t read this applet fence"
+    ),
+    appletParseFailedBody: t(
+      "filePanel.markdown.appletParseFailedBody",
+      "Use JSON with pluginId, appletId, and optional props."
+    ),
+    appletMountFailedBody: t(
+      "filePanel.markdown.appletMountFailedBody",
+      "Retry. If it still fails, check that the plugin is installed."
+    ),
+    appletMountFailedTitle: t(
+      "filePanel.markdown.appletMountFailedTitle",
+      "Couldn’t mount the applet"
     ),
   };
 }
@@ -122,13 +147,17 @@ export function createMarkdownTocLabels(t: FilesTranslate): {
 }
 
 export function createMarkdownZoomLabels(t: FilesTranslate): {
+  controlsLabel: string;
   reset: string;
   zoomIn: string;
+  zoomLevel: string;
   zoomOut: string;
 } {
   return {
+    controlsLabel: t("filePanel.markdown.zoom.controlsLabel", "Text size"),
     reset: t("filePanel.markdown.zoom.reset", "Reset text size"),
     zoomIn: t("filePanel.markdown.zoom.in", "Increase text size"),
+    zoomLevel: t("filePanel.markdown.zoom.level", "Text size"),
     zoomOut: t("filePanel.markdown.zoom.out", "Decrease text size"),
   };
 }

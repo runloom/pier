@@ -5,9 +5,10 @@
  * 连接状态）。
  */
 import { useEffect } from "react";
+import { ConnectionBanner } from "./components/connection-banner.tsx";
 import type { Route } from "./lib/routes.ts";
 import { useHashRoute } from "./lib/routes.ts";
-import { autoConnectLatestHost } from "./lib/session.ts";
+import { autoConnectLatestHost, resumeActiveHost } from "./lib/session.ts";
 import { ChangesPage } from "./pages/changes.tsx";
 import { FilesPage } from "./pages/files.tsx";
 import { HostPage } from "./pages/host.tsx";
@@ -42,7 +43,22 @@ export function App() {
 
   useEffect(() => {
     autoConnectLatestHost().catch(() => undefined);
+    // §9.1：回到前台立即重拨/拉最新快照，不等退避定时器醒来。
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        resumeActiveHost().catch(() => undefined);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
-  return <CurrentPage route={route} />;
+  return (
+    <>
+      <ConnectionBanner />
+      <CurrentPage route={route} />
+    </>
+  );
 }

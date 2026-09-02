@@ -5,8 +5,6 @@ import type {
 } from "@plugins/api/renderer.ts";
 import { FilePlus } from "lucide-react";
 import {
-  FILES_COPY_PATH_COMMAND_ID,
-  FILES_COPY_RELATIVE_PATH_COMMAND_ID,
   FILES_NEW_FILE_COMMAND_ID,
   FILES_NEW_FOLDER_COMMAND_ID,
   FILES_RENAME_COMMAND_ID,
@@ -18,16 +16,13 @@ import { showFilesNamePrompt } from "../panel/name-prompt.tsx";
 import {
   basename,
   dirnameRelative,
-  joinAbsolutePath,
   notifyMoveWithUndo,
   parseEditorMetadata,
   parseTreeBackgroundMetadata,
   parseTreeMetadata,
   pluginAction,
-  relativeToProjectRoot,
   resolveCreateParentDir,
   validateName,
-  writeClipboardText,
 } from "./action-utils.ts";
 import {
   createFileClipboardCopyAction,
@@ -35,7 +30,10 @@ import {
   createFileClipboardPasteAction,
 } from "./actions-clipboard.ts";
 import { createDuplicateAction } from "./actions-duplicate.ts";
-import { createCopyPathWithRangeAction } from "./copy-path-range-action.ts";
+import {
+  createCopyPathAction,
+  createCopyPathWithRangeAction,
+} from "./copy-path-range-action.ts";
 import { beginInlineCreate, createViaPrompt } from "./create.ts";
 import { createDeleteAction } from "./delete-action.ts";
 import { openUntitledFileFromCreateMenu } from "./open-untitled.ts";
@@ -256,113 +254,6 @@ function createRenameAction(
   });
 }
 
-function createCopyPathAction(
-  context: RendererPluginContext,
-  t: FilesTranslate,
-  variant: "absolute" | "relative"
-): RendererPluginAction {
-  return pluginAction({
-    id:
-      variant === "absolute"
-        ? FILES_COPY_PATH_COMMAND_ID
-        : FILES_COPY_RELATIVE_PATH_COMMAND_ID,
-    category: "file",
-    metadata: {
-      group: "6_path",
-      sortOrder: variant === "absolute" ? 1 : 2,
-    },
-    surfaces: [
-      "files/tree-item",
-      "files/editor",
-      "files/markdown-preview",
-      "files/canvas-preview",
-      "files/breadcrumb",
-    ],
-    title: () =>
-      variant === "absolute"
-        ? t("filePanel.tree.action.copyPath", "Copy Path")
-        : t("filePanel.tree.action.copyRelativePath", "Copy Relative Path"),
-    handler: async (invocation) => {
-      const treeTarget = parseTreeMetadata(invocation);
-      if (treeTarget) {
-        const paths =
-          treeTarget.selectedPaths &&
-          treeTarget.selectedPaths.length > 1 &&
-          treeTarget.selectedPaths.includes(treeTarget.path)
-            ? treeTarget.selectedPaths
-            : [treeTarget.path];
-        const value = paths
-          .map((path) =>
-            variant === "absolute"
-              ? joinAbsolutePath(treeTarget.root, path)
-              : relativeToProjectRoot(
-                  treeTarget.root,
-                  path,
-                  treeTarget.projectRoot
-                )
-          )
-          .join("\n");
-        try {
-          await writeClipboardText(value);
-          context.notifications.success(
-            t("filePanel.tree.pathCopied", "Path copied")
-          );
-        } catch (error) {
-          await context.dialogs.alert({
-            body: error instanceof Error ? error.message : String(error),
-            title: t("filePanel.tree.copyFailed", "Copy failed"),
-          });
-        }
-        return;
-      }
-      const editorTarget = parseEditorMetadata(invocation);
-      // Markdown preview 等 disk 源同样携带 path/root（可选 projectRoot）。
-      const diskTarget =
-        editorTarget ??
-        (() => {
-          const path =
-            typeof invocation?.metadata?.path === "string"
-              ? invocation.metadata.path
-              : null;
-          const root =
-            typeof invocation?.metadata?.root === "string"
-              ? invocation.metadata.root
-              : null;
-          if (!(path && root)) {
-            return null;
-          }
-          const projectRoot =
-            typeof invocation?.metadata?.projectRoot === "string"
-              ? invocation.metadata.projectRoot
-              : undefined;
-          return { path, projectRoot, root };
-        })();
-      if (!diskTarget) {
-        return;
-      }
-      const value =
-        variant === "absolute"
-          ? joinAbsolutePath(diskTarget.root, diskTarget.path)
-          : relativeToProjectRoot(
-              diskTarget.root,
-              diskTarget.path,
-              diskTarget.projectRoot
-            );
-      try {
-        await writeClipboardText(value);
-        context.notifications.success(
-          t("filePanel.tree.pathCopied", "Path copied")
-        );
-      } catch (error) {
-        await context.dialogs.alert({
-          body: error instanceof Error ? error.message : String(error),
-          title: t("filePanel.tree.copyFailed", "Copy failed"),
-        });
-      }
-    },
-  });
-}
-
 function createRevealAction(
   context: RendererPluginContext,
   t: FilesTranslate
@@ -428,8 +319,8 @@ export function createFilesTreeActions(
     createFileClipboardCopyAction(context, t),
     createFileClipboardPasteAction(context, t),
     createDeleteAction(context, t, controller),
-    createCopyPathAction(context, t, "absolute"),
-    createCopyPathAction(context, t, "relative"),
+    createCopyPathAction(context, controller, t, "absolute"),
+    createCopyPathAction(context, controller, t, "relative"),
     createCopyPathWithRangeAction(context, controller, t),
     createRevealAction(context, t),
   ];

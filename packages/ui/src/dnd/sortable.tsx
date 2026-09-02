@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { cn } from "../utils.ts";
 import { useDroppableId } from "./droppable.tsx";
 import {
@@ -31,6 +31,13 @@ export interface SortableItemApi {
 /** Surfaces whose clicks must never start a whole-item drag. */
 const DRAG_IGNORE_SELECTOR =
   "button, a, input, textarea, select, [role='tab'], [contenteditable='true']";
+
+function eventTargetElement(target: EventTarget | null): Element | null {
+  if (target instanceof Element) {
+    return target;
+  }
+  return target instanceof Node ? target.parentElement : null;
+}
 
 function insertionIndex(
   client: number,
@@ -101,6 +108,7 @@ export function Sortable({
   onDropItem,
   onReorder,
   orientation = "vertical",
+  reorderable = true,
 }: {
   children: (itemId: string, item: SortableItemApi) => ReactNode;
   className?: string | undefined;
@@ -111,6 +119,8 @@ export function Sortable({
   /** Same-list reorder commit (called once on drop). */
   onReorder: (items: string[]) => void;
   orientation?: "horizontal" | "vertical" | undefined;
+  /** When false, only cross-list drops commit; same-list order stays. */
+  reorderable?: boolean | undefined;
 }) {
   const sourceDroppableId = useDroppableId();
   const itemEls = useRef(new Map<string, HTMLElement>());
@@ -136,6 +146,7 @@ export function Sortable({
     height: number;
     index: number;
   } | null>(null);
+  const foreignGapRef = useRef<{ height: number; index: number } | null>(null);
 
   const applyPreview = (next: string[] | null): void => {
     previewOrderRef.current = next;
@@ -144,20 +155,19 @@ export function Sortable({
     );
   };
 
-  // Accept foreign items with a live insertion index (wins over plain onDrop).
+  // Accept foreign items with the last painted gap index (wins over onDrop).
   useEffect(() => {
     if (!(sourceDroppableId && onDropItem)) {
       return;
     }
     return registerSortableInsert(sourceDroppableId, (itemId, x, y) => {
-      const client = orientation === "horizontal" ? x : y;
-      const index = insertionIndex(
-        client,
+      const fallback = insertionIndex(
+        orientation === "horizontal" ? x : y,
         itemsRef.current,
         itemEls.current,
         orientation
       );
-      onDropItem(itemId, index);
+      onDropItem(itemId, foreignGapRef.current?.index ?? fallback);
     });
   }, [onDropItem, orientation, sourceDroppableId]);
 
@@ -172,20 +182,22 @@ export function Sortable({
         session.sourceId === sourceDroppableId ||
         session.overId !== sourceDroppableId
       ) {
+        foreignGapRef.current = null;
         setForeignGap(null);
         return;
       }
-      const client = orientation === "horizontal" ? session.x : session.y;
       const index = insertionIndex(
-        client,
+        orientation === "horizontal" ? session.x : session.y,
         itemsRef.current,
         itemEls.current,
         orientation
       );
+      const next = { height: session.height, index };
+      foreignGapRef.current = next;
       setForeignGap((current) =>
         current && current.index === index && current.height === session.height
           ? current
-          : { height: session.height, index }
+          : next
       );
     });
   }, [onDropItem, orientation, sourceDroppableId]);
@@ -217,7 +229,7 @@ export function Sortable({
     const positionGhost = (x: number, y: number) => {
       const ghost = ghostRef.current;
       if (ghost) {
-        ghost.style.transform = `translate(${x - grabX}px, ${y - grabY}px) rotate(1.5deg) scale(1.02)`;
+        ghost.style.transform = `translate(${x - grabX}px, ${y - grabY}px)`;
       }
     };
 
@@ -263,6 +275,10 @@ export function Sortable({
         applyPreview(itemsRef.current.filter((id) => id !== itemId));
         return;
       }
+      if (!reorderable) {
+        applyPreview(null);
+        return;
+      }
       const visual = (previewOrderRef.current ?? [...itemsRef.current]).filter(
         (id) => id !== itemId
       );
@@ -293,25 +309,35 @@ export function Sortable({
       cancelAnimationFrame(rafId);
       document.body.style.userSelect = "";
       const finalOrder = previewOrderRef.current;
-      setDraggingId(null);
-      setGhostRect(null);
-      applyPreview(null);
-      setDropOver(null);
-      publishSortableDrag(null);
-      if (!commit) {
-        return;
-      }
-      const overId = droppableIdFromPoint(upEvent.clientX, upEvent.clientY);
-      if (overId && overId !== sourceDroppableId) {
-        const insert = sortableInsertHandler(overId);
-        if (insert) {
-          insert(itemId, upEvent.clientX, upEvent.clientY);
-          return;
+      const overId = commit
+        ? droppableIdFromPoint(upEvent.clientX, upEvent.clientY)
+        : null;
+      // Native pointerup is outside React's event flush. Commit the board
+      // first so the optimistic order paints instead of the pre-drag list.
+      try {
+        if (commit) {
+          if (overId && overId !== sourceDroppableId) {
+            const insert = sortableInsertHandler(overId);
+            flushSync(() => {
+              if (insert) {
+                insert(itemId, upEvent.clientX, upEvent.clientY);
+              } else {
+                droppableHandler(overId)?.(itemId);
+              }
+            });
+          } else if (reorderable) {
+            flushSync(() => {
+              onReorder(finalOrder ?? [...itemsRef.current]);
+            });
+          }
         }
-        droppableHandler(overId)?.(itemId);
-        return;
+      } finally {
+        setDraggingId(null);
+        setGhostRect(null);
+        applyPreview(null);
+        setDropOver(null);
+        publishSortableDrag(null);
       }
-      onReorder(finalOrder ?? [...itemsRef.current]);
     };
     const onUp = (upEvent: PointerEvent) => finish(upEvent, true);
     const onCancel = (upEvent: PointerEvent) => finish(upEvent, false);
@@ -344,8 +370,8 @@ export function Sortable({
     if (event.button !== 0) {
       return;
     }
-    const target = event.target;
-    if (target instanceof Element && target.closest(DRAG_IGNORE_SELECTOR)) {
+    const target = eventTargetElement(event.target);
+    if (target?.closest(DRAG_IGNORE_SELECTOR)) {
       return;
     }
     startDrag(itemId, event);
@@ -425,12 +451,12 @@ export function Sortable({
         ? createPortal(
             <div
               aria-hidden
-              className="pointer-events-none fixed top-0 left-0 z-50 rounded-lg opacity-95 shadow-2xl ring-2 ring-ring/20"
+              className="pointer-events-none fixed top-0 left-0 z-50 rounded-lg bg-background opacity-95 shadow-lg ring-1 ring-ring/30 [&_*]:pointer-events-none"
               data-slot="dnd-ghost"
               ref={(node) => {
                 ghostRef.current = node;
                 if (node) {
-                  node.style.transform = `translate(${ghostRect.x}px, ${ghostRect.y}px) rotate(1.5deg) scale(1.02)`;
+                  node.style.transform = `translate(${ghostRect.x}px, ${ghostRect.y}px)`;
                 }
               }}
               style={{

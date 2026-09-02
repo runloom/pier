@@ -24,6 +24,8 @@ export type GitReviewPatchStateReason =
 export type GitReviewPatchMaterial =
   | {
       readonly kind: "patch";
+      readonly newContents?: string;
+      readonly oldContents?: string;
       readonly patch: string;
       readonly sourceOid: string | null;
       readonly sourceRevision: string;

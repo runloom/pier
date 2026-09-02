@@ -200,7 +200,7 @@ export function registerCherryPickActions(
     registerSequencerRunAction(
       context,
       {
-        commandFallback: "git: Cherry-pick Commit...",
+        commandFallback: "GIT: Cherry-pick Commit...",
         commandId: "pier.git.cherryPick",
         conflictBodyFallback:
           "Cherry-pick paused due to conflicts. Resolve them, then continue.",
@@ -218,7 +218,7 @@ export function registerCherryPickActions(
     registerSequencerAbortAction(
       context,
       {
-        commandFallback: "git: Abort Cherry-pick",
+        commandFallback: "GIT: Abort Cherry-pick",
         commandId: "pier.git.cherryPickAbort",
         kind: "cherry-picking",
       },
@@ -227,7 +227,7 @@ export function registerCherryPickActions(
     registerSequencerContinueAction(
       context,
       {
-        commandFallback: "git: Continue Cherry-pick",
+        commandFallback: "GIT: Continue Cherry-pick",
         commandId: "pier.git.cherryPickContinue",
         kind: "cherry-picking",
       },
@@ -248,7 +248,7 @@ export function registerRevertActions(
     registerSequencerRunAction(
       context,
       {
-        commandFallback: "git: Revert Commit...",
+        commandFallback: "GIT: Revert Commit...",
         commandId: "pier.git.revert",
         conflictBodyFallback:
           "Revert paused due to conflicts. Resolve them, then continue.",
@@ -266,7 +266,7 @@ export function registerRevertActions(
     registerSequencerAbortAction(
       context,
       {
-        commandFallback: "git: Abort Revert",
+        commandFallback: "GIT: Abort Revert",
         commandId: "pier.git.revertAbort",
         kind: "reverting",
       },
@@ -275,7 +275,7 @@ export function registerRevertActions(
     registerSequencerContinueAction(
       context,
       {
-        commandFallback: "git: Continue Revert",
+        commandFallback: "GIT: Continue Revert",
         commandId: "pier.git.revertContinue",
         kind: "reverting",
       },
@@ -300,7 +300,7 @@ export function registerUndoCommitAction(
       const title = commandTitle(
         context,
         "pier.git.undoLastCommit",
-        "git: Undo Last Commit"
+        "GIT: Undo Last Commit"
       );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
@@ -359,6 +359,6 @@ export function registerUndoCommitAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.undoLastCommit", "git: Undo Last Commit"),
+      commandTitle(context, "pier.git.undoLastCommit", "GIT: Undo Last Commit"),
   });
 }

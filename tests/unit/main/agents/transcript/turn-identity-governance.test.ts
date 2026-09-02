@@ -16,6 +16,8 @@ describe("transcript turn identity governance", () => {
     expect(agents).toContain("PromptSubmit 文件水位");
     expect(agents).toContain("evidenceSource=host");
     expect(agents).toContain("turn-identity-governance.test.ts");
+    expect(agents).toContain("foreground-activity-transcript-unseal.test.ts");
+    expect(agents).toContain("无回合身份");
   });
 
   it("requires transcript-reconciler agents to declare turn identity", () => {

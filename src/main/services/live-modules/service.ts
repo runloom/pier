@@ -224,7 +224,11 @@ export function createLiveModulesService(
 
     async compile(rootId, relPath) {
       const registered = roots.get(rootId);
+      // Official plugin applets compile from the plugin package, not project
+      // canvas files — skip the first-open canvas trust gate.
+      const isPluginApplet = relPath.startsWith("@pier-applet/");
       if (
+        !isPluginApplet &&
         registered?.projectRoot &&
         options.resolveProjectTrust &&
         !(await options.resolveProjectTrust(registered.projectRoot))

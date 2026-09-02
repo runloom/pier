@@ -93,6 +93,8 @@ function shouldFocusRendererWindow(command: RendererCommand): boolean {
     case "files.openDisk":
     case "terminal.open":
       return command.focus ?? true;
+    case "git.openReviewPanel":
+      return true;
     case "panel.close":
     case "panel.equalize":
     case "panel.list":

@@ -83,6 +83,8 @@ function createClient(
 ): PierMobileClient {
   return new PierMobileClient({
     createWebSocket: (url) => new MockWebSocket(url),
+    // 既有时序断言按精确毫秒锁定：默认关掉抖动，抖动单独测。
+    reconnectJitterRatio: 0,
     reconnectInitialMs: 100,
     reconnectMaxMs: 400,
     ...options,
@@ -364,6 +366,23 @@ describe("PierMobileClient", () => {
     expect(MockWebSocket.instances).toHaveLength(3);
     await vi.advanceTimersByTimeAsync(1);
     expect(MockWebSocket.instances).toHaveLength(4);
+    client.close();
+  });
+
+  it("退避带加性抖动：delay = base × (1 + ratio × random)", async () => {
+    vi.useFakeTimers();
+    // random 恒 1、ratio 0.3 → 首次退避 100ms × 1.3 = 130ms
+    const client = createClient({ random: () => 1, reconnectJitterRatio: 0.3 });
+    const handshake = client.connect(CONNECT_ARGS);
+    handshake.catch(() => undefined);
+    expect(MockWebSocket.instances).toHaveLength(1);
+    lastSocket().emitClose();
+    expect(client.status).toBe("reconnecting");
+
+    await vi.advanceTimersByTimeAsync(129);
+    expect(MockWebSocket.instances).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(MockWebSocket.instances).toHaveLength(2);
     client.close();
   });
 

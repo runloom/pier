@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isInstallerKillRattleLine,
   isProgressNoiseLine,
   parseProgressPercent,
   sanitizeProcessOutput,
@@ -33,6 +34,34 @@ describe("agent lifecycle process output", () => {
       "10%####\r50%##########\r99%####################\rerror: boom\n";
     const cleaned = sanitizeProcessOutput(raw);
     expect(cleaned).toBe("error: boom");
+  });
+
+  it("drops npm SIGTERM / --force rattle from a timed-out install", () => {
+    const raw = [
+      "npm warn using --force Recommended protections disabled.",
+      "npm error process terminated",
+      "npm error signal SIGTERM",
+      "npm error A complete log of this run can be found in: /Users/dev/.npm/_logs/debug.log",
+    ].join("\n");
+    expect(isInstallerKillRattleLine(raw.split("\n")[0] ?? "")).toBe(true);
+    expect(sanitizeProcessOutput(raw)).toBe("");
+  });
+
+  it("keeps real errors while dropping npm self-error companions", () => {
+    const raw = [
+      "npm warn using --force Recommended protections disabled.",
+      "npm error Exit handler never called!",
+      "npm error This is an error with npm itself. Please report this error at:",
+      "npm error   <https://github.com/npm/cli/issues>",
+      "npm error code EACCES",
+      "npm error A complete log of this run can be found in:",
+      "    /Users/dev/.npm/_logs/debug-0.log",
+    ].join("\n");
+    const cleaned = sanitizeProcessOutput(raw);
+    expect(cleaned).toBe("npm error code EACCES");
+    expect(cleaned).not.toContain("Exit handler");
+    expect(cleaned).not.toContain("github.com/npm");
+    expect(cleaned).not.toContain("_logs");
   });
 
   it("parses last percent from a chunk", () => {

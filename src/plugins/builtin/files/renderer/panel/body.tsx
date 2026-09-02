@@ -420,6 +420,7 @@ export function ResolvedFilePanel({
           markdownInitialAnchor={markdownAnchor}
           markdownInitialAnchorRequestId={markdownAnchorRequestId}
           markdownLabels={createMarkdownRendererLabels(t)}
+          markdownLiveModules={context?.liveModules}
           markdownSource={
             document.source.kind === "disk" ? document.source : undefined
           }
@@ -430,7 +431,8 @@ export function ResolvedFilePanel({
           onJumpToSource={
             onModeChange
               ? (offset) => {
-                  // Bypass viewport capture: double-click means this block start.
+                  // Bypass viewport capture: ⌥+double-click / context-menu
+                  // jump targets this block's start.
                   onModeChange("source");
                   controller.revealOffset(editorSessionId, offset, document.id);
                 }

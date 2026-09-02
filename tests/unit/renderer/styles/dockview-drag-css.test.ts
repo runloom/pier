@@ -23,6 +23,12 @@ describe("Pier dockview drag CSS", () => {
       ".dockview-theme-pier .dv-drop-target-container .dv-drop-target-anchor"
     );
     expect(css).toContain("box-shadow: inset 0 0 0 1px");
+    expect(css).not.toContain(
+      "html[data-pier-panel-transfer-native-drop-hidden]"
+    );
+    expect(css).toContain(
+      ".dockview-theme-pier .dv-tab[data-pier-panel-transfer-in-transit]"
+    );
   });
 
   it("makes the dragged tab ghost compact and removes the default focus outline", () => {

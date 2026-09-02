@@ -55,7 +55,11 @@ describe("EnterKeyPlugin IME Enter", () => {
         />
         <CaptureEditor editorRef={editorRef} />
         <SeedDraft text="实" />
-        <EnterKeyPlugin menuOpenRef={{ current: false }} onSend={onSend} />
+        <EnterKeyPlugin
+          isImeHeld={() => false}
+          menuOpenRef={{ current: false }}
+          onSend={onSend}
+        />
       </LexicalComposer>
     );
     const root = screen.getByTestId("ime-enter-root");
@@ -69,5 +73,42 @@ describe("EnterKeyPlugin IME Enter", () => {
     expect(allowed).toBe(true);
     expect(editorRef.current).not.toBeNull();
     expect(readLexicalPlainText(editorRef.current as LexicalEditor)).toBe("实");
+  });
+
+  it("does not send leftover Enter while the composition gate is held", () => {
+    const onSend = vi.fn();
+    render(
+      <LexicalComposer
+        initialConfig={{
+          namespace: "ime-enter-held",
+          onError: (error) => {
+            throw error;
+          },
+        }}
+      >
+        <PlainTextPlugin
+          contentEditable={
+            <ContentEditable data-testid="ime-enter-held-root" />
+          }
+          ErrorBoundary={LexicalErrorBoundary}
+          placeholder={null}
+        />
+        <EnterKeyPlugin
+          isImeHeld={() => true}
+          menuOpenRef={{ current: false }}
+          onSend={onSend}
+        />
+      </LexicalComposer>
+    );
+    const allowed = fireEvent.keyDown(
+      screen.getByTestId("ime-enter-held-root"),
+      {
+        isComposing: false,
+        key: "Enter",
+        keyCode: 13,
+      }
+    );
+    expect(onSend).not.toHaveBeenCalled();
+    expect(allowed).toBe(true);
   });
 });

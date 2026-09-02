@@ -116,7 +116,7 @@ describe("Settings plugins section", () => {
     usePluginRegistryStore.setState(REGISTRY_INITIAL_STATE);
   });
 
-  it("插件列表始终以摘要行展示：名称/状态/来源/计数摘要，不含底层 ID、命令表或权限明细", async () => {
+  it("插件列表只展示名称、状态、描述和动作，不含贡献计数、权限明细和底层 ID", async () => {
     const enabledWorktree = pluginEntry({
       enabled: true,
       id: "pier.worktree",
@@ -185,21 +185,24 @@ describe("Settings plugins section", () => {
       screen.queryByRole("button", { name: "Show Worktree details" })
     ).not.toBeInTheDocument();
 
-    // 计数摘要行(图标+文案)直接可见, 不需要展开任何详情。
     const worktreeRow = within(screen.getByTestId("plugin-row-pier.worktree"));
-    expect(worktreeRow.getByText("1 command")).toBeVisible();
-    expect(worktreeRow.getByText("1 terminal status item")).toBeVisible();
+    expect(worktreeRow.queryByText("1 command")).not.toBeInTheDocument();
+    expect(
+      worktreeRow.queryByText("1 terminal status item")
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Disable Worktree" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Worktree" }));
 
     await waitFor(() => {
       expect(disable).toHaveBeenCalledWith("pier.worktree");
     });
+    await waitFor(() => {
+      expect(
+        screen.getByRole("switch", { name: "Worktree" })
+      ).not.toBeChecked();
+    });
     expect(
-      await screen.findByRole("button", { name: "Enable Worktree" })
-    ).toBeVisible();
-    expect(
-      screen.queryByRole("button", { name: "Enable Local Example" })
+      screen.queryByRole("switch", { name: "Local Example" })
     ).not.toBeInTheDocument();
     expect(enable).not.toHaveBeenCalled();
   });
@@ -241,7 +244,7 @@ describe("Settings plugins section", () => {
     });
   });
 
-  it("中文环境下使用插件 manifest 自带 locale 展示名称、描述和启停按钮", async () => {
+  it("中文环境下使用插件 manifest 自带 locale 展示名称、描述和启停开关", async () => {
     await i18next.changeLanguage("zh-CN");
     const enabledWorktree = pluginEntry({
       description:
@@ -315,17 +318,16 @@ describe("Settings plugins section", () => {
     expect(screen.getByText("本地示例")).toBeVisible();
     expect(screen.getByText("本地示例插件")).toBeVisible();
     expect(screen.queryByText("pier.worktree.list")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "停用工作树" })).toBeVisible();
+    expect(screen.getByRole("switch", { name: "工作树" })).toBeVisible();
     expect(screen.getByText("仅显示信息")).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "显示工作树详情" })
     ).not.toBeInTheDocument();
 
-    // 命令/状态项标题不再单独展示, 只展示 i18n 计数摘要。
     expect(screen.queryByText("工作树列表")).not.toBeInTheDocument();
     expect(screen.queryByText("工作树状态")).not.toBeInTheDocument();
     const worktreeRow = within(screen.getByTestId("plugin-row-pier.worktree"));
-    expect(worktreeRow.getByText("1 个命令")).toBeVisible();
-    expect(worktreeRow.getByText("1 个终端状态项")).toBeVisible();
+    expect(worktreeRow.queryByText("1 个命令")).not.toBeInTheDocument();
+    expect(worktreeRow.queryByText("1 个终端状态项")).not.toBeInTheDocument();
   });
 });

@@ -686,4 +686,46 @@ describe("bin/pier.mjs", () => {
     });
     await server.close();
   });
+
+  it("prints an English next-step for missing path-open files", async () => {
+    const userDataDir = await makeTempDir();
+    const socketPath = resolveLocalControlSocketPath(userDataDir, "darwin");
+    const machineMessage =
+      "path not found: /tmp/pier-does-not-exist-xyz. Pier does not create files. Create it first, then retry.";
+    const server = createPierLocalControlServer({
+      handleRequest: (envelope) => {
+        const parsed = pierCommandEnvelopeSchema.parse(envelope);
+        return Promise.resolve({
+          error: {
+            code: "not_found",
+            message: machineMessage,
+          },
+          ok: false,
+          requestId: parsed.requestId,
+        });
+      },
+      socketPath,
+    });
+    await server.start();
+    const env = cliTestEnv({ PIER_CONTROL_SOCKET_PATH: socketPath });
+
+    await expect(
+      execFileAsync("node", ["bin/pier.mjs", "/tmp/pier-does-not-exist-xyz"], {
+        env,
+      })
+    ).rejects.toMatchObject({
+      stderr: `${machineMessage}\n`,
+    });
+
+    await expect(
+      execFileAsync(
+        "node",
+        ["bin/pier.mjs", "/tmp/pier-does-not-exist-xyz", "--json"],
+        { env }
+      )
+    ).rejects.toMatchObject({
+      stdout: expect.stringContaining(machineMessage),
+    });
+    await server.close();
+  });
 });

@@ -1,13 +1,12 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parsePierCanvasMeta } from "@shared/contracts/pier-canvas.ts";
 import { cleanup, render } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
-const TEMPLATE_MODULES = import.meta.glob<Record<string, unknown>>(
-  "../../../resources/system-skills/pier-canvas/templates/*.canvas.tsx",
-  { eager: true }
+const TEMPLATE_LOADERS = import.meta.glob<Record<string, unknown>>(
+  "../../../resources/system-skills/pier-canvas/templates/*.canvas.tsx"
 );
 
 const TEMPLATES_DIR = join(
@@ -22,10 +21,23 @@ function templateSource(name: string): string {
 afterEach(cleanup);
 
 describe("bundled Pier Canvas templates", () => {
-  it("direct-mounts one template for every Canvas kind against the host export facade", () => {
+  it("direct-mounts one template for every Canvas kind against the host export facade", async () => {
     const kinds = new Set<string>();
+    let appletBacked = 0;
 
-    for (const [path, module] of Object.entries(TEMPLATE_MODULES)) {
+    for (const [path, load] of Object.entries(TEMPLATE_LOADERS)) {
+      const name = path.split("/").at(-1);
+      if (!name) {
+        throw new Error(`unrecognized template path: ${path}`);
+      }
+      const source = templateSource(name);
+      if (source.includes("@pier-applet/")) {
+        appletBacked += 1;
+        expect(source).toContain("export default function");
+        expect(source).toContain("export const canvas");
+        continue;
+      }
+      const module = await load();
       const Canvas = module.default as ComponentType | undefined;
       if (typeof Canvas !== "function") {
         throw new Error(`${path} must default-export a component`);
@@ -44,6 +56,7 @@ describe("bundled Pier Canvas templates", () => {
       unmount();
     }
 
+    expect(appletBacked).toBeGreaterThan(0);
     expect([...kinds].sort()).toEqual(["composition", "docs", "kit"]);
   });
 
@@ -73,20 +86,19 @@ describe("bundled Pier Canvas templates", () => {
     expect(source).not.toContain("h-auto");
   });
 
-  it("keeps the kanban starter wired to sibling-file persistence", () => {
-    // recipe=board teaching contract: disk is the source of truth. The
-    // starter must actually read/write/watch board.json, not just import
-    // the hook (that regression shipped once).
-    const source = templateSource("kanban.canvas.tsx");
-    expect(source).toContain("useCanvasFile");
-    expect(source).toContain("file.read(");
-    expect(source).toContain("file.write(");
-    expect(source).toContain("file.watch(");
-    expect(source).toContain("schemaVersion");
-    expect(source).toContain("onDropItem");
-    // `justify` takes CSS values; "between" silently does nothing.
-    expect(source).not.toContain('justify="between"');
-    expect(source).toContain("cardsRef");
-    expect(source).toContain("persistLatest");
+  it("keeps tracker skins as thin applet islands, not a local ledger", () => {
+    for (const name of ["task-list.canvas.tsx", "task-dag.canvas.tsx"]) {
+      const source = templateSource(name);
+      expect(source).toContain("@pier-applet/pier.tasks/");
+      expect(source).toContain('from "pier/canvas"');
+      expect(source).toContain("<Frame");
+      expect(source).toContain("export default function");
+      expect(source).not.toContain("useCanvasFile");
+      expect(source).not.toContain("board.json");
+      expect(source).not.toContain("tracker-board");
+    }
+    expect(existsSync(join(TEMPLATES_DIR, "tracker-board.canvas.tsx"))).toBe(
+      false
+    );
   });
 });

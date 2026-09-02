@@ -7,7 +7,6 @@ import {
   TableRow,
 } from "@pier/ui/table.tsx";
 import { type ReactElement, useRef } from "react";
-import { contentHashForBlock } from "../comments/target.ts";
 import type { MarkdownBlock } from "../ir.ts";
 import { type MarkdownRenderContext, renderInlines } from "../ir-inlines.tsx";
 import {
@@ -15,6 +14,7 @@ import {
   sourceBlockProps,
   tableAlignment,
 } from "../ir-render-helpers.ts";
+import { tableWidthsKey } from "./structure-key.ts";
 import {
   TableColumnResizeHandle,
   useTableColumnResize,
@@ -37,15 +37,14 @@ export function MarkdownTableView({
   const tableRef = useRef<HTMLTableElement | null>(null);
   const header = block.rows[0];
   const body = block.rows.slice(1);
-  // Non-commentable (empty) tables and unsaved files get no resize handles.
-  const contentHash = contentHashForBlock(block);
-  const resizable = contentHash !== null && Boolean(context.source);
+  const widthsKey = tableWidthsKey(block);
+  const resizable = widthsKey !== null && Boolean(context.source);
   const resize = useTableColumnResize({
     columnCount: header ? header.cells.length : 0,
-    contentHash: contentHash ?? "",
     containerRef: wrapRef,
     sourcePath: context.source?.path,
     tableRef,
+    widthsKey: widthsKey ?? "",
   });
   if (!header) return null;
   return (
@@ -56,10 +55,7 @@ export function MarkdownTableView({
       ref={wrapRef}
       {...resize.wrapProps}
     >
-      <Table
-        ref={tableRef}
-        style={resize.widths ? { tableLayout: "fixed" } : undefined}
-      >
+      <Table ref={tableRef} style={resize.tableStyle}>
         {resize.colgroup}
         <TableHeader>
           <TableRow>
@@ -72,6 +68,7 @@ export function MarkdownTableView({
                 {resizable ? (
                   <TableColumnResizeHandle
                     ariaLabel={context.labels.resizeColumn}
+                    autoValueText={context.labels.columnWidthAuto}
                     columnIndex={index}
                     head={resize.headProps}
                     width={resize.widths?.[String(index)]}

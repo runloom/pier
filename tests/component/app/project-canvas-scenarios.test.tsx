@@ -1,6 +1,6 @@
 import { parsePierCanvasMeta } from "@shared/contracts/pier-canvas.ts";
 import { PIER_CANVAS_EXPORT_NAMES } from "@shared/pier-canvas-export-names.ts";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -31,6 +31,7 @@ function displayPath(path: string): string {
 
 const IN_REPO_REACT_CANVASES = [
   "canvas-kit/canvas-kit.canvas.tsx",
+  "mobile-web-shell/mobile-web-shell.canvas.tsx",
   "pier-cli-user-manual/pier-cli-user-manual.canvas.tsx",
   "smoke/hello.canvas.tsx",
 ] as const;
@@ -42,7 +43,7 @@ describe("project canvases render", () => {
     );
   });
 
-  it("finds exactly the in-repo React canvases (canvas-kit + cli manual + smoke)", () => {
+  it("finds exactly the in-repo React canvases (kit + mobile shell + cli manual + smoke)", () => {
     const relative = Object.keys(CANVAS_MODULES)
       .filter((path) => !path.endsWith(".canvas.solid.tsx"))
       .map((path) => path.replace("../../../.pier/canvases/", ""))
@@ -68,6 +69,51 @@ describe("project canvases render", () => {
       expect(parsePierCanvasMeta(module.canvas)).not.toBeNull();
     });
   }
+
+  it("lets the mobile-web-shell pair frame toggle the viewfinder", () => {
+    const path = Object.keys(CANVAS_MODULES).find((entry) =>
+      entry.endsWith("mobile-web-shell/mobile-web-shell.canvas.tsx")
+    );
+    if (path === undefined) {
+      throw new Error("mobile-web-shell canvas is missing");
+    }
+    const Canvas = CANVAS_MODULES[path]?.default as ComponentType | undefined;
+    if (typeof Canvas !== "function") {
+      throw new Error(
+        "mobile-web-shell canvas must default-export a component"
+      );
+    }
+    render(<Canvas />);
+    expect(screen.getByText("对准二维码")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "停止扫码" }));
+    expect(screen.getByText("取景框")).not.toBeNull();
+  });
+
+  it("pushes the session overlay from the mobile-web-shell prototype", () => {
+    const path = Object.keys(CANVAS_MODULES).find((entry) =>
+      entry.endsWith("mobile-web-shell/mobile-web-shell.canvas.tsx")
+    );
+    if (path === undefined) {
+      throw new Error("mobile-web-shell canvas is missing");
+    }
+    const Canvas = CANVAS_MODULES[path]?.default as ComponentType | undefined;
+    if (typeof Canvas !== "function") {
+      throw new Error(
+        "mobile-web-shell canvas must default-export a component"
+      );
+    }
+    render(<Canvas />);
+    const desk = screen.getAllByRole("button", { name: /办公桌 Mac mini/ })[0];
+    const tree = screen.getAllByRole("button", { name: /feat-mobile/ })[0];
+    if (!(desk && tree)) {
+      throw new Error("mobile-web-shell host buttons are missing");
+    }
+    fireEvent.click(desk);
+    fireEvent.click(tree);
+    expect(
+      document.querySelector("[data-slot='mobile-slide-overlay']")
+    ).not.toBeNull();
+  });
 
   it("renders material cards with fixed well and flush chrome", () => {
     // 2026-08-24 修版：井固定 h-28 居中；卡去自身 py/gap，h-full 行内等高。

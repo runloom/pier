@@ -13,7 +13,11 @@ import {
 } from "../command-results.ts";
 import type { PierCoreServices } from "../command-router-services.ts";
 import { listPanels } from "./panel.ts";
-import { isTerminalComponent, resolveNativeKey } from "./terminal-locate.ts";
+import {
+  isTerminalComponent,
+  pickUniquePanel,
+  resolveNativeKey,
+} from "./terminal-locate.ts";
 
 type TerminalListCommand = Extract<PierCommand, { type: "terminal.list" }>;
 type TerminalGetCommand = Extract<PierCommand, { type: "terminal.get" }>;
@@ -41,18 +45,46 @@ export function agentIdFromParams(
   return;
 }
 
-function agentIdsByPanelId(services: PierCoreServices): Map<string, string> {
-  const map = new Map<string, string>();
-  try {
-    for (const e of services.agentRuntimeIndex.listMachine().entries) {
-      if (e.panelId && e.agentId) {
-        map.set(e.panelId, e.agentId);
-      }
+export interface AgentPanelIndex {
+  byScope: Map<string, string>;
+  uniqueByPanel: Map<string, string>;
+}
+
+export function indexAgentIdsByPanel(
+  entries: readonly {
+    agentId?: string | undefined;
+    panelId?: string | undefined;
+    windowId?: string | undefined;
+  }[]
+): AgentPanelIndex {
+  const byScope = new Map<string, string>();
+  const seen = new Map<string, string[]>();
+  for (const e of entries) {
+    if (e.panelId && e.agentId) {
+      byScope.set(`${e.windowId ?? ""}\0${e.panelId}`, e.agentId);
+      const ids = seen.get(e.panelId) ?? [];
+      ids.push(e.agentId);
+      seen.set(e.panelId, ids);
     }
-  } catch {
-    /* list 标注降级：无 Index 时仅靠 params */
   }
-  return map;
+  const uniqueByPanel = new Map<string, string>();
+  for (const [panelId, ids] of seen) {
+    // 词表不一致时：panelId 全局唯一才允许回退（跨窗同 id 禁止误绑）。
+    if (ids.length === 1 && ids[0]) {
+      uniqueByPanel.set(panelId, ids[0]);
+    }
+  }
+  return { byScope, uniqueByPanel };
+}
+
+function agentIdsByPanel(services: PierCoreServices): AgentPanelIndex {
+  try {
+    return indexAgentIdsByPanel(
+      services.agentRuntimeIndex.listMachine().entries
+    );
+  } catch {
+    return { byScope: new Map(), uniqueByPanel: new Map() };
+  }
 }
 
 export function toLocator(
@@ -71,14 +103,16 @@ export function toLocator(
     params?: Record<string, unknown> | undefined;
     display?: { short?: string | undefined } | undefined;
   },
-  indexAgentByPanel: Map<string, string>
+  index: AgentPanelIndex
 ) {
   const path =
     panel.context?.cwd ??
     panel.context?.projectRootPath ??
     panel.context?.worktreeKey;
   const fromParams = agentIdFromParams(panel.params);
-  const fromIndex = indexAgentByPanel.get(panel.id);
+  const fromIndex =
+    index.byScope.get(`${panel.windowId}\0${panel.id}`) ??
+    index.uniqueByPanel.get(panel.id);
   const agentId = fromParams ?? fromIndex;
   return {
     panelId: panel.id,
@@ -103,7 +137,7 @@ async function collectTerminals(
     windowId ? { type: "panel.list", windowId } : { type: "panel.list" },
     services as never
   );
-  const indexAgentByPanel = agentIdsByPanelId(services);
+  const indexAgentByPanel = agentIdsByPanel(services);
   return listed.panels
     .filter((p) => isTerminalComponent(p.component))
     .map((p) => toLocator(p, indexAgentByPanel));
@@ -124,15 +158,22 @@ export async function executeTerminalGetCommand(
   services: PierCoreServices
 ): Promise<PierCommandResult> {
   const terminals = await collectTerminals(services, command.windowId);
-  const hit = terminals.find((t) => t.panelId === command.panelId);
-  if (!hit) {
+  const picked = pickUniquePanel(
+    terminals,
+    command.panelId,
+    command.windowId,
+    (terminal) => terminal.panelId
+  );
+  if (!picked.ok) {
     return failure(
       requestId,
       "not_found",
-      `terminal panel not found: ${command.panelId}`
+      picked.reason === "ambiguous"
+        ? `terminal panel is ambiguous across windows: ${command.panelId}`
+        : `terminal panel not found: ${command.panelId}`
     );
   }
-  return success(requestId, { terminal: hit });
+  return success(requestId, { terminal: picked.item });
 }
 
 function keySequence(key: string): string | null {
@@ -165,18 +206,25 @@ async function resolvePanelForWrite(
   | { ok: false; result: PierCommandResult }
 > {
   const terminals = await collectTerminals(services, windowId);
-  const hit = terminals.find((t) => t.panelId === panelId);
-  if (!hit) {
+  const picked = pickUniquePanel(
+    terminals,
+    panelId,
+    windowId,
+    (terminal) => terminal.panelId
+  );
+  if (!picked.ok) {
     return {
       ok: false,
       result: failure(
         requestId,
         "not_found",
-        `terminal panel not found: ${panelId}`
+        picked.reason === "ambiguous"
+          ? `terminal panel is ambiguous across windows: ${panelId}`
+          : `terminal panel not found: ${panelId}`
       ),
     };
   }
-  return { ok: true, windowId: hit.windowId };
+  return { ok: true, windowId: picked.item.windowId };
 }
 
 export async function executeTerminalSendCommand(

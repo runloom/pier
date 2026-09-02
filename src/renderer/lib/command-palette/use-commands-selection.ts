@@ -1,9 +1,13 @@
 import { useEffect, useRef } from "react";
 import type { Action } from "@/lib/actions/types.ts";
-import type { ActionGroup } from "@/lib/command-palette/action-search.ts";
+import {
+  commandListHasItemValue,
+  firstCommandListItemValue,
+  type PresentedCommandGroup,
+} from "@/lib/command-palette/present-groups.ts";
 
 interface UseCommandPaletteCommandsSelectionOptions {
-  groups: readonly ActionGroup[];
+  groups: readonly PresentedCommandGroup[];
   mode: "commands" | "quick-pick";
   normalizedQuery: string;
   rankedActions: readonly Action[];
@@ -43,14 +47,12 @@ export function useCommandPaletteCommandsSelection({
       setSelectedValue(rankedActions[0]?.id ?? "");
       return;
     }
-    const firstId = groups[0]?.actions[0]?.id ?? "";
+    const firstId = firstCommandListItemValue(groups);
     if (!firstId) {
       setSelectedValue("");
       return;
     }
-    const stillVisible = groups.some((group) =>
-      group.actions.some((action) => action.id === selectedValue)
-    );
+    const stillVisible = commandListHasItemValue(groups, selectedValue);
     if (queryChanged || !stillVisible || selectedValue === "") {
       setSelectedValue(firstId);
     }

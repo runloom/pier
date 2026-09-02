@@ -1,12 +1,9 @@
 import type { DockviewApi } from "dockview-react";
-import { pickFocusTarget } from "@/lib/workspace/focus-target.ts";
+import {
+  GROUP_FOCUS_TOL_PX,
+  pickFocusTarget,
+} from "@/lib/workspace/focus-target.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
-
-/**
- * = pierTheme.gap (4) + 1. 改 gap 必须同步此常量.
- * 容忍像素让相邻 group 的边界比较不被 gap 卡掉.
- */
-const FOCUS_TOL_PX = 5;
 
 function getGroupElement(g: unknown): HTMLElement | null {
   const el = (g as { element?: HTMLElement } | null)?.element;
@@ -57,7 +54,7 @@ export function focusWorkspaceGroup(
     sourceRect,
     candidates,
     direction,
-    FOCUS_TOL_PX
+    GROUP_FOCUS_TOL_PX
   );
   if (targetIdx === null) {
     return;

@@ -1,13 +1,13 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
+import { Alert, AlertAction, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Empty,
-  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { LiveModuleMountError } from "@plugins/api/live-module-mount.ts";
 import type { LiveModuleDiagnostic } from "@shared/contracts/live-modules.ts";
@@ -17,7 +17,7 @@ import { removeLiveModuleCss } from "./css-cleanup.ts";
 
 /**
  * Presentational shells for the canvas preview: not-a-canvas, compile failure,
- * hot-reload soft error, ready chrome and the delayed loading skeleton.
+ * warning banner, ready chrome and the delayed loading skeleton.
  */
 
 /** esbuild / Chromium helper death — not a bad `.canvas.tsx` file. */
@@ -142,9 +142,10 @@ export function CanvasUnavailableEmpty(props: { t: FilesTranslate }) {
 }
 
 /**
- * Non-blocking banner while a previous successful mount is still visible
- * (hot-reload compile failure / warnings). Not for runtime crashes — those
- * clear the host and use {@link CanvasCompileErrorEmpty}.
+ * Flush infobar while the canvas body is still on screen (compile warnings).
+ * `Alert layout="infobar"` — same chrome as OutsideWorkspaceBanner and
+ * FileSaveErrorBanner. Compile failures and runtime crashes clear the host
+ * and use {@link CanvasCompileErrorEmpty}.
  */
 export function CanvasSoftErrorBanner(props: {
   message: string;
@@ -154,45 +155,34 @@ export function CanvasSoftErrorBanner(props: {
   const previewStopped = isCanvasPreviewStoppedFailure({
     message: props.message,
   });
-  let body: string;
+  const trimmed = props.message.trim();
+  let title: string;
   if (previewStopped) {
-    body = props.t(
-      "filePanel.canvas.previewStoppedHint",
-      "Preview stopped unexpectedly. Reload to try again."
+    title = props.t(
+      "filePanel.canvas.previewStopped",
+      "Couldn’t preview canvas"
     );
-  } else if (props.message.trim().length > 0) {
-    body = props.message;
+  } else if (trimmed.length > 0) {
+    title = trimmed;
   } else {
-    body = props.t(
-      "filePanel.canvas.compileFailedHint",
-      "Fix the canvas file or its imports, then reload."
+    title = props.t(
+      "filePanel.canvas.compiledWithWarnings",
+      "Canvas compiled with warnings"
     );
   }
-  const title = previewStopped
-    ? props.t("filePanel.canvas.previewStopped", "Couldn’t preview canvas")
-    : props.t("filePanel.canvas.compileFailed", "Couldn’t compile canvas");
   return (
-    <div
-      className="shrink-0 border-border border-b px-4 py-3"
+    <Alert
       data-slot="file-canvas-soft-error"
+      layout="infobar"
+      variant="warning"
     >
-      <Alert variant="warning">
-        <AlertTitle>{title}</AlertTitle>
-        <AlertDescription>
-          <p>{body}</p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              onClick={props.onReload}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {props.t("filePanel.canvas.reload", "Reload")}
-            </Button>
-          </div>
-        </AlertDescription>
-      </Alert>
-    </div>
+      <AlertTitle className="truncate">{title}</AlertTitle>
+      <AlertAction>
+        <Button onClick={props.onReload} type="button" variant="outline">
+          {props.t("filePanel.canvas.reload", "Reload")}
+        </Button>
+      </AlertAction>
+    </Alert>
   );
 }
 
@@ -229,9 +219,29 @@ function canvasErrorEmptyCopy(input: {
   };
 }
 
+function canvasErrorEmptyDescription(input: {
+  diagnostics: LiveModuleDiagnostic[];
+  hint: string;
+  message: string;
+  previewStopped: boolean;
+}): string {
+  if (input.previewStopped) {
+    return input.hint;
+  }
+  if (input.diagnostics.length > 0) {
+    return input.diagnostics.map(formatDiagnosticLocation).join(" · ");
+  }
+  const message = input.message.trim();
+  if (message.length > 0) {
+    return message;
+  }
+  return input.hint;
+}
+
 /**
- * Full-region error when there is no canvas body to show (first compile fail,
- * or runtime crash after ErrorBoundary nulls the tree).
+ * Full-region error when there is no canvas body to show (compile fail,
+ * including hot reload, or runtime crash after ErrorBoundary nulls the tree).
+ * Shared ErrorEmpty chrome — not a second Alert card.
  */
 export function CanvasCompileErrorEmpty(props: {
   diagnostics: LiveModuleDiagnostic[];
@@ -251,49 +261,23 @@ export function CanvasCompileErrorEmpty(props: {
     isRuntime: props.isRuntime,
     previewStopped,
   });
-  const showDiagnostics = !previewStopped && props.diagnostics.length > 0;
-  const showMessage =
-    !previewStopped &&
-    props.diagnostics.length === 0 &&
-    props.message.trim().length > 0;
+  const hint = props.t(copy.hintKey, copy.hintFallback);
   return (
-    <Empty className="min-h-64 py-12" data-slot="file-canvas-error-empty">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <FileQuestion />
-        </EmptyMedia>
-        <EmptyTitle>{props.t(copy.titleKey, copy.titleFallback)}</EmptyTitle>
-        <EmptyDescription>
-          {props.t(copy.hintKey, copy.hintFallback)}
-        </EmptyDescription>
-      </EmptyHeader>
-      {showDiagnostics ? (
-        <div
-          className="mx-auto w-full max-w-lg px-6 text-left"
-          data-slot="file-canvas-diagnostics"
-        >
-          <p className="mb-2 font-medium text-muted-foreground text-xs">
-            {props.t("filePanel.canvas.diagnosticsHeading", "Details")}
-          </p>
-          <ul className="flex list-disc flex-col gap-1.5 pl-4 text-muted-foreground text-xs">
-            {props.diagnostics.map((diagnostic) => {
-              const line = formatDiagnosticLocation(diagnostic);
-              return <li key={line}>{line}</li>;
-            })}
-          </ul>
-        </div>
-      ) : null}
-      {showMessage ? (
-        <div className="mx-auto w-full max-w-lg px-6 text-left">
-          <p className="text-muted-foreground text-xs">{props.message}</p>
-        </div>
-      ) : null}
-      <EmptyContent>
-        <Button onClick={props.onReload} type="button" variant="outline">
-          {props.t("filePanel.canvas.reload", "Reload")}
-        </Button>
-      </EmptyContent>
-    </Empty>
+    <ErrorEmpty
+      className="min-h-64"
+      data-slot="file-canvas-error-empty"
+      description={canvasErrorEmptyDescription({
+        diagnostics: props.diagnostics,
+        hint,
+        message: props.message,
+        previewStopped,
+      })}
+      retryAction={{
+        label: props.t("filePanel.canvas.reload", "Reload"),
+        onClick: props.onReload,
+      }}
+      title={props.t(copy.titleKey, copy.titleFallback)}
+    />
   );
 }
 

@@ -65,7 +65,10 @@ export interface ArtboardProps {
 export type ArtboardPreset = "desktop" | "laptop" | "phone" | "tablet";
 
 export interface WorldStageProps {
-  /** CSS background of the world plane. */
+  /**
+   * CSS background of the world plane. Artboard captions contrast against
+   * this floor; frame contents keep host theme tokens.
+   */
   background?: string;
   children?: ReactNode;
   className?: string;

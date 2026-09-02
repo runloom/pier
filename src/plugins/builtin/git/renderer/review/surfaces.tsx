@@ -414,6 +414,7 @@ function ReviewDocumentsComponent(
           responsiveUnified={responsiveUnified}
           setViewOptions={responsiveViewOptions.setOptions}
           showCommit={!committed}
+          showDiffStyle={activeSurface !== "conflict"}
           viewOptions={responsiveViewOptions.effectiveOptions}
         />
       }

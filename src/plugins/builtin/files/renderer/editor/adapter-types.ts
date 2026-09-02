@@ -82,6 +82,7 @@ export interface FileEditorAdapterProps {
   markdownInitialAnchor?: string | undefined;
   markdownInitialAnchorRequestId?: string | undefined;
   markdownLabels?: MarkdownRendererLabels | undefined;
+  markdownLiveModules?: RendererPluginContext["liveModules"] | undefined;
   markdownSource?: MarkdownDiskSource | undefined;
   markdownTocLabels?:
     | {
@@ -90,8 +91,10 @@ export interface FileEditorAdapterProps {
     | undefined;
   markdownZoomLabels?:
     | {
+        controlsLabel: string;
         reset: string;
         zoomIn: string;
+        zoomLevel: string;
         zoomOut: string;
       }
     | undefined;

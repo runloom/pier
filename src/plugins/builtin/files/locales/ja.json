@@ -18,6 +18,18 @@
     "pier.files.editor.showHover": {
       "title": "シンボル情報を表示"
     },
+    "pier.files.editor.selectNextOccurrence": {
+      "title": "次の一致を選択"
+    },
+    "pier.files.editor.selectAllOccurrences": {
+      "title": "一致をすべて選択"
+    },
+    "pier.files.editor.addCursorAbove": {
+      "title": "上の行にカーソルを追加"
+    },
+    "pier.files.editor.addCursorBelow": {
+      "title": "下の行にカーソルを追加"
+    },
     "pier.files.revealActiveFileInTree": {
       "title": "ファイルツリーで現在のファイルを表示"
     }
@@ -63,15 +75,29 @@
     "filePanel.markdown.openFullscreen": "全画面で表示",
     "filePanel.markdown.incompleteTask": "未完了のタスク",
     "filePanel.markdown.renderFailed": "Markdown プレビューを描画できません。",
-    "filePanel.markdown.resizeColumn": "ドラッグで列の表示幅を調整します。ダブルクリックでリセット。",
+    "filePanel.markdown.columnWidthAuto": "自動幅",
+    "filePanel.markdown.jumpToSource": "ソースへ移動",
+    "filePanel.markdown.resizeColumn": "ドラッグで列の表示幅を調整します。ダブルクリックで表全体を自動幅に戻します。",
+    "filePanel.markdown.appletDisabledTitle": "この文書ではアプレットがオフです",
+    "filePanel.markdown.appletDisabledBody": "先頭付近に <!-- pier-applets: enable --> を追加すると表示されます。",
+    "filePanel.markdown.appletParseFailedTitle": "アプレット枠を読めませんでした",
+    "filePanel.markdown.appletParseFailedBody": "pluginId と appletId、任意の props を含む JSON を使ってください。",
+    "filePanel.markdown.appletMountFailedTitle": "アプレットを開けませんでした",
+    "filePanel.markdown.appletMountFailedBody": "再試行してください。まだ失敗する場合はプラグインがインストールされているか確認してください。",
     "filePanel.markdown.toc.title": "目次",
+    "filePanel.markdown.gitBars.track": "未コミットの変更",
+    "filePanel.markdown.gitBars.added": "{{line}} 行目の追加を見る",
+    "filePanel.markdown.gitBars.modified": "{{line}} 行目の編集を見る",
+    "filePanel.markdown.gitBars.deleted": "{{line}} 行目の削除を見る",
     "filePanel.markdown.measure.comfortable": "読みやすい幅",
     "filePanel.markdown.measure.wide": "広い幅",
     "filePanel.markdown.appearance.auto": "アプリの外観に合わせる",
     "filePanel.markdown.appearance.light": "ライトで読む",
     "filePanel.markdown.appearance.dark": "ダークで読む",
     "filePanel.markdown.contextMenuFailed": "プレビューメニューを開けません",
+    "filePanel.markdown.zoom.controlsLabel": "文字サイズ",
     "filePanel.markdown.zoom.in": "文字を大きくする",
+    "filePanel.markdown.zoom.level": "文字サイズ",
     "filePanel.markdown.zoom.out": "文字を小さくする",
     "filePanel.markdown.zoom.reset": "文字サイズをリセット",
     "filePanel.editor.sourceLabel": "ソースエディタ",
@@ -185,7 +211,7 @@
     "filePanel.languageService.nextStep.waitOrRestart": "再試行を待つか、繰り返す場合は Pier を再起動してください。",
     "filePanel.languageService.nextStep.focusEditor": "エディタをクリックすると、言語機能が再開します。",
     "filePanel.languageService.nextStep.installThenRestart": "下のインストールコマンドをターミナルで実行してから、Pier を再起動してください。",
-    "filePanel.languageService.nextStep.installOfficialTools": "このファイル種類の言語サーバーを PATH にインストール（「設定 → ファイル → ローカルツール」を参照）してから、Pier を再起動してください。",
+    "filePanel.languageService.nextStep.installOfficialTools": "このファイル種類の言語サーバーをインストールしてください（「設定 → ファイル → このパソコンの言語サーバー」）。その後 Pier を再起動してください。",
     "filePanel.languageService.nextStep.adjustLimit": "別のプロジェクトタブを閉じるか、「設定 → ファイル」で言語サービスの上限を上げてください。",
     "filePanel.languageService.nextStep.reinstallOrRestart": "Pier を再起動してください。続く場合は言語サーバーを再インストールしてください。",
     "filePanel.languageService.nextStep.restartApp": "Pier を再起動してから、ファイルを開き直してください。",
@@ -320,6 +346,7 @@
     "filePanel.tree.deleteFailed": "削除できません",
     "filePanel.tree.copyFailed": "コピーに失敗しました",
     "filePanel.tree.pathCopied": "パスをコピーしました",
+    "filePanel.tree.noPathToCopy": "先にファイルを開くか、ファイルツリーで選んでください。",
     "filePanel.tree.delete.title": "削除",
     "filePanel.tree.delete.body": "{{name}} を削除しますか？ゴミ箱から復元できます。",
     "filePanel.tree.delete.confirmLabel": "削除",
@@ -395,6 +422,10 @@
     "filePanel.editor.action.copy": "コピー",
     "filePanel.editor.action.paste": "ペースト",
     "filePanel.editor.action.selectAll": "すべてを選択",
+    "filePanel.editor.action.selectNextOccurrence": "次の一致を選択",
+    "filePanel.editor.action.selectAllOccurrences": "一致をすべて選択",
+    "filePanel.editor.action.addCursorAbove": "上の行にカーソルを追加",
+    "filePanel.editor.action.addCursorBelow": "下の行にカーソルを追加",
     "filePanel.editor.action.wordWrap.on": "折り返し：オン",
     "filePanel.editor.action.wordWrap.off": "折り返し：オフ",
     "filePanel.editor.clipboardFailed": "クリップボードを使えませんでした",
@@ -478,6 +509,7 @@
     "filePanel.contentSearch.action.open": "開く",
     "filePanel.contentSearch.action.copyMatch": "一致行をコピー",
     "filePanel.contentSearch.matchCopied": "一致行をコピーしました",
+    "filePanel.contentSearch.noHitToCopy": "先に検索結果を選んでください。",
     "filePanel.contentSearch.contextMenuFailed": "メニューを開けません",
     "filePanel.commentNav.toolbar": "コメント",
     "filePanel.commentNav.position": "コメント {{current}} / {{total}}",

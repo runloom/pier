@@ -186,6 +186,8 @@ describe("terminal runtime control", () => {
     expect(stop).toHaveAttribute("data-variant", "ghost");
     expect(stop).toHaveClass("text-action-danger");
     expect(restart).toHaveClass("text-action-accent");
+    expect(restart).not.toHaveAttribute("aria-busy");
+    expect(restart.querySelector("svg")).not.toHaveClass("animate-spin");
     expect(reveal).toHaveAttribute("data-tone", "muted");
     expectBefore(stop, restart);
     expectBefore(restart, reveal);
@@ -445,6 +447,9 @@ describe("terminal runtime control", () => {
       expect(selector).toBeDisabled();
       expect(screen.getByRole("button", { name: "Stop task" })).toBeDisabled();
       expect(restart).toBeDisabled();
+      expect(restart).toHaveAttribute("aria-busy", "true");
+      expect(restart.querySelector('[data-slot="spinner"]')).toBeNull();
+      expect(restart.querySelector("svg")).toHaveClass("animate-spin");
       expect(
         screen.getByRole("button", { name: "Reveal task terminal" })
       ).toBeDisabled();

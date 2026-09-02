@@ -33,6 +33,21 @@ export type ToastTarget =
 /** OS 投递目标（进程级唯一）。 */
 export type OsTarget = { mode: "none" } | { mode: "process" };
 
+/**
+ * M2 远程推送候选（规格 §12）：已配对且持有推送句柄的设备。
+ * `hasLiveSession` = 该设备当前有前台帧会话（LAN 或会合任一路径）——
+ * 有会话的设备自己会收到 waiting 快照，不推。
+ */
+export interface RemotePushCandidate {
+  deviceId: string;
+  hasLiveSession: boolean;
+}
+
+/** 远程推送目标：正交于 toast/OS（可与 toast 同发；见规格 §12 关键场景）。 */
+export type RemotePushTarget =
+  | { mode: "none" }
+  | { mode: "devices"; deviceIds: string[] };
+
 export interface DeliveryFocus {
   /** 是否存在存活且 focused 的 Pier 窗（key-window）。 */
   hasFocusedPierWindow: boolean;
@@ -72,6 +87,11 @@ export interface DeliveryPlan {
   /** OS 冷却键；inbox 合并仍走 dedupeKey。 */
   osCooldownKey?: string;
   osTarget: OsTarget;
+  /**
+   * M2 第三条正交通道（规格 §12）：目标设备无前台会话才推；
+   * **有 key-window 仍推**（与 toast 并行，不参与 toast/OS 互斥）。
+   */
+  remotePushTarget: RemotePushTarget;
   toastTarget: ToastTarget;
 }
 
@@ -178,12 +198,41 @@ export function shouldSilenceAgentInterrupt(
 }
 
 /**
- * 唯一打断决策。inbox 恒 true；toast 与 OS 互斥。
+ * M2 远程推送裁决（规格 §12，单独函数保证与 toast/OS 判定正交）：
+ * kind ∈ OS 白名单 ∧ 设备无前台会话 ∧ DND 规则（error 除外）。
+ * 静音/muted/suppressToast 由调用方（resolveDeliveryPlan）先行短路。
+ */
+function resolveRemotePushTarget(
+  input: DeliveryInput,
+  prefs: DeliveryPrefs,
+  candidates: readonly RemotePushCandidate[] | undefined
+): RemotePushTarget {
+  if (!candidates || candidates.length === 0) {
+    return { mode: "none" };
+  }
+  if (!OS_ELIGIBLE_KINDS.has(input.kind)) {
+    return { mode: "none" };
+  }
+  if (prefs.dndEnabled && input.severity !== "error") {
+    return { mode: "none" };
+  }
+  const deviceIds = candidates
+    .filter((candidate) => !candidate.hasLiveSession)
+    .map((candidate) => candidate.deviceId);
+  return deviceIds.length === 0
+    ? { mode: "none" }
+    : { mode: "devices", deviceIds };
+}
+
+/**
+ * 唯一打断决策。inbox 恒 true；toast 与 OS 互斥；remotePush 正交
+ * （有 key-window 仍推手机——规格 §12 关键场景）。
  */
 export function resolveDeliveryPlan(
   input: DeliveryInput,
   prefs: DeliveryPrefs,
-  focus: DeliveryFocus
+  focus: DeliveryFocus,
+  remote?: { candidates: readonly RemotePushCandidate[] }
 ): DeliveryPlan {
   const decision: NotificationDeliveryDecision = {
     inbox: true,
@@ -195,6 +244,7 @@ export function resolveDeliveryPlan(
     return {
       decision,
       osTarget: { mode: "none" },
+      remotePushTarget: { mode: "none" },
       toastTarget: { mode: "none" },
     };
   }
@@ -205,6 +255,7 @@ export function resolveDeliveryPlan(
     return {
       decision,
       osTarget: { mode: "none" },
+      remotePushTarget: { mode: "none" },
       toastTarget: { mode: "none" },
     };
   }
@@ -236,6 +287,7 @@ export function resolveDeliveryPlan(
   const plan: DeliveryPlan = {
     decision,
     osTarget,
+    remotePushTarget: resolveRemotePushTarget(input, prefs, remote?.candidates),
     toastTarget,
   };
 

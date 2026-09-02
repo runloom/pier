@@ -414,5 +414,14 @@ export async function validateManagedPluginPackage(
   }
   assertNoEvalUsage(rendererSource, "renderer bundle");
 
+  for (const applet of manifest.applets ?? []) {
+    const appletPath = join(options.packageDir, applet.entry);
+    const info = await stat(appletPath).catch(() => null);
+    if (!info?.isFile()) {
+      throw new Error(`applet entry is missing: ${applet.entry}`);
+    }
+    // Applet .tsx is compiled behind the live-module fence; do not eval-scan it.
+  }
+
   return { manifest };
 }

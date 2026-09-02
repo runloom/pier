@@ -130,6 +130,9 @@ export function registerGitReviewTreePathActions(options: {
   surfaces: readonly string[];
 }): () => void {
   const { context, parseItem, surfaces } = options;
+  const copyPathSurfaces = surfaces.filter(
+    (surface) => surface !== GIT_REVIEW_DIFF_SURFACE
+  );
   const resolvePathItem = (
     invocation: RendererPluginActionInvocation | undefined
   ): PathItem | null => {
@@ -150,9 +153,18 @@ export function registerGitReviewTreePathActions(options: {
     return liveCopyTargetProviders.get(panelId)?.() ?? null;
   };
 
+  const noPathToCopyReason = () =>
+    pluginText(
+      context,
+      "reviewTreeNoPathToCopy",
+      "Open or select a file first."
+    );
+
   const disposers = [
     context.actions.register({
       category: "git",
+      disabledReason: (invocation) =>
+        resolvePathItem(invocation) == null ? noPathToCopyReason() : null,
       enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
         const item = resolvePathItem(invocation);
@@ -184,11 +196,13 @@ export function registerGitReviewTreePathActions(options: {
         menuHidden: (invocation) => resolvePathItem(invocation) == null,
         sortOrder: 1,
       },
-      surfaces,
+      surfaces: copyPathSurfaces,
       title: () => pluginText(context, "reviewTreeCopyPath", "Copy Path"),
     }),
     context.actions.register({
       category: "git",
+      disabledReason: (invocation) =>
+        resolvePathItem(invocation) == null ? noPathToCopyReason() : null,
       enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
         const item = resolvePathItem(invocation);
@@ -218,12 +232,14 @@ export function registerGitReviewTreePathActions(options: {
         menuHidden: (invocation) => resolvePathItem(invocation) == null,
         sortOrder: 2,
       },
-      surfaces,
+      surfaces: copyPathSurfaces,
       title: () =>
         pluginText(context, "reviewTreeCopyRelativePath", "Copy Relative Path"),
     }),
     context.actions.register({
       category: "git",
+      disabledReason: (invocation) =>
+        resolvePathItem(invocation) == null ? noPathToCopyReason() : null,
       enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
         const item = resolvePathItem(invocation);

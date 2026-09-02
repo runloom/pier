@@ -7,7 +7,8 @@
  *   3. 同 group 内按 metadata.sortOrder 升序 (缺省 0), 同 sortOrder 按 title 字典序
  *
  * 快捷键 hint: 优先反查 action 自身绑定, 没有时再借用 shortcutSourceId,
- * 用 toElectronAccelerator 转 Electron 格式 (仅显示, 不绑定; 实际触发在 web keymap 路径).
+ * 再没有时用 displayChord（只显示）。toElectronAccelerator 转 Electron 格式
+ * (仅显示, 不绑定; 实际触发在 web keymap 路径).
  */
 import {
   getDiffCopyStickyText,
@@ -15,8 +16,8 @@ import {
 } from "@pier/ui/diff-view/selection/copy-sticky.ts";
 import type { MenuItem, MenuTemplate } from "@shared/contracts/menu.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
+import { resolveActionShortcutChord } from "@/lib/actions/shortcut-hint.ts";
 import type { Action, ActionInvocation } from "@/lib/actions/types.ts";
-import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import type { KeyChord } from "@/lib/keybindings/types.ts";
 import {
   captureDomSelectionText,
@@ -97,13 +98,8 @@ function sortOrderOf(a: Action): number {
 }
 
 function actionToMenuItem(a: Action, invocation?: ActionInvocation): MenuItem {
-  const binding = keybindingRegistry.getFirstBindingFor(
-    a.id,
-    a.metadata?.shortcutSourceId
-  );
-  const accelerator = binding
-    ? toElectronAccelerator(binding.chord)
-    : undefined;
+  const chord = resolveActionShortcutChord(a, invocation);
+  const accelerator = chord ? toElectronAccelerator(chord) : undefined;
   // 复制选区：metadata → DOM/provider；diff sticky 仅 git/review-diff 表面。
   const copyText =
     a.id === "pier.panel.copySelection"

@@ -21,6 +21,20 @@ describe("pierDiffItemPresentation", () => {
     expect(pierDiffItemPresentation({ kind: "image", patch: null })).toBe(
       "ready"
     );
+    expect(
+      pierDiffItemPresentation({
+        conflict: { contentsDigest: "estimate:section:1" },
+        kind: "conflict",
+        patch: null,
+      })
+    ).toBe("loading");
+    expect(
+      pierDiffItemPresentation({
+        conflict: { contentsDigest: "sha256:uu" },
+        kind: "conflict",
+        patch: null,
+      })
+    ).toBe("ready");
   });
 
   it("treats header-only state notices as ready empty content", () => {

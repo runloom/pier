@@ -56,7 +56,7 @@ describe("canvas stage governance", () => {
     const offenders = previewSources()
       .filter(({ name }) => name.includes("canvas"))
       .filter(({ text }) =>
-        /measureContainScale|zoomCameraAt|softClampCamera|fitCamera|clampZoom/.test(
+        /measureContainScale|zoomCameraAt|softClampCamera|fitCamera|clampZoom|cameraLookingAtWorld|worldPointAtViewportCenter/.test(
           text
         )
       )
@@ -137,6 +137,49 @@ describe("canvas stage governance", () => {
   it("does not wrap the live-module host in HtmlWorldCanvas", () => {
     const shell = read("src/plugins/builtin/files/renderer/preview/canvas.tsx");
     expect(shell).not.toContain("HtmlWorldCanvas");
+  });
+
+  it("remembers board camera by path, not compile nonce", () => {
+    const viewport = read(
+      "src/plugins/builtin/files/renderer/preview/use-canvas-stage-viewport.ts"
+    );
+    expect(viewport).toContain("resetKey: cameraMemoryKey");
+    expect(viewport).not.toMatch(/\$\{path\}:\$\{nonce\}/u);
+    expect(viewport).toContain("rememberCanvasWorldCamera");
+    expect(viewport).toContain("recallCanvasWorldCamera");
+  });
+
+  it("splits world zoom and comment navigator into two bottom pills", () => {
+    const shell = read("src/plugins/builtin/files/renderer/preview/canvas.tsx");
+    const controls = read("packages/ui/src/image-preview/controls.tsx");
+    const navigator = read("packages/ui/src/comments/navigator.tsx");
+    expect(shell).not.toContain("start={commentNavigator}");
+    expect(shell).not.toContain('anchor={worldActive ? "start" : "center"}');
+    expect(shell).not.toContain('align="end"');
+    expect(controls).toContain("justify-end");
+    expect(controls).not.toContain("justify-center");
+    expect(controls).toContain("includeFit = true");
+    expect(controls).toContain("PRESET_ZOOM_LEVELS");
+    expect(navigator).toContain("Trash2");
+    expect(navigator).not.toContain("rounded-full px-2.5");
+  });
+
+  it("shares one zoom pill across image, mermaid, board, and markdown reading", () => {
+    expect(read("packages/ui/src/image-preview/canvas.tsx")).toContain(
+      "<ImagePreviewControls"
+    );
+    expect(read("packages/ui/src/image-preview/world-canvas.tsx")).toContain(
+      "<ImagePreviewControls"
+    );
+    expect(
+      read("src/plugins/builtin/files/renderer/preview/canvas.tsx")
+    ).toContain("<ImagePreviewControls");
+    expect(
+      read("src/plugins/builtin/files/renderer/markdown/preview-font-scale.tsx")
+    ).toContain("<ImagePreviewControls");
+    expect(read("packages/ui/src/mermaid/scene.tsx")).toContain(
+      "HtmlWorldCanvas"
+    );
   });
 
   it("matches markdown 13px body on the DocsShell reading surface", () => {

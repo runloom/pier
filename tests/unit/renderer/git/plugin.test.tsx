@@ -224,43 +224,43 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
           commands: {
             "pier.git.merge": {
               aliases: ["locale git merge"],
-              title: "git: Merge Branch...",
+              title: "GIT: Merge Branch...",
             },
             "pier.git.switchBranch": {
               aliases: ["locale git switch branch"],
-              title: "git: Switch Branch...",
+              title: "GIT: Switch Branch...",
             },
             "pier.git.mergeAbort": {
               aliases: ["locale git merge abort"],
-              title: "git: Abort Merge",
+              title: "GIT: Abort Merge",
             },
             "pier.git.stash": {
               aliases: ["locale git stash"],
-              title: "git: Stash",
+              title: "GIT: Stash",
             },
             "pier.git.stashPop": {
               aliases: ["locale git stash pop"],
-              title: "git: Pop Stash...",
+              title: "GIT: Pop Stash...",
             },
             "pier.git.rebase": {
               aliases: ["locale git rebase"],
-              title: "git: Rebase Branch...",
+              title: "GIT: Rebase Branch...",
             },
             "pier.git.rebaseAbort": {
               aliases: ["locale git rebase abort"],
-              title: "git: Abort Rebase",
+              title: "GIT: Abort Rebase",
             },
             "pier.git.rebaseContinue": {
               aliases: ["locale git rebase continue"],
-              title: "git: Continue Rebase",
+              title: "GIT: Continue Rebase",
             },
             "pier.git.undoLastCommit": {
               aliases: ["locale git undo commit"],
-              title: "git: Undo Last Commit",
+              title: "GIT: Undo Last Commit",
             },
             "pier.git.commit": {
               aliases: ["locale git commit"],
-              title: "git: Commit",
+              title: "GIT: Commit",
             },
             "pier.worktree.create": {
               aliases: ["locale worktree create"],
@@ -319,43 +319,43 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
           commands: {
             "pier.git.merge": {
               aliases: ["本地化合并分支"],
-              title: "git: 合并分支...",
+              title: "GIT: 合并分支...",
             },
             "pier.git.switchBranch": {
               aliases: ["本地化切换分支"],
-              title: "git: 切换分支...",
+              title: "GIT: 切换分支...",
             },
             "pier.git.mergeAbort": {
               aliases: ["本地化中止合并"],
-              title: "git: 中止合并",
+              title: "GIT: 中止合并",
             },
             "pier.git.stash": {
               aliases: ["本地化暂存更改"],
-              title: "git: 暂存更改",
+              title: "GIT: 暂存更改",
             },
             "pier.git.stashPop": {
               aliases: ["本地化弹出暂存"],
-              title: "git: 弹出暂存...",
+              title: "GIT: 弹出暂存...",
             },
             "pier.git.rebase": {
               aliases: ["本地化变基"],
-              title: "git: 变基到分支...",
+              title: "GIT: 变基到分支...",
             },
             "pier.git.rebaseAbort": {
               aliases: ["本地化中止变基"],
-              title: "git: 中止变基",
+              title: "GIT: 中止变基",
             },
             "pier.git.rebaseContinue": {
               aliases: ["本地化继续变基"],
-              title: "git: 继续变基",
+              title: "GIT: 继续变基",
             },
             "pier.git.undoLastCommit": {
               aliases: ["本地化撤销提交"],
-              title: "git: 撤销上次提交",
+              title: "GIT: 撤销上次提交",
             },
             "pier.git.commit": {
               aliases: ["本地化提交"],
-              title: "git: 提交",
+              title: "GIT: 提交",
             },
             "pier.worktree.create": {
               aliases: ["本地化创建工作树"],
@@ -1301,7 +1301,7 @@ describe("git builtin plugin", () => {
     const quickPick = useCommandPaletteController.getState().quickPick;
     expect(quickPick).toMatchObject({
       placeholder: "Enter a branch name to switch or create",
-      title: "git: Switch Branch...",
+      title: "GIT: Switch Branch...",
     });
     expect(quickPick?.items?.map((item) => item.id)).toEqual([
       "refs/remotes/origin/feature/remote",
@@ -1771,7 +1771,7 @@ describe("git builtin plugin", () => {
 
     const handlerPromise = actionRegistry.get("pier.git.stashPop")?.handler();
 
-    expect(await screen.findByText("git: Pop Stash...")).toBeVisible();
+    expect(await screen.findByText("GIT: Pop Stash...")).toBeVisible();
     expect(screen.getByText("fatal: not a git repository")).toBeVisible();
     expect(getLastTerminalHostSnapshot()).toEqual(
       expect.objectContaining({
@@ -1936,7 +1936,7 @@ describe("git builtin plugin", () => {
     }
     const acceptPromise = quickPick.onAccept(item);
 
-    expect(await screen.findByText("git: Drop Stash...")).toBeVisible();
+    expect(await screen.findByText("GIT: Drop Stash...")).toBeVisible();
     expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     // {{stash}} 插值链路：fallback 也必须替换为实际 label
     expect(await screen.findByText(DROP_STASH_CONFIRM_BODY_RE)).toBeVisible();
@@ -1981,7 +1981,7 @@ describe("git builtin plugin", () => {
     }
     const acceptPromise = quickPick.onAccept(item);
 
-    expect(await screen.findByText("git: Drop Stash...")).toBeVisible();
+    expect(await screen.findByText("GIT: Drop Stash...")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await acceptPromise;
 
@@ -1996,7 +1996,7 @@ describe("git builtin plugin", () => {
       .get("pier.git.undoLastCommit")
       ?.handler();
 
-    expect(await screen.findByText("git: Undo Last Commit")).toBeVisible();
+    expect(await screen.findByText("GIT: Undo Last Commit")).toBeVisible();
     expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     expect(
       screen.getByText(
@@ -2807,6 +2807,37 @@ describe("git builtin plugin", () => {
         cwd: "/Users/dev",
         getGroupId: () => null,
         panelId: "terminal-home",
+        title: null,
+      })
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("仅有 worktreeRoot 时不显示分支状态栏项", async () => {
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    const { container } = render(
+      statusItem.render({
+        context: {
+          branch: "main",
+          contextId: "ctx-legacy",
+          cwd: "/Users/dev/ABC/pier",
+          openedPath: "/Users/dev/ABC/pier",
+          projectRootPath: "/Users/dev/ABC/pier",
+          source: "panel",
+          updatedAt: now,
+          worktreeRoot: "/Users/dev/ABC/pier",
+        },
+        cwd: "/Users/dev/ABC/pier",
+        getGroupId: () => null,
+        panelId: "terminal-legacy",
         title: null,
       })
     );

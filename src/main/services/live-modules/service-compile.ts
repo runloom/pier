@@ -13,6 +13,7 @@ import {
   cancelCompileContext,
   esbuildContextKey,
 } from "./compile-context-cache.ts";
+import { resolvePierAppletCompileEntry } from "./compile-resolve-applet.ts";
 import {
   assertPathInsideRoot,
   LiveModuleFenceError,
@@ -56,19 +57,22 @@ export async function runLiveModuleCompile(
     };
   }
 
-  if (!isLiveModuleCanvasFileName(relPath)) {
+  const appletEntry = resolvePierAppletCompileEntry(relPath);
+  if (!(appletEntry || isLiveModuleCanvasFileName(relPath))) {
     return {
       diagnostics: [
         {
           message:
-            "live modules entry must use a canvas suffix (.canvas.tsx/.vue/.svelte/.canvas.solid.tsx, …)",
+            "live modules entry must use a canvas suffix (.canvas.tsx/.vue/.svelte/.canvas.solid.tsx, …) or an @pier-applet specifier",
           severity: "error",
         },
       ],
       ok: false,
     };
   }
-  const framework = detectLiveModuleFrameworkFromFileName(relPath) ?? "react";
+  const framework = appletEntry
+    ? "react"
+    : (detectLiveModuleFrameworkFromFileName(relPath) ?? "react");
 
   if (!root.projectRoot && framework !== "react") {
     const failure: LiveModuleCompileResult = {
@@ -121,12 +125,16 @@ export async function runLiveModuleCompile(
   }
 
   try {
-    const entryAbsolute = resolveUnderRoot(root.contentRoot, relPath, "canvas");
-    const entryReal = assertPathInsideRoot(
-      entryAbsolute,
-      root.projectRoot ?? root.contentRoot,
-      "canvas"
-    );
+    const entryAbsolute = appletEntry
+      ? appletEntry.entryAbsolutePath
+      : resolveUnderRoot(root.contentRoot, relPath, "canvas");
+    const entryReal = appletEntry
+      ? assertPathInsideRoot(entryAbsolute, appletEntry.fenceRoot, "applet")
+      : assertPathInsideRoot(
+          entryAbsolute,
+          root.projectRoot ?? root.contentRoot,
+          "canvas"
+        );
 
     let previewBarrelAbsolutePath: string | undefined;
     if (
@@ -161,6 +169,7 @@ export async function runLiveModuleCompile(
       forcePreviewBarrel: root.spec.resolve.forcePreviewBarrel,
       framework,
       moduleId: relPath,
+      extraFenceRoots: appletEntry?.extraFenceRoots ?? [],
       previewBarrelAbsolutePath,
       projectRoot: root.projectRoot,
       rootId,
@@ -189,6 +198,7 @@ export async function runLiveModuleCompile(
               allowedBarePackages: root.spec.resolve.allowedBarePackages,
               contentRoot: root.contentRoot,
               entryAbsolutePath: entryReal,
+              extraFenceRoots: appletEntry?.extraFenceRoots ?? [],
               forcePreviewBarrel: root.spec.resolve.forcePreviewBarrel,
               framework,
               previewBarrelAbsolutePath,

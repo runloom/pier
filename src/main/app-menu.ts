@@ -5,7 +5,11 @@ import {
   type AppMenuLanguage,
   resolveAppMenuLanguage as resolveMenuLanguage,
 } from "@shared/i18n/app-menu.ts";
-import { firstAcceleratorForCommand } from "@shared/keybindings.ts";
+import {
+  chordHasNonGlobalBinding,
+  firstBindingForCommand,
+  keybindingToElectronAccelerator,
+} from "@shared/keybindings.ts";
 import { Menu, type MenuItemConstructorOptions } from "electron";
 import { createDetachedDevToolsMenuItem } from "./devtools.ts";
 import { createOpenSettingsMenuItem } from "./settings-menu.ts";
@@ -42,9 +46,16 @@ function appCommandMenuItem(
   click: () => void,
   userKeymap: ProjectPreferences["userKeymap"]
 ): MenuItemConstructorOptions {
-  const accelerator = firstAcceleratorForCommand(commandId, userKeymap);
+  const binding = firstBindingForCommand(commandId, userKeymap);
+  const accelerator = binding
+    ? keybindingToElectronAccelerator(binding.keys)
+    : undefined;
+  const registerGlobally =
+    (binding?.scope ?? "global") === "global" &&
+    !(binding && chordHasNonGlobalBinding(binding.keys, userKeymap));
   return {
     ...(accelerator ? { accelerator } : {}),
+    ...(accelerator && !registerGlobally ? { registerAccelerator: false } : {}),
     click,
     label,
   };

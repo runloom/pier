@@ -14,8 +14,12 @@ export interface EditorRevealLocation {
 }
 
 export interface EditorRevealSession {
-  currentLine(): number | null;
   readonly documentId: string;
+  /**
+   * True only while a live editor view is attached. detach 保留 #savedState，
+   * 用 currentLine() 判「已挂载」会恒真 —— reveal 被误判为已应用而丢弃。
+   */
+  hasView(): boolean;
   revealRange(from: number, to: number): void;
 }
 
@@ -75,7 +79,9 @@ export class FileEditorPendingReveals {
       return false;
     }
     this.#pendingLocations.delete(editorSessionId);
-    if (session && session.currentLine() !== null) {
+    // 视图真挂着才立即 apply；detach 保留的会话必须排队，等 attach 重放
+    // （applySnapshot 在无视图时静默 return，立即 apply 等于丢弃）。
+    if (session?.hasView()) {
       session.revealRange(from, to);
       this.#pending.delete(editorSessionId);
       return true;

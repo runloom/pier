@@ -521,6 +521,12 @@ static Napi::Value JsDebugSnapshot(const Napi::CallbackInfo& info) {
 //   swift 线程触发 C 函数指针 → trampoline 构 Payload → TSFN 跨线程到 JS 线程 →
 //   payload.callJs(env, jsCallback) → delete payload.
 //
+// 队列必须无界（max_queue_size = 0）：Node `node_api.cc` 的 `Push()` 只在
+// `max_queue_size > 0` 且队列满时才等待，所以无界 BlockingCall 在 swift/AppKit
+// 线程上永不阻塞，同时不丢任何一条 forward。CommandStarted/Finished（OSC 133
+// 智能体点亮）、ProcessClosed/ChildExited、Key/BareEscape、OpenUrl 都是不可合并的
+// 一次性事件；有界队列 + NonBlockingCall 在 JS 忙时会静默丢掉它们（napi_queue_full）。
+//
 // Payload 是 plain struct, 各自字段 + 一个 callJs 方法负责把字段映射到 napi 值.
 // 添加新 forward 只需:声明 Payload、声明 g_xxx ForwardChannel、1 行 trampoline、
 // 1 行 JsSet handler.

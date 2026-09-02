@@ -8,6 +8,7 @@ import {
   isPluginDataEventFor,
   normalizeCanvasHostSnapshotId,
   parsePluginDataWatchTarget,
+  pluginDataCommandPayload,
 } from "@shared/contracts/canvas-host.ts";
 import type { PierCommand } from "@shared/contracts/commands.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
@@ -36,6 +37,11 @@ export const host = {
   invoke: async (command: PierCommand) => {
     if (!isCanvasHostCommandAllowed(command.type)) {
       throw canvasHostPermissionError(`canvas host denies ${command.type}`);
+    }
+    if (command.type === "app.openExternal") {
+      // Preload facade keeps the user-activation gate for canvases; the main
+      // command path stays as the backstop for non-renderer clients.
+      return window.pier.externalNavigation.open(command.url);
     }
     const bridge = canvasHostBridge();
     if (!bridge) {
@@ -171,10 +177,7 @@ export function useHostSnapshot(
       });
     };
     if (pluginTarget) {
-      const payload = {
-        key: pluginTarget.key,
-        pluginId: pluginTarget.pluginId,
-      };
+      const payload = pluginDataCommandPayload(pluginTarget);
       pending = bridge
         .invoke({
           payload,

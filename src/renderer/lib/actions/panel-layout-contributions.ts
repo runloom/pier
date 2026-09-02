@@ -29,7 +29,11 @@ import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelsInSameGroup } from "@/stores/workspace-panel-helpers.ts";
 import type { ActionContribution } from "./contribution-types.ts";
-import { resolvePanelCopyPath } from "./panel-copy-path.ts";
+import {
+  isFilesDiskTab,
+  resolvePanelCopyPath,
+  resolvePanelCopyRelativePath,
+} from "./panel-copy-path.ts";
 import { PANEL_WINDOW_ACTION_CONTRIBUTIONS } from "./panel-window-contributions.ts";
 import type { ActionInvocation } from "./types.ts";
 
@@ -111,6 +115,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       id: "pier.panel.copySelection",
       // 终端/文件编辑器自带复制，不在那些 surface 重复。
       // build-entries 对 copy 用同源 copyText 覆盖 enabled。
+      displayChord: "Mod+KeyC",
       enabled: (invocation) => {
         const sticky = isDiffCopyStickySurface(invocation?.surface)
           ? getDiffCopyStickyText()
@@ -148,9 +153,44 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       id: "pier.panel.copyPath",
       // 无持有路径时整行移除，不置灰。
       menuHidden: (invocation) => resolvePanelCopyPath(invocation) == null,
+      // 仅磁盘文件标签借用 Files ⌥⌘C；终端「复制地址」不要挂这条。
+      shortcutSourceId: (invocation) =>
+        isFilesDiskTab(invocation) ? "pier.files.copyPath" : undefined,
       sortOrder: 2,
       surfaces: ["dockview-tab"],
+      title: (invocation) =>
+        i18next.t(
+          isFilesDiskTab(invocation)
+            ? "contextMenu.action.copyFilePath"
+            : "contextMenu.action.copyPath"
+        ),
       titleKey: "contextMenu.action.copyPath",
+    },
+    {
+      categoryKey: "panel",
+      group: "0_edit",
+      handler: async (invocation) => {
+        const path = resolvePanelCopyRelativePath(invocation);
+        if (!path) {
+          return;
+        }
+        try {
+          await writeClipboardText(path);
+          toast.success(i18next.t("contextMenu.action.pathCopied"));
+        } catch (error) {
+          await showAppAlert({
+            body: error instanceof Error ? error.message : String(error),
+            title: i18next.t("contextMenu.action.clipboardFailed"),
+          });
+        }
+      },
+      id: "pier.panel.copyRelativePath",
+      menuHidden: (invocation) =>
+        resolvePanelCopyRelativePath(invocation) == null,
+      shortcutSourceId: "pier.files.copyRelativePath",
+      sortOrder: 3,
+      surfaces: ["dockview-tab"],
+      titleKey: "contextMenu.action.copyRelativePath",
     },
     {
       categoryKey: "panel",
@@ -165,7 +205,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       },
       id: "pier.panel.keepOpen",
       menuHidden: (invocation) => !isPreviewFileTab(invocation),
-      sortOrder: 3,
+      sortOrder: 1,
       surfaces: ["dockview-tab"],
       titleKey: "contextMenu.action.keepOpen",
     },
@@ -176,6 +216,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
         runSelectionSelectAll(invocation?.sourcePanelId);
       },
       id: "pier.panel.selectAll",
+      displayChord: "Mod+KeyA",
       menuHidden: (invocation) =>
         hasSpecializedEditPipelineSurface(invocation?.surface),
       sortOrder: 1,

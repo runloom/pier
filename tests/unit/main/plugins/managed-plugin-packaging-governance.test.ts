@@ -71,6 +71,8 @@ describe("managed plugin packaging governance", () => {
   it("ships each bundled plugin into an isolated plugin-packages subdir", () => {
     expect(builderConfig).toContain("from: packages/plugin-claude/dist-pkg");
     expect(builderConfig).toContain("to: plugin-packages/pier.claude");
+    expect(builderConfig).toContain("from: packages/plugin-tasks/dist-pkg");
+    expect(builderConfig).toContain("to: plugin-packages/pier.tasks");
     expect(builderConfig).toContain("from: packages/plugin-codex/dist-pkg");
     expect(builderConfig).toContain("to: plugin-packages/pier.codex");
     expect(builderConfig).toContain("from: packages/plugin-grok/dist-pkg");

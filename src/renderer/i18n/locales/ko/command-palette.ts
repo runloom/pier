@@ -5,6 +5,7 @@ export const commandPalette = {
   loading: "불러오는 중…",
   inputFailed: "제출하지 못했습니다. 다시 시도하세요",
   searchResults: "결과",
+  recent: "최근",
   agents: {
     launchFailed: "에이전트를 시작하지 못했습니다. 다시 시도하세요",
     noAgentDetected: "사용할 수 있는 에이전트가 없습니다",
@@ -20,7 +21,7 @@ export const commandPalette = {
   },
   category: {
     file: "파일",
-    git: "git",
+    git: "GIT",
     view: "보기",
     settings: "설정",
     workspace: "워크스페이스",
@@ -29,6 +30,7 @@ export const commandPalette = {
     panel: "패널",
     terminal: "터미널",
     window: "윈도우",
+    agent: "에이전트",
   },
   action: {
     toggleCommandPalette: "명령 팔레트 표시",

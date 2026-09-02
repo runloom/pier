@@ -1087,9 +1087,9 @@ describe("WorkspaceHeaderActions", () => {
     );
     expect(visibleCommandItemLabels()).toEqual([
       "New Terminal",
+      "Run Task…",
       "Start Claude",
       "Start Codex",
-      "Run Task…",
       "New Tab",
       "Create Worktree",
       "New Window",
@@ -1098,11 +1098,14 @@ describe("WorkspaceHeaderActions", () => {
       screen.getByText("Run", { selector: "[cmdk-group-heading]" })
     ).toBeVisible();
     expect(
-      screen.getByText("Panel", { selector: "[cmdk-group-heading]" })
+      screen.getByText("Agents", { selector: "[cmdk-group-heading]" })
     ).toBeVisible();
     expect(
-      screen.getByText("Worktree", { selector: "[cmdk-group-heading]" })
-    ).toBeVisible();
+      screen.queryByText("Panel", { selector: "[cmdk-group-heading]" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Worktree", { selector: "[cmdk-group-heading]" })
+    ).not.toBeInTheDocument();
     const worktreeItem = await findCommandItem("Create Worktree");
     expect(worktreeItem).toHaveTextContent("Open a project first");
     expect(
@@ -1207,7 +1210,7 @@ describe("WorkspaceHeaderActions", () => {
     expect(await screen.findByText("No matching items")).toBeVisible();
   });
 
-  it("lets frecency promote a create action without changing its source", async () => {
+  it("keeps create-menu order stable when frecency would have promoted a later action", async () => {
     useCommandPaletteMru.setState({
       entries: [
         {
@@ -1227,7 +1230,7 @@ describe("WorkspaceHeaderActions", () => {
     await screen.findByText("Create in this panel group", {
       selector: "[data-slot='popover-title']",
     });
-    expect(visibleCommandItemLabels()[0]).toBe("Run Task…");
+    expect(visibleCommandItemLabels()[0]).toBe("New Terminal");
   });
 
   it("keeps the first create action selected when the pointer rests over a later row on open", async () => {
@@ -1499,7 +1502,7 @@ describe("WorkspaceHeaderActions", () => {
 
   it("localizes plugin categories from their metadata key", async () => {
     await i18next.changeLanguage("zh-CN");
-    disposeWorktreeCreateAction = actionRegistry.register({
+    const disposeCreate = actionRegistry.register({
       category: "Worktree",
       handler: vi.fn(),
       id: "pier.worktree.create",
@@ -1507,6 +1510,18 @@ describe("WorkspaceHeaderActions", () => {
       surfaces: ["command-palette", "create-menu"],
       title: () => "创建工作树",
     });
+    const disposeDelete = actionRegistry.register({
+      category: "Worktree",
+      handler: vi.fn(),
+      id: "pier.worktree.delete",
+      metadata: { categoryKey: "worktree", sortOrder: 3 },
+      surfaces: ["command-palette", "create-menu"],
+      title: () => "删除工作树",
+    });
+    disposeWorktreeCreateAction = () => {
+      disposeCreate();
+      disposeDelete();
+    };
     const props = createProps([createPanel("terminal-1", "终端 1")]);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
 

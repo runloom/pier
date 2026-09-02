@@ -184,6 +184,7 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         contentAnchorRequestId={props.markdownContentAnchorRequestId}
         copyAnchor={props.markdownCopyAnchor}
         copyCode={props.markdownCopyCode}
+        diskRevision={document?.revision ?? undefined}
         errorLabel={props.markdownErrorLabel}
         fileResources={props.markdownFileResources}
         initialAnchor={props.markdownInitialAnchor}
@@ -192,12 +193,14 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         // of prior ready IR cannot flash the previous file's content.
         key={props.documentId}
         labels={props.markdownLabels}
+        liveModules={props.markdownLiveModules}
         onContextMenu={props.onMarkdownPreviewContextMenu}
         onJumpToSource={props.onJumpToSource}
         onToggleTask={onToggleTask}
         onToggleWordWrap={onToggleWordWrap}
         openExternal={props.openExternal}
         openInternal={props.onOpenMarkdownInternal}
+        panelContext={props.panelContext}
         panelId={props.panelId}
         registerSelectionSelectAllProvider={
           props.registerSelectionSelectAllProvider

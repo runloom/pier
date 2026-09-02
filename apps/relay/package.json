@@ -1,0 +1,15 @@
+{
+  "name": "@pier/relay",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pier 会合云：无账号、零持久化的盲转发服务（挑战准入 + 担保名册 + envelope 路由）",
+  "dependencies": {
+    "ws": "^8.21.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/ws": "^8.18.1"
+  }
+}

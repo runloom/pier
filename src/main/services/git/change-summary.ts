@@ -124,6 +124,60 @@ function parseNumstat(output: string): {
 }
 
 /**
+ * `--numstat -z` 记录涉及的路径（rename/copy 记录同时给出旧、新路径）。
+ * 记录格式不合法时返回 null，判定与 parseNumstat 一致。
+ * watch 用它证明 numstat 没有谈到 status 之外的文件，两者才算同一工作树状态。
+ */
+export function numstatPaths(output: string): readonly string[] | null {
+  const paths: string[] = [];
+  const records = output.split("\0");
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index] ?? "";
+    if (record.length === 0) continue;
+    const firstTab = record.indexOf("\t");
+    const secondTab = record.indexOf("\t", firstTab + 1);
+    if (firstTab < 0 || secondTab < 0) return null;
+    const inlinePath = record.slice(secondTab + 1);
+    if (inlinePath.length > 0) {
+      paths.push(inlinePath);
+      continue;
+    }
+    const origPath = records[index + 1] ?? "";
+    const path = records[index + 2] ?? "";
+    if (origPath.length === 0 || path.length === 0) return null;
+    paths.push(origPath, path);
+    index += 2;
+  }
+  return paths;
+}
+
+/**
+ * numstat 若列出 status 没有的路径，说明两次取样之间有已跟踪文件被改动，
+ * 两者不属于同一工作树状态。rename/copy 的旧路径也算 status 已知
+ *（`origPath`，或未配对时的 D 条目）。numstat 格式不合法同样视为不一致。
+ */
+export function numstatWithinStatus(
+  files: readonly GitFileStatus[],
+  numstatOut: string
+): boolean {
+  const paths = numstatPaths(numstatOut);
+  if (paths === null) {
+    return false;
+  }
+  if (paths.length === 0) {
+    return true;
+  }
+  const known = new Set<string>();
+  for (const file of files) {
+    known.add(file.path);
+    if (file.origPath !== null) {
+      known.add(file.origPath);
+    }
+  }
+  return paths.every((path) => known.has(path));
+}
+
+/**
  * 组装状态栏的全范围摘要。
  * 可计文本行必须准确进 +/-；binary / 目录 / 嵌套仓 / 读失败的未跟踪路径进
  * excludedFiles，仍返回 lineDelta。filesOnly 仅用于整段不可用（numstat 失败、

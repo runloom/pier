@@ -11,14 +11,14 @@ import {
   useState,
 } from "react";
 import { Button } from "../../button.tsx";
-import { SCROLLBAR_SYSTEM_CSS } from "../../scrollbar-system.ts";
 import { ensurePierDiffLightDomStyles } from "../appearance.ts";
 import type {
   PierDiffViewAppearance,
   PierDiffViewPresentation,
 } from "../types.ts";
-import { createFormatUnmodifiedLines } from "../use-code-options.ts";
 import { ConflictAcceptActions } from "./accept-actions.tsx";
+import { createFormatUnmodifiedLines } from "./format-unmodified-lines.ts";
+import { CONFLICT_HOST_UNSAFE_CSS } from "./host-css.ts";
 import { applyConflictResolution, countUnresolvedMarkers } from "./rebuild.ts";
 import type {
   ConflictActionLike,
@@ -26,20 +26,6 @@ import type {
   ConflictResolution,
   PierUnresolvedConflictLabels,
 } from "./types.ts";
-
-/** Minimal unsafe CSS for conflict host — no CodeView multi-file chrome. */
-const CONFLICT_UNSAFE_CSS = `
-${SCROLLBAR_SYSTEM_CSS}
-
-  :host {
-    color-scheme: light dark;
-  }
-
-  pre, [data-code], [data-line], [data-content] {
-    -webkit-user-select: text;
-    user-select: text;
-  }
-`;
 
 interface UnresolvedInstanceLike {
   readonly options?: {
@@ -58,6 +44,7 @@ export function MarkersConflictBody(options: {
   readonly busy: boolean;
   readonly contents: string;
   readonly contentsDigest: string;
+  readonly embedInCodeView?: boolean;
   readonly labels: PierUnresolvedConflictLabels;
   readonly onError?: (error: Error) => void;
   readonly onOpenFile?: () => void;
@@ -206,6 +193,9 @@ export function MarkersConflictBody(options: {
 
   const pierreOptions = useMemo(
     () => ({
+      ...(options.embedInCodeView === true
+        ? { disableFileHeader: true as const }
+        : {}),
       enableLineSelection: true,
       ...(options.labels.expandAllUnmodified === undefined
         ? {}
@@ -219,12 +209,13 @@ export function MarkersConflictBody(options: {
           : ("scroll" as const),
       theme: options.appearance.codeThemes,
       themeType: options.appearance.colorMode,
-      unsafeCSS: CONFLICT_UNSAFE_CSS,
+      unsafeCSS: CONFLICT_HOST_UNSAFE_CSS,
     }),
     [
       formatUnmodifiedLines,
       options.appearance.codeThemes,
       options.appearance.colorMode,
+      options.embedInCodeView,
       options.labels.expandAllUnmodified,
       options.presentation?.wrapLines,
     ]
@@ -273,8 +264,7 @@ export function MarkersConflictBody(options: {
       ["--diffs-font-family" as string]: options.appearance.codeFontFamily,
       ["--diffs-font-size" as string]: options.appearance.codeFontSize,
       colorScheme: options.appearance.colorMode,
-      height: "100%",
-      minHeight: 0,
+      height: "auto",
       width: "100%",
     }),
     [
@@ -288,22 +278,20 @@ export function MarkersConflictBody(options: {
 
   return (
     <div
-      className="flex h-full min-h-0 min-w-0 flex-col"
+      className="min-w-0 overflow-hidden"
       data-pier-unresolved-conflict=""
       data-pier-unresolved-path={options.path}
       style={{ colorScheme: options.appearance.colorMode }}
     >
-      <div className="min-h-0 flex-1 overflow-auto">
-        <UnresolvedFile
-          disableWorkerPool={false}
-          file={file}
-          key={file.cacheKey}
-          options={pierreOptions}
-          renderHeaderMetadata={renderHeaderMetadata}
-          renderMergeConflictUtility={renderMergeConflictUtility}
-          style={style}
-        />
-      </div>
+      <UnresolvedFile
+        disableWorkerPool={false}
+        file={file}
+        key={file.cacheKey}
+        options={pierreOptions}
+        {...(options.embedInCodeView === true ? {} : { renderHeaderMetadata })}
+        renderMergeConflictUtility={renderMergeConflictUtility}
+        style={style}
+      />
     </div>
   );
 }

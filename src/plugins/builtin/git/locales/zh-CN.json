@@ -4,7 +4,7 @@
       "aliases": ["合并分支", "git merge", "he bing fen zhi"],
       "category": "git",
       "description": "选择一个分支并合并到当前分支。",
-      "title": "git: 合并分支..."
+      "title": "GIT: 合并分支..."
     },
     "pier.git.switchBranch": {
       "aliases": [
@@ -23,13 +23,13 @@
       ],
       "category": "git",
       "description": "切换到本地分支，或从当前检出新建分支并切换。",
-      "title": "git: 切换分支..."
+      "title": "GIT: 切换分支..."
     },
     "pier.git.mergeAbort": {
       "aliases": ["中止合并", "git merge abort", "zhong zhi he bing"],
       "category": "git",
       "description": "中止当前合并操作。",
-      "title": "git: 中止合并"
+      "title": "GIT: 中止合并"
     },
     "pier.git.stash": {
       "aliases": [
@@ -43,7 +43,7 @@
       ],
       "category": "git",
       "description": "储藏本地已修改文件的变更。",
-      "title": "git: 储藏更改"
+      "title": "GIT: 储藏更改"
     },
     "pier.git.stashApply": {
       "aliases": [
@@ -55,7 +55,7 @@
       ],
       "category": "git",
       "description": "选择一条储藏并应用，保留在列表中。",
-      "title": "git: 应用储藏..."
+      "title": "GIT: 应用储藏..."
     },
     "pier.git.stashDrop": {
       "aliases": [
@@ -68,7 +68,7 @@
       ],
       "category": "git",
       "description": "选择一条储藏并从列表中删除。",
-      "title": "git: 删除储藏..."
+      "title": "GIT: 删除储藏..."
     },
     "pier.git.stashIncludeUntracked": {
       "aliases": [
@@ -81,7 +81,7 @@
       ],
       "category": "git",
       "description": "储藏本地变更，并包含新增文件。",
-      "title": "git: 储藏更改（含新增文件）"
+      "title": "GIT: 储藏更改（含新增文件）"
     },
     "pier.git.stashPop": {
       "aliases": [
@@ -96,25 +96,25 @@
       ],
       "category": "git",
       "description": "选择一条储藏，应用后从列表移除。",
-      "title": "git: 弹出储藏..."
+      "title": "GIT: 弹出储藏..."
     },
     "pier.git.rebase": {
       "aliases": ["变基到分支", "git rebase", "rebase onto", "bian ji fen zhi"],
       "category": "git",
       "description": "选择一个分支并将当前分支变基到它之上。",
-      "title": "git: 变基到分支..."
+      "title": "GIT: 变基到分支..."
     },
     "pier.git.rebaseAbort": {
       "aliases": ["中止变基", "git rebase abort", "zhong zhi bian ji"],
       "category": "git",
       "description": "中止当前变基操作。",
-      "title": "git: 中止变基"
+      "title": "GIT: 中止变基"
     },
     "pier.git.rebaseContinue": {
       "aliases": ["继续变基", "git rebase continue", "ji xu bian ji"],
       "category": "git",
       "description": "继续当前变基操作。",
-      "title": "git: 继续变基"
+      "title": "GIT: 继续变基"
     },
     "pier.git.cherryPick": {
       "aliases": [
@@ -129,43 +129,43 @@
       ],
       "category": "git",
       "description": "选择一个提交并应用到当前分支。",
-      "title": "git: 拣选提交..."
+      "title": "GIT: 拣选提交..."
     },
     "pier.git.cherryPickAbort": {
       "aliases": ["git cherry-pick abort", "中止 cherry-pick", "中止拣选"],
       "category": "git",
       "description": "中止当前拣选操作。",
-      "title": "git: 中止拣选"
+      "title": "GIT: 中止拣选"
     },
     "pier.git.cherryPickContinue": {
       "aliases": ["git cherry-pick continue", "继续 cherry-pick", "继续拣选"],
       "category": "git",
       "description": "继续当前拣选操作。",
-      "title": "git: 继续拣选"
+      "title": "GIT: 继续拣选"
     },
     "pier.git.revert": {
       "aliases": ["git revert", "回滚提交", "还原提交"],
       "category": "git",
       "description": "选择一个提交并创建一个还原它的新提交。",
-      "title": "git: 还原提交..."
+      "title": "GIT: 还原提交..."
     },
     "pier.git.revertAbort": {
       "aliases": ["git revert abort", "中止 revert", "中止还原"],
       "category": "git",
       "description": "中止当前还原操作。",
-      "title": "git: 中止还原"
+      "title": "GIT: 中止还原"
     },
     "pier.git.revertContinue": {
       "aliases": ["git revert continue", "继续 revert", "继续还原"],
       "category": "git",
       "description": "继续当前还原操作。",
-      "title": "git: 继续还原"
+      "title": "GIT: 继续还原"
     },
     "pier.git.commit": {
       "aliases": ["git commit", "commit changes", "提交", "提交更改"],
       "category": "git",
       "description": "提交当前更改。可包含未暂存的文件，也可在提交后推送。",
-      "title": "git: 提交"
+      "title": "GIT: 提交"
     },
     "pier.git.undoLastCommit": {
       "aliases": [
@@ -182,13 +182,13 @@
       ],
       "category": "git",
       "description": "撤销上次提交，并保留变更为已暂存。",
-      "title": "git: 撤销上次提交"
+      "title": "GIT: 撤销上次提交"
     },
     "pier.git.review.openFile": {
       "aliases": ["打开文件", "打开变更文件", "open file"],
       "category": "git",
       "description": "在编辑器中打开此变更文件。",
-      "title": "git: 打开文件"
+      "title": "GIT: 打开文件"
     },
     "pier.git.review.openInEditor": {
       "aliases": [
@@ -200,19 +200,19 @@
       ],
       "category": "git",
       "description": "跳转到源码编辑器中的此变更；有工作区对应行时定位到该行。",
-      "title": "git: 跳转到源码"
+      "title": "GIT: 跳转到源码"
     },
     "pier.git.review.stageFile": {
       "aliases": ["暂存文件", "git add", "stage"],
       "category": "git",
       "description": "暂存所选文件的变更。",
-      "title": "git: 暂存"
+      "title": "GIT: 暂存"
     },
     "pier.git.review.unstageFile": {
       "aliases": ["取消暂存", "git restore --staged", "unstage"],
       "category": "git",
       "description": "取消所选文件已暂存的变更。",
-      "title": "git: 取消暂存"
+      "title": "GIT: 取消暂存"
     },
     "pier.git.review.discardFile": {
       "aliases": [
@@ -228,7 +228,7 @@
       ],
       "category": "git",
       "description": "放弃本地修改；新增文件会移到废纸篓。",
-      "title": "git: 放弃更改"
+      "title": "GIT: 放弃更改"
     },
     "pier.git.review.toggleTree": {
       "category": "git",
@@ -249,27 +249,27 @@
       "aliases": ["打开目录", "打开项目文件夹"],
       "category": "git",
       "description": "在文件目录树中打开此项目。",
-      "title": "git: 打开目录"
+      "title": "GIT: 打开目录"
     },
     "pier.git.review.copyPath": {
       "category": "git",
       "description": "复制所选变更的绝对路径。",
-      "title": "git: 复制路径"
+      "title": "GIT: 复制路径"
     },
     "pier.git.review.copyRelativePath": {
       "category": "git",
       "description": "复制所选变更在仓库内的相对路径。",
-      "title": "git: 复制相对路径"
+      "title": "GIT: 复制相对路径"
     },
     "pier.git.review.copyPathWithRange": {
       "category": "git",
       "description": "复制仓库内相对路径和当前所选行号。",
-      "title": "git: 复制路径和所选行"
+      "title": "GIT: 复制路径和所选行"
     },
     "pier.git.review.revealInFinder": {
       "category": "git",
       "description": "在系统文件管理器中显示所选变更。",
-      "title": "git: 在访达中显示"
+      "title": "GIT: 在访达中显示"
     },
     "pier.worktree.create": {
       "aliases": [
@@ -343,19 +343,19 @@
       ],
       "category": "git",
       "description": "从远程获取最新分支信息，不改动当前工作区。",
-      "title": "git: 获取远程更新"
+      "title": "GIT: 获取远程更新"
     },
     "pier.git.pull": {
       "aliases": ["git pull", "pull", "拉取", "拉取更改", "同步拉取", "la qu"],
       "category": "git",
       "description": "仅快进拉取远端更改。",
-      "title": "git: 拉取"
+      "title": "GIT: 拉取"
     },
     "pier.git.push": {
       "aliases": ["git push", "push", "推送", "推送更改", "tui song"],
       "category": "git",
       "description": "将本地提交推送到远端。",
-      "title": "git: 推送"
+      "title": "GIT: 推送"
     },
     "pier.git.publish": {
       "aliases": [
@@ -370,7 +370,7 @@
       ],
       "category": "git",
       "description": "将当前分支首次推送到远程并设置上游。",
-      "title": "git: 发布分支"
+      "title": "GIT: 发布分支"
     },
     "pier.git.sync": {
       "aliases": [
@@ -383,7 +383,7 @@
       ],
       "category": "git",
       "description": "先拉取再推送，与远端同步。",
-      "title": "git: 同步"
+      "title": "GIT: 同步"
     },
     "pier.git.viewChanges": {
       "aliases": [
@@ -405,7 +405,7 @@
       ],
       "category": "git",
       "description": "打开当前仓库的变更审查面板。",
-      "title": "git: 打开审查"
+      "title": "GIT: 打开审查"
     }
   },
   "description": "提供 git 命令面板入口和终端状态栏支持。",
@@ -918,6 +918,7 @@
     "ui.reviewCopyPathWithRange": "复制路径和所选行",
     "ui.reviewTreeCopyRelativePath": "复制相对路径",
     "ui.reviewTreePathCopied": "已复制路径",
+    "ui.reviewTreeNoPathToCopy": "请先打开或选中要复制路径的文件。",
     "ui.reviewTreeCopyPathFailed": "无法复制路径",
     "ui.reviewTreeRevealInFinder": "在访达中显示",
     "ui.reviewTreeRevealFailed": "无法显示该项目",
@@ -1003,5 +1004,5 @@
       "title": "变更"
     }
   },
-  "name": "git"
+  "name": "GIT"
 }

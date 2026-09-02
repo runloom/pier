@@ -148,6 +148,23 @@ describe("agent lifecycle service + runner", () => {
     expect(runner.run).not.toHaveBeenCalled();
   });
 
+  it("timeout does not attach installer stderr as errorDetail", async () => {
+    const runner = fakeRunner({
+      ok: false,
+      code: 124,
+      timedOut: true,
+      stderr:
+        "npm warn using --force Recommended protections disabled.\nnpm error signal SIGTERM",
+    });
+    const service = createAgentLifecycleService({
+      getEnv: async () => ({ PATH: "/no-such-bin", Path: "/no-such-bin" }),
+      runner,
+    });
+    const result = await service.run("gemini", "install");
+    expect(result.errorCode).toBe("timeout");
+    expect(result.errorDetail).toBeUndefined();
+  });
+
   it("maps package_manager_missing from runner", async () => {
     const runner = fakeRunner({
       ok: false,

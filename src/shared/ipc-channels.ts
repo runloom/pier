@@ -92,6 +92,11 @@ export const PIER = {
    * 不落盘；落盘仍走 preferences.update。
    */
   THEME_PREVIEW_VISUAL: "pier://theme:preview-visual",
+  /**
+   * renderer → main：同步 nativeTheme.themeSource + 窗口兜底底色。
+   * 历史 wire 值，改值会破坏滚动升级期的 preload/main 配对。
+   */
+  THEME_SET_NATIVE_CHROME: "pier:theme:set-native-chrome",
   // renderer 上报终端输入路由诊断；main 校验并写入已有 diagnostics JSONL。
   TERMINAL_INPUT_ROUTING_DIAGNOSTIC: "pier://terminal:input-routing-diagnostic",
   /** renderer → main：任务 spawn / TaskRuns / RC 诊断，写入 diagnostics JSONL。 */
@@ -123,6 +128,11 @@ export const PIER_BROADCAST = {
    * payload: { theme, stylePresetId }；main 排除 sender。
    */
   THEME_VISUAL_PREVIEW: "pier://theme:visual-preview",
+  /**
+   * OS / nativeTheme 外观变化（payload ThemeSystemAppearancePayload）。
+   * 偏好为跟随系统时 renderer 用它重解 light/dark；不落盘。
+   */
+  THEME_SYSTEM_APPEARANCE: "pier://theme:system-appearance",
   // 原生窗口几何变化后触发 renderer 补发 overlay / native view layout.
   WINDOW_LAYOUT_PULSE: "pier:window:layout-pulse",
   // OS 级窗口 key-window 聚焦变化 (main → 该窗 renderer, payload WindowFocusChangedPayload).
@@ -206,6 +216,11 @@ export const PIER_BROADCAST = {
   COMMENTS_CHANGED: "pier://comments:changed",
   // 插件数据投影变更：宿主仅转发 manifest 已声明键的事件（设计 §4.1）。
   PLUGIN_DATA_CHANGED: "pier://plugin-data:changed",
+  /**
+   * 跨窗面板拖拽的 live 落点预览。payload PanelTransferOverlayPreview；
+   * 全窗广播，各 renderer 按 windowId 决定藏 sticky 层或画目标覆盖层。
+   */
+  PANEL_TRANSFER_OVERLAY_PREVIEW: "pier://panel-transfer:overlay-preview",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

@@ -19,6 +19,14 @@
  *   5. Outside-release guard: `onWillDrop` preventDefault()s dockview's
  *      sticky-overlay dragend commit when the release point is outside the
  *      window viewport, so rip-out drags never phantom-move in-window.
+ *   6. Live overlay (Path B): main polls the cursor and broadcasts
+ *      `panel-transfer:overlay-preview`. Source hide is a dockview-core
+ *      patch (document `dragleave` clears the absolute overlay). The hovered
+ *      foreign window drives Dockview `contentDropTarget.showOverlay`.
+ *      Tear-off: leaving all Pier windows hides the source tab so dragend
+ *      cannot snap it back; capture-phase dragend also hides using the
+ *      release point. The new window's native chrome is revealed at claim
+ *      time (`revealHost`), not after renderer boot.
  *
  * The `panelTransfer.*` renderer commands (prepareSource / stageTarget /
  * releaseSource / finalize / resolvePlacement) are implemented in

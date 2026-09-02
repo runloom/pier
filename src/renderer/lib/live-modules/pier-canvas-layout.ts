@@ -342,7 +342,7 @@ export function Text({
         ...asStyle,
         color: TEXT_TONE_COLOR[tone],
         // `--md-scale` is only set on `[data-canvas-reading]`. Unset → 1,
-        // so kanban / world Text does not inherit a docs zoom.
+        // so fill / world Text does not inherit a docs zoom.
         fontSize: `calc(${asStyle.fontSize}px * var(--md-scale, 1))`,
         ...style,
       },

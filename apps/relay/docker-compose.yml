@@ -1,0 +1,15 @@
+# 从仓库根：docker compose -f apps/relay/docker-compose.yml up -d --build
+# TLS 由宿主机 Caddy 终结；容器只绑 loopback。
+services:
+  relay:
+    build:
+      context: ../..
+      dockerfile: apps/relay/Dockerfile
+    image: pier-relay:local
+    container_name: pier-relay
+    restart: unless-stopped
+    environment:
+      RELAY_PORT: "8787"
+      RELAY_PUBLIC_URL: "wss://relay.pier.codes"
+    ports:
+      - "127.0.0.1:8787:8787"

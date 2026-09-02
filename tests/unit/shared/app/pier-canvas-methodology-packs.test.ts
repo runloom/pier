@@ -102,12 +102,16 @@ describe("pier-canvas methodology packs", () => {
     expect(skill).toContain("methodology");
     expect(skill).toContain("freeform");
     expect(skill).toContain("Stage selection");
+    expect(skill).toContain("Auto-resolve");
+    expect(skill).toContain("You choose the preview shell");
+    expect(skill).toContain("The host does not infer the shell");
+    expect(skill).toContain("A mockup is **not** a design-doc");
     // Shell inventory + auto-selection (docs shell carries its own chrome).
     expect(skill).toContain("DocsShell");
     expect(skill).toContain("Pick the shell from the user's ask");
     expect(skill).toContain("no floating font-scale control");
     expect(skill).toContain("recipe=design");
-    expect(skill).toContain("recipe=board");
+    expect(skill).toContain("recipe=task-list");
     expect(skill).toContain("WorldStage");
     expect(skill).toContain("<Stack fill>");
     expect(skill).toContain("Audience language");
@@ -136,6 +140,8 @@ describe("pier-canvas methodology packs", () => {
     expect(methodology).toContain("不为「显得高级」加演示");
     expect(methodology).toContain("Recommended information architecture");
     expect(methodology).toContain("Pack selection");
+    expect(methodology).toContain("Auto-resolve");
+    expect(methodology).toContain("WorldStage");
     expect(methodology).toContain("decision_nav_4");
     expect(methodology).toContain("Day 1");
     expect(methodology).toContain("Overview");
@@ -257,10 +263,11 @@ describe("pier-canvas methodology packs", () => {
       readdirSync(join(PACKS_ROOT, "recipes"))
         .filter((name) => !name.startsWith("."))
         .sort()
-    ).toEqual(["board", "design"]);
+    ).toEqual(["design", "task-dag", "task-list"]);
     const recipes = [
       { id: "design", stage: "world" },
-      { id: "board", stage: "fill" },
+      { id: "task-list", stage: "flow" },
+      { id: "task-dag", stage: "flow" },
     ] as const;
     for (const recipe of recipes) {
       const pack = JSON.parse(
@@ -281,10 +288,15 @@ describe("pier-canvas methodology packs", () => {
       "utf8"
     );
     expect(skill).toContain("packs/recipes/design/");
-    expect(skill).toContain("packs/recipes/board/");
     expect(skill).toContain("templates/design-mockup.canvas.tsx");
-    expect(skill).toContain("templates/kanban.canvas.tsx");
-    expect(skill).toContain("recipe=board");
+    expect(skill).toContain("recipe=task-list");
+    expect(skill).toContain("recipe=task-dag");
+    expect(skill).not.toContain("recipe=tracker-board");
+    expect(skill).not.toContain("templates/tracker-board.canvas.tsx");
+    expect(skill).not.toContain("packs/recipes/tracker-board/");
+    expect(skill).not.toContain("recipe=board");
+    expect(skill).not.toContain("templates/kanban.canvas.tsx");
+    expect(skill).not.toContain("packs/recipes/board/");
     const hostData = readFileSync(
       join(
         process.cwd(),
@@ -303,6 +315,10 @@ describe("pier-canvas methodology packs", () => {
     expect(hostData).toContain("invokeCommand");
     expect(hostData).toContain("Do not call");
     expect(hostData).toContain("run.spawn");
+    expect(hostData).toContain("@pier-applet/pier.tasks/task-list");
+    expect(hostData).not.toContain(
+      'import TrackerBoard from "@pier-applet/pier.tasks/tracker-board"'
+    );
     expect(hostData).not.toContain("workbench-examples");
     expect(authoring).not.toContain("workbench-examples");
   });

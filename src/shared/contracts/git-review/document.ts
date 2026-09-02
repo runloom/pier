@@ -39,6 +39,12 @@ const patchSectionSchema = z.strictObject({
   ...gitReviewSectionBaseShape,
   changeBlocks: z.array(gitReviewChangeBlockSchema),
   kind: z.literal("patch"),
+  /**
+   * Full old/new text for Pierre expand of collapsed unmodified lines.
+   * Pair required: both present or both omitted. Absent → patch-only isPartial.
+   */
+  newContents: z.string().optional(),
+  oldContents: z.string().optional(),
   patch: z.string().min(1),
 });
 
@@ -126,8 +132,8 @@ export type GitReviewConflictPresentation = z.infer<
 const conflictSectionSchema = z.strictObject({
   ...gitReviewSectionBaseShape,
   /**
-   * Worktree UTF-8 text when presentation is markers-text; otherwise null
-   * (avoids shipping large non-renderable bodies over IPC).
+   * Worktree UTF-8 text for markers-text and readable file-level bodies.
+   * binary / tooLarge / invalidEncoding / readError stay null.
    */
   contents: z.string().nullable(),
   /** sha256:… of worktree bytes when readable; synthetic digest otherwise. */
@@ -153,6 +159,18 @@ export const gitReviewFileSectionSchema = z
     conflictSectionSchema,
   ])
   .superRefine((section, context) => {
+    if (section.kind === "patch") {
+      const hasOld = section.oldContents !== undefined;
+      const hasNew = section.newContents !== undefined;
+      if (hasOld !== hasNew) {
+        context.addIssue({
+          code: "custom",
+          message: "Patch sides must include both oldContents and newContents",
+          path: [hasOld ? "newContents" : "oldContents"],
+        });
+      }
+      return;
+    }
     if (section.kind === "conflict") {
       if (
         section.presentation === "markers-text" &&
@@ -166,11 +184,13 @@ export const gitReviewFileSectionSchema = z
       }
       if (
         section.presentation !== "markers-text" &&
+        section.presentation !== "file-level" &&
         section.contents !== null
       ) {
         context.addIssue({
           code: "custom",
-          message: "Only markers-text conflict may carry worktree contents",
+          message:
+            "Only markers-text and file-level conflict may carry worktree contents",
           path: ["contents"],
         });
       }

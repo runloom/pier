@@ -35,6 +35,10 @@ import {
   type ReadGitReviewPatchOptions,
 } from "./patch-contract.ts";
 import {
+  type GitReviewPatchCollection,
+  withGitReviewDiffSides,
+} from "./patch-sides.ts";
+import {
   raceFilesystemOperation,
   tryReadFingerprint,
   tryReadSnapshot,
@@ -70,6 +74,17 @@ const PATCH_MACHINE_ARGS = [
 export async function readGitReviewPatch(
   options: ReadGitReviewPatchOptions
 ): Promise<GitReviewPatchMaterial> {
+  const collected = await collectGitReviewPatch(options);
+  return withGitReviewDiffSides(
+    options,
+    collected.material,
+    collected.worktreeFence
+  );
+}
+
+async function collectGitReviewPatch(
+  options: ReadGitReviewPatchOptions
+): Promise<GitReviewPatchCollection> {
   if (options.fact.origin === "untracked") {
     if (options.group !== "unstaged" && options.group !== "working") {
       throw new GitReviewDocumentProtocolError(
@@ -91,7 +106,7 @@ export async function readGitReviewPatch(
   ) {
     const snapshot = await tryReadFingerprint(options);
     if (snapshot.kind === "state") {
-      return snapshot;
+      return { material: snapshot, worktreeFence: null };
     }
     before = snapshot.snapshot;
   }
@@ -112,8 +127,15 @@ export async function readGitReviewPatch(
         "Git Review worktree 文件在 patch 生成期间发生变化"
       );
     }
+    return {
+      material,
+      worktreeFence: {
+        digest: after.snapshot.digest,
+        identityToken: after.snapshot.identityToken,
+      },
+    };
   }
-  return material;
+  return { material, worktreeFence: null };
 }
 
 async function collectSelectedPatch(
@@ -154,16 +176,25 @@ async function collectSelectedPatch(
 
 async function readUntrackedPatch(
   options: ReadGitReviewPatchOptions
-): Promise<GitReviewPatchMaterial> {
+): Promise<GitReviewPatchCollection> {
   const before = await tryReadSnapshot(options);
   if (before.kind === "state") {
-    return before;
+    return { material: before, worktreeFence: null };
   }
   if (before.snapshot.bytes.includes(0)) {
-    return createGitReviewPatchState("binary", before.snapshot.digest);
+    return {
+      material: createGitReviewPatchState("binary", before.snapshot.digest),
+      worktreeFence: null,
+    };
   }
   if (!isUtf8(before.snapshot.bytes)) {
-    return createGitReviewPatchState("invalidEncoding", before.snapshot.digest);
+    return {
+      material: createGitReviewPatchState(
+        "invalidEncoding",
+        before.snapshot.digest
+      ),
+      worktreeFence: null,
+    };
   }
   const temporaryRootPromise = createGitReviewTemporaryRoot();
   let temporaryRoot: string;
@@ -179,6 +210,7 @@ async function readUntrackedPatch(
   let cleanupError: unknown;
   let material: GitReviewPatchMaterial | undefined;
   let primaryError: unknown;
+  let worktreeFence: GitReviewPatchCollection["worktreeFence"] = null;
   try {
     const objectDirectory = join(temporaryRoot, "objects");
     const indexPath = join(temporaryRoot, "index");
@@ -236,6 +268,10 @@ async function readUntrackedPatch(
         "Git Review untracked 文件在 patch 生成期间发生变化"
       );
     }
+    worktreeFence = {
+      digest: after.snapshot.digest,
+      identityToken: after.snapshot.identityToken,
+    };
   } catch (error) {
     primaryError = error;
   } finally {
@@ -253,12 +289,12 @@ async function readUntrackedPatch(
   if (cleanupError !== undefined) {
     throw cleanupError;
   }
-  if (material === undefined) {
+  if (material === undefined || worktreeFence === null) {
     throw new GitReviewDocumentProtocolError(
       "Git Review untracked patch 未产生结果"
     );
   }
-  return material;
+  return { material, worktreeFence };
 }
 
 async function resolveObjectDirectory(

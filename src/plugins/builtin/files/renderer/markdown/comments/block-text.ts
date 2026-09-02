@@ -4,7 +4,10 @@
  */
 import type { MarkdownBlock, MarkdownInline } from "../ir.ts";
 
-function inlinesToText(inlines: readonly MarkdownInline[]): string {
+/** 单元格 / 行内扁平化（表格结构键与评论指纹共用）。 */
+export function markdownInlinesToText(
+  inlines: readonly MarkdownInline[]
+): string {
   const parts: string[] = [];
   for (const inline of inlines) {
     switch (inline.kind) {
@@ -22,7 +25,7 @@ function inlinesToText(inlines: readonly MarkdownInline[]): string {
       case "delete":
       case "link":
       case "textDirective":
-        parts.push(inlinesToText(inline.children));
+        parts.push(markdownInlinesToText(inline.children));
         break;
       case "image":
         parts.push(inline.alt);
@@ -47,7 +50,7 @@ export function markdownBlockPlainText(block: MarkdownBlock): string {
     case "heading":
     case "paragraph":
     case "leafDirective":
-      return inlinesToText(block.children);
+      return markdownInlinesToText(block.children);
     case "code":
     case "math":
     case "html":
@@ -65,7 +68,9 @@ export function markdownBlockPlainText(block: MarkdownBlock): string {
     case "table":
       return block.rows
         .map((row) =>
-          row.cells.map((cell) => inlinesToText(cell.children)).join("\t")
+          row.cells
+            .map((cell) => markdownInlinesToText(cell.children))
+            .join("\t")
         )
         .join("\n");
     case "thematicBreak":

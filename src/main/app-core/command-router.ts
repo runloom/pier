@@ -28,7 +28,10 @@ import { executeAgentAssetsCommand } from "./commands/agent-assets.ts";
 import { executeAgentAttentionRespondCommand } from "./commands/agent-attention-respond.ts";
 import { executeAiCommand } from "./commands/ai.ts";
 import { executeAppCliCommand } from "./commands/app-cli.ts";
-import { executeAppSnapshotCommand } from "./commands/app-snapshot.ts";
+import {
+  executeAppOpenExternalCommand,
+  executeAppSnapshotCommand,
+} from "./commands/app-snapshot.ts";
 import { executeCanvasCommand } from "./commands/canvas-command.ts";
 import { executeCommentsCommand } from "./commands/comments.ts";
 import { executeEnvironmentCommand } from "./commands/environment.ts";
@@ -44,6 +47,7 @@ import {
   executeNotificationsMarkReadCommand,
   executeNotificationsWatchCommand,
 } from "./commands/notifications.ts";
+import { executePushHandleCommand } from "./commands/notifications-push-handle.ts";
 import {
   executePanelFocusCommand,
   executePanelListCommand,
@@ -137,6 +141,8 @@ async function executeAppStateCommand(
       });
     case "app.snapshot":
       return await executeAppSnapshotCommand(requestId, command, services);
+    case "app.openExternal":
+      return await executeAppOpenExternalCommand(requestId, command, services);
     case "app.cli.status":
     case "app.cli.install":
     case "app.cli.uninstall":
@@ -370,6 +376,8 @@ async function executeCommandByDomain(
     (cmd: PierCommand) =>
       executeAgentAttentionRespondCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeRemoteAccessCommand(requestId, cmd, services),
+    (cmd: PierCommand) =>
+      executePushHandleCommand(requestId, cmd, services, context),
     (cmd: PierCommand) => executePluginCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeAiCommand(requestId, cmd, services),
     (cmd: PierCommand) =>

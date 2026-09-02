@@ -151,6 +151,9 @@ describe("pier.memory project settings", () => {
     await waitFor(() => {
       expect(screen.getByText("use pnpm")).toBeTruthy();
     });
+    expect(screen.getByText("pnpm · convention").className).toContain(
+      "text-xs"
+    );
     expect(
       screen.getByRole("button", { name: "Clear project memory" }).className
     ).toContain("self-start");
@@ -196,6 +199,12 @@ describe("pier.memory project settings", () => {
     await waitFor(() => {
       expect(alert).toHaveBeenCalled();
     });
+    const body = String(
+      (alert.mock.calls[0] as [{ body: string }] | undefined)?.[0]?.body ?? ""
+    );
+    expect(body).toContain("/repo/.mcp.json");
+    expect(body).toContain("conflict");
+    expect(body).not.toContain("written");
   });
 
   it("enables directly without any git confirmation dialog", async () => {

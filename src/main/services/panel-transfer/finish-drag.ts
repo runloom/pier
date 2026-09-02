@@ -35,6 +35,7 @@ export interface FinishDragContext {
   clearOffer(transferId: string): void;
   geometry: PanelTransferGeometryPort;
   getOffer(transferId: string): FinishDragLiveOffer | undefined;
+  ignoreWindowIds?: () => ReadonlySet<string>;
   pruneTombstones(): void;
   rememberTombstone(transferId: string, result: PanelTransferResult): void;
   renderer: ReturnType<typeof createPanelTransferRendererPort>;
@@ -108,7 +109,8 @@ export async function finishPanelTransferDrag(
     const missedClassification = classifyTransferCursor(
       ctx.geometry,
       ctx.windows,
-      caller.runtimeWindowId
+      caller.runtimeWindowId,
+      ctx.ignoreWindowIds?.()
     );
     if (missedClassification.kind === "source") {
       return null;
@@ -153,7 +155,8 @@ export async function finishPanelTransferDrag(
   const classification = classifyTransferCursor(
     ctx.geometry,
     ctx.windows,
-    live.source.runtimeWindowId
+    live.source.runtimeWindowId,
+    ctx.ignoreWindowIds?.()
   );
   if (classification.kind === "source") {
     // Same-window release: Dockview already handled reorder/split. Silent

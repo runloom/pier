@@ -569,3 +569,101 @@ describe("routeDelivery / resolveToastTarget compatibility (focused default)", (
     ).toEqual({ mode: "key-window" });
   });
 });
+
+describe("resolveDeliveryPlan · remotePush 第三正交通道（M2 规格 §12）", () => {
+  const CANDIDATES = [
+    { deviceId: "d-idle", hasLiveSession: false },
+    { deviceId: "d-live", hasLiveSession: true },
+  ];
+  const attention: DeliveryInput = {
+    agentRef: "11:p1",
+    kind: "agent.attention",
+    severity: "warning",
+  };
+
+  it("有 key-window 仍推手机（与 toast 并行；toast/OS 互斥不受影响）", () => {
+    const result = resolveDeliveryPlan(attention, prefs(), FOCUSED, {
+      candidates: CANDIDATES,
+    });
+    expect(result.decision.toast).toBe(true);
+    expect(result.decision.osNotify).toBe(false);
+    expect(result.remotePushTarget).toEqual({
+      deviceIds: ["d-idle"],
+      mode: "devices",
+    });
+  });
+
+  it("有前台会话的设备被剔除；候选全在线 → none", () => {
+    const result = resolveDeliveryPlan(attention, prefs(), UNFOCUSED, {
+      candidates: [{ deviceId: "d-live", hasLiveSession: true }],
+    });
+    expect(result.remotePushTarget).toEqual({ mode: "none" });
+  });
+
+  it("kind ∉ OS 白名单 → none（与 OS 同门）", () => {
+    const result = resolveDeliveryPlan(
+      { kind: "task-run.finished", severity: "info" },
+      prefs(),
+      UNFOCUSED,
+      { candidates: CANDIDATES }
+    );
+    expect(result.remotePushTarget).toEqual({ mode: "none" });
+  });
+
+  it("DND 挡非 error、放行 error（与 toast 同规则；不改 OS 既有行为）", () => {
+    const blocked = resolveDeliveryPlan(
+      attention,
+      prefs({ dndEnabled: true }),
+      UNFOCUSED,
+      { candidates: CANDIDATES }
+    );
+    expect(blocked.remotePushTarget).toEqual({ mode: "none" });
+    expect(blocked.decision.osNotify).toBe(true);
+
+    const error = resolveDeliveryPlan(
+      { ...attention, severity: "error" },
+      prefs({
+        agentAttention: { enableErrorAttention: true },
+        dndEnabled: true,
+      }),
+      UNFOCUSED,
+      { candidates: CANDIDATES }
+    );
+    expect(error.remotePushTarget).toEqual({
+      deviceIds: ["d-idle"],
+      mode: "devices",
+    });
+  });
+
+  it("agent 细粒度静音 → remotePush 同静音（打断三通道统一受门）", () => {
+    const result = resolveDeliveryPlan(
+      attention,
+      prefs({ agentAttention: { enabled: false } }),
+      UNFOCUSED,
+      { candidates: CANDIDATES }
+    );
+    expect(result.remotePushTarget).toEqual({ mode: "none" });
+  });
+
+  it("mutedKinds / suppressToast → remotePush 同静音（只落档不打扰）", () => {
+    const muted = resolveDeliveryPlan(
+      attention,
+      prefs({ mutedKinds: ["agent.attention"] }),
+      UNFOCUSED,
+      { candidates: CANDIDATES }
+    );
+    expect(muted.remotePushTarget).toEqual({ mode: "none" });
+
+    const suppressed = resolveDeliveryPlan(
+      { ...attention, suppressToast: true },
+      prefs(),
+      UNFOCUSED,
+      { candidates: CANDIDATES }
+    );
+    expect(suppressed.remotePushTarget).toEqual({ mode: "none" });
+  });
+
+  it("缺省第四入参 = 无候选 → none（既有调用零改动回归）", () => {
+    expect(plan(attention).remotePushTarget).toEqual({ mode: "none" });
+  });
+});

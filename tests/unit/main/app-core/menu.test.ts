@@ -242,6 +242,67 @@ describe("app menu", () => {
     });
   });
 
+  it("shows split accelerators without registering them globally", () => {
+    const template = buildAppMenuTemplate({
+      appName: "Pier",
+      getTargetWindow: () => null,
+      isDev: false,
+      language: "en",
+      onMenuCommand: vi.fn(),
+      onNewTerminal: vi.fn(),
+      onNewWindow: vi.fn(),
+      onOpenCommandPalette: vi.fn(),
+      onResetZoom: vi.fn(),
+      onZoomIn: vi.fn(),
+      onZoomOut: vi.fn(),
+    });
+
+    const windowMenu = submenu(itemAt(template, 4));
+    expect(windowMenu.find((item) => item.label === "Split Right")).toEqual(
+      expect.objectContaining({
+        accelerator: "CmdOrCtrl+D",
+        registerAccelerator: false,
+      })
+    );
+    expect(windowMenu.find((item) => item.label === "Split Down")).toEqual(
+      expect.objectContaining({
+        accelerator: "CmdOrCtrl+Shift+D",
+        registerAccelerator: false,
+      })
+    );
+    expect(
+      windowMenu.find((item) => item.label === "Next Tab")
+    ).not.toHaveProperty("registerAccelerator");
+
+    const viewMenu = submenu(itemAt(template, 3));
+    expect(viewMenu.find((item) => item.label === "Agent List")).toEqual(
+      expect.objectContaining({
+        accelerator: "CmdOrCtrl+Shift+L",
+        registerAccelerator: false,
+      })
+    );
+    expect(windowMenu.find((item) => item.label === "Focus Up")).toEqual(
+      expect.objectContaining({
+        accelerator: "CmdOrCtrl+Alt+Up",
+        registerAccelerator: false,
+      })
+    );
+    expect(windowMenu.find((item) => item.label === "Focus Down")).toEqual(
+      expect.objectContaining({
+        accelerator: "CmdOrCtrl+Alt+Down",
+        registerAccelerator: false,
+      })
+    );
+    expect(windowMenu.find((item) => item.label === "Focus Left")).toEqual(
+      expect.objectContaining({
+        accelerator: "CmdOrCtrl+Alt+Left",
+      })
+    );
+    expect(
+      windowMenu.find((item) => item.label === "Focus Left")
+    ).not.toHaveProperty("registerAccelerator");
+  });
+
   it("routes zoom menu items through Pier handlers with keymap accelerators", () => {
     const onResetZoom = vi.fn();
     const onZoomIn = vi.fn();

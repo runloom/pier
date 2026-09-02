@@ -22,6 +22,7 @@ export const CORE_RESERVED_ACTION_IDS = [
   "pier.panel.closeOthers",
   "pier.panel.closeToTheRight",
   "pier.panel.copyPath",
+  "pier.panel.copyRelativePath",
   "pier.panel.copySelection",
   "pier.panel.copyToNewWindow",
   "pier.panel.copyToWindow",

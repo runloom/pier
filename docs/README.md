@@ -25,7 +25,8 @@ Pier 是给命令行 AI 用的桌面工作台。根目录 [`README.md`](../READM
 
 | 文档 | 你会找到什么 |
 | --- | --- |
-| [发布总览](./release.md) | 宿主与官方插件的双通道发布流程 |
+| [发布总览](./release.md) | 宿主、官方插件、会合云与移动端 Web 的发布流程 |
+| [会合云](../apps/relay/README.md) | 本地 `pnpm dev:relay`、环境变量、tag `relay-v*` / `mobile-web-v*` |
 | [桌面端发布](./app-release.md) | CI、secrets 与本地 `build:dist` |
 | [模型定价](./model-pricing.md) | 模型定价目录与更新流程 |
 | [Claude 账号插件](./claude-account-plugin.md) | `pier.claude` 账号能力的维护说明 |
@@ -44,6 +45,8 @@ Pier 是给命令行 AI 用的桌面工作台。根目录 [`README.md`](../READM
 ## 文档约定
 
 - 根 `README.md` 是产品前门，聚焦它是什么、如何开始和去哪里深入了解
+- 根 README 四语：`README.md`（简体中文真源）与 `README.en.md` / `README.ja.md` / `README.ko.md`。语言标签与产品 `SUPPORTED_LOCALES` 一致（`zh-CN` / `en` / `ja` / `ko`）。改中文前门时同步译文
+- CLI GitHub 手册四语：`.pier/canvases/pier-cli-user-manual/README.md`（简体中文真源）与同目录 `README.en.md` / `README.ja.md` / `README.ko.md`。命令语义仍以 `data.json` 为真源；应用内 Canvas 暂不按语言分文件
 - 长流程放在 `docs/` 或相应 Canvas 手册中，避免在多个入口重复维护
 - 用户可见文案使用统一产品词，并尽量说明下一步动作
 - 行为变化时同步更新相关文档与 `CHANGELOG.md` 的 `[Unreleased]`

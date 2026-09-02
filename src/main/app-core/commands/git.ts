@@ -2,8 +2,12 @@ import type {
   PierCommand,
   PierCommandResult,
 } from "@shared/contracts/commands.ts";
-import { commandSuccess as success } from "../command-results.ts";
+import {
+  commandFailure as failure,
+  commandSuccess as success,
+} from "../command-results.ts";
 import type { PierCoreServices } from "../command-router.ts";
+import { resolveCommandWindow } from "../window-routing.ts";
 
 /**
  * 写操作命令表：执行成功后立即 pulse watch service（业界惯例：应用自己跑完
@@ -65,6 +69,50 @@ export async function executeGitCommand(
   return result;
 }
 
+/**
+ * 移动端/桌面共用：在桌面工作区 show-or-focus 该仓库的审查面板。
+ * 作用域以 main 路径锚点解析器为准（gitRoot 缺失 = 非 git 仓库，拒绝）。
+ */
+async function openReviewPanel(
+  requestId: string,
+  command: Extract<PierCommand, { type: "git.openReviewPanel" }>,
+  services: PierCoreServices
+): Promise<PierCommandResult> {
+  const resolved = resolveCommandWindow(command.windowId, services);
+  if (!resolved.window) {
+    return failure(
+      requestId,
+      resolved.code ?? "not_found",
+      resolved.error ?? "no renderer window available"
+    );
+  }
+  const context = await services.panelContexts.resolveForPath(command.cwd);
+  if (!context.gitRoot) {
+    return failure(
+      requestId,
+      "git_error",
+      `not a git repository: ${command.cwd}`
+    );
+  }
+  const result = await services.rendererCommand.execute({
+    context,
+    type: "git.openReviewPanel",
+    windowId: resolved.window.id,
+  });
+  if (!result.ok) {
+    return failure(
+      requestId,
+      result.error.code ?? "internal_error",
+      result.error.message
+    );
+  }
+  const panelId = (result.data as { panelId?: unknown } | null)?.panelId;
+  return success(requestId, {
+    gitRootPath: context.gitRoot,
+    panelId: typeof panelId === "string" ? panelId : null,
+  });
+}
+
 async function dispatchGitCommand(
   requestId: string,
   command: PierCommand,
@@ -73,6 +121,8 @@ async function dispatchGitCommand(
   switch (command.type) {
     case "git.getStatus":
       return success(requestId, await services.git.getStatus(command.cwd));
+    case "git.openReviewPanel":
+      return openReviewPanel(requestId, command, services);
     case "git.listIgnored":
       return success(requestId, await services.git.listIgnored(command.cwd));
     case "git.getDiffPatch":

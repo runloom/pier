@@ -154,7 +154,7 @@ describe("createDefaultPluginSources", () => {
       messages: {
         "ui.title": "Worktrees",
       },
-      name: "git",
+      name: "GIT",
     });
   });
 
@@ -164,8 +164,8 @@ describe("createDefaultPluginSources", () => {
       id: GIT_PLUGIN_ID,
       manifest: GIT_PLUGIN_MANIFEST,
       locales: {
-        en: { name: "git" },
-        "zh-CN": { name: "git" },
+        en: { name: "GIT" },
+        "zh-CN": { name: "GIT" },
       },
     });
 
@@ -192,7 +192,7 @@ describe("createDefaultPluginSources", () => {
             messages: {
               "ui.title": "Worktrees",
             },
-            name: "git",
+            name: "GIT",
           },
           "zh-CN": {
             commands: {
@@ -204,7 +204,7 @@ describe("createDefaultPluginSources", () => {
             messages: {
               "ui.title": "工作树",
             },
-            name: "git",
+            name: "GIT",
           },
         },
       },

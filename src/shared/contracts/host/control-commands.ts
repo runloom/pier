@@ -128,9 +128,26 @@ export const hostControlCommandSchemas = [
         });
       }
     }),
+  // M2：Web 壳推送句柄（仅 mobile-paired）。deviceId 由会话身份决定，
+  // 不入参——防止伪造他机句柄（规格 §12 / M2 计划 Task 8）。
+  z.object({ type: z.literal("notifications.getPushPublicKey") }).strict(),
+  z
+    .object({
+      type: z.literal("notifications.registerPushHandle"),
+      webPush: z
+        .object({
+          endpoint: z.string().url(),
+          keys: z.object({ p256dh: nonEmpty, auth: nonEmpty }).strict(),
+        })
+        .strict(),
+    })
+    .strict(),
+  z.object({ type: z.literal("notifications.unregisterPushHandle") }).strict(),
   // M1：移动端审批回写。只允许 13 个固定审批键的按键字节，不开任意文本。
   // 语义动作（approve/reject 映射表）待证据矩阵——未验证一律 unsupported，
   // schema 不含语义动作字段，UI 不出现语义按钮。
+  // agentRef 两形态：完整引用（桌面）或裸 panelId（移动端）。
+  // panelId 跨窗不唯一；移动端另传 windowId 消歧，缺省须恰好一命中。
   z
     .object({
       type: z.literal("agent.attention.respond"),
@@ -151,6 +168,7 @@ export const hostControlCommandSchemas = [
         "8",
         "9",
       ]),
+      windowId: nonEmpty.optional(),
     })
     .strict(),
   // M1：宿主远程访问管理命令面（Task 9）。仅 desktop-renderer；

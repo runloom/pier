@@ -108,6 +108,9 @@ function adaptActionMetadata(
   if (metadata?.menuHidden) {
     adapted.menuHidden = metadata.menuHidden;
   }
+  if (metadata?.displayChord) {
+    adapted.displayChord = metadata.displayChord;
+  }
   if (metadata?.shortcutSourceId) {
     adapted.shortcutSourceId = metadata.shortcutSourceId;
   }

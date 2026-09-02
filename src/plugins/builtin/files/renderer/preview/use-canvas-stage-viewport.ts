@@ -22,6 +22,12 @@ import {
 } from "react";
 import type { FilesTranslate } from "../i18n.ts";
 import {
+  type CanvasWorldCameraMemory,
+  canvasWorldCameraStorageKey,
+  recallCanvasWorldCamera,
+  rememberCanvasWorldCamera,
+} from "./canvas-camera-memory.ts";
+import {
   type CanvasStageInfo,
   detectCanvasStage,
   FLOW_CANVAS_STAGE,
@@ -34,6 +40,7 @@ export function useCanvasStageViewport(input: {
   path: string;
   /** Design Mode pick is active — pan must not capture pointers then. */
   pickMode: boolean;
+  root: string;
   stateKind: "error" | "loading" | "pending" | "ready";
   t: FilesTranslate;
 }): {
@@ -42,7 +49,8 @@ export function useCanvasStageViewport(input: {
   stageLabels: ImagePreviewCanvasLabels;
   worldStage: boolean;
 } {
-  const { canvasShellEl, hostEl, nonce, path, pickMode, stateKind, t } = input;
+  const { canvasShellEl, hostEl, nonce, path, pickMode, root, stateKind, t } =
+    input;
 
   // Stage is a property of the composed root (WorldStage marker). Re-walk on
   // nonce (same host node can swap DocsShell ↔ WorldStage). Also observe the
@@ -76,6 +84,10 @@ export function useCanvasStageViewport(input: {
   const worldStage = stageInfo.stage === "world";
 
   const pickModeRef = useRef(false);
+  const cameraPoseRef = useRef<{
+    key: string;
+    pose: CanvasWorldCameraMemory;
+  } | null>(null);
   useEffect(() => {
     pickModeRef.current = pickMode;
   }, [pickMode]);
@@ -99,12 +111,64 @@ export function useCanvasStageViewport(input: {
     }
     return measureWorldContentBounds(canvasShellEl);
   }, [canvasShellEl]);
+  const cameraMemoryKey = canvasWorldCameraStorageKey(root, path);
+  const recallWorldCamera = useCallback(() => {
+    const memory = recallCanvasWorldCamera(cameraMemoryKey);
+    if (memory?.mode !== "free") {
+      return null;
+    }
+    return {
+      scale: memory.scale,
+      worldX: memory.worldX,
+      worldY: memory.worldY,
+    };
+  }, [cameraMemoryKey]);
   const camera = useWorldCamera({
     enabled: worldStage,
     getContentSize: getWorldContentSize,
-    resetKey: `${path}:${nonce}`,
+    recall: recallWorldCamera,
+    // Root+path identity: hot reload (nonce) must not snap back to fit.
+    resetKey: cameraMemoryKey,
     shouldCapturePointer: shouldCaptureWorldPointer,
   });
+
+  useEffect(() => {
+    if (!(worldStage && camera.camera)) {
+      return;
+    }
+    let pose: CanvasWorldCameraMemory | null = null;
+    if (camera.zoom === "fit") {
+      pose = { mode: "fit", v: 1 };
+    } else if (camera.lookAt) {
+      pose = {
+        mode: "free",
+        scale: camera.lookAt.scale,
+        v: 1,
+        worldX: camera.lookAt.worldX,
+        worldY: camera.lookAt.worldY,
+      };
+    }
+    if (!pose) {
+      return;
+    }
+    cameraPoseRef.current = { key: cameraMemoryKey, pose };
+    const timer = window.setTimeout(() => {
+      rememberCanvasWorldCamera(cameraMemoryKey, pose);
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [camera.camera, camera.lookAt, camera.zoom, cameraMemoryKey, worldStage]);
+
+  useEffect(() => {
+    const key = cameraMemoryKey;
+    return () => {
+      const pending = cameraPoseRef.current;
+      if (pending && pending.key === key) {
+        rememberCanvasWorldCamera(pending.key, pending.pose);
+      }
+    };
+  }, [cameraMemoryKey]);
 
   // The world plane can grow after mount (WorldStage measures its Layers),
   // so re-fit on shell resize — mirror of ZoomPanWorldStage's world observer.

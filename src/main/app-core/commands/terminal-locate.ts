@@ -30,6 +30,55 @@ export function resolveNativeKey(
   return toNativePanelKey(win, panelId);
 }
 
+/**
+ * panelId 跨窗口不唯一。未带 windowId 时必须恰好一命中，否则 fail-closed。
+ */
+export function pickUniquePanel<T extends { windowId: string }>(
+  items: readonly T[],
+  panelId: string,
+  windowId: string | undefined,
+  idOf: (item: T) => string
+): { ok: true; item: T } | { ok: false; reason: "ambiguous" | "missing" } {
+  const hits = items.filter((item) => {
+    if (idOf(item) !== panelId) {
+      return false;
+    }
+    if (windowId !== undefined && windowId.length > 0) {
+      return item.windowId === windowId;
+    }
+    return true;
+  });
+  if (hits.length === 1) {
+    const item = hits[0];
+    if (item) {
+      return { ok: true, item };
+    }
+  }
+  if (hits.length === 0) {
+    return { ok: false, reason: "missing" };
+  }
+  return { ok: false, reason: "ambiguous" };
+}
+
+function panelLookupFailure(
+  requestId: string,
+  panelId: string,
+  reason: "ambiguous" | "missing"
+): PierCommandResult {
+  if (reason === "ambiguous") {
+    return commandFailure(
+      requestId,
+      "not_found",
+      `terminal panel is ambiguous across windows: ${panelId}`
+    );
+  }
+  return commandFailure(
+    requestId,
+    "not_found",
+    `terminal panel not found: ${panelId}`
+  );
+}
+
 export async function findListedPanel(
   requestId: string,
   panelId: string,
@@ -50,18 +99,19 @@ export async function findListedPanel(
     windowId ? { type: "panel.list", windowId } : { type: "panel.list" },
     services as never
   );
-  const hit = listed.panels.find((panel) => panel.id === panelId);
-  if (!hit) {
+  const picked = pickUniquePanel(
+    listed.panels,
+    panelId,
+    windowId,
+    (panel) => panel.id
+  );
+  if (!picked.ok) {
     return {
       ok: false,
-      result: commandFailure(
-        requestId,
-        "not_found",
-        `terminal panel not found: ${panelId}`
-      ),
+      result: panelLookupFailure(requestId, panelId, picked.reason),
     };
   }
-  return { ok: true, panel: hit };
+  return { ok: true, panel: picked.item };
 }
 
 export async function requireTerminalPanel(

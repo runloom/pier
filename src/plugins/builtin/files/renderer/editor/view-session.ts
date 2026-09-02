@@ -42,9 +42,11 @@ import {
   editorStateSelectionLines,
   executeEditorViewCommand,
   type FileEditorCommand,
+  type FileEditorViewCommand,
   navigateEditorSearch,
   replaceEditorSearch,
   resetEditorSearch,
+  runEditorViewCommand,
   selectAllEditorMatches,
 } from "./view-operations.ts";
 import {
@@ -66,7 +68,7 @@ export type {
   FileEditorLspHoverResult,
   FileEditorViewPresentation,
 } from "./adapter-types.ts";
-export type { FileEditorCommand } from "./view-operations.ts";
+
 export class FileEditorViewSession {
   readonly documentId: string;
   readonly editorSessionId: string;
@@ -133,8 +135,7 @@ export class FileEditorViewSession {
   ): void {
     const restoreScroll = options?.restoreScroll !== false;
     if (this.#view) {
-      // 已存在 view：可能是 Activity 隐藏后 parent 换了 / DOM 被挪走。
-      // 重挂载前若仍能读到 scroll，先写入快照；append 后务必恢复（重挂会归零）。
+      // 已有 view（Activity 隐藏后 parent 可能换了）：先快照 scroll，append 后恢复。
       this.#captureScrollFromView(this.#view);
       if (this.#view.dom.parentElement !== parent) {
         parent.appendChild(this.#view.dom);
@@ -165,7 +166,6 @@ export class FileEditorViewSession {
     this.#view.scrollDOM.dataset.scrollbar = "stable";
     this.#bindScrollCapture(this.#view);
     this.syncDocument(document);
-    // Skip pixel restore when a content reveal is pending (mode switch / go-to).
     if (restoreScroll) {
       restoreFileEditorScroll(this.#view, this.#scroll);
     }
@@ -184,9 +184,7 @@ export class FileEditorViewSession {
     }
   }
   setHostReadOnly(readOnly: boolean): void {
-    if (this.#hostReadOnly === readOnly) {
-      return;
-    }
+    if (this.#hostReadOnly === readOnly) return;
     this.#hostReadOnly = readOnly;
     const view = this.#view;
     if (view) {
@@ -263,8 +261,7 @@ export class FileEditorViewSession {
     if (!view) {
       return false;
     }
-    // 先快照：display:none / 已从 parent 卸下时 scrollTop 可能已是 0，
-    // 故优先依赖 scroll 监听累计的 #scroll，仅在仍有非零值时用 live 覆盖。
+    // display:none / 已卸下时 scrollTop 可能是 0：先靠监听累计，有非零 live 再覆盖。
     this.#captureScrollFromView(view);
     if (
       parent &&
@@ -333,8 +330,7 @@ export class FileEditorViewSession {
     }
     const view = this.#view;
     if (!view) return;
-    // Selection owns vertical scroll; cross-mode content reveal resets X.
-    // Pixel restore (left+top) only for transfer / same-mode remount seed.
+    // Selection owns Y; content reveal resets X. Pixel restore only for remount seed.
     if (snapshot.selection) {
       revealFileEditorOffset(view, snapshot.selection.anchor, {
         head: snapshot.selection.head,
@@ -359,6 +355,9 @@ export class FileEditorViewSession {
   }
   captureViewportAnchor(): MarkdownCrossModeAnchor | null {
     return this.#view ? captureEditorViewportAnchor(this.#view) : null;
+  }
+  hasView(): boolean {
+    return this.#view !== null;
   }
   currentLine(): number | null {
     return editorStateCurrentLine(this.#view?.state ?? this.#savedState);
@@ -408,6 +407,9 @@ export class FileEditorViewSession {
   }
   async execute(command: FileEditorCommand): Promise<void> {
     await executeEditorViewCommand(this.#view, command);
+  }
+  runViewCommand(command: FileEditorViewCommand): boolean {
+    return runEditorViewCommand(this.#view, command);
   }
   setGitGutterMarkers(markers: ReadonlyMap<number, GitGutterLineMarker>): void {
     if (this.#view) setGitGutterMarkers(this.#view, markers);

@@ -17,6 +17,7 @@ import type {
   PierInlineReviewLabels,
   PierInlineReviewThread,
 } from "./review/inline-comment-types.ts";
+import type { PierUnresolvedConflictHost } from "./unresolved-conflict/host-types.ts";
 import type { PierDiffViewHandle } from "./use-handle.ts";
 
 export interface PierDiffViewAppearance {
@@ -134,6 +135,11 @@ export interface PierDiffViewProps {
    * 避免与 scrollTo(target) 双意图（full-alignment K5）。
    */
   readonly suppressMembershipScrollRestore?: boolean;
+  /**
+   * Host for merge-conflict items: UnresolvedFile / File in the annotation
+   * body, CodeView file chrome unchanged. Omit when the view has none.
+   */
+  readonly unresolvedConflict?: PierUnresolvedConflictHost;
 }
 
 export type PierDiffViewConflictPresentation =

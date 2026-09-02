@@ -14,9 +14,10 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { TopBar } from "../components/top-bar.tsx";
 import { type StoredHost, saveHost } from "../lib/paired-hosts.ts";
+import { redeemViaRelay } from "../lib/relay-api.ts";
 import { navigate } from "../lib/routes.ts";
 
-/** 十一能力全列：mobile-paired 客户端种类的默认能力集（单一来源 @shared）。 */
+/** mobile-paired 客户端种类的默认能力集全列（单一来源 @shared，勿手抄清单）。 */
 const REQUESTED_CAPABILITIES =
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND["mobile-paired"];
 
@@ -79,6 +80,22 @@ export function PairPage() {
       setError("二维码内容不符合 Pier 配对载荷格式");
       return;
     }
+    // 会合路径：QR 带 relayHint + hostId + pairSecret → 密封赎回，可跨网。
+    if (
+      payload.data.relayHint !== null &&
+      payload.data.hostId !== undefined &&
+      payload.data.pairSecret !== undefined
+    ) {
+      await submitViaRelay(payload.data.relayHint, {
+        fingerprint: payload.data.fingerprint,
+        host: payload.data.host,
+        hostId: payload.data.hostId,
+        pairingCode: payload.data.pairingCode,
+        pairSecret: payload.data.pairSecret,
+        port: payload.data.port,
+      });
+      return;
+    }
     const host = payload.data.host ?? window.location.hostname;
     if (payload.data.port === undefined) {
       setError("配对载荷缺少端口，无法连接宿主机");
@@ -120,6 +137,62 @@ export function PairPage() {
       );
     } catch {
       setError(`无法连接宿主机 ${host}:${payload.data.port}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitViaRelay = async (
+    relayUrl: string,
+    qr: {
+      fingerprint: string;
+      host: string | undefined;
+      hostId: string;
+      pairingCode: string;
+      pairSecret: string;
+      port: number | undefined;
+    }
+  ) => {
+    setBusy(true);
+    try {
+      const outcome = await redeemViaRelay({
+        fingerprint: qr.fingerprint,
+        hostId: qr.hostId,
+        pairSecret: qr.pairSecret,
+        relayUrl,
+        request: {
+          code: qr.pairingCode,
+          name: navigator.userAgent.slice(0, 64),
+          requestedCapabilities: [...REQUESTED_CAPABILITIES],
+          shell: "web",
+        },
+      });
+      if (!outcome.ok) {
+        const known = pairingFailureReasonSchema.safeParse(outcome.reason);
+        setError(
+          known.success
+            ? FAILURE_REASON_TEXT[known.data]
+            : `配对失败（${outcome.reason}）`
+        );
+        return;
+      }
+      // relay 宿主用 hostId 作稳定键；host/port 仅展示占位（连接走会合）。
+      const record: StoredHost = {
+        deviceId: outcome.deviceId,
+        deviceToken: outcome.deviceToken,
+        fingerprint: qr.fingerprint,
+        host: qr.host ?? new URL(relayUrl).hostname,
+        hostId: qr.hostId,
+        pairedAt: Date.now(),
+        // relay 宿主 port 仅展示占位（连接走 relayUrl + hostId）；443 满足
+        // storedHostSchema 的 positive 约束，稳定键用 hostId 不受其影响。
+        port: qr.port ?? 443,
+        relayUrl,
+      };
+      saveHost(record);
+      navigate({ page: "hosts" });
+    } catch {
+      setError("无法经远程连接完成配对，请稍后重试");
     } finally {
       setBusy(false);
     }
@@ -169,7 +242,8 @@ export function PairPage() {
       <TopBar back={{ page: "hosts" }} title="添加设备" />
       <main className="flex-1 px-4 py-4">
         <p className="mb-3 text-neutral-400 text-xs">
-          在桌面端「设置 · 远程访问」出示配对二维码，粘贴其内容或用相机扫码。
+          在桌面端「设置 ·
+          远程访问」生成配对码：用系统相机扫二维码后复制文本粘贴到下方，或点桌面端「复制配对内容」把文本发到手机。
         </p>
         <textarea
           className="mb-3 h-40 w-full rounded border border-neutral-700 bg-neutral-900 p-2 font-mono text-xs"
@@ -177,7 +251,7 @@ export function PairPage() {
           onChange={(event) => {
             setPayloadText(event.target.value);
           }}
-          placeholder='{"fingerprint":"…","pairingCode":"…","relayHint":null}'
+          placeholder="粘贴配对内容（一段 JSON 文本）"
           value={payloadText}
         />
         {error !== null && (

@@ -18,6 +18,9 @@ const EDITABLE_ROLES: Record<string, true> = {
  * IME 仍在处理该键（Chromium `keyCode` 229 或 `isComposing`）。
  * 此时不能把 Enter 当发送：preventDefault 会把候选字按 UTF-8 字节提交
  * （汉字「现」变成三个 U+FFFD）。
+ *
+ * 不够单独挡住 compositionend 之后补发的普通 Enter — 见
+ * `createImeCompositionGate` / `shouldDeferImeEnter`。
  */
 export const IME_PENDING_KEYCODE = 229;
 

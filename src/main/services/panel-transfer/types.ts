@@ -26,6 +26,34 @@ export interface PanelTransferTargetRef {
   windowRecordId: string;
 }
 
+/** In-flight HTML5 / Path B offer, including an optional claimed runner. */
+export interface PanelTransferLiveOffer {
+  abort: AbortController;
+  accepted: boolean;
+  capability: PanelTransferOffer["capability"];
+  claim?: {
+    deferred: PromiseWithResolvers<PanelTransferResult>;
+    focusOnCommit: boolean;
+    kind: "internal" | "managed";
+    placement: PanelTransferPlacement;
+    runnerStarted: boolean;
+    target: PanelTransferTargetRef;
+  };
+  expiresAt: number;
+  offer: PanelTransferOffer;
+  source: PanelTransferCaller;
+  transferId: string;
+  unsupported?: true;
+}
+
+export interface OverlayPreviewScheduleHandle {
+  dispose(): void;
+}
+
+export interface OverlayPreviewScheduler {
+  interval(callback: () => void, ms: number): OverlayPreviewScheduleHandle;
+}
+
 export interface PanelTransferJournalRecord {
   createdAt: number;
   offer: Extract<PanelTransferOffer, { capability: "movable" }>;
@@ -186,9 +214,15 @@ export interface PanelTransferWindowPort {
     recordId: string;
   }>;
   releaseRendererShow(windowId: string, reason: string): void;
+  /**
+   * Show native chrome immediately during tear-off. Does not wait for
+   * renderer boot or drop the panel-transfer show-hold.
+   */
+  revealHost(windowId: string): void;
   runExclusive<T>(
     operation: (lease: WindowTransitionLease) => Promise<T>
   ): Promise<T>;
+  setBounds(windowId: string, bounds: WindowBounds): void;
 }
 
 export interface PanelTransferService {
@@ -250,3 +284,7 @@ export const PANEL_TRANSFER_CLAIM_TOTAL_MS = 45_000;
 export const PANEL_TRANSFER_TOMBSTONE_TTL_MS = 10 * 60_000;
 export const PANEL_TRANSFER_NEW_WINDOW_CURSOR_OFFSET = 48;
 export const PANEL_TRANSFER_SHOW_HOLD_REASON = "panel-transfer";
+/** Cursor poll for live drop preview (Path B overlay; HTML5 does not cross windows). */
+export const PANEL_TRANSFER_OVERLAY_PREVIEW_INTERVAL_MS = 32;
+/** Quantize client points so overlay IPC is not every mouse pixel. */
+export const PANEL_TRANSFER_OVERLAY_PREVIEW_QUANTIZE_PX = 4;

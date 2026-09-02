@@ -1,3 +1,4 @@
+import { sanitizeProcessOutput } from "@shared/agent-lifecycle/process-output.ts";
 import { isAgentUpdateAvailable } from "@shared/agent-lifecycle/version-compare.ts";
 import type {
   AgentLifecycleAction,
@@ -38,25 +39,8 @@ export function isLifecycleSoftFailure(result: {
   );
 }
 
-/** Drop residual progress-bar noise if any slipped through older main builds. */
 function cleanErrorDetail(rawDetail: string): string {
-  return rawDetail
-    .split(/\r?\n/)
-    .filter((line) => {
-      const tLine = line.trim();
-      if (!tLine) {
-        return false;
-      }
-      if (/^\d{1,3}(\.\d+)?%\s*[#█▓▒░.=+-]*$/.test(tLine)) {
-        return false;
-      }
-      if ((tLine.match(/#/g)?.length ?? 0) >= 12) {
-        return false;
-      }
-      return true;
-    })
-    .join("\n")
-    .trim();
+  return sanitizeProcessOutput(rawDetail);
 }
 
 export function formatLifecycleError(
@@ -73,9 +57,24 @@ export function formatLifecycleError(
       ? `settings.agents.lifecycle.errors.${code}`
       : "settings.agents.lifecycle.errors.command_failed";
   const message = t(key);
+  if (code === "timeout" || code === "cancelled") {
+    return message;
+  }
   const cleaned = cleanErrorDetail(result.errorDetail?.trim() ?? "");
   const detail = cleaned || result.commandPreview?.trim() || "";
   return detail ? `${message}\n\n${detail}` : message;
+}
+
+export function formatLifecycleBatchFailureLine(
+  t: TFunction,
+  options: {
+    agentLabel: string;
+    errorCode?: string | undefined;
+    errorDetail?: string | undefined;
+    commandPreview?: string | undefined;
+  }
+): string {
+  return `${options.agentLabel}: ${formatLifecycleError(t, options)}`;
 }
 
 /**

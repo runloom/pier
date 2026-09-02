@@ -4,12 +4,14 @@ import {
   resetTooltipDismissStateForTests,
   suppressTooltips,
   TOOLTIP_ARROW_CLASS,
-  TOOLTIP_ARROW_LAYOUT_HEIGHT_PX,
+  TOOLTIP_ARROW_HEIGHT_PX,
+  TOOLTIP_ARROW_OVERLAP_PX,
   TOOLTIP_ARROW_PADDING_PX,
-  TOOLTIP_ARROW_SIZE_PX,
+  TOOLTIP_ARROW_WIDTH_PX,
   TOOLTIP_COLLISION_PADDING,
   TOOLTIP_COLLISION_PADDING_PX,
   TOOLTIP_COLLISION_PADDING_X_PX,
+  TOOLTIP_CONTENT_RADIUS_PX,
   TOOLTIP_SIDE_OFFSET_PX,
   Tooltip,
   TooltipContent,
@@ -115,14 +117,16 @@ describe("Tooltip primitive", () => {
       bottom: 8,
       left: 6,
     });
-    expect(TOOLTIP_ARROW_PADDING_PX).toBe(12);
-    expect(TOOLTIP_ARROW_SIZE_PX).toBe(10);
-    expect(TOOLTIP_ARROW_LAYOUT_HEIGHT_PX).toBe(5);
-    expect(TOOLTIP_ARROW_CLASS).toContain("rotate-45");
-    expect(TOOLTIP_ARROW_CLASS).toContain("bg-foreground");
-    expect(TOOLTIP_ARROW_CLASS).toContain("top-0");
-    expect(TOOLTIP_ARROW_CLASS).toContain("-translate-y-1/2");
-    expect(TOOLTIP_ARROW_CLASS).not.toContain("top-1/2");
+    expect(TOOLTIP_CONTENT_RADIUS_PX).toBe(16);
+    expect(TOOLTIP_ARROW_OVERLAP_PX).toBe(1);
+    expect(TOOLTIP_ARROW_PADDING_PX).toBe(TOOLTIP_CONTENT_RADIUS_PX);
+    expect(TOOLTIP_ARROW_WIDTH_PX).toBe(12);
+    expect(TOOLTIP_ARROW_HEIGHT_PX).toBe(6);
+    expect(TOOLTIP_ARROW_WIDTH_PX / TOOLTIP_ARROW_HEIGHT_PX).toBe(2);
+    expect(TOOLTIP_ARROW_CLASS).toContain("fill-foreground");
+    expect(TOOLTIP_ARROW_CLASS).toContain("-translate-y-px");
+    expect(TOOLTIP_ARROW_CLASS).not.toContain("rotate-45");
+    expect(TOOLTIP_ARROW_CLASS).not.toContain("rounded-[2px]");
   });
 
   it.each([
@@ -150,7 +154,9 @@ describe("Tooltip primitive", () => {
     expect(tooltip).toHaveTextContent("?");
     const arrow = tooltip.querySelector('[data-slot="tooltip-arrow"]');
     expect(arrow).not.toBeNull();
-    expect(arrow).toHaveClass("rotate-45", "bg-foreground");
+    expect(arrow).toHaveClass("fill-foreground", "-translate-y-px");
+    expect(arrow).not.toHaveClass("rotate-45");
+    expect(arrow?.tagName.toLowerCase()).toBe("svg");
     expectNoManualHorizontalArrowClasses(tooltip);
   });
 

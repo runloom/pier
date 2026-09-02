@@ -106,15 +106,22 @@ stay there. Put complex calculations in pure adjacent modules.
   arbitrary `grid-cols-[…]` shells.
 - `Frame` is a **reading column** (max-width + padding), not a full-height app
   chrome. Do not nest dual `ScrollArea` + `70vh` fake viewports inside it.
-- **Stage:** flow (default) for docs and overviews; `<Stack fill>` for a
-  one-screen board that owns scroll; `WorldStage` for multi-device mockups
-  and live DAGs. See SKILL.md **Stage selection**.
+- **Stage:** you infer from intent when the invoke does not pin `mode` /
+  `recipe` / `content` (SKILL.md **Auto-resolve**). The host does not infer.
+  Flow `Frame` for docs and overviews; `<Stack fill>` for a one-screen board
+  that owns scroll; `WorldStage` for multi-device mockups and live DAGs. See
+  SKILL.md **Stage selection**. Do not put a UI mockup inside a methodology
+  Design tab.
 - Product UI mockups (settings, panels, chrome) go on **`Artboard`**
   (`preset="desktop" | "laptop" | "phone" | "tablet"`). In **world** they sit
   on `WorldStage` with `Layer` (`x` / `y`). Flow children always wrap; omit
   `width` to use the same 3×desktop line as `ArtboardStage`. `ArtboardStage` remains the
   **flow fit-all card** (same chrome as `Mermaid`); it does not capture
   wheel. Do not stack screens as a document inside `Frame`.
+- `WorldStage background` is the studio floor. **Artboard captions** (label /
+  title / description) contrast against that floor. Do not restyle those
+  captions from the canvas; a light floor on a dark app theme is a host
+  concern. Product ink stays inside the frame.
 - Multi-line `AccordionTrigger` content must not rely on underline hover chrome;
   the host Accordion uses a light background hover.
 

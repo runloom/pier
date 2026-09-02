@@ -4,16 +4,21 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { TopBar } from "../components/top-bar.tsx";
+import { canSubscribe, subscribeWebPush } from "../lib/push.ts";
+import { navigate } from "../lib/routes.ts";
 import { getMobileClient } from "../lib/session.ts";
+import { useMobileWebStore } from "../lib/store.ts";
 
 interface NotificationItem {
   body?: string;
   id: string;
   kind: string;
+  panelId?: string;
   read: boolean;
   severity: string;
   title: string;
   ts: number;
+  windowId?: string;
 }
 
 interface NotificationsListResult {
@@ -35,10 +40,37 @@ function relativeTime(ts: number, now: number): string {
   return `${Math.floor(delta / 86_400_000)} 天前`;
 }
 
+/** 订阅态：unsupported=非 standalone/无 PushManager；idle→busy→done/error。 */
+type PushState = "unsupported" | "idle" | "busy" | "done" | "error";
+
 export function NotificationsPage() {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [pushState, setPushState] = useState<PushState>(() =>
+    canSubscribe() ? "idle" : "unsupported"
+  );
+
+  const enablePush = useCallback(async () => {
+    setPushState("busy");
+    try {
+      const { publicKey } = await getMobileClient().command<{
+        publicKey: string;
+      }>({ type: "notifications.getPushPublicKey" });
+      const handle = await subscribeWebPush(publicKey);
+      if (handle === null) {
+        setPushState("error");
+        return;
+      }
+      await getMobileClient().command({
+        type: "notifications.registerPushHandle",
+        webPush: handle,
+      });
+      setPushState("done");
+    } catch {
+      setPushState("error");
+    }
+  }, []);
 
   const reload = useCallback(() => {
     getMobileClient()
@@ -53,9 +85,12 @@ export function NotificationsPage() {
       });
   }, []);
 
+  // 快照 revision 变化即重拉列表：停留在本页时新通知/已读态自动出现。
+  const revision = useMobileWebStore((state) => state.revision);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: revision 是重拉触发器，体不读取
   useEffect(() => {
     reload();
-  }, [reload]);
+  }, [reload, revision]);
 
   const markRead = (id: string) => {
     getMobileClient()
@@ -64,6 +99,24 @@ export function NotificationsPage() {
       .catch(() => {
         setError("标记已读失败");
       });
+  };
+
+  const openItem = (item: NotificationItem) => {
+    if (item.panelId === undefined) {
+      return;
+    }
+    if (!item.read) {
+      getMobileClient()
+        .command({ id: item.id, type: "notifications.mark-read" })
+        .catch(() => {
+          setError("标记已读失败");
+        });
+    }
+    navigate({
+      page: "session",
+      panelId: item.panelId,
+      ...(item.windowId === undefined ? {} : { windowId: item.windowId }),
+    });
   };
 
   const markAllRead = () => {
@@ -86,7 +139,7 @@ export function NotificationsPage() {
             当前主机收件箱 · 未读 {unreadCount}
           </p>
           <button
-            className="rounded border border-neutral-600 px-2 py-1 text-[10px]"
+            className="min-h-9 rounded-md border border-neutral-600 px-3 text-neutral-200 text-xs active:bg-neutral-800"
             data-testid="notifications-mark-all"
             onClick={markAllRead}
             type="button"
@@ -99,6 +152,39 @@ export function NotificationsPage() {
             {error}
           </p>
         )}
+        <div className="mb-3 rounded border border-neutral-800 bg-neutral-900/60 p-3">
+          {pushState === "unsupported" ? (
+            <p className="text-[11px] text-neutral-500" data-testid="push-hint">
+              把本页「添加到主屏幕」后，才能在离开电脑时接收「需要你处理」提醒。
+            </p>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-neutral-400 text-xs">
+                {pushState === "done"
+                  ? "已开启离线提醒"
+                  : "离开电脑时接收「需要你处理」提醒"}
+              </span>
+              {pushState !== "done" && (
+                <button
+                  className="rounded bg-emerald-600 px-3 py-1 text-white text-xs disabled:opacity-50"
+                  data-testid="push-enable"
+                  disabled={pushState === "busy"}
+                  onClick={() => {
+                    enablePush().catch(() => setPushState("error"));
+                  }}
+                  type="button"
+                >
+                  {pushState === "busy" ? "开启中…" : "开启提醒"}
+                </button>
+              )}
+            </div>
+          )}
+          {pushState === "error" && (
+            <p className="mt-1 text-[11px] text-red-400" role="alert">
+              开启失败，请确认已授予通知权限后重试。
+            </p>
+          )}
+        </div>
         {items.length === 0 ? (
           <p
             className="mt-8 text-center text-neutral-500 text-sm"
@@ -118,32 +204,62 @@ export function NotificationsPage() {
                 data-testid="notification-item"
                 key={item.id}
               >
-                <div className="flex items-center justify-between">
-                  <span
-                    className={`text-sm ${item.read ? "text-neutral-400" : "font-medium text-neutral-100"}`}
-                  >
-                    {item.read ? "已读 · " : "未读 · "}
-                    {item.title}
-                  </span>
-                  <span className="text-[10px] text-neutral-500">
-                    {relativeTime(item.ts, now)}
-                  </span>
-                </div>
-                {item.body !== undefined && (
-                  <p className="mt-0.5 text-[10px] text-neutral-500">
-                    {item.body}
-                  </p>
-                )}
-                {!item.read && (
+                {item.panelId === undefined ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-sm ${item.read ? "text-neutral-400" : "font-medium text-neutral-100"}`}
+                      >
+                        {item.read ? "已读 · " : "未读 · "}
+                        {item.title}
+                      </span>
+                      <span className="text-[10px] text-neutral-500">
+                        {relativeTime(item.ts, now)}
+                      </span>
+                    </div>
+                    {item.body !== undefined && (
+                      <p className="mt-0.5 text-[10px] text-neutral-500">
+                        {item.body}
+                      </p>
+                    )}
+                    {!item.read && (
+                      <button
+                        className="mt-2 min-h-9 rounded-md border border-neutral-700 px-3 text-neutral-300 text-xs active:bg-neutral-800"
+                        data-testid={`notification-read-${item.id}`}
+                        onClick={() => {
+                          markRead(item.id);
+                        }}
+                        type="button"
+                      >
+                        标为已读
+                      </button>
+                    )}
+                  </>
+                ) : (
                   <button
-                    className="mt-2 text-[10px] text-neutral-400 underline"
-                    data-testid={`notification-read-${item.id}`}
+                    className="w-full text-left"
+                    data-testid={`notification-open-${item.id}`}
                     onClick={() => {
-                      markRead(item.id);
+                      openItem(item);
                     }}
                     type="button"
                   >
-                    标为已读
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-sm ${item.read ? "text-neutral-400" : "font-medium text-neutral-100"}`}
+                      >
+                        {item.read ? "已读 · " : "未读 · "}
+                        {item.title}
+                      </span>
+                      <span className="text-[10px] text-neutral-500">
+                        {relativeTime(item.ts, now)}
+                      </span>
+                    </div>
+                    {item.body !== undefined && (
+                      <p className="mt-0.5 text-[10px] text-neutral-500">
+                        {item.body}
+                      </p>
+                    )}
                   </button>
                 )}
               </li>
