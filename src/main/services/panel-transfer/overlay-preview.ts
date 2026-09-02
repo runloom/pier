@@ -229,7 +229,15 @@ export function createBoundOverlayPreview(args: {
         speculative.ensure(preview.transferId, sourceWindowId);
         return;
       }
-      if (preview.kind === "source" || preview.kind === "target") {
+      if (preview.kind === "source") {
+        speculative.discard(preview.transferId);
+        return;
+      }
+      if (preview.kind === "target") {
+        // Hovering our own warm window is still tear-off, not a managed drop.
+        if (speculative.hiddenIds().has(preview.windowId)) {
+          return;
+        }
         speculative.discard(preview.transferId);
       }
     },

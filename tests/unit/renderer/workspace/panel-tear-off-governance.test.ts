@@ -19,6 +19,8 @@ describe("panel tear-off governance", () => {
     expect(spec).toContain("data-pier-panel-transfer-in-transit");
     expect(spec).toContain("revealHost");
     expect(spec).toContain("isDragReleaseOutsideThisWindow");
+    expect(spec).toContain("分类与 HTML5 `drop` 都必须忽略这些 window id");
+    expect(spec).toContain("含正在销毁的预创建窗");
 
     const tearOff = readFileSync(
       join(ROOT, "src/renderer/components/workspace/transfer/tear-off.ts"),
@@ -35,6 +37,7 @@ describe("panel tear-off governance", () => {
     );
     expect(speculative).toContain("revealHost");
     expect(speculative).toContain("ensure(");
+    expect(speculative).toContain("dyingIds");
 
     const dnd = readFileSync(
       join(ROOT, "src/renderer/components/workspace/transfer/dnd.ts"),

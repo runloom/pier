@@ -1,7 +1,8 @@
 /**
  * Warm a hidden transfer window while the cursor is outside every Pier
  * window, so mouseup does not wait on native create. Cursor classification
- * must ignore these ids — Electron may clamp off-screen bounds on-screen.
+ * and HTML5 drop must ignore these ids — otherwise the warm window is
+ * claimed as managed and never revealed.
  */
 
 import type { WindowTransitionLease } from "../window-service.ts";
@@ -20,6 +21,8 @@ export interface CreatedTransferWindow {
 interface Slot {
   cancelled: boolean;
   created: CreatedTransferWindow | null;
+  /** Window ids that existed when `ensure` started. New ids are ours. */
+  knownWindowIds: ReadonlySet<string>;
   phase: "creating" | "ready";
   promise: Promise<CreatedTransferWindow | null>;
 }
@@ -32,16 +35,37 @@ export interface SpeculativeTransferWindow {
   take(transferId: string): CreatedTransferWindow | null;
 }
 
+function revealTransferHost(
+  windows: PanelTransferWindowPort,
+  windowId: string,
+  bounds: { height: number; width: number; x: number; y: number }
+): void {
+  windows.holdRendererShow(windowId, PANEL_TRANSFER_SHOW_HOLD_REASON);
+  // Window is already showInactive at opacity 0. Position while hidden so
+  // forceReveal does not flash the source-display clamp rect, then set
+  // again after show in case Electron ignored the first other-display move.
+  windows.setBounds(windowId, bounds);
+  windows.revealHost(windowId);
+  windows.setBounds(windowId, bounds);
+}
+
 export function createSpeculativeTransferWindow(args: {
   geometry: PanelTransferGeometryPort;
   windows: PanelTransferWindowPort;
 }): SpeculativeTransferWindow {
   const slots = new Map<string, Slot>();
+  const destroyingIds = new Set<string>();
+  const dyingIds = new Set<string>();
 
   const destroyCreated = (
     transferId: string,
     created: CreatedTransferWindow
   ) => {
+    dyingIds.add(created.windowId);
+    if (destroyingIds.has(created.windowId)) {
+      return;
+    }
+    destroyingIds.add(created.windowId);
     args.windows
       .runExclusive(async (lease) => {
         await args.windows.destroyForTransfer(
@@ -49,6 +73,7 @@ export function createSpeculativeTransferWindow(args: {
           created.windowId,
           transferId
         );
+        dyingIds.delete(created.windowId);
       })
       .catch((error: unknown) => {
         console.error(
@@ -56,6 +81,9 @@ export function createSpeculativeTransferWindow(args: {
           `transferId=${transferId}`,
           error instanceof Error ? error.message : String(error)
         );
+      })
+      .finally(() => {
+        destroyingIds.delete(created.windowId);
       });
   };
 
@@ -77,6 +105,9 @@ export function createSpeculativeTransferWindow(args: {
           bounds,
           transferId,
         });
+        // Visible to hiddenIds before this exclusive callback returns —
+        // overlay ticks can run while createForTransfer is in flight.
+        slot.created = next;
         args.windows.holdRendererShow(
           next.windowId,
           PANEL_TRANSFER_SHOW_HOLD_REASON
@@ -124,9 +155,11 @@ export function createSpeculativeTransferWindow(args: {
         return;
       }
       slot.cancelled = true;
-      if (slot.phase === "ready" && slot.created) {
-        slots.delete(transferId);
+      if (slot.created) {
         destroyCreated(transferId, slot.created);
+      }
+      if (slot.phase === "ready") {
+        slots.delete(transferId);
       }
     },
     ensure(transferId, sourceWindowId) {
@@ -134,9 +167,15 @@ export function createSpeculativeTransferWindow(args: {
       if (existing && !existing.cancelled) {
         return;
       }
+      // Let a cancelled in-flight create finish destroy before warming again,
+      // otherwise slots.set would drop its id from hiddenIds.
+      if (existing?.cancelled && existing.phase === "creating") {
+        return;
+      }
       const slot: Slot = {
         cancelled: false,
         created: null,
+        knownWindowIds: new Set(args.windows.list().map((info) => info.id)),
         phase: "creating",
         promise: Promise.resolve(null),
       };
@@ -144,12 +183,22 @@ export function createSpeculativeTransferWindow(args: {
       slots.set(transferId, slot);
     },
     hiddenIds() {
-      const ids = new Set<string>();
+      const ids = new Set(dyingIds);
       for (const slot of slots.values()) {
-        if (slot.cancelled || !slot.created) {
+        if (slot.created) {
+          ids.add(slot.created.windowId);
+        }
+        if (slot.phase !== "creating") {
           continue;
         }
-        ids.add(slot.created.windowId);
+        // createForTransfer inserts the window into list() before it
+        // returns; ignore those new ids so classification / HTML5 drop
+        // cannot treat the warm window as a managed user target.
+        for (const info of args.windows.list()) {
+          if (!slot.knownWindowIds.has(info.id)) {
+            ids.add(info.id);
+          }
+        }
       }
       return ids;
     },
@@ -181,22 +230,13 @@ export async function materializeInternalTransferWindow(input: {
   );
   const taken = input.speculative.take(input.transferId);
   if (taken) {
-    input.windows.setBounds(taken.windowId, bounds);
-    input.windows.holdRendererShow(
-      taken.windowId,
-      PANEL_TRANSFER_SHOW_HOLD_REASON
-    );
-    input.windows.revealHost(taken.windowId);
+    revealTransferHost(input.windows, taken.windowId, bounds);
     return taken;
   }
   const created = await input.windows.createForTransfer(input.lease, {
     bounds,
     transferId: input.transferId,
   });
-  input.windows.holdRendererShow(
-    created.windowId,
-    PANEL_TRANSFER_SHOW_HOLD_REASON
-  );
-  input.windows.revealHost(created.windowId);
+  revealTransferHost(input.windows, created.windowId, bounds);
   return created;
 }

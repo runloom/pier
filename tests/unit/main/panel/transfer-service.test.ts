@@ -608,6 +608,334 @@ describe("PanelTransferService", () => {
     expect(windows.revealHost).toHaveBeenCalledWith("w-new");
   });
 
+  function installWarmWindowUnderCursor(): void {
+    const listed = [
+      { focused: true, id: "main", recordId: "record-main" },
+      { focused: false, id: "w-1", recordId: "record-w1" },
+    ];
+    windows.list = vi.fn(() => listed);
+    const originalBounds = geometry.getWindowBounds;
+    geometry.getWindowBounds = (windowId) => {
+      if (windowId === "w-new") {
+        return { height: 800, width: 1200, x: 4400, y: 4600 };
+      }
+      return originalBounds(windowId);
+    };
+    createForTransfer.mockImplementation(async () => {
+      if (!listed.some((info) => info.id === "w-new")) {
+        listed.push({ focused: false, id: "w-new", recordId: "record-new" });
+      }
+      return { recordId: "record-new", windowId: "w-new" };
+    });
+  }
+
+  it("does not discard the warm window when the cursor sits on it", async () => {
+    installWarmWindowUnderCursor();
+    cursor = { x: 100, y: 80 };
+    const tick = { run: null as (() => void) | null };
+    const service = createService({
+      broadcastOverlayPreview: () => undefined,
+      overlayPreviewSchedule: {
+        interval: (callback: () => void, _ms: number) => {
+          tick.run = callback;
+          return {
+            dispose() {
+              tick.run = null;
+            },
+          };
+        },
+      },
+    });
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    cursor = { x: 5000, y: 5000 };
+    tick.run?.();
+    await vi.waitFor(() => expect(createForTransfer).toHaveBeenCalledOnce());
+    tick.run?.();
+    expect(windows.destroyForTransfer).not.toHaveBeenCalled();
+    const result = await service.finishDrag(source, TRANSFER_A);
+    expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(createForTransfer).toHaveBeenCalledOnce();
+    expect(windows.revealHost).toHaveBeenCalledWith("w-new");
+  });
+
+  it("HTML5 drop on a warmed tear-off window still revealHost", async () => {
+    installWarmWindowUnderCursor();
+    cursor = { x: 100, y: 80 };
+    const tick = { run: null as (() => void) | null };
+    const service = createService({
+      broadcastOverlayPreview: () => undefined,
+      overlayPreviewSchedule: {
+        interval: (callback: () => void, _ms: number) => {
+          tick.run = callback;
+          return {
+            dispose() {
+              tick.run = null;
+            },
+          };
+        },
+      },
+    });
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    cursor = { x: 5000, y: 5000 };
+    tick.run?.();
+    await vi.waitFor(() => expect(createForTransfer).toHaveBeenCalledOnce());
+    const warmed = caller("w-new", "record-new", 9);
+    await expect(
+      service.drop(warmed, {
+        placement: { kind: "tab", groupId: "g1", index: 0 },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(windows.revealHost).toHaveBeenCalledWith("w-new");
+    expect(createForTransfer).toHaveBeenCalledOnce();
+  });
+
+  it("does not discard a warm window that appears in list() before create resolves", async () => {
+    const listed = [
+      { focused: true, id: "main", recordId: "record-main" },
+      { focused: false, id: "w-1", recordId: "record-w1" },
+    ];
+    let releaseCreate!: () => void;
+    const createGate = new Promise<void>((resolve) => {
+      releaseCreate = resolve;
+    });
+    windows.list = vi.fn(() => listed);
+    const originalBounds = geometry.getWindowBounds;
+    geometry.getWindowBounds = (windowId) => {
+      if (windowId === "w-new") {
+        return { height: 800, width: 1200, x: 4400, y: 4600 };
+      }
+      return originalBounds(windowId);
+    };
+    createForTransfer.mockImplementation(async () => {
+      if (!listed.some((info) => info.id === "w-new")) {
+        listed.push({ focused: false, id: "w-new", recordId: "record-new" });
+      }
+      await createGate;
+      return { recordId: "record-new", windowId: "w-new" };
+    });
+    cursor = { x: 100, y: 80 };
+    const tick = { run: null as (() => void) | null };
+    const service = createService({
+      broadcastOverlayPreview: () => undefined,
+      overlayPreviewSchedule: {
+        interval: (callback: () => void, _ms: number) => {
+          tick.run = callback;
+          return {
+            dispose() {
+              tick.run = null;
+            },
+          };
+        },
+      },
+    });
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    cursor = { x: 5000, y: 5000 };
+    tick.run?.();
+    await vi.waitFor(() =>
+      expect(listed.some((info) => info.id === "w-new")).toBe(true)
+    );
+    tick.run?.();
+    expect(windows.destroyForTransfer).not.toHaveBeenCalled();
+    releaseCreate();
+    const result = await service.finishDrag(source, TRANSFER_A);
+    expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(createForTransfer).toHaveBeenCalledOnce();
+    expect(windows.revealHost).toHaveBeenCalledWith("w-new");
+  });
+
+  it("finishDrag after discard still tear-off reveals while destroy is in flight", async () => {
+    installWarmWindowUnderCursor();
+    let releaseDestroy!: () => void;
+    const destroyGate = new Promise<void>((resolve) => {
+      releaseDestroy = resolve;
+    });
+    windows.destroyForTransfer = vi.fn(async () => {
+      await destroyGate;
+    });
+    cursor = { x: 100, y: 80 };
+    const tick = { run: null as (() => void) | null };
+    const service = createService({
+      broadcastOverlayPreview: () => undefined,
+      overlayPreviewSchedule: {
+        interval: (callback: () => void, _ms: number) => {
+          tick.run = callback;
+          return {
+            dispose() {
+              tick.run = null;
+            },
+          };
+        },
+      },
+    });
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    cursor = { x: 5000, y: 5000 };
+    tick.run?.();
+    await vi.waitFor(() => expect(createForTransfer).toHaveBeenCalledOnce());
+    cursor = { x: 1500, y: 400 };
+    tick.run?.();
+    await vi.waitFor(() =>
+      expect(windows.destroyForTransfer).toHaveBeenCalledOnce()
+    );
+    cursor = { x: 5000, y: 5000 };
+    const result = await service.finishDrag(source, TRANSFER_A);
+    expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(windows.revealHost).toHaveBeenCalled();
+    releaseDestroy();
+  });
+
+  it("HTML5 drop on a warm window over a real target claims that target", async () => {
+    installWarmWindowUnderCursor();
+    geometry.getWindowZOrderTopFirst = () => ["w-new", "w-1", "main"];
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.resolvePlacement") {
+        return {
+          data: {
+            direction: "right",
+            kind: "split",
+            referenceGroupId: "g-target",
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+    cursor = { x: 100, y: 80 };
+    const tick = { run: null as (() => void) | null };
+    const service = createService({
+      broadcastOverlayPreview: () => undefined,
+      overlayPreviewSchedule: {
+        interval: (callback: () => void, _ms: number) => {
+          tick.run = callback;
+          return {
+            dispose() {
+              tick.run = null;
+            },
+          };
+        },
+      },
+    });
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    cursor = { x: 5000, y: 5000 };
+    tick.run?.();
+    await vi.waitFor(() => expect(createForTransfer).toHaveBeenCalledOnce());
+    const originalBounds = geometry.getWindowBounds;
+    geometry.getWindowBounds = (windowId) => {
+      if (windowId === "w-new") {
+        return { height: 800, width: 1200, x: 1300, y: 0 };
+      }
+      return originalBounds(windowId);
+    };
+    cursor = { x: 1500, y: 400 };
+    const warmed = caller("w-new", "record-new", 9);
+    await expect(
+      service.drop(warmed, {
+        placement: { kind: "tab", groupId: "g1", index: 0 },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(windows.revealHost).not.toHaveBeenCalled();
+    expect(createForTransfer).toHaveBeenCalledOnce();
+    const resolveCall = rendererExecute.mock.calls.find((call) => {
+      const command = call[0];
+      return (
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        command.type === "panelTransfer.resolvePlacement"
+      );
+    });
+    expect(resolveCall?.[1]).toEqual({ windowId: "w-1" });
+    const stageCall = rendererExecute.mock.calls.find((call) => {
+      const command = call[0];
+      return (
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        command.type === "panelTransfer.stageTarget"
+      );
+    });
+    expect(stageCall?.[0]).toMatchObject({
+      placement: {
+        direction: "right",
+        kind: "split",
+        referenceGroupId: "g-target",
+      },
+      type: "panelTransfer.stageTarget",
+    });
+    expect(stageCall?.[1]).toEqual({ windowId: "w-1" });
+  });
+
+  it("HTML5 drop on a warm window over the source stays silent for finishDrag", async () => {
+    installWarmWindowUnderCursor();
+    geometry.getWindowZOrderTopFirst = () => ["w-new", "main", "w-1"];
+    cursor = { x: 100, y: 80 };
+    const tick = { run: null as (() => void) | null };
+    const service = createService({
+      broadcastOverlayPreview: () => undefined,
+      overlayPreviewSchedule: {
+        interval: (callback: () => void, _ms: number) => {
+          tick.run = callback;
+          return {
+            dispose() {
+              tick.run = null;
+            },
+          };
+        },
+      },
+    });
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    cursor = { x: 5000, y: 5000 };
+    tick.run?.();
+    await vi.waitFor(() => expect(createForTransfer).toHaveBeenCalledOnce());
+    const originalBounds = geometry.getWindowBounds;
+    geometry.getWindowBounds = (windowId) => {
+      if (windowId === "w-new") {
+        return { height: 800, width: 1200, x: 0, y: 0 };
+      }
+      return originalBounds(windowId);
+    };
+    cursor = { x: 100, y: 80 };
+    const warmed = caller("w-new", "record-new", 9);
+    await expect(
+      service.drop(warmed, {
+        placement: { kind: "tab", groupId: "g1", index: 0 },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toEqual({
+      code: "already_claimed",
+      message: "transfer already claimed",
+      ok: false,
+    });
+    expect(windows.revealHost).not.toHaveBeenCalled();
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toBeNull();
+  });
+
   it("tryClaim is unique; second different claim is already_claimed", async () => {
     const service = createService();
     const source = caller("main", "record-main", 1);
