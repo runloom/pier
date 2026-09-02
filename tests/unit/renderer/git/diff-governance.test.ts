@@ -60,6 +60,7 @@ describe("Git diff renderer governance", () => {
 
     expect(importers).toEqual([
       "src/renderer/lib/theme/register-custom-themes.ts",
+      "packages/ui/src/diff-view/file-diff/from-patch.ts",
       "packages/ui/src/diff-view/file-diff/placeholders.ts",
       "packages/ui/src/diff-view/handle-deps.ts",
       "packages/ui/src/diff-view/hunk-annotations.ts",
@@ -73,6 +74,9 @@ describe("Git diff renderer governance", () => {
       "packages/ui/src/diff-view/review/use-review-annotation-merge.ts",
       "packages/ui/src/diff-view/selection-text.ts",
       "packages/ui/src/diff-view/topology-scroll.ts",
+      "packages/ui/src/diff-view/unresolved-conflict/annotation.ts",
+      "packages/ui/src/diff-view/unresolved-conflict/file-body.tsx",
+      "packages/ui/src/diff-view/unresolved-conflict/file-diff.ts",
       "packages/ui/src/diff-view/unresolved-conflict/markers-body.tsx",
       "packages/ui/src/diff-view/use-code-options.ts",
       "packages/ui/src/diff-view/use-content-selection.ts",

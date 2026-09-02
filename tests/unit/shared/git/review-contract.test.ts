@@ -334,6 +334,25 @@ describe("Git review shared contract", () => {
     ).toBe("patch");
     expect(
       gitReviewFileSectionSchema.parse({
+        changeBlocks: [changeBlock],
+        kind: "patch",
+        newContents: "new\n",
+        oldContents: "old\n",
+        patch,
+        sectionKey: "section:unstaged-sides",
+      }).kind
+    ).toBe("patch");
+    expect(
+      gitReviewFileSectionSchema.safeParse({
+        changeBlocks: [changeBlock],
+        kind: "patch",
+        oldContents: "old\n",
+        patch,
+        sectionKey: "section:unstaged-unpaired",
+      }).success
+    ).toBe(false);
+    expect(
+      gitReviewFileSectionSchema.parse({
         kind: "state",
         oldPath: null,
         reason: "conflict",
@@ -390,6 +409,34 @@ describe("Git review shared contract", () => {
     if (conflictSection.kind === "conflict") {
       expect(conflictSection.presentation).toBe("file-level");
     }
+    expect(
+      gitReviewFileSectionSchema.parse({
+        contents: "keep current\n",
+        contentsDigest: "sha256:file-level-text",
+        kind: "conflict",
+        oldPath: null,
+        presentation: "file-level",
+        sectionKey: "section:conflict-file-text",
+        stages: { baseOid: null, oursOid: null, theirsOid: null },
+        status: "conflicted",
+        targetPath: "src/app.ts",
+        xy: "UD",
+      }).contents
+    ).toBe("keep current\n");
+    expect(
+      gitReviewFileSectionSchema.safeParse({
+        contents: "nope",
+        contentsDigest: "sha256:abc",
+        kind: "conflict",
+        oldPath: null,
+        presentation: "binary",
+        sectionKey: "section:conflict-binary-text",
+        stages: { baseOid: null, oursOid: null, theirsOid: null },
+        status: "conflicted",
+        targetPath: "src/app.ts",
+        xy: "UU",
+      }).success
+    ).toBe(false);
     const validState = {
       kind: "state" as const,
       oldPath: null,

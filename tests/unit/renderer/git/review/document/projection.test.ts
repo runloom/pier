@@ -140,6 +140,67 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     expect(toCodeViewItems(projection.items, new Map()).errors).toEqual([]);
   });
 
+  it("projects patch sides onto loaded items so unmodified lines can expand", () => {
+    const path = "src/mid.ts";
+    const item: GitReviewIndexEntry = {
+      entryKey: "entry:sides",
+      oldPaths: [],
+      path,
+      renderSlots: [
+        {
+          group: "unstaged",
+          oldPath: null,
+          sectionKey: "section:sides",
+          status: "modified",
+          targetPath: path,
+        },
+      ],
+      status: "modified",
+    };
+    const oldContents = `${Array.from({ length: 30 }, (_, index) => `keep-${index}`).join("\n")}\nchange-old\nafter\n`;
+    const newContents = `${Array.from({ length: 30 }, (_, index) => `keep-${index}`).join("\n")}\nchange-new\nafter\n`;
+    const document = patchDocument({
+      entryKey: item.entryKey,
+      newContents,
+      oldContents,
+      patch: [
+        `diff --git a/${path} b/${path}`,
+        "index 1111111..2222222 100644",
+        `--- a/${path}`,
+        `+++ b/${path}`,
+        "@@ -28,5 +28,5 @@",
+        " keep-27",
+        " keep-28",
+        " keep-29",
+        "-change-old",
+        "+change-new",
+        " after",
+        "",
+      ].join("\n"),
+      sectionKey: "section:sides",
+    });
+    const projection = projectReviewDocumentResource(
+      { document, entry: item, kind: "loaded" },
+      context(),
+      "en"
+    );
+    expect(projection.items[0]?.diffFiles).toEqual({
+      newContents,
+      oldContents,
+    });
+    const parsed = toCodeViewItems(projection.items, new Map());
+    expect(parsed.errors).toEqual([]);
+    const fileDiff = parsed.items[0];
+    expect(fileDiff?.type).toBe("diff");
+    if (fileDiff?.type !== "diff") {
+      throw new Error("expected diff item");
+    }
+    expect(fileDiff.fileDiff.isPartial).toBe(false);
+    expect(
+      fileDiff.fileDiff.additionLines.some((line) => line.includes("keep-0"))
+    ).toBe(true);
+  });
+
   it("reuses immutable loaded projection for the same document and entry semantics", () => {
     const resource = loaded(2);
     if (resource.kind !== "loaded") {
@@ -410,6 +471,82 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     expect(projection.items[0]?.kind).toBe("conflict");
     expect(projection.items[0]?.conflict?.presentation).toBe("markers-text");
     expect(projection.items[0]?.conflict?.contents).toBe(contents);
+  });
+
+  it("prefers a conflict section over a leftover patch when keys do not match", () => {
+    const path = "resources/skill.md";
+    const item: GitReviewIndexEntry = {
+      entryKey: "entry:skill",
+      oldPaths: [],
+      path,
+      renderSlots: [
+        {
+          group: "conflict",
+          oldPath: null,
+          sectionKey: "section:conflict",
+          status: "conflicted",
+          targetPath: path,
+          xy: "UU",
+        },
+      ],
+      status: "conflicted",
+    };
+    const contents = [
+      "<<<<<<< HEAD",
+      "ours",
+      "=======",
+      "theirs",
+      ">>>>>>> other",
+      "",
+    ].join("\n");
+    const leftoverPatch = patchDocument({
+      entryKey: item.entryKey,
+      patch: `diff --git a/${path} b/${path}\n@@ -1 +1 @@\n-old\n+new\n`,
+      sectionKey: "section:unstaged",
+      stageState: "unstaged",
+    }).sections[0];
+    if (leftoverPatch === undefined) {
+      throw new Error("missing leftover patch");
+    }
+    const document: GitReviewFileDocumentOk = {
+      entryKey: item.entryKey,
+      kind: "ok",
+      revision: "revision:skill",
+      sections: [
+        leftoverPatch,
+        {
+          contents,
+          contentsDigest: "sha256:skill",
+          kind: "conflict",
+          oldPath: null,
+          presentation: "markers-text",
+          sectionKey: "section:stale-conflict",
+          stages: { baseOid: null, oursOid: null, theirsOid: null },
+          status: "conflicted",
+          targetPath: path,
+          xy: "UU",
+        },
+      ],
+      surfaceSections: {
+        committed: null,
+        head: "section:stale-conflict",
+        index: "section:unstaged",
+        staged: null,
+      },
+    };
+    const projection = projectReviewLedger({
+      context: context(),
+      diffBase: "conflict",
+      entries: [item],
+      locale: "en",
+      resourceByEntryKey: new Map([
+        [item.entryKey, { document, entry: item, kind: "loaded" }],
+      ]),
+    });
+    expect(projection.items).toHaveLength(1);
+    expect(projection.items[0]?.kind).toBe("conflict");
+    expect(projection.items[0]?.conflict?.contents).toBe(contents);
+    expect(projection.items[0]?.patch).toBeNull();
   });
 
   it("projects every index slot; idle/loading/unchanged become estimate", () => {

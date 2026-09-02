@@ -106,8 +106,10 @@ export async function readGitReviewConflictMaterial(
     };
   }
 
+  // Keep worktree text so Pierre File can use official file chrome.
+  // UnresolvedFile still only mounts on a closed marker stack.
   return {
-    contents: null,
+    contents: text,
     contentsDigest: digest,
     presentation: "file-level",
     sourceRevision: digest,

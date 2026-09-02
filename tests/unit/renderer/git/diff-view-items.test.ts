@@ -146,6 +146,54 @@ describe("toCodeViewItem estimate slots", () => {
     ).toBe(true);
   });
 
+  it("expands mid-file patches when both sides are present (same as conflict)", () => {
+    const prefix = Array.from({ length: 30 }, (_, index) => `keep-${index}`);
+    const oldContents = `${[...prefix, "change-old", "after"].join("\n")}\n`;
+    const newContents = `${[...prefix, "change-new", "after"].join("\n")}\n`;
+    const patch = [
+      "diff --git a/mid.ts b/mid.ts",
+      "index 1111111..2222222 100644",
+      "--- a/mid.ts",
+      "+++ b/mid.ts",
+      "@@ -28,5 +28,5 @@",
+      " keep-27",
+      " keep-28",
+      " keep-29",
+      "-change-old",
+      "+change-new",
+      " after",
+      "",
+    ].join("\n");
+    const input: PierDiffViewItem = {
+      cacheKey: "loaded:mid-sides",
+      diffFiles: { newContents, oldContents },
+      fileDisplay: { path: "mid.ts", status: "modified" },
+      id: "section:mid-sides",
+      kind: "loaded",
+      patch,
+    };
+    const { entry, error } = toCodeViewItem(input, undefined);
+    expect(error).toBeNull();
+    if (entry.item.type !== "diff") {
+      throw new Error("expected diff item");
+    }
+    expect(entry.item.fileDiff.isPartial).toBe(false);
+    expect(entry.item.fileDiff.hunks[0]?.collapsedBefore ?? 0).toBeGreaterThan(
+      0
+    );
+    expect(
+      entry.item.fileDiff.additionLines.some((line) => line.includes("keep-0"))
+    ).toBe(true);
+    expect(
+      entry.item.fileDiff.additionLines.some((line) =>
+        line.includes("change-new")
+      )
+    ).toBe(true);
+    for (const line of entry.item.fileDiff.additionLines) {
+      expect(line).not.toMatch(/^(?:undefined)+$/);
+    }
+  });
+
   it("treats zero-hunk patches as empty body without throwing", () => {
     // mode-only / 无 @@ hunk：不得因 assert 误报 error notice
     const patch = [
@@ -247,5 +295,77 @@ describe("toCodeViewItem image slots", () => {
       additions: 0,
       deletions: 0,
     });
+  });
+});
+
+describe("toCodeViewItem conflict slots", () => {
+  const stages = {
+    baseOid: null,
+    oursOid: null,
+    theirsOid: null,
+  };
+
+  it("builds a non-collapsed conflict file with a file-level annotation", () => {
+    const input: PierDiffViewItem = {
+      cacheKey: "conflict:src/a.ts",
+      conflict: {
+        contents: "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> other\n",
+        contentsDigest: "sha256:uu",
+        presentation: "markers-text",
+        stages,
+        xy: "UU",
+      },
+      fileDisplay: { path: "src/a.ts", status: "conflicted" },
+      id: "section:conflict",
+      kind: "conflict",
+      patch: null,
+    };
+    const { entry, error } = toCodeViewItem(input, undefined);
+    expect(error).toBeNull();
+    if (entry.item.type !== "diff") {
+      throw new Error("expected diff item");
+    }
+    expect(entry.item.collapsed).toBeUndefined();
+    expect(entry.item.fileDiff.cacheKey).toMatch(/^unresolved-conflict:/u);
+    expect(
+      entry.item.annotations?.some(
+        (annotation) =>
+          annotation.lineNumber === 0 &&
+          annotation.metadata !== undefined &&
+          "kind" in annotation.metadata &&
+          annotation.metadata.kind === "unresolved-conflict"
+      )
+    ).toBe(true);
+    expect(fileDiffLineStats(entry.item.fileDiff)).toEqual({
+      additions: 0,
+      deletions: 0,
+    });
+  });
+
+  it("keeps conflict estimates collapsed without a dummy annotation", () => {
+    const input: PierDiffViewItem = {
+      cacheKey: "estimate:section:conflict",
+      conflict: {
+        contents: null,
+        contentsDigest: "estimate:section:conflict",
+        presentation: "file-level",
+        stages,
+        xy: "UU",
+      },
+      fileDisplay: { path: "src/a.ts", status: "conflicted" },
+      id: "section:conflict",
+      kind: "conflict",
+      patch: null,
+    };
+    const { entry, error } = toCodeViewItem(input, undefined);
+    expect(error).toBeNull();
+    if (entry.item.type !== "diff") {
+      throw new Error("expected diff item");
+    }
+    expect(entry.item.collapsed).toBe(true);
+    expect(entry.item.fileDiff.cacheKey ?? "").not.toMatch(
+      /^unresolved-conflict:/u
+    );
+    expect(entry.item.annotations).toBeUndefined();
   });
 });

@@ -2,6 +2,7 @@
 export type PierDiffItemPresentation = "loading" | "ready";
 
 export function pierDiffItemPresentation(input: {
+  readonly conflict?: { readonly contentsDigest: string };
   readonly patch: string | null;
   readonly stateNotice?: string;
   readonly kind?:
@@ -16,11 +17,17 @@ export function pierDiffItemPresentation(input: {
   if (input.kind === "estimate") {
     return "loading";
   }
-  // conflict / ready-notice / error / image：宿主另有正文表面，header 视为就绪
+  if (input.kind === "conflict") {
+    const digest = input.conflict?.contentsDigest;
+    if (digest === undefined || digest.startsWith("estimate:")) {
+      return "loading";
+    }
+    return "ready";
+  }
+  // ready-notice / error / image：宿主另有正文表面，header 视为就绪
   if (
     input.kind === "error" ||
     input.kind === "ready-notice" ||
-    input.kind === "conflict" ||
     input.kind === "image"
   ) {
     return "ready";

@@ -59,6 +59,7 @@ export type {
   PierDiffViewPresentation,
   PierDiffViewProps,
 } from "./types.ts";
+export type { PierUnresolvedConflictHost } from "./unresolved-conflict/host-types.ts";
 export {
   type PierConflictFileBody,
   type PierConflictPresentation,

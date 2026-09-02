@@ -74,11 +74,11 @@ function fileSource(root: string, path = "conflict.ts") {
   };
 }
 
-async function conflictSection(root: string) {
+async function conflictSection(root: string, path = "conflict.ts") {
   const service = new GitReviewService();
   const document = await service.getFileDocument({
     operationId: randomUUID(),
-    source: fileSource(root),
+    source: fileSource(root, path),
   });
   expect(document.kind).toBe("ok");
   if (document.kind !== "ok") {
@@ -150,7 +150,16 @@ describe("git.resolveReviewConflict", () => {
 
     const { section } = await conflictSection(root);
     expect(section.presentation).toBe("file-level");
-    expect(section.contents).toBeNull();
+    expect(section.contents).toBe("resolved\n");
+  });
+
+  it("materializes DU conflict as file-level without failing the document schema", async () => {
+    const root = await createRepository();
+    await createDuConflict(root);
+    const { section } = await conflictSection(root, "gone.ts");
+    expect(section.presentation).toBe("file-level");
+    expect(section.xy).toBe("DU");
+    expect(section.contents).not.toBeNull();
   });
 
   it("keeps theirs for a UU conflict via checkout", async () => {

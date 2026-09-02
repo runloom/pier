@@ -6,7 +6,7 @@ describe("terminal close IPC reason semantics", () => {
     vi.clearAllMocks();
   });
 
-  async function setupHarness() {
+  async function setupHarness(options?: { transferSourceClose?: boolean }) {
     const invokeHandlers = new Map<
       string,
       (...args: unknown[]) => unknown | Promise<unknown>
@@ -83,6 +83,13 @@ describe("terminal close IPC reason semantics", () => {
       subscribeRuns: vi.fn(() => vi.fn()),
     };
 
+    const releaseTerminalCwdForwarding = vi.fn();
+    vi.doMock("@main/ipc/terminal/cwd-forwarding.ts", () => ({
+      handleTerminalCwdChange: vi.fn(async () => undefined),
+      releaseTerminalCwdForwarding,
+      resetTerminalCwdForwardingForTests: vi.fn(),
+      retainTerminalCwdForwarding: vi.fn(),
+    }));
     vi.doMock("electron", () => ({
       app: { getPath: vi.fn((k: string) => `/tmp/pier-test-${k}`) },
     }));
@@ -141,6 +148,24 @@ describe("terminal close IPC reason semantics", () => {
         windowId: "window-main",
       })),
     }));
+    if (options?.transferSourceClose) {
+      vi.doMock(
+        "@main/services/panel-transfer/terminal.ts",
+        async (importOriginal) => {
+          const actual =
+            await importOriginal<
+              typeof import("@main/services/panel-transfer/terminal.ts")
+            >();
+          return {
+            ...actual,
+            getTerminalPanelTransfer: () =>
+              ({
+                acknowledgeSourceCloseIdempotent: () => true,
+              }) as never,
+          };
+        }
+      );
+    }
 
     const closeTerminal = fakeAddon.closeTerminal;
     const { registerTerminalIpc } = await import("@main/ipc/terminal/index.ts");
@@ -154,6 +179,7 @@ describe("terminal close IPC reason semantics", () => {
       fakeAddon,
       invokeHandlers,
       processClosedForwardCallback: () => processClosedForwardCallback,
+      releaseTerminalCwdForwarding,
       taskService,
       win,
     };
@@ -335,5 +361,31 @@ describe("terminal close IPC reason semantics", () => {
       error: "createTerminal returned false",
     });
     expect(foregroundActivityService.snapshot().activities).toEqual([]);
+  });
+
+  it("releases git identity on a real close and keeps it on relaunch", async () => {
+    const { invokeHandlers, releaseTerminalCwdForwarding, win } =
+      await setupHarness();
+    const close = invokeHandlers.get("pier:terminal:close");
+
+    await close?.({ sender: win.webContents }, "terminal-1");
+    expect(releaseTerminalCwdForwarding).toHaveBeenCalledTimes(1);
+    releaseTerminalCwdForwarding.mockClear();
+
+    await close?.({ sender: win.webContents }, "terminal-1", {
+      reason: "relaunch",
+    });
+    expect(releaseTerminalCwdForwarding).not.toHaveBeenCalled();
+  });
+
+  it("releases git identity when transfer source close is acknowledged", async () => {
+    const { closeTerminal, invokeHandlers, releaseTerminalCwdForwarding, win } =
+      await setupHarness({ transferSourceClose: true });
+    const close = invokeHandlers.get("pier:terminal:close");
+
+    await close?.({ sender: win.webContents }, "terminal-1");
+
+    expect(releaseTerminalCwdForwarding).toHaveBeenCalledTimes(1);
+    expect(closeTerminal).not.toHaveBeenCalled();
   });
 });

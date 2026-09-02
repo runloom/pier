@@ -2814,6 +2814,37 @@ describe("git builtin plugin", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it("仅有 worktreeRoot 时不显示分支状态栏项", async () => {
+    dispose = activateWorktreePlugin();
+    const statusItem = terminalStatusItemRegistry
+      .list()
+      .find((item) => item.id === "pier.worktree.status");
+    if (!statusItem) {
+      throw new Error("expected worktree status item");
+    }
+
+    const { container } = render(
+      statusItem.render({
+        context: {
+          branch: "main",
+          contextId: "ctx-legacy",
+          cwd: "/Users/dev/ABC/pier",
+          openedPath: "/Users/dev/ABC/pier",
+          projectRootPath: "/Users/dev/ABC/pier",
+          source: "panel",
+          updatedAt: now,
+          worktreeRoot: "/Users/dev/ABC/pier",
+        },
+        cwd: "/Users/dev/ABC/pier",
+        getGroupId: () => null,
+        panelId: "terminal-legacy",
+        title: null,
+      })
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("runtime 刷新会替换贡献而不会误删新注册的 action", async () => {
     await rendererPluginRuntime.refresh([pluginEntry(true)]);
     expect(actionRegistry.get("pier.worktree.list")).toBeDefined();

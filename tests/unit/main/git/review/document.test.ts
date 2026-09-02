@@ -718,6 +718,45 @@ describe("GitReviewService document", () => {
     );
   });
 
+  it("中段未暂存改动的 patch section 附带两侧全文", async () => {
+    const root = await createRepository();
+    const prefix = Array.from(
+      { length: 40 },
+      (_, index) => `keep-${index}`
+    ).join("\n");
+    const suffix = Array.from(
+      { length: 40 },
+      (_, index) => `tail-${index}`
+    ).join("\n");
+    await writeFile(
+      join(root, "mid.ts"),
+      `${prefix}\nchange-old\n${suffix}\n`,
+      "utf8"
+    );
+    await commitAll(root, "base");
+    await writeFile(
+      join(root, "mid.ts"),
+      `${prefix}\nchange-new\n${suffix}\n`,
+      "utf8"
+    );
+    const result = await new GitReviewService().getFileDocument(
+      request(source(root, "mid.ts"))
+    );
+
+    expectOk(result);
+    const patches = result.sections.filter(
+      (section) => section.kind === "patch"
+    );
+    expect(patches.length).toBeGreaterThan(0);
+    for (const section of patches) {
+      expect(section.oldContents).toContain("keep-0");
+      expect(section.oldContents).toContain("change-old");
+      expect(section.newContents).toContain("change-new");
+      expect(section.patch).toContain("change-new");
+      expect(section.patch).not.toContain("keep-0");
+    }
+  });
+
   it("deleted 文件返回 patch", async () => {
     const root = await createRepository();
     await writeFile(join(root, "deleted.ts"), "deleted\n", "utf8");
@@ -730,7 +769,11 @@ describe("GitReviewService document", () => {
 
     expectOk(deleted);
     expect(contents(deleted)).toEqual([
-      expect.objectContaining({ kind: "patch" }),
+      expect.objectContaining({
+        kind: "patch",
+        newContents: "",
+        oldContents: "deleted\n",
+      }),
     ]);
   });
 

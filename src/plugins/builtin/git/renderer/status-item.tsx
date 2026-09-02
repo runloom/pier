@@ -26,6 +26,7 @@ import {
   basename,
   deriveBranchIconKind,
   deriveStatusFlags,
+  gitIdentityRoot,
   isGitStatusBarVisible,
   isStatusItemSettingEnabled,
   remoteSyncLine,
@@ -183,8 +184,8 @@ function GitBranchStatusItem({
   pluginContext: RendererPluginContext;
 }) {
   const panelContext = context;
-  const gitRoot = panelContext?.gitRoot ?? null;
-  const displayPath = panelContext?.worktreeRoot ?? gitRoot;
+  const gitRoot = gitIdentityRoot(panelContext);
+  const displayPath = gitRoot;
   const statusState = useGitStatus(pluginContext, gitRoot);
   const showDirtyIndicator = useBooleanSetting(
     pluginContext,
