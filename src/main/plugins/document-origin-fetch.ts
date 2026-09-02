@@ -2,16 +2,18 @@ import type {
   DocumentOriginFetchRequest,
   DocumentOriginFetchResult,
 } from "@pier/plugin-api/main";
-import { BrowserWindow } from "electron";
+import { BrowserWindow, session } from "electron";
 
 export type {
   DocumentOriginFetchRequest,
   DocumentOriginFetchResult,
 } from "@pier/plugin-api/main";
 
-const ORIGIN_FETCH_TIMEOUT_MS = 8000;
+export const ORIGIN_FETCH_TIMEOUT_MS = 8000;
 const CF_WAIT_MS = 3000;
 const ISOLATED_WORLD_ID = 1000;
+/** Shared with the hidden-window fallback so `cf_clearance` survives idle teardown. */
+const DOCUMENT_ORIGIN_PARTITION = "persist:pier-document-origin-fetch";
 const ALLOWED_DOCUMENT_ORIGINS = new Set(["https://grok.com"]);
 const ALLOWED_HEADER_NAMES = new Set([
   "accept",
@@ -25,11 +27,62 @@ const ALLOWED_HEADER_NAMES = new Set([
 
 const windows = new Map<string, BrowserWindow>();
 const inflight = new Map<string, Promise<BrowserWindow>>();
+/** Idle teardown: grok.com SPA is a whole renderer; poll interval is 15 min. */
+const ORIGIN_WINDOW_IDLE_TTL_MS = 60_000;
+const idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const activeFetches = new Map<string, number>();
+
+function cancelIdleTeardown(origin: string): void {
+  const timer = idleTimers.get(origin);
+  if (timer === undefined) return;
+  clearTimeout(timer);
+  idleTimers.delete(origin);
+}
+
+function scheduleIdleTeardown(origin: string): void {
+  cancelIdleTeardown(origin);
+  const timer = setTimeout(() => {
+    idleTimers.delete(origin);
+    if ((activeFetches.get(origin) ?? 0) > 0) return;
+    const win = windows.get(origin);
+    if (win) destroyOriginWindow(origin, win);
+  }, ORIGIN_WINDOW_IDLE_TTL_MS);
+  timer.unref?.();
+  idleTimers.set(origin, timer);
+}
+
+function beginFetch(origin: string): void {
+  cancelIdleTeardown(origin);
+  activeFetches.set(origin, (activeFetches.get(origin) ?? 0) + 1);
+}
+
+function endFetch(origin: string): void {
+  const remaining = (activeFetches.get(origin) ?? 1) - 1;
+  if (remaining > 0) {
+    activeFetches.set(origin, remaining);
+    return;
+  }
+  activeFetches.delete(origin);
+  if (windows.has(origin)) scheduleIdleTeardown(origin);
+}
 
 function abortError(): Error {
   const error = new Error("document origin fetch aborted");
   error.name = "AbortError";
   return error;
+}
+
+function timeoutError(): Error {
+  const error = new Error("document origin fetch timed out");
+  error.name = "TimeoutError";
+  return error;
+}
+
+function isAbortOrTimeoutError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || error.name === "TimeoutError")
+  );
 }
 
 export function assertDocumentOriginRequest(request: {
@@ -91,7 +144,7 @@ async function withTimeout<T>(
   try {
     return await new Promise<T>((resolve, reject) => {
       timer = setTimeout(() => {
-        reject(new Error("document origin fetch timed out"));
+        reject(timeoutError());
       }, ms);
       abort = (): void => reject(abortError());
       signal?.addEventListener("abort", abort, { once: true });
@@ -105,6 +158,71 @@ async function withTimeout<T>(
 
 function bytesFromBase64(base64: string): Uint8Array {
   return Uint8Array.from(Buffer.from(base64, "base64"));
+}
+
+/** Cloudflare Challenge Pages set `cf-mitigated: challenge` on every type. */
+function looksLikeCloudflareChallenge(response: {
+  headers: { get(name: string): string | null };
+}): boolean {
+  return response.headers.get("cf-mitigated") === "challenge";
+}
+
+/**
+ * Chromium-stack fetch on the origin partition (cookies, TLS fingerprint).
+ * Returns null only for a CF challenge or a retryable network failure — never
+ * for abort/timeout (those must not boot the hidden window).
+ */
+async function fetchViaChromiumSession(
+  request: DocumentOriginFetchRequest
+): Promise<DocumentOriginFetchResult | null> {
+  if (request.signal?.aborted) {
+    throw abortError();
+  }
+  const controller = new AbortController();
+  const onAbort = (): void => {
+    controller.abort();
+  };
+  request.signal?.addEventListener("abort", onAbort, { once: true });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, ORIGIN_FETCH_TIMEOUT_MS);
+  timer.unref?.();
+  try {
+    const ses = session.fromPartition(DOCUMENT_ORIGIN_PARTITION);
+    const init: RequestInit = {
+      headers: sanitizedHeaders(request.headers ?? {}),
+      method: request.method ?? "GET",
+      signal: controller.signal,
+    };
+    if (request.body) {
+      init.body = Buffer.from(request.body);
+    }
+    const response = await ses.fetch(request.url, init);
+    if (looksLikeCloudflareChallenge(response)) {
+      return null;
+    }
+    return {
+      body: new Uint8Array(await response.arrayBuffer()),
+      ok: response.ok,
+      status: response.status,
+    };
+  } catch (error) {
+    if (request.signal?.aborted) {
+      throw abortError();
+    }
+    if (timedOut) {
+      throw timeoutError();
+    }
+    if (isAbortOrTimeoutError(error)) {
+      throw abortError();
+    }
+    return null;
+  } finally {
+    clearTimeout(timer);
+    request.signal?.removeEventListener("abort", onAbort);
+  }
 }
 
 function attachWindowGuards(win: BrowserWindow, origin: string): void {
@@ -129,7 +247,7 @@ function createOriginWindow(origin: string): BrowserWindow {
       backgroundThrottling: false,
       contextIsolation: true,
       nodeIntegration: false,
-      partition: "persist:pier-document-origin-fetch",
+      partition: DOCUMENT_ORIGIN_PARTITION,
       sandbox: true,
     },
   });
@@ -145,6 +263,7 @@ function createOriginWindow(origin: string): BrowserWindow {
 }
 
 function destroyOriginWindow(origin: string, win: BrowserWindow): void {
+  cancelIdleTeardown(origin);
   if (windows.get(origin) === win) windows.delete(origin);
   if (!win.isDestroyed()) win.destroy();
 }
@@ -222,8 +341,24 @@ export async function fetchFromDocumentOrigin(
 ): Promise<DocumentOriginFetchResult> {
   const origin = assertDocumentOriginRequest(request);
   if (request.signal?.aborted) throw abortError();
-  const deadlineAt = Date.now() + ORIGIN_FETCH_TIMEOUT_MS;
   const originUrl = `${origin}/`;
+  beginFetch(originUrl);
+  try {
+    const viaSession = await fetchViaChromiumSession(request);
+    if (viaSession) {
+      return viaSession;
+    }
+    return await fetchWithOriginWindow(originUrl, request);
+  } finally {
+    endFetch(originUrl);
+  }
+}
+
+async function fetchWithOriginWindow(
+  originUrl: string,
+  request: DocumentOriginFetchRequest
+): Promise<DocumentOriginFetchResult> {
+  const deadlineAt = Date.now() + ORIGIN_FETCH_TIMEOUT_MS;
   const win = await windowForOrigin(originUrl, request.signal);
   if (request.signal?.aborted) throw abortError();
   const method = request.method ?? "GET";
@@ -274,6 +409,10 @@ export async function fetchFromDocumentOrigin(
 
 export function disposeDocumentOriginWindows(): void {
   inflight.clear();
+  for (const origin of idleTimers.keys()) {
+    cancelIdleTeardown(origin);
+  }
+  activeFetches.clear();
   for (const win of windows.values()) {
     if (!win.isDestroyed()) win.destroy();
   }

@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { toHostError } from "./live-module-realm.ts";
 
 export type LiveModuleUnmount = () => void;
 
@@ -86,7 +87,9 @@ function reportMountError(
   onError: ((error: Error) => void) | undefined,
   error: unknown
 ): void {
-  onError?.(error instanceof Error ? error : new Error(String(error)));
+  // Canvas code runs in a disposable realm: its Error instances fail
+  // `instanceof Error` here, so rebuild a host Error carrying the same message.
+  onError?.(toHostError(error));
 }
 
 /** Notify the host after the canvas root leaves render/commit. */
@@ -189,12 +192,12 @@ function renderLiveModuleTree<P>(
  * - React: `export default function Comp()` also works
  * - Svelte: `export default Component` (class with $destroy) also works
  */
-export async function mountLiveModuleExport(
+export function mountLiveModuleExport(
   el: HTMLElement,
   framework: LiveModuleFramework,
   mod: Record<string, unknown>,
   options: MountLiveModuleOptions = {}
-): Promise<LiveModuleUnmount> {
+): LiveModuleUnmount {
   const explicitMount = mod.mount;
   if (typeof explicitMount === "function") {
     const stop = (

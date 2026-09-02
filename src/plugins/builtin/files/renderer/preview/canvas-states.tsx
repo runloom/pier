@@ -10,6 +10,7 @@ import {
 import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { LiveModuleMountError } from "@plugins/api/live-module-mount.ts";
+import { toHostError } from "@plugins/api/live-module-realm.ts";
 import type { LiveModuleDiagnostic } from "@shared/contracts/live-modules.ts";
 import { FileQuestion } from "lucide-react";
 import type { FilesTranslate } from "../i18n.ts";
@@ -83,8 +84,12 @@ export function canvasMountErrorMessage(
       }
     }
   }
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
+  // Realm errors (module evaluation / framework mount) are not host `Error`s.
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = toHostError(error).message;
+    if (message.trim().length > 0) {
+      return message;
+    }
   }
   return t("filePanel.canvas.runtimeFailed", "Canvas crashed while rendering");
 }

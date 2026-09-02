@@ -2,6 +2,10 @@ import {
   PIER_CANVAS_COMPONENT_EXPORT_NAMES,
   PIER_CANVAS_VALUE_EXPORT_NAMES,
 } from "@shared/pier-canvas-export-names.ts";
+import {
+  liveModuleHostGlobalExpression,
+  liveModuleHostGlobalReaderSource,
+} from "./host-global-source.ts";
 
 export const PIER_CANVAS_STUB_NAMESPACE = "pier-live-canvas-stub";
 export const PIER_CANVAS_STUB_PATH = "pier:canvas-stub";
@@ -41,7 +45,8 @@ export function nodeBuiltinStubSource(specifier: string): string {
 
 /**
  * Stub module inlined into each canvas bundle. Named exports always exist;
- * implementations are read from `globalThis.__PIER_LIVE_CANVAS__` at render time.
+ * implementations are read from the host `__PIER_LIVE_CANVAS__` at render time
+ * (own realm first, then `parent` — canvases evaluate in a disposable iframe realm).
  *
  * Components become `createElement` wrappers. Value exports (hooks) are called
  * through with their own arguments and return value — wrapping those in
@@ -51,8 +56,9 @@ export function nodeBuiltinStubSource(specifier: string): string {
 export function pierCanvasStubSource(): string {
   const lines = [
     'import { createElement } from "react";',
+    liveModuleHostGlobalReaderSource(),
     "function getCanvas() {",
-    "  const canvas = globalThis.__PIER_LIVE_CANVAS__;",
+    `  const canvas = ${liveModuleHostGlobalExpression("__PIER_LIVE_CANVAS__")};`,
     "  if (!canvas) {",
     '    throw new Error("Live module pier/canvas runtime missing — call installLiveModuleRuntime()");',
     "  }",

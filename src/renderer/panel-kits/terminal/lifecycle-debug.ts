@@ -52,12 +52,12 @@ export function updateTerminalPanelLifecycleDebug(
   });
 }
 
+/**
+ * 面板生命周期结束即释放条目：debug 快照只读取仍在 dockview 中的 panel，
+ * 保留「disposed」条目只会让 Map 随历史面板数无界增长。
+ */
 export function disposeTerminalPanelLifecycleDebug(panelId: string): void {
-  updateTerminalPanelLifecycleDebug(panelId, {
-    createPending: false,
-    phase: "disposed",
-    placeholderVisible: false,
-  });
+  lifecycleByPanelId.delete(panelId);
 }
 
 export function resetTerminalPanelLifecycleDebugForTests(): void {

@@ -1,5 +1,9 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { mountLiveModuleExport } from "@plugins/api/live-module-mount.ts";
+import {
+  importLiveModuleInDisposableRealm,
+  type LiveModuleRealm,
+} from "@plugins/api/live-module-realm.ts";
 import type { RendererLiveModulesApi } from "@plugins/api/live-modules-context.ts";
 import {
   projectLiveRootId,
@@ -90,6 +94,7 @@ export function MarkdownAppletFence({
     }
     let cancelled = false;
     let unmount: (() => void) | undefined;
+    let realm: LiveModuleRealm | undefined;
     const spec = projectLiveRootSpec({ projectRootPath: disk.root });
     const mount = async () => {
       await liveModules.registerRoot(spec);
@@ -99,16 +104,19 @@ export function MarkdownAppletFence({
         throw new Error(compiled.diagnostics[0]?.message ?? "compile failed");
       }
       const url = await liveModules.getUrl(spec.id, moduleId);
-      const mod = (await import(/* @vite-ignore */ url)) as Record<
-        string,
-        unknown
-      >;
+      const loaded = await importLiveModuleInDisposableRealm(url);
       if (cancelled) {
+        loaded.dispose();
         return;
       }
-      unmount = await mountLiveModuleExport(el, "react", mod, {
+      realm = loaded;
+      unmount = mountLiveModuleExport(el, "react", loaded.namespace, {
         props: appletFenceProps(parsed.props),
       });
+      if (cancelled) {
+        unmount();
+        realm.disposeSoon();
+      }
     };
     mount().catch((caught: unknown) => {
       if (!cancelled) {
@@ -118,6 +126,7 @@ export function MarkdownAppletFence({
     return () => {
       cancelled = true;
       unmount?.();
+      realm?.disposeSoon();
       liveModules
         .unregisterRoot(projectLiveRootId(disk.root))
         .catch(() => undefined);

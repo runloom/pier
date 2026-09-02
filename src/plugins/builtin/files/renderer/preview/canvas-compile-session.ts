@@ -3,6 +3,10 @@ import {
   LiveModuleMountError,
   mountLiveModuleExport,
 } from "@plugins/api/live-module-mount.ts";
+import {
+  importLiveModuleInDisposableRealm,
+  type LiveModuleRealm,
+} from "@plugins/api/live-module-realm.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY,
@@ -48,10 +52,14 @@ import {
 /**
  * The compile + mount session for one canvas preview generation.
  *
- * - registers the project live root, compiles, imports the bundle, mounts it
- * - hot reload keeps the previous mount until the new bundle is ready
- * - CSS teardown ordering: previous styles are removed BEFORE `import(url)`
- *   (the new bundle's injector tags styles with the same moduleId prefix)
+ * - registers the project live root, compiles, imports the bundle into a
+ *   disposable realm (`importLiveModuleInDisposableRealm`), mounts it
+ * - hot reload keeps the previous mount until the new bundle is ready; the
+ *   previous realm is discarded together with its mount so replaced module
+ *   graphs do not accumulate in the host module map
+ * - CSS teardown ordering: previous styles are removed BEFORE the new bundle
+ *   is imported in the disposable realm (the injector tags styles with the
+ *   same moduleId prefix)
  * - manual Reload (toolbar) and stale events bump `nonce` → new generation
  */
 export function useCanvasCompileSession(props: {
@@ -133,6 +141,10 @@ export function useCanvasCompileSession(props: {
     let registeredRootId: string | null = null;
     let compileRelPath: string | null = null;
     let isHotReload = false;
+    /** Imported this generation but not yet owned by `unmountRef`. */
+    let pendingRealm: LiveModuleRealm | null = null;
+    /** Set as soon as `mountLiveModuleExport` returns, before `unmountRef`. */
+    let pendingUnmount: (() => void) | null = null;
 
     const clearSkeletonTimer = () => {
       if (skeletonTimer !== null) {
@@ -302,14 +314,15 @@ export function useCanvasCompileSession(props: {
         if (previousModuleId) {
           removeLiveModuleCss(previousModuleId);
         }
-        // Dynamic URL from compile ticket — specifier unknown until runtime.
-        const mod = (await import(/* @vite-ignore */ result.url)) as Record<
-          string,
-          unknown
-        >;
+        // Dynamic URL from compile ticket — evaluated in a disposable realm so
+        // this generation's module graph dies with its mount.
+        const realm = await importLiveModuleInDisposableRealm(result.url);
         if (!stillOwner()) {
+          realm.dispose();
           return;
         }
+        pendingRealm = realm;
+        const mod = realm.namespace;
 
         // Atomic swap: tear down previous only once the new module is ready.
         // stillOwner() re-check prevents a superseded generation from stealing the host.
@@ -349,34 +362,34 @@ export function useCanvasCompileSession(props: {
         };
 
         if (!stillOwner()) {
+          pendingRealm = null;
+          realm.dispose();
           return;
         }
-        const nextUnmount = await mountLiveModuleExport(
-          hostEl,
-          framework,
-          mod,
-          {
-            onError: reportRuntimeError,
-            wrap: liveModuleCanvasFileScopeWrapper({
-              directory:
-                canvasDirectoryFromProjectPath(path, contentDirectories) ?? "",
-              path,
-              root,
-            }),
-          }
-        );
+        const nextUnmount = mountLiveModuleExport(hostEl, framework, mod, {
+          onError: reportRuntimeError,
+          wrap: liveModuleCanvasFileScopeWrapper({
+            directory:
+              canvasDirectoryFromProjectPath(path, contentDirectories) ?? "",
+            path,
+            root,
+          }),
+        });
+        pendingUnmount = nextUnmount;
         if (!stillOwner()) {
-          // This generation lost the race — the new bundle's CSS was injected
-          // at import time but nothing will mount it, so drop it.
           nextUnmount();
+          pendingUnmount = null;
           removeLiveModuleCss(relPath);
+          pendingRealm = null;
+          realm.disposeSoon();
           return;
         }
         clearSkeletonTimer();
-        // CSS cleanup is owned by clearMountedCanvas (error/unmount paths) and
-        // the pre-import removal above (swap path) — not by this wrapper.
+        pendingUnmount = null;
+        pendingRealm = null;
         unmountRef.current = () => {
           nextUnmount();
+          realm.disposeSoon();
         };
         mountedIdentityRef.current = identity;
         mountedModuleIdRef.current = relPath;
@@ -402,6 +415,10 @@ export function useCanvasCompileSession(props: {
           ...(warningSoft ? { softError: warningSoft } : {}),
         });
       } catch (error) {
+        pendingUnmount?.();
+        pendingUnmount = null;
+        pendingRealm?.disposeSoon();
+        pendingRealm = null;
         if (!stillOwner()) {
           return;
         }
@@ -447,6 +464,10 @@ export function useCanvasCompileSession(props: {
       cancelled = true;
       clearSkeletonTimer();
       stopWatch();
+      pendingUnmount?.();
+      pendingUnmount = null;
+      pendingRealm?.disposeSoon();
+      pendingRealm = null;
       // Refcounted release — last panel for this content root drops watchers.
       if (registeredRootId) {
         liveModules.unregisterRoot(registeredRootId).catch(() => undefined);

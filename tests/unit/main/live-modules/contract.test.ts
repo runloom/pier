@@ -14,6 +14,7 @@ import {
 } from "@shared/contracts/live-modules.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import {
+  LIVE_MODULE_RUNTIME_IDS,
   LIVE_MODULE_SCHEME,
   liveModuleAssetTicketFromUrl,
   liveModuleAssetUrlForTicket,
@@ -268,13 +269,8 @@ describe("live-module-url", () => {
   });
 
   it("round-trips runtime shim ids", () => {
-    for (const id of [
-      "react",
-      "react-dom",
-      "react-dom-client",
-      "jsx-runtime",
-      "jsx-dev-runtime",
-    ] as const) {
+    expect(LIVE_MODULE_RUNTIME_IDS).toContain("realm-bootstrap");
+    for (const id of LIVE_MODULE_RUNTIME_IDS) {
       const url = liveModuleRuntimeUrl(id);
       expect(liveModuleRuntimeIdFromUrl(url)).toBe(id);
     }

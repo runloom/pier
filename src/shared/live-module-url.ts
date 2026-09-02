@@ -5,8 +5,8 @@
  * Contract rules (C0 / design §0.1):
  * - Module and asset URLs carry only a ticket — never a filesystem path.
  * - Runtime URLs are a fixed whitelist (react / react-dom / jsx) for host
- *   singletons. `pier/canvas` is compiled as an inlined globalThis stub — not a
- *   protocol runtime id.
+ *   singletons plus the realm bootstrap. `pier/canvas` is compiled as an
+ *   inlined globalThis stub — not a protocol runtime id.
  */
 
 export const LIVE_MODULE_SCHEME = "pier-live";
@@ -20,9 +20,14 @@ export const LIVE_MODULE_RUNTIME_IDS = [
   "react-dom-client",
   "jsx-runtime",
   "jsx-dev-runtime",
+  /** Realm bootstrap script. Production CSP has no unsafe-inline/unsafe-eval. */
+  "realm-bootstrap",
 ] as const;
 
 export type LiveModuleRuntimeId = (typeof LIVE_MODULE_RUNTIME_IDS)[number];
+
+/** Host calls this on the realm window before dropping the iframe. */
+export const LIVE_MODULE_REALM_TEARDOWN_NAME = "__pierLiveRealmTeardown";
 
 const LIVE_MODULE_RUNTIME_ID_SET = new Set<string>(LIVE_MODULE_RUNTIME_IDS);
 

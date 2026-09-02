@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+import {
+  importLiveModuleInSameRealmForTests,
+  setLiveModuleRealmImporterForTests,
+} from "@plugins/api/live-module-realm.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FileCanvasPreview } from "@plugins/builtin/files/renderer/preview/canvas.tsx";
 import {
@@ -65,9 +69,13 @@ const PROJECT_ROOT = "/proj";
 describe("FileCanvasPreview", () => {
   beforeEach(() => {
     vi.useRealTimers();
+    // jsdom cannot run module scripts in the disposable realm iframe; evaluate
+    // the data: URL modules in the host realm instead.
+    setLiveModuleRealmImporterForTests(importLiveModuleInSameRealmForTests);
   });
 
   afterEach(() => {
+    setLiveModuleRealmImporterForTests(null);
     vi.useRealTimers();
     vi.restoreAllMocks();
   });

@@ -32,6 +32,7 @@ export {
 } from "./projection-types.ts";
 export { reconcileReviewDocumentSnapshot } from "./reconcile.ts";
 export {
+  GIT_REVIEW_PROJECTIONS_PER_DOCUMENT,
   isCodeViewMemberResource,
   projectReviewDocumentResource,
 } from "./resource-projection.ts";

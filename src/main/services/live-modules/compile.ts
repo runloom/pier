@@ -1,6 +1,7 @@
 import { dirname } from "node:path";
 import type { LiveModuleDiagnostic } from "@shared/contracts/live-modules.ts";
 import type { LiveModuleFramework } from "@shared/live-module-framework.ts";
+import { liveModuleAssetUrlForTicket } from "@shared/live-module-url.ts";
 import type { BuildOptions } from "esbuild";
 import { type CompiledLiveAsset, createCanvasAssetPlugin } from "./assets.ts";
 import {
@@ -35,10 +36,36 @@ import {
   buildCanvasTailwindCss,
   entryDirectImportsFromMetafile,
 } from "./tailwind.ts";
+import { createLiveModuleTicket } from "./ticket-registry.ts";
 
 export const LIVE_MODULE_COMPILE_TIMEOUT_MS = 15_000;
-/** Raised to fit inline sourcemaps; still a hard abuse cap on ticket buffers. */
+/** Hard abuse cap on ticket buffers (sourcemap is a separate asset). */
 export const LIVE_MODULE_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
+export const LIVE_MODULE_SOURCE_MAP_MIME_TYPE = "application/json";
+
+/**
+ * External sourcemap ticket. Unload is the iframe realm; this only keeps the
+ * live source small. DevTools fetches the map via `//# sourceMappingURL`.
+ */
+export function attachExternalSourceMap(
+  moduleSource: string,
+  sourceMapText: string | undefined,
+  assets: CompiledLiveAsset[]
+): string {
+  if (sourceMapText === undefined) {
+    return moduleSource;
+  }
+  const ticket = createLiveModuleTicket((candidate) =>
+    assets.some((asset) => asset.ticket === candidate)
+  );
+  assets.push({
+    bytes: Buffer.from(sourceMapText, "utf8"),
+    mimeType: LIVE_MODULE_SOURCE_MAP_MIME_TYPE,
+    ticket,
+  });
+  const url = liveModuleAssetUrlForTicket(ticket);
+  return `${moduleSource}\n//# sourceMappingURL=${url}\n`;
+}
 
 export interface CompileLiveModuleInput {
   allowedBarePackages: readonly string[];
@@ -165,7 +192,7 @@ export async function compileLiveModule(
         }),
         createCanvasAssetPlugin({ assetsRef, fenceRoot }),
       ],
-      sourcemap: "inline",
+      sourcemap: "external",
       target: ["chrome120"],
       write: false,
     };
@@ -216,7 +243,9 @@ export async function compileLiveModule(
       entry.assetsRef.current = [];
       const result = await entry.context.rebuild();
 
-      const { cssText, jsFile } = pickJsAndCssOutputs(result.outputFiles ?? []);
+      const { cssText, jsFile, sourceMapText } = pickJsAndCssOutputs(
+        result.outputFiles ?? []
+      );
       if (!jsFile) {
         return compileFailureResult(
           [
@@ -259,7 +288,10 @@ export async function compileLiveModule(
         input.moduleId,
         tailwind.propertyCss
       );
-      const bytes = new TextEncoder().encode(finalSource);
+      const assets = [...entry.assetsRef.current];
+      const bytes = new TextEncoder().encode(
+        attachExternalSourceMap(finalSource, sourceMapText, assets)
+      );
 
       if (bytes.byteLength > LIVE_MODULE_MAX_OUTPUT_BYTES) {
         return compileFailureResult(
@@ -291,7 +323,7 @@ export async function compileLiveModule(
       ];
 
       const success: CompileLiveModuleSuccess = {
-        assets: [...entry.assetsRef.current],
+        assets,
         bytes,
         graph: [...entry.graphRef.current].sort(),
         ok: true,
