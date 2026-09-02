@@ -193,6 +193,7 @@ export const FILES_PLUGIN_MANIFEST = {
   },
   canvasActions: [],
   dataProjections: [],
+  description: "Browse project files and open source, Markdown, and canvases.",
   settingsPages: [],
   groupContent: [
     {

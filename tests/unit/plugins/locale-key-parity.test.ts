@@ -29,6 +29,20 @@ describe("builtin plugin locale key parity", () => {
   it.each([
     "files",
     "git",
+    "memory",
+  ] as const)("%s ships a plugin list description in every locale", (plugin) => {
+    for (const locale of SUPPORTED_LOCALES) {
+      const data = readJson(
+        join(ROOT, `src/plugins/builtin/${plugin}/locales/${locale}.json`)
+      ) as { description?: unknown };
+      expect(typeof data.description, locale).toBe("string");
+      expect(String(data.description).trim().length, locale).toBeGreaterThan(0);
+    }
+  });
+
+  it.each([
+    "files",
+    "git",
   ] as const)("%s keeps non-alias keys aligned across shipped languages", (plugin) => {
     const expected = omitAliasLeaves(
       leafKeys(
@@ -68,6 +82,12 @@ describe("official plugin locale key parity", () => {
         omitAliasLeaves(leafKeys(locales[locale])).toSorted(),
         locale
       ).toEqual(expected);
+      const messages = locales[locale] as { description?: unknown };
+      expect(typeof messages.description, locale).toBe("string");
+      expect(
+        String(messages.description).trim().length,
+        locale
+      ).toBeGreaterThan(0);
     }
   });
 });

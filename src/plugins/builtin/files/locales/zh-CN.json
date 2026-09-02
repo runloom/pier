@@ -544,6 +544,7 @@
       "description": "显示当前项目并打开其目录树。"
     }
   },
+  "description": "浏览项目文件，打开并编辑源码、Markdown 和画布。",
   "name": "文件",
   "panels": {
     "pier.files.filePanel": {
