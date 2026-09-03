@@ -53,7 +53,7 @@ import {
   SidebarToggleButton,
 } from "./parts.tsx";
 import {
-  breadcrumbSegmentsForSource,
+  breadcrumbSegmentsForPanelSource,
   outsideWorkspaceStateFor,
 } from "./source.ts";
 import {
@@ -356,17 +356,7 @@ export function FilesGroupView({
   let trailing: ReactNode = null;
   let body: ReactNode;
 
-  if (outsideWorkspace && selectedSource) {
-    center = (
-      <FilePanelBreadcrumb
-        ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
-        {...(breadcrumbContextMenu
-          ? { onContextMenu: breadcrumbContextMenu }
-          : {})}
-        segments={breadcrumbSegmentsForSource(selectedSource, projectName)}
-      />
-    );
-  } else if (sourceState.kind === "invalid") {
+  if (sourceState.kind === "invalid") {
     center = (
       <span className="truncate font-mono text-muted-foreground text-xs">
         {sourceState.title}
@@ -402,8 +392,12 @@ export function FilesGroupView({
         {...(breadcrumbContextMenu
           ? { onContextMenu: breadcrumbContextMenu }
           : {})}
-        onSegmentClick={handleBreadcrumbClick}
-        segments={breadcrumbSegmentsForSource(selectedSource, projectName)}
+        {...(outsideWorkspace ? {} : { onSegmentClick: handleBreadcrumbClick })}
+        segments={breadcrumbSegmentsForPanelSource(
+          selectedSource,
+          projectName,
+          outsideWorkspace
+        )}
       />
     );
     trailing = (

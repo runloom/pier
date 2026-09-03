@@ -16,14 +16,17 @@ import {
   consumersForPath,
   displayPathForCandidate,
   labelForAgent,
+  MCP_DISCOVERY_ADAPTERS,
   MCP_PATH_CANDIDATES,
   type McpPathCandidate,
   pathCandidateById,
 } from "./adapters.ts";
+import { compareServerViews, toServerView } from "./derive-server-views.ts";
 import {
   MCP_PARSE_MAX_BYTES,
-  parseMcpServerNames,
-} from "./parse-server-names.ts";
+  type McpServerDecl,
+  parseMcpServerDecls,
+} from "./parse-server-decls.ts";
 
 export class AgentMcpCatalogServiceError extends Error {
   readonly reason: "forbidden" | "not_found" | "unsupported";
@@ -224,10 +227,10 @@ export function createAgentMcpCatalogService(options: {
     return entries;
   }
 
-  async function readServerNames(
+  async function readServerDecls(
     entry: McpCatalogEntry,
     projectRootPath: string | null
-  ): Promise<string[]> {
+  ): Promise<McpServerDecl[]> {
     if (entry.presence !== "present" || !entry.absolutePath) {
       return [];
     }
@@ -245,7 +248,15 @@ export function createAgentMcpCatalogService(options: {
     if (!path) {
       return [];
     }
-    return parseMcpServerNames(raw, path.format, projectRootPath);
+    return parseMcpServerDecls(raw, path.format, projectRootPath);
+  }
+
+  function installedConsumers(installed: ReadonlySet<string>): string[] {
+    return MCP_DISCOVERY_ADAPTERS.filter(
+      (adapter) => adapter.consumesMcp && installed.has(adapter.agentKind)
+    )
+      .map((adapter) => adapter.agentKind)
+      .sort((a, b) => a.localeCompare(b));
   }
 
   async function buildServers(
@@ -253,40 +264,43 @@ export function createAgentMcpCatalogService(options: {
     projectRootPath: string | null
   ): Promise<McpServerView[]> {
     const installed = new Set(await listInstalledAgents());
+    const consumers = installedConsumers(installed);
     const byName = new Map<string, McpServerListing[]>();
     for (const entry of entries) {
-      const names = await readServerNames(entry, projectRootPath);
-      if (names.length === 0) continue;
+      const decls = await readServerDecls(entry, projectRootPath);
+      if (decls.length === 0) continue;
       if (!entry.absolutePath) continue;
-      const consumers = consumersForPath(entry.id);
-      const agentIds =
-        consumers.length > 0 ? consumers : ([entry.agentId] as const);
-      for (const agentId of agentIds) {
-        const listing: McpServerListing = {
-          absolutePath: entry.absolutePath,
-          agentId,
-          agentLabel: labelForAgent(agentId),
-          displayPath: entry.displayPath,
-          entryId: entry.id,
-          scopeLabel: entry.scopeLabel,
-        };
-        for (const name of names) {
-          const list = byName.get(name) ?? [];
+      const agentIds = consumersForPath(entry.id);
+      const ids = agentIds.length > 0 ? agentIds : ([entry.agentId] as const);
+      for (const decl of decls) {
+        for (const agentId of ids) {
+          const listing: McpServerListing = {
+            absolutePath: entry.absolutePath,
+            agentId,
+            agentLabel: labelForAgent(agentId),
+            displayPath: entry.displayPath,
+            enabled: decl.enabled,
+            entryId: entry.id,
+            scopeLabel: entry.scopeLabel,
+            transport: decl.transport,
+          };
+          const list = byName.get(decl.name) ?? [];
           list.push(listing);
-          byName.set(name, list);
+          byName.set(decl.name, list);
         }
       }
     }
     return [...byName.entries()]
       .map(([name, listings]) => {
         const deduped = dedupeListings(listings);
-        return {
-          effects: deriveEffects(deduped, installed),
-          listings: deduped,
+        return toServerView(
           name,
-        };
+          deduped,
+          deriveEffects(deduped, installed),
+          consumers
+        );
       })
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort(compareServerViews);
   }
 
   function deriveEffects(

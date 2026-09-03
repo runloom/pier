@@ -443,6 +443,13 @@ section 根节点下的裸子节点。
 权威规格：[`docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md`](docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md)。  
 检查点：`tests/unit/renderer/git/review/open-directory-governance.test.ts`。
 
+### MCP 跨智能体清单
+
+设置 → 项目 / 本机工作台 → MCP 是跨智能体**只读清单**：按服务器名聚合，标明从哪来、谁能用、已装智能体里谁还没有。Pier 不改这些文件，也不启动这些服务器。智能体识别必须带名称（Grok 的 X 徽标禁止单独出现）。`pier-memory` 在仓库项目跳到「项目记忆」Tab。禁止宿主 spawn / 启停 / 工具探测 / 连接绿点 / 统一写入 / 市场。
+
+权威规格：[`docs/superpowers/specs/2026-09-03-mcp-inventory-gold-standard.md`](docs/superpowers/specs/2026-09-03-mcp-inventory-gold-standard.md)。  
+检查点：`tests/unit/renderer/settings/mcp-inventory-governance.test.ts`、`tests/unit/main/agents/agent-mcp-catalog-parse.test.ts`、`tests/unit/main/agents/agent-mcp-catalog-service.test.ts`、`tests/unit/renderer/settings/mcp-panel.test.tsx`、`tests/unit/plugins/file-panel-breadcrumb-reveal.test.ts`。
+
 ### LSP Gateway `src/main/services/lsp/session-broker.ts`
 
 语言服务的进程树按 `(workspaceKey, serverId, rootPath)` 全局唯一（`sessionOwnerKey` 不含窗口与
