@@ -107,6 +107,19 @@ describe("createAgentMcpCatalogService", () => {
         effect: { state: "discoverable", viaRoot: ".cursor/mcp.json" },
       },
     ]);
+    const filesystem = snap.servers.find((s) => s.name === "filesystem");
+    expect(filesystem?.ownership).toBe("project");
+    expect(filesystem?.transport).toBe("stdio");
+    expect(filesystem?.enabled).toBe("on");
+    expect(filesystem?.gaps.map((gap) => gap.agentKind)).toEqual([
+      "claude",
+      "codex",
+      "opencode",
+    ]);
+    expect(filesystem?.listings.every((row) => row.enabled)).toBe(true);
+    expect(filesystem?.listings.every((row) => row.transport === "stdio")).toBe(
+      true
+    );
   });
 
   it("attributes .mcp.json from Claude + OMP adapter configs", async () => {
@@ -269,5 +282,31 @@ describe("createAgentMcpCatalogService", () => {
     await expect(
       mcp.open({ scope: "project", projectRootPath: registeredRoot }, entryId)
     ).rejects.toMatchObject({ reason: "not_found" });
+  });
+
+  it("classifies pier-memory as managed and remote disabled servers", async () => {
+    await mkdir(join(projectRoot, ".cursor"), { recursive: true });
+    await writeFile(
+      join(projectRoot, ".cursor", "mcp.json"),
+      JSON.stringify({
+        mcpServers: {
+          "pier-memory": { command: "node" },
+          linear: { url: "https://mcp.example.invalid", disabled: true },
+        },
+      }),
+      "utf8"
+    );
+    const { mcp } = makeService();
+    const snap = await mcp.catalog({
+      scope: "project",
+      projectRootPath: registeredRoot,
+    });
+    const memory = snap.servers.find((s) => s.name === "pier-memory");
+    const linear = snap.servers.find((s) => s.name === "linear");
+    expect(memory?.ownership).toBe("pier-managed");
+    expect(linear?.ownership).toBe("project");
+    expect(linear?.transport).toBe("http");
+    expect(linear?.enabled).toBe("off");
+    expect(JSON.stringify(snap.servers)).not.toContain("mcp.example.invalid");
   });
 });

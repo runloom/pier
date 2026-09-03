@@ -24,6 +24,11 @@ export interface ActionMetadata {
   aliases?: () => readonly string[];
   categoryKey?: ActionCategoryKey;
   /**
+   * 热路径标记（默认智能体）：命令行在标题旁显示短「默认」徽章。
+   * 不改排序、不写进 title()，避免污染搜索。
+   */
+  defaultAffordance?: boolean;
+  /**
    * 仅菜单/命令面板展示用的和弦（"Mod+KeyC"）。不注册进 keymap。
    * 终端/编辑器原生剪切复制粘贴必须走这条，禁止写进 DEFAULT_KEYMAP。
    */

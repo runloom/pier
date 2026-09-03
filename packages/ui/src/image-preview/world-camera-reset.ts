@@ -3,6 +3,7 @@ import {
   cameraLookingAtWorld,
   clampZoom,
   softClampCamera,
+  type ViewportFitInsets,
   type WorldCamera,
   type WorldCameraLookAt,
   type WorldSizeBox,
@@ -10,8 +11,14 @@ import {
 } from "./canvas-math.ts";
 
 export interface WorldCameraHookInput {
+  /**
+   * Diagram / board fit may scale content above 1. Default false (photos).
+   */
+  allowUpscale?: boolean | undefined;
   enabled?: boolean | undefined;
   getContentSize: () => WorldSizeBox | null;
+  /** Fit insets. Number = total padding per axis (legacy). */
+  padding?: number | ViewportFitInsets | undefined;
   /** Restore a free look-at for this world (null / omitted → fit). */
   recall?: (() => WorldCameraLookAt | null) | undefined;
   resetKey?: string | number | null | undefined;

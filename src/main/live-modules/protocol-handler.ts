@@ -1,39 +1,66 @@
 import {
+  LIVE_MODULE_SCHEME,
   type LiveModuleRuntimeId,
   liveModuleAssetTicketFromUrl,
   liveModuleRuntimeIdFromUrl,
   liveModuleTicketFromUrl,
 } from "@shared/live-module-url.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
+import {
+  liveModuleHostGlobalExpression,
+  liveModuleHostGlobalReaderSource,
+} from "../services/live-modules/host-global-source.ts";
 import type { LiveModulesService } from "../services/live-modules/service.ts";
+import { realmBootstrapSource } from "./realm-bootstrap-source.ts";
 
-function isAllowedOrigin(origin: string | null): boolean {
+/**
+ * CORS allowlist. Module scripts send Origin; Fetch requires echoing it
+ * (`null` for opaque file/about:blank; `pier-live://runtime|module|asset` for
+ * the intra-protocol graph). Tickets still gate bytes.
+ */
+export function isAllowedLiveModuleCorsOrigin(origin: string | null): boolean {
   if (!origin) {
     return false;
   }
-  if (origin.startsWith("file://")) {
+  if (origin === "null" || origin.startsWith("file:")) {
     return true;
-  }
-  if (!isDevRuntime()) {
-    return false;
   }
   try {
     const url = new URL(origin);
-    if (url.protocol !== "http:") {
+    if (url.protocol === `${LIVE_MODULE_SCHEME}:`) {
+      return (
+        url.hostname === "runtime" ||
+        url.hostname === "module" ||
+        url.hostname === "asset"
+      );
+    }
+    if (url.protocol === "file:") {
+      return true;
+    }
+    if (!isDevRuntime()) {
       return false;
     }
-    return url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    return (
+      url.protocol === "http:" &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+    );
   } catch {
     return false;
   }
 }
 
+/**
+ * Host singletons are read through the parent-aware reader: shims evaluate in
+ * the disposable live-module realm, where `globalThis` is the iframe window.
+ */
 export function runtimeShimSource(id: LiveModuleRuntimeId): string {
+  const reader = liveModuleHostGlobalReaderSource();
+  const shared = `${reader}\nconst shared = ${liveModuleHostGlobalExpression("__PIER_PLUGIN_SHARED__")};`;
   switch (id) {
     case "react":
       // Keep ≥ packages/plugin-api/src/react.ts public surface (+ React 19 hooks).
       return `
-const shared = globalThis.__PIER_PLUGIN_SHARED__;
+${shared}
 if (!shared?.React) throw new Error("Live module React runtime missing");
 const React = shared.React;
 export default React;
@@ -52,7 +79,7 @@ export const cache = React.cache;
 `;
     case "react-dom":
       return `
-const shared = globalThis.__PIER_PLUGIN_SHARED__;
+${shared}
 if (!shared?.ReactDOM) throw new Error("Live module ReactDOM runtime missing");
 const ReactDOM = shared.ReactDOM;
 export default ReactDOM;
@@ -62,7 +89,7 @@ export const useFormState = ReactDOM.useFormState;
 `;
     case "react-dom-client":
       return `
-const shared = globalThis.__PIER_PLUGIN_SHARED__;
+${shared}
 if (!shared?.ReactDOMClient) throw new Error("Live module react-dom/client runtime missing");
 const ReactDOMClient = shared.ReactDOMClient;
 export default ReactDOMClient;
@@ -70,18 +97,20 @@ export const { createRoot, hydrateRoot } = ReactDOMClient;
 `;
     case "jsx-runtime":
       return `
-const shared = globalThis.__PIER_PLUGIN_SHARED__;
+${shared}
 if (!shared?.ReactJSXRuntime) throw new Error("Live module jsx-runtime missing");
 const runtime = shared.ReactJSXRuntime;
 export const { Fragment, jsx, jsxs } = runtime;
 `;
     case "jsx-dev-runtime":
       return `
-const shared = globalThis.__PIER_PLUGIN_SHARED__;
+${shared}
 if (!shared?.ReactJSXDevRuntime) throw new Error("Live module jsx-dev-runtime missing");
 const runtime = shared.ReactJSXDevRuntime;
 export const { Fragment, jsx, jsxs, jsxDEV } = runtime;
 `;
+    case "realm-bootstrap":
+      return realmBootstrapSource();
     default: {
       const _exhaustive: never = id;
       return `throw new Error("unknown runtime ${String(_exhaustive)}")`;
@@ -99,13 +128,13 @@ export function createLiveModuleProtocolHandler(
       "content-type": "text/javascript; charset=utf-8",
       "x-content-type-options": "nosniff",
     };
-    // When Origin is present, only host origins may read module bytes.
-    // Missing Origin (common for same-realm module loads) is allowed.
-    if (origin && !isAllowedOrigin(origin)) {
-      return new Response("forbidden origin", { status: 403 });
-    }
-    if (isAllowedOrigin(origin)) {
-      headers["access-control-allow-origin"] = origin!;
+    // Missing Origin: not a CORS request (same-origin / no-cors). Present
+    // Origin must be allowlisted and echoed — Fetch forbids `*`.
+    if (origin) {
+      if (!isAllowedLiveModuleCorsOrigin(origin)) {
+        return new Response("forbidden origin", { status: 403 });
+      }
+      headers["access-control-allow-origin"] = origin;
       headers.vary = "Origin";
     }
 

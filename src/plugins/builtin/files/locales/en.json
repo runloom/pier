@@ -544,6 +544,7 @@
       "description": "Shows the current project and opens its file tree."
     }
   },
+  "description": "Browse project files and open source, Markdown, and canvases.",
   "name": "Files",
   "panels": {
     "pier.files.filePanel": {

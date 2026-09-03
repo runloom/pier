@@ -735,6 +735,35 @@
   --status-done-border: color-mix(in oklab, var(--done) 24%, transparent);
 }
 
+/*
+ * Mermaid kind/tone cards: always the light pastel status wash + dark ink,
+ * even when app chrome is dark. Ant dark solids (#162312) make meta
+ * (muted-foreground) fail contrast; bright chips on the canvas match
+ * light-theme kind color. Neutral `bg-card` nodes are not tagged and keep
+ * theme foreground. Hex literals are the :root.light status map tokens.
+ */
+[data-slot="mermaid-node"][data-mermaid-wash="pastel"] {
+  --foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --muted-foreground: oklch(0.42 0 0);
+  --done: #7e22ce;
+  --status-info-bg: #e6f4ff;
+  --status-info-fg: #0958d9;
+  --status-info-border: #91caff;
+  --status-success-bg: #f6ffed;
+  --status-success-fg: #237804;
+  --status-success-border: #b7eb8f;
+  --status-warning-bg: #fffbe6;
+  --status-warning-fg: #874d00;
+  --status-warning-border: #ffe58f;
+  --status-danger-bg: #fff2f0;
+  --status-danger-fg: #cf1322;
+  --status-danger-border: #ffccc7;
+  --status-done-bg: color-mix(in oklab, var(--done) 14%, white);
+  --status-done-fg: color-mix(in oklab, var(--done) 82%, var(--foreground));
+  --status-done-border: color-mix(in oklab, var(--done) 24%, white);
+}
+
 :root:not(.light) {
   --elevation-border: color-mix(in oklab, var(--foreground) 16%, transparent);
   --elevation-shadow-color: color-mix(in oklab, var(--background) 66%, black);

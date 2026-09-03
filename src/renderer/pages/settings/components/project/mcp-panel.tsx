@@ -1,12 +1,4 @@
-import { Badge } from "@pier/ui/badge.tsx";
-import { Button } from "@pier/ui/button.tsx";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@pier/ui/dropdown-menu.tsx";
+import { DIALOG_SECTION_TITLE_CLASS } from "@pier/ui/dialog-form-layout.ts";
 import {
   Empty,
   EmptyDescription,
@@ -14,29 +6,40 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemTitle,
-} from "@pier/ui/item.tsx";
+import { ItemGroup } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
-import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import { ToggleGroup, ToggleGroupItem } from "@pier/ui/toggle-group.tsx";
 import type {
   AssetRootRef,
-  McpAgentEffectCell,
+  McpOwnership,
   McpServerListing,
   McpServerView,
 } from "@shared/contracts/agent/assets.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { Cable, ChevronDown } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Cable } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
-import { openAbsoluteInPierEditor } from "@/lib/files/shell-path-actions.ts";
+import {
+  openAbsoluteInPierEditor,
+  openUnderRootInPierEditor,
+} from "@/lib/files/shell-path-actions.ts";
+import { getPluginProjectSettingsRegistrations } from "@/lib/plugins/project-settings-registry.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
+import { agentLabel } from "./mcp-agent-chips.tsx";
+import { normalizeServers } from "./mcp-normalize.ts";
+import {
+  McpServerRow,
+  MEMORY_PROJECT_SETTINGS_TAB,
+} from "./mcp-server-row.tsx";
+
+const FILTER_ALL = "all";
+
+const GROUP_ORDER: readonly McpOwnership[] = [
+  "pier-managed",
+  "project",
+  "user",
+];
 
 function assetRootFor(
   projectRootPath: string,
@@ -45,127 +48,23 @@ function assetRootFor(
   return isPierHome ? { scope: "home" } : { scope: "project", projectRootPath };
 }
 
-function ScopeBadge({
-  scopeLabel,
-  t,
-}: {
-  scopeLabel: McpServerListing["scopeLabel"];
-  t: ReturnType<typeof useT>;
-}) {
-  return (
-    <Badge size="xs" variant="outline">
-      {scopeLabel === "project"
-        ? t("settings.projects.mcpScopeProject")
-        : t("settings.projects.mcpScopeUser")}
-    </Badge>
-  );
+function groupTitle(
+  ownership: McpOwnership,
+  t: ReturnType<typeof useT>
+): string {
+  if (ownership === "pier-managed") return t("settings.projects.mcpGroupPier");
+  if (ownership === "project") return t("settings.projects.mcpGroupProject");
+  return t("settings.projects.mcpGroupUser");
 }
 
-function agentLabel(agentKind: string): string {
-  return getAgentCatalogEntry(agentKind as AgentKind)?.label ?? agentKind;
-}
-
-/** Skills-parallel availability strip (`AgentEffectSummary`). */
-function McpAvailabilitySummary({
-  effects,
-  t,
-}: {
-  effects: readonly McpAgentEffectCell[];
-  t: ReturnType<typeof useT>;
-}) {
-  const discoverable = effects.filter(
-    (cell) => cell.effect.state === "discoverable"
-  );
-  if (discoverable.length === 0) {
-    return (
-      <span className="text-muted-foreground text-xs">
-        {t("settings.projects.mcpAvailableNone")}
-      </span>
-    );
-  }
-  return (
-    <span className="flex flex-wrap items-center gap-1">
-      {discoverable.map((cell) => (
-        <span
-          aria-label={agentLabel(cell.agentKind)}
-          className="inline-flex size-5 items-center justify-center"
-          key={cell.agentKind}
-          role="img"
-        >
-          <AgentIcon agentId={cell.agentKind as AgentKind} size={14} />
-        </span>
-      ))}
-    </span>
-  );
-}
-
-function normalizeServers(value: unknown): McpServerView[] {
-  if (!Array.isArray(value)) return [];
-  const out: McpServerView[] = [];
-  for (const row of value) {
-    if (!row || typeof row !== "object") continue;
-    const name = "name" in row && typeof row.name === "string" ? row.name : "";
-    const listingsRaw =
-      "listings" in row && Array.isArray(row.listings) ? row.listings : [];
-    if (!name || listingsRaw.length === 0) continue;
-    const listings: McpServerListing[] = [];
-    for (const item of listingsRaw) {
-      if (!item || typeof item !== "object") continue;
-      const listing = item as Partial<McpServerListing>;
-      if (
-        typeof listing.absolutePath !== "string" ||
-        typeof listing.agentId !== "string" ||
-        typeof listing.agentLabel !== "string" ||
-        typeof listing.displayPath !== "string" ||
-        typeof listing.entryId !== "string" ||
-        (listing.scopeLabel !== "project" && listing.scopeLabel !== "user")
-      ) {
-        continue;
-      }
-      listings.push({
-        absolutePath: listing.absolutePath,
-        agentId: listing.agentId,
-        agentLabel: listing.agentLabel,
-        displayPath: listing.displayPath,
-        entryId: listing.entryId,
-        scopeLabel: listing.scopeLabel,
-      });
+function discoverableAgentIds(servers: readonly McpServerView[]): string[] {
+  const ids = new Set<string>();
+  for (const server of servers) {
+    for (const cell of server.effects) {
+      if (cell.effect.state === "discoverable") ids.add(cell.agentKind);
     }
-    if (listings.length === 0) continue;
-    const effectsRaw =
-      "effects" in row && Array.isArray(row.effects) ? row.effects : [];
-    const effects: McpAgentEffectCell[] = [];
-    for (const item of effectsRaw) {
-      if (!item || typeof item !== "object") continue;
-      const cell = item as Partial<McpAgentEffectCell>;
-      if (typeof cell.agentKind !== "string" || !cell.effect) continue;
-      if (cell.effect.state === "discoverable") {
-        if (typeof cell.effect.viaRoot !== "string") continue;
-        effects.push({
-          agentKind: cell.agentKind,
-          effect: { state: "discoverable", viaRoot: cell.effect.viaRoot },
-        });
-      } else if (cell.effect.state === "agent-not-installed") {
-        effects.push({
-          agentKind: cell.agentKind,
-          effect: { state: "agent-not-installed" },
-        });
-      }
-    }
-    // Old main without effects: fall back so UI still shows declaring agents.
-    const resolvedEffects =
-      effects.length > 0
-        ? effects
-        : listings.map((listing) => ({
-            agentKind: listing.agentId,
-            effect: {
-              state: "discoverable" as const,
-              viaRoot: listing.displayPath,
-            },
-          }));
-    out.push({ effects: resolvedEffects, listings, name });
   }
-  return out;
+  return [...ids].sort((a, b) => agentLabel(a).localeCompare(agentLabel(b)));
 }
 
 export function ProjectMcpPanel({
@@ -178,8 +77,8 @@ export function ProjectMcpPanel({
   const t = useT();
   const [servers, setServers] = useState<McpServerView[]>([]);
   const [loading, setLoading] = useState(true);
-  /** Old main returns entries only; `servers` is missing until Pier restarts. */
   const [mainNeedsReload, setMainNeedsReload] = useState(false);
+  const [agentFilter, setAgentFilter] = useState(FILTER_ALL);
 
   useEffect(() => {
     let cancelled = false;
@@ -212,14 +111,41 @@ export function ProjectMcpPanel({
     };
   }, [projectRootPath, isPierHome, t]);
 
-  function openInPier(absolutePath: string, title?: string) {
-    const result = openAbsoluteInPierEditor(absolutePath, title);
+  const filterAgents = useMemo(() => discoverableAgentIds(servers), [servers]);
+
+  const visibleServers = useMemo(() => {
+    if (agentFilter === FILTER_ALL) return servers;
+    return servers.filter((server) =>
+      server.effects.some(
+        (cell) =>
+          cell.effect.state === "discoverable" && cell.agentKind === agentFilter
+      )
+    );
+  }, [agentFilter, servers]);
+
+  const canOpenMemory =
+    !isPierHome &&
+    getPluginProjectSettingsRegistrations().some(
+      (item) => item.id === MEMORY_PROJECT_SETTINGS_TAB
+    );
+
+  function openListing(listing: McpServerListing) {
+    const result =
+      listing.scopeLabel === "project" && !isPierHome
+        ? openUnderRootInPierEditor(projectRootPath, listing.displayPath)
+        : openAbsoluteInPierEditor(listing.absolutePath);
     if (!result.ok) {
       showAppAlert({
         title: t("settings.projects.mcpActionFailed"),
         body: result.reason,
       }).catch(() => undefined);
     }
+  }
+
+  function openMemory() {
+    useSettingsDialogStore
+      .getState()
+      .setProjectsTab(MEMORY_PROJECT_SETTINGS_TAB);
   }
 
   if (loading) {
@@ -263,92 +189,59 @@ export function ProjectMcpPanel({
       <p className="text-muted-foreground text-sm">
         {t("settings.projects.mcpNoticeBody")}
       </p>
-      <ItemGroup className="gap-2" data-size="sm">
-        {servers.map((server) => {
-          const listings = server.listings;
-          const sole = listings.length === 1 ? listings[0] : null;
-          const mixedScopes = listings.some(
-            (listing) => listing.scopeLabel !== listings[0]?.scopeLabel
+      {filterAgents.length >= 2 ? (
+        <ToggleGroup
+          aria-label={t("settings.projects.mcpFilterGroupLabel")}
+          className="flex-wrap"
+          onValueChange={(value) => {
+            if (!value) return;
+            setAgentFilter(value);
+          }}
+          type="single"
+          value={agentFilter}
+          variant="outline"
+        >
+          <ToggleGroupItem value={FILTER_ALL}>
+            {t("settings.projects.mcpFilterAll")}
+          </ToggleGroupItem>
+          {filterAgents.map((agentKind) => (
+            <ToggleGroupItem key={agentKind} value={agentKind}>
+              {agentLabel(agentKind as AgentKind)}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      ) : null}
+      {visibleServers.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          {t("settings.projects.mcpFilterEmpty")}
+        </p>
+      ) : (
+        GROUP_ORDER.map((ownership) => {
+          const group = visibleServers.filter(
+            (server) => server.ownership === ownership
           );
+          if (group.length === 0) return null;
           return (
-            <Item
-              className="border"
-              key={server.name}
-              size="sm"
-              variant="outline"
-            >
-              <ItemContent>
-                <ItemTitle className="font-mono text-sm">
-                  {server.name}
-                </ItemTitle>
-                <ItemDescription>
-                  <McpAvailabilitySummary effects={server.effects} t={t} />
-                </ItemDescription>
-              </ItemContent>
-              <ItemActions>
-                {sole ? (
-                  <Button
-                    onClick={() => {
-                      openInPier(sole.absolutePath);
-                    }}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    {t("settings.projects.mcpOpen")}
-                  </Button>
-                ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="sm" type="button" variant="outline">
-                        {t("settings.projects.mcpSources")}
-                        <ChevronDown data-icon="inline-end" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-72!">
-                      <DropdownMenuGroup>
-                        {listings.map((listing) => (
-                          <DropdownMenuItem
-                            className="items-start"
-                            key={`${listing.entryId}:${listing.displayPath}`}
-                            onSelect={() => {
-                              openInPier(listing.absolutePath);
-                            }}
-                          >
-                            <AgentIcon
-                              agentId={listing.agentId as AgentKind}
-                              size={14}
-                            />
-                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                              <span className="flex min-w-0 items-center gap-1.5">
-                                <span className="truncate font-medium">
-                                  {listing.agentLabel}
-                                </span>
-                                {mixedScopes ? (
-                                  <ScopeBadge
-                                    scopeLabel={listing.scopeLabel}
-                                    t={t}
-                                  />
-                                ) : null}
-                              </span>
-                              <span
-                                className="truncate font-mono text-muted-foreground text-xs"
-                                title={listing.displayPath}
-                              >
-                                {listing.displayPath}
-                              </span>
-                            </span>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </ItemActions>
-            </Item>
+            <section className="flex min-w-0 flex-col gap-2" key={ownership}>
+              <h3 className={DIALOG_SECTION_TITLE_CLASS}>
+                {groupTitle(ownership, t)}
+              </h3>
+              <ItemGroup className="gap-2" data-size="sm">
+                {group.map((server) => (
+                  <McpServerRow
+                    canOpenMemory={canOpenMemory}
+                    key={server.name}
+                    onOpenListing={openListing}
+                    onOpenMemory={openMemory}
+                    server={server}
+                    t={t}
+                  />
+                ))}
+              </ItemGroup>
+            </section>
           );
-        })}
-      </ItemGroup>
+        })
+      )}
     </div>
   );
 }

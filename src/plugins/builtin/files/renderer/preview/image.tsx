@@ -224,6 +224,7 @@ export function FileImagePreview({
   return (
     <ImagePreviewCanvas
       alt={document.name}
+      chrome="board"
       className="min-h-0 w-full flex-1 bg-background"
       labels={labels}
       loading={loadState === "loading"}

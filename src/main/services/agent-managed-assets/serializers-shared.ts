@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
+import { PIER_MANAGED_MCP_SERVER_NAME } from "@shared/contracts/agent/assets.ts";
 
-export const SERVER_KEY = "pier-memory";
+export const SERVER_KEY = PIER_MANAGED_MCP_SERVER_NAME;
 /**
  * 引擎精确锁定 **日历版本**(该包自 0.6.2 后改用 CalVer;"0.6.3" 只是包内部
  * serverInfo 版本串,npm 上不存在)。不得回退 0.6.2:其存储路径硬编码、

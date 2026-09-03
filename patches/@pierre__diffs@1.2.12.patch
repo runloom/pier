@@ -12,7 +12,7 @@ index a720beb585d03b5f49ab64a7ffab9274ff9e6a83..b92636c0b6ea126738b47cfe160bc3c3
  type CodeViewPassThroughOptions<LAnnotation> = Pick<FileDiffOptions<LAnnotation>, CodeViewDiffOptionKeys>;
  declare const CODE_VIEW_SHARED_CALLBACK_KEYS: readonly ['renderCustomHeader', 'renderHeaderPrefix', 'renderHeaderMetadata', 'renderAnnotation', 'renderGutterUtility', 'onPostRender', 'onGutterUtilityClick', 'onLineClick', 'onLineNumberClick', 'onLineEnter', 'onLineLeave', 'onTokenClick', 'onTokenEnter', 'onTokenLeave'];
 diff --git a/dist/components/CodeView.js b/dist/components/CodeView.js
-index 3c51a218da6df6ec4b53522c0b07a95280473cea..7073c63b5518aa3b6244e7f0471052cc285de2ac 100644
+index 3c51a218da6df6ec4b53522c0b07a95280473cea..9959532f5c644358209ad0f2146cfcab9385b88a 100644
 --- a/dist/components/CodeView.js
 +++ b/dist/components/CodeView.js
 @@ -32,6 +32,8 @@ const CODE_VIEW_DIFF_OPTION_KEYS = [
@@ -24,7 +24,16 @@ index 3c51a218da6df6ec4b53522c0b07a95280473cea..7073c63b5518aa3b6244e7f0471052cc
  	"lineHoverHighlight",
  	"enableTokenInteractionsOnWhitespace",
  	"enableGutterUtility",
-@@ -1646,7 +1648,7 @@ function shouldClearPool(previousOptions, nextOptions) {
+@@ -338,6 +340,8 @@ var CodeView = class CodeView {
+ 	reset() {
+ 		this.restoreScrollInteractions();
+ 		this.cleanAllRenderedItems();
++		// reset() only cleans the rendered window; unsubscribe the rest.
++		for (const item of this.items) this.workerManager?.unsubscribeToThemeChanges(item.instance);
+ 		this.selectedLines = null;
+ 		this.items.length = 0;
+ 		this.idToItem.clear();
+@@ -1646,7 +1650,7 @@ function shouldClearPool(previousOptions, nextOptions) {
  	return !areThemesEqual(previousOptions.theme ?? DEFAULT_THEMES, nextOptions.theme ?? DEFAULT_THEMES) || (previousOptions.themeType ?? "system") !== (nextOptions.themeType ?? "system") || previousOptions.unsafeCSS !== nextOptions.unsafeCSS;
  }
  function hasItemLayoutOptionChanged(previousOptions, nextOptions) {

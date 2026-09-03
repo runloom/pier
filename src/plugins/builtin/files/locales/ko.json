@@ -544,6 +544,7 @@
       "description": "현재 프로젝트를 표시하고 파일 트리를 엽니다."
     }
   },
+  "description": "프로젝트 파일을 탐색하고 소스, Markdown, 캔버스를 열어 편집합니다.",
   "name": "파일",
   "panels": {
     "pier.files.filePanel": {

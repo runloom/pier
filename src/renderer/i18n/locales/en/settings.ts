@@ -3,6 +3,7 @@ import { settingsAppUpdate } from "./settings-app-update.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
+import { settingsMcp } from "./settings-mcp.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsRemoteAccess } from "./settings-remote-access.ts";
@@ -191,30 +192,7 @@ export const settings = {
     rulesOtherBody: "{{name}} isn’t a normal editable file.",
     rulesOtherTitle: "{{name}} isn’t editable here",
     rulesEditorLabel: "Contents of {{name}}",
-    mcpLoading: "Loading MCP servers…",
-    mcpLoadFailed: "Couldn't load MCP list — try again",
-    mcpActionFailed: "Couldn't open config file — try again",
-    mcpNoticeBody:
-      "Lists MCP servers from agent configs and which agents can use them. Pier won’t edit those files.",
-    mcpColAgent: "Agent",
-    mcpColPath: "Path",
-    mcpColScope: "Scope",
-    mcpColStatus: "Status",
-    mcpColActions: "Actions",
-    mcpScopeProject: "In project",
-    mcpScopeUser: "User config",
-    mcpPresent: "Found",
-    mcpMissing: "Missing",
-    mcpUnsupported: "Unsupported",
-    mcpOpen: "Open configuration file",
-    mcpSources: "Config sources",
-    mcpAvailableNone: "Not available to agents",
-    mcpEmptyTitle: "No MCP servers found",
-    mcpEmptyDescription:
-      "No MCP servers in this scope. Add them in agent config, then check again.",
-    mcpRestartTitle: "Restart Pier to load MCP servers",
-    mcpRestartDescription:
-      "This window is still on an older version. Fully quit Pier, start again, then reopen this tab.",
+    ...settingsMcp,
   },
   skills: settingsSkills,
   materials: settingsMaterials,

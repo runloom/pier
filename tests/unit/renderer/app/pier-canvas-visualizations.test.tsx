@@ -119,8 +119,9 @@ describe("Pier Canvas visualizations", () => {
 
     const warning = await screen.findByLabelText("b 警告");
     const warningCard = warning.querySelector('[data-slot="mermaid-node"]');
-    expect(warningCard?.className).toContain("border-warning/40");
-    expect(warningCard?.className).toContain("bg-warning/10");
+    expect(warningCard?.className).toContain("border-status-warning-border");
+    expect(warningCard?.className).toContain("bg-status-warning-bg");
+    expect(warningCard?.getAttribute("data-mermaid-wash")).toBe("pastel");
     expect(warningCard?.getAttribute("style")).toBeNull();
     expect(warningCard?.getAttribute("data-tone")).toBe("warning");
 
@@ -129,6 +130,7 @@ describe("Pier Canvas visualizations", () => {
       .querySelector('[data-slot="mermaid-node"]');
     expect(neutralCard?.className).toContain("bg-card");
     expect(neutralCard?.className).not.toContain("bg-status-");
+    expect(neutralCard?.getAttribute("data-mermaid-wash")).toBeNull();
     expect(neutralCard?.getAttribute("data-tone")).toBe("muted");
     expect(neutralCard?.getAttribute("data-kind")).toBe("none");
     expect(
@@ -152,14 +154,14 @@ describe("Pier Canvas visualizations", () => {
     const human = await screen.findByLabelText("h 人类");
     const humanCard = human.querySelector('[data-slot="mermaid-node"]');
     expect(humanCard?.getAttribute("data-kind")).toBe("actor");
-    expect(humanCard?.className).toContain("border-info/40");
-    expect(humanCard?.className).toContain("bg-info/10");
+    expect(humanCard?.className).toContain("border-status-info-border");
+    expect(humanCard?.className).toContain("bg-status-info-bg");
     expect(human.querySelector("svg")).toBeTruthy();
 
     const external = screen.getByLabelText("e 外部");
     const externalCard = external.querySelector('[data-slot="mermaid-node"]');
-    expect(externalCard?.className).toContain("border-warning/40");
-    expect(externalCard?.className).toContain("bg-warning/10");
+    expect(externalCard?.className).toContain("border-status-warning-border");
+    expect(externalCard?.className).toContain("bg-status-warning-bg");
     expect(externalCard?.className).toContain("border-dashed");
     expect(
       document.querySelector('[data-slot="mermaid-node"] > span.absolute')
@@ -188,12 +190,12 @@ describe("Pier Canvas visualizations", () => {
     const artifact = (await screen.findByLabelText("p 画面")).querySelector(
       '[data-slot="mermaid-node"]'
     );
-    expect(agent?.className).toContain("border-done/40");
-    expect(agent?.className).toContain("bg-done/10");
-    expect(tool?.className).toContain("border-success/40");
-    expect(tool?.className).toContain("bg-success/10");
-    expect(artifact?.className).toContain("border-info/40");
-    expect(artifact?.className).toContain("bg-info/10");
+    expect(agent?.className).toContain("border-status-done-border");
+    expect(agent?.className).toContain("bg-status-done-bg");
+    expect(tool?.className).toContain("border-status-success-border");
+    expect(tool?.className).toContain("bg-status-success-bg");
+    expect(artifact?.className).toContain("border-status-info-border");
+    expect(artifact?.className).toContain("bg-status-info-bg");
     expect(artifact?.className).toContain("border-dashed");
   });
 
@@ -227,9 +229,9 @@ describe("Pier Canvas visualizations", () => {
     const card = (await screen.findByLabelText("x 出口")).querySelector(
       '[data-slot="mermaid-node"]'
     );
-    expect(card?.className).toContain("border-destructive/40");
-    expect(card?.className).toContain("bg-destructive/10");
-    expect(card?.className).not.toContain("bg-success/10");
+    expect(card?.className).toContain("border-status-danger-border");
+    expect(card?.className).toContain("bg-status-danger-bg");
+    expect(card?.className).not.toContain("bg-status-success-bg");
     expect(card?.getAttribute("data-kind")).toBe("tool");
   });
 

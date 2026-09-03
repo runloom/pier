@@ -136,6 +136,7 @@ function createMockContext(overrides?: {
     contentPreview: {
       close: vi.fn(),
       openImage: vi.fn(),
+      openMermaid: vi.fn(),
     },
     contextMenu: {
       popup: vi.fn(async () => undefined),

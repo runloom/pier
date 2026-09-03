@@ -24,6 +24,7 @@ import {
   registerPrivilegedProtocolSchemes,
 } from "./bootstrap-privileged-protocols.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app.ts";
+import { installProcessMemoryTrail } from "./diagnostics/process-memory.ts";
 import { installDisplayCapturePolicy } from "./display-capture-policy.ts";
 import { registerHtmlPreviewTicketIpc } from "./files/html-preview-ipc.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
@@ -112,6 +113,7 @@ applyGpuWorkarounds();
 const gotTheLock = app.requestSingleInstanceLock();
 if (gotTheLock) {
   installMainDiagnosticsLogging();
+  installProcessMemoryTrail();
 } else {
   abortMissingSingleInstanceLock(isDev, app, (message) => {
     startupLog.error(message);

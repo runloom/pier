@@ -185,8 +185,14 @@ export function computeTransferNewWindowBounds(
     y: cursor.y,
   };
   const workArea = geometry.getDisplayWorkAreaNear(cursor);
-  const width = sourceBounds.width ?? 1280;
-  const height = sourceBounds.height ?? 800;
+  const width = Math.min(
+    sourceBounds.width ?? 1280,
+    Math.max(workArea.width, 1)
+  );
+  const height = Math.min(
+    sourceBounds.height ?? 800,
+    Math.max(workArea.height, 1)
+  );
   const x = clampNumber(
     cursor.x - PANEL_TRANSFER_NEW_WINDOW_CURSOR_OFFSET,
     workArea.x,

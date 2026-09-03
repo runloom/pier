@@ -3,12 +3,18 @@ import {
   anchoredScrollAfterZoom,
   cameraLookingAtWorld,
   fitCamera,
+  fitInsetsPadY,
   MAX_ZOOM,
   MIN_ZOOM,
   measureWorldContentBounds,
   pinchZoom,
   screenToWorldPoint,
   softClampCamera,
+  VIEWPORT_CHROME_TOP_PX,
+  VIEWPORT_CONTROLS_INSET_PX,
+  VIEWPORT_PADDING_PX,
+  WORLD_BOARD_FIT_INSETS,
+  WORLD_OVERLAY_FIT_INSETS,
   worldPointAtViewportCenter,
   worldToScreenPoint,
   zoomCameraAt,
@@ -85,6 +91,31 @@ describe("fitCamera", () => {
     expect(camera.x).toBe(450);
   });
 
+  it("upscales small content when allowUpscale is set", () => {
+    const camera = fitCamera(
+      { height: 100, width: 100 },
+      { height: 424, width: 424 },
+      { allowUpscale: true, padding: 24 }
+    );
+    expect(camera.scale).toBe(4);
+    expect(camera.x).toBe(12);
+    expect(camera.y).toBe(12);
+  });
+
+  it("centers inside asymmetric insets", () => {
+    const camera = fitCamera(
+      { height: 100, width: 100 },
+      { height: 200, width: 200 },
+      {
+        allowUpscale: true,
+        padding: { bottom: 30, left: 10, right: 10, top: 50 },
+      }
+    );
+    expect(camera.scale).toBe(1.2);
+    expect(camera.x).toBe(40);
+    expect(camera.y).toBe(50);
+  });
+
   it("compensates for origin offset so content is exactly centered", () => {
     const camera = fitCamera(
       { height: 200, width: 600, x: 32, y: 32 },
@@ -96,6 +127,18 @@ describe("fitCamera", () => {
     expect(camera.x).toBe(118);
     // (600 - 200)/2 - 32 = 200 - 32 = 168
     expect(camera.y).toBe(168);
+  });
+});
+
+describe("preview fit insets", () => {
+  it("keeps overlay title inset and board paper inset distinct", () => {
+    expect(WORLD_OVERLAY_FIT_INSETS.top).toBe(VIEWPORT_CHROME_TOP_PX);
+    expect(WORLD_BOARD_FIT_INSETS.top).toBe(VIEWPORT_PADDING_PX / 2);
+    expect(WORLD_OVERLAY_FIT_INSETS.bottom).toBe(VIEWPORT_CONTROLS_INSET_PX);
+    expect(WORLD_BOARD_FIT_INSETS.bottom).toBe(VIEWPORT_CONTROLS_INSET_PX);
+    expect(fitInsetsPadY(WORLD_OVERLAY_FIT_INSETS)).toBeGreaterThan(
+      fitInsetsPadY(WORLD_BOARD_FIT_INSETS)
+    );
   });
 });
 

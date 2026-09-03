@@ -97,8 +97,32 @@ export const rulesReadResultSchema = z
 
 export type RulesReadResult = z.infer<typeof rulesReadResultSchema>;
 
+/** Canonical Pier-managed MCP server key written into agent configs. */
+export const PIER_MANAGED_MCP_SERVER_NAME = "pier-memory" as const;
+
 /** MCP catalog */
 export const mcpCatalogScopeLabelSchema = z.enum(["project", "user"]);
+
+export const mcpTransportSchema = z.enum(["stdio", "http", "unknown"]);
+
+export type McpTransport = z.infer<typeof mcpTransportSchema>;
+
+export const mcpOwnershipSchema = z.enum(["pier-managed", "project", "user"]);
+
+export type McpOwnership = z.infer<typeof mcpOwnershipSchema>;
+
+export const mcpEnabledRollupSchema = z.enum(["on", "off", "mixed"]);
+
+export type McpEnabledRollup = z.infer<typeof mcpEnabledRollupSchema>;
+
+export const mcpTransportRollupSchema = z.enum([
+  "stdio",
+  "http",
+  "unknown",
+  "mixed",
+]);
+
+export type McpTransportRollup = z.infer<typeof mcpTransportRollupSchema>;
 
 export const mcpCatalogPresenceSchema = z.enum([
   "present",
@@ -123,7 +147,7 @@ export const mcpCatalogEntrySchema = z
 
 export type McpCatalogEntry = z.infer<typeof mcpCatalogEntrySchema>;
 
-/** One agent/config source that declares a named MCP server (names only). */
+/** One agent/config source that declares a named MCP server (no payloads). */
 export const mcpServerListingSchema = z
   .object({
     /** Absolute config path for `window.pier.files` reveal/open. */
@@ -131,9 +155,11 @@ export const mcpServerListingSchema = z
     agentId: z.string().min(1),
     agentLabel: z.string().min(1),
     displayPath: z.string().min(1),
+    enabled: z.boolean(),
     /** Catalog entry id (whitelist / diagnostics). */
     entryId: z.string().min(1),
     scopeLabel: mcpCatalogScopeLabelSchema,
+    transport: mcpTransportSchema,
   })
   .strict();
 
@@ -165,12 +191,25 @@ export const mcpAgentEffectCellSchema = z
 
 export type McpAgentEffectCell = z.infer<typeof mcpAgentEffectCellSchema>;
 
+export const mcpGapSchema = z
+  .object({
+    agentKind: z.string().min(1),
+  })
+  .strict();
+
+export type McpGap = z.infer<typeof mcpGapSchema>;
+
 export const mcpServerViewSchema = z
   .object({
+    enabled: mcpEnabledRollupSchema,
     /** Skills-style availability matrix for installed / declaring agents. */
     effects: z.array(mcpAgentEffectCellSchema),
+    /** Installed MCP-consuming agents that did not declare this name. */
+    gaps: z.array(mcpGapSchema),
     listings: z.array(mcpServerListingSchema).min(1),
     name: z.string().min(1),
+    ownership: mcpOwnershipSchema,
+    transport: mcpTransportRollupSchema,
   })
   .strict();
 

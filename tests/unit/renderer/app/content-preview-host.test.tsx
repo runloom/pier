@@ -295,13 +295,18 @@ describe("ContentPreviewHost", () => {
     expect(header.className).toContain("app-drag");
     expect(header.className).toContain("h-14");
     expect(header.className).toContain("justify-center");
+    expect(header.className).toContain("bg-background");
     expect(header.className).toContain("z-50");
     expect(header.className).not.toContain("pointer-events-none");
     expect(header).toHaveTextContent("preview.png");
     const stage = screen.getByTestId("content-preview-stage");
     expect(stage.className).toContain("inset-0");
-    // Title/close band — media must not layout under floating chrome.
-    expect(stage.className).toContain("pt-14");
+    // Opaque title bar covers the diagram; stage still fills the overlay.
+    expect(stage.className).not.toContain("pt-14");
+    const viewport = stage.querySelector(
+      '[data-slot="image-preview-viewport"]'
+    );
+    expect(viewport?.className).toContain("pt-14");
     const controls = stage.querySelector(
       '[data-slot="image-preview-controls"]'
     );
@@ -373,6 +378,9 @@ describe("ContentPreviewHost", () => {
 
     await screen.findByTestId("content-preview");
     expect(screen.getByText("任务 DAG")).toBeInTheDocument();
+    expect(screen.getByTestId("content-preview-header").className).toContain(
+      "bg-background"
+    );
     const stage = document.querySelector('[data-slot="mermaid-stage"]');
     expect(stage).toBeTruthy();
     expect(stage).not.toHaveClass("border");
@@ -381,6 +389,27 @@ describe("ContentPreviewHost", () => {
       document.querySelector('[data-slot="image-preview-controls"]')
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: /zoom in/i })).toBeTruthy();
+    const viewport = document.querySelector(
+      '[data-slot="html-world-viewport"]'
+    );
+    expect(viewport).toBeTruthy();
+    expect(String(viewport?.getAttribute("style") ?? "")).not.toContain(
+      "radial-gradient"
+    );
+  });
+
+  it("pins mermaid overlay tokens to the requested color mode", async () => {
+    render(<ContentPreviewHost />);
+    openMermaidPreview({
+      "aria-label": "流程",
+      colorMode: "light",
+      edges: [],
+      nodes: [],
+      source: "flowchart LR\n  A-->B",
+      title: "流程",
+    });
+    const root = await screen.findByTestId("content-preview");
+    expect(root).toHaveAttribute("data-color-mode", "light");
   });
 
   it("renders html-world stage with image zoom strip", async () => {

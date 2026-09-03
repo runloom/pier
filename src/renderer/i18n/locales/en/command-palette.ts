@@ -52,6 +52,7 @@ export const commandPalette = {
     newAgent: "Start Default Agent",
     listAgents: "Agent List…",
     openCollaboration: "Agent Collaboration…",
+    defaultAgentMark: "Default",
     startAgent: "Start {{agent}}",
     runTask: "Run Task…",
     terminalList: "Terminal List...",

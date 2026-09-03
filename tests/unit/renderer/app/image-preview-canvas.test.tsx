@@ -4,8 +4,12 @@ import {
   measureContainScale,
 } from "@pier/ui/image-preview/canvas.tsx";
 import {
+  fitInsetsPadY,
+  VIEWPORT_CHROME_TOP_PX,
   VIEWPORT_CONTROLS_INSET_PX,
   VIEWPORT_PADDING_PX,
+  WORLD_BOARD_FIT_INSETS,
+  WORLD_OVERLAY_FIT_INSETS,
 } from "@pier/ui/image-preview/canvas-math.ts";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -51,11 +55,12 @@ describe("image preview zoom anchoring helpers", () => {
     ).toBe(1);
   });
 
-  it("fits into the area above the reserved controls band", () => {
-    // Derived (not hardcoded) so the test diverges loudly if the constants or
-    // the pb-16 pairing ever drift from the hook's fit math.
-    const paddingYPx = VIEWPORT_PADDING_PX / 2 + VIEWPORT_CONTROLS_INSET_PX;
-    // 12 top + 64 controls inset = 76: vertical fit dominates.
+  it("fits overlay chrome between the title band and the reserved controls", () => {
+    const paddingYPx = fitInsetsPadY(WORLD_OVERLAY_FIT_INSETS);
+    expect(paddingYPx).toBe(
+      VIEWPORT_CHROME_TOP_PX + VIEWPORT_CONTROLS_INSET_PX
+    );
+    // 56 title + 64 controls inset = 120: vertical fit dominates.
     expect(
       measureContainScale({
         naturalHeight: 300,
@@ -64,7 +69,7 @@ describe("image preview zoom anchoring helpers", () => {
         viewportHeight: 200,
         viewportWidth: 200,
       })
-    ).toBe(0.4133);
+    ).toBe(0.2667);
     // Horizontal padding still defaults to the symmetric viewport padding.
     expect(
       measureContainScale({
@@ -75,6 +80,30 @@ describe("image preview zoom anchoring helpers", () => {
         viewportWidth: 200,
       })
     ).toBe(0.5867);
+  });
+
+  it("fits board chrome without the overlay title band", () => {
+    const paddingYPx = fitInsetsPadY(WORLD_BOARD_FIT_INSETS);
+    expect(paddingYPx).toBe(
+      VIEWPORT_PADDING_PX / 2 + VIEWPORT_CONTROLS_INSET_PX
+    );
+    expect(
+      measureContainScale({
+        naturalHeight: 300,
+        naturalWidth: 300,
+        paddingYPx,
+        viewportHeight: 200,
+        viewportWidth: 200,
+      })
+    ).toBeGreaterThan(
+      measureContainScale({
+        naturalHeight: 300,
+        naturalWidth: 300,
+        paddingYPx: fitInsetsPadY(WORLD_OVERLAY_FIT_INSETS),
+        viewportHeight: 200,
+        viewportWidth: 200,
+      })
+    );
   });
 
   it("keeps the viewport center stable across zoom changes", () => {
@@ -166,8 +195,23 @@ describe("ImagePreviewCanvas", () => {
       />
     );
     const viewport = screen.getByRole("region", { name: "Image viewer" });
-    // pb-16 keeps resting / fit content clear of the zoom pill; the constant
-    // paired with it is VIEWPORT_CONTROLS_INSET_PX in canvas-math.ts.
+    // Board chrome: pb-16 clears the zoom pill; no overlay title band.
+    expect(viewport.className).toContain("pb-16");
+    expect(viewport.className).not.toContain("pt-14");
+  });
+
+  it("reserves overlay title inset only when chrome is overlay", () => {
+    render(
+      <ImagePreviewCanvas
+        alt="shot"
+        chrome="overlay"
+        labels={labels}
+        src="data:image/png;base64,xx"
+        status="ready"
+      />
+    );
+    const viewport = screen.getByRole("region", { name: "Image viewer" });
+    expect(viewport.className).toContain("pt-14");
     expect(viewport.className).toContain("pb-16");
   });
 

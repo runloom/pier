@@ -1796,8 +1796,8 @@ describe("createRendererPluginContext", () => {
     await expect(
       context.charts.renderMermaid("graph TD;A-->B")
     ).resolves.toEqual({ ok: true, svg: "<svg />" });
-    // Plugin charts use the CSS-var Mermaid path (document tokens), not
-    // official Mermaid's light/dark palettes used by canvas visualizations.
+    // Plugin charts route through the shared mermaid facade (single official
+    // engine with CSS-var tokens, same as canvas and markdown).
     expect(renderMermaid).toHaveBeenCalledWith("graph TD;A-->B");
   });
 

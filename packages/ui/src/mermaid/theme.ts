@@ -15,18 +15,18 @@ export const MERMAID_THEME_CSS = `
     filter: none !important;
   }
   .flowchart-link, .edge-thickness-normal, .relation, .transition, .messageLine0, .messageLine1, .actor-line, .loopLine {
-    stroke: var(--muted-foreground) !important;
+    stroke: color-mix(in srgb, var(--foreground) 45%, var(--background)) !important;
   }
   marker path, .arrowMarkerPath, .marker {
-    fill: var(--muted-foreground) !important;
-    stroke: var(--muted-foreground) !important;
+    fill: color-mix(in srgb, var(--foreground) 45%, var(--background)) !important;
+    stroke: color-mix(in srgb, var(--foreground) 45%, var(--background)) !important;
   }
   .nodeLabel, .edgeLabel, .label, .actor, .messageText, .labelText, .loopText, .noteText, .entityLabel, .classTitle, .titleText, .taskText, .legendText,
   .messageText > tspan, .labelText > tspan, .loopText > tspan, .noteText > tspan,
   text.actor > tspan {
     color: var(--foreground) !important;
     fill: var(--foreground) !important;
-    font-family: inherit !important;
+    font-family: var(--font-sans) !important;
   }
   /* mermaid base theme paints edge-label pills pink through its own
      ".edgeLabel p" / ".edgeLabel rect" rules; neutralize every layer so a
@@ -59,6 +59,15 @@ export const MERMAID_THEME_CSS = `
     fill: var(--secondary) !important;
     stroke: var(--border) !important;
   }
+  /* Default flowchart nodes: mermaid.js paints a cream nodeBkg after this
+     block. !important beats that fill so dark-theme labels (foreground)
+     stay readable. classDef rules are also !important and are appended
+     after themeCSS, so author fills still win. Slotted Pier rects stay
+     transparent below. */
+  .node rect, .node polygon, .node circle, .node .label-container, .node .basic {
+    fill: var(--card) !important;
+    stroke: var(--border) !important;
+  }
   .${SLOT_CLASS} > rect,
   .${SLOT_CLASS} > polygon,
   .${SLOT_CLASS} > circle,
@@ -68,19 +77,41 @@ export const MERMAID_THEME_CSS = `
     stroke: none !important;
     filter: none !important;
   }
+  /* mermaid htmlLabels wrap the slot in span.nodeLabel + table-cell
+     (vertical-align middle, line-height 1.5). A centered card shorter
+     than that cell leaves a transparent band at the top of the node.
+     Pin the wrapper to the top and keep overflow visible so the status
+     surface can cover every title line. Leftover htmlLabel text (vertex
+     id) stays invisible without collapsing the box. Do not set height
+     100% on [data-pier-slot]: that would override the measured px box. */
   .${SLOT_CLASS} .label {
-    padding: 0 !important;
+    fill: none !important;
     overflow: visible !important;
+    padding: 0 !important;
   }
-  .${SLOT_CLASS} .nodeLabel,
   .${SLOT_CLASS} foreignObject,
   .${SLOT_CLASS} foreignObject > div {
-    overflow: visible !important;
-    white-space: normal !important;
-    /* mermaid paints labels with color/fill !important; slotted Pier
-       cards must keep status/kind tokens (and Lucide currentColor). */
     color: initial !important;
+    display: block !important;
     fill: none !important;
+    line-height: normal !important;
+    overflow: visible !important;
+    vertical-align: top !important;
+    white-space: normal !important;
+  }
+  .${SLOT_CLASS} .nodeLabel,
+  .${SLOT_CLASS} .nodeLabel p {
+    color: transparent !important;
+    display: block !important;
+    fill: none !important;
+    font-size: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .${SLOT_CLASS} .nodeLabel [${SLOT_ATTR}] {
+    color: initial !important;
+    font-size: 1rem !important;
+    line-height: normal !important;
   }
   /* mermaid flowchart CSS fills node paths with a pale yellow. Lucide
      icons in htmlLabels are descendants of g.node, so that rule turns
@@ -107,8 +138,6 @@ export const MERMAID_THEME_CSS = `
     border-color: inherit !important;
   }
   svg {
-    max-width: 100%;
-    height: auto;
     overflow: visible;
   }
 `;
@@ -116,8 +145,16 @@ export const MERMAID_THEME_CSS = `
 let mermaidPromise: Promise<Mermaid> | null = null;
 
 export function loadMermaid(): Promise<Mermaid> {
-  mermaidPromise ??= import("mermaid").then((mod) => {
+  mermaidPromise ??= Promise.all([
+    import("mermaid"),
+    import("@mermaid-js/layout-elk"),
+  ]).then(([mod, elkLayouts]) => {
     const mermaid = mod.default;
+    // layout-elk's core is a small registry; its loader lazy-imports the
+    // heavy ELK engine chunk on first elk-rendered diagram. Enables the
+    // `flowchart-elk` diagram type and `%%{init: {"flowchart":
+    // {"defaultRenderer": "elk"}}}%%` per-diagram opt-in.
+    mermaid.registerLayoutLoaders(elkLayouts.default);
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: "antiscript",
@@ -125,11 +162,15 @@ export function loadMermaid(): Promise<Mermaid> {
       htmlLabels: true,
       theme: "base",
       themeCSS: MERMAID_THEME_CSS,
-      // khroma parses themeVariables and rejects CSS vars. Paint follows
-      // Pier tokens through themeCSS `var(--*)` overrides instead.
+      // khroma parses themeVariables colors and rejects CSS vars; font
+      // family passes through. Diagram text always uses the UI font, never
+      // the markdown paper/reading font.
       themeVariables: {
-        fontFamily: "inherit",
+        fontFamily: "var(--font-sans)",
       },
+      // Keep failed renders from injecting mermaid's error graphic into the
+      // document; callers surface the rejection instead.
+      suppressErrorRendering: true,
       flowchart: {
         diagramPadding: 24,
         htmlLabels: true,
@@ -139,14 +180,14 @@ export function loadMermaid(): Promise<Mermaid> {
         // between arrowheads and the visible card.
         padding: 1,
         rankSpacing: 56,
-        useMaxWidth: true,
+        useMaxWidth: false,
       },
       sequence: {
         actorMargin: 48,
         boxMargin: 6,
         messageMargin: 28,
         mirrorActors: false,
-        useMaxWidth: true,
+        useMaxWidth: false,
       },
       dompurifyConfig: {
         ADD_ATTR: ["data-pier-slot"],

@@ -3,6 +3,7 @@ import { settingsAppUpdate } from "./settings-app-update.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
+import { settingsMcp } from "./settings-mcp.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsRemoteAccess } from "./settings-remote-access.ts";
@@ -191,30 +192,7 @@ export const settings = {
     rulesOtherBody: "{{name}}은(는) 일반 편집 가능 파일이 아닙니다.",
     rulesOtherTitle: "{{name}}은(는) 여기서 편집할 수 없습니다",
     rulesEditorLabel: "{{name}}의 내용",
-    mcpLoading: "MCP 서버를 불러오는 중…",
-    mcpLoadFailed: "MCP 목록을 불러오지 못했습니다. 다시 시도하세요",
-    mcpActionFailed: "구성 파일을 열지 못했습니다. 다시 시도하세요",
-    mcpNoticeBody:
-      "에이전트 설정의 MCP 서버와 어떤 에이전트가 쓸 수 있는지를 나열합니다. Pier는 그 파일을 편집하지 않습니다.",
-    mcpColAgent: "에이전트",
-    mcpColPath: "경로",
-    mcpColScope: "범위",
-    mcpColStatus: "상태",
-    mcpColActions: "작업",
-    mcpScopeProject: "프로젝트 안",
-    mcpScopeUser: "사용자 구성",
-    mcpPresent: "찾음",
-    mcpMissing: "없음",
-    mcpUnsupported: "지원되지 않음",
-    mcpOpen: "구성 파일 열기",
-    mcpSources: "구성 출처",
-    mcpAvailableNone: "에이전트가 쓸 수 없음",
-    mcpEmptyTitle: "MCP 서버를 찾지 못했습니다",
-    mcpEmptyDescription:
-      "이 범위에 MCP 서버가 없습니다. 에이전트 구성에 추가한 다음 다시 확인하세요.",
-    mcpRestartTitle: "MCP 서버를 불러오려면 Pier를 다시 시작하세요",
-    mcpRestartDescription:
-      "이 윈도우는 아직 이전 버전입니다. Pier를 완전히 종료한 뒤 다시 시작하고, 이 탭을 다시 여세요.",
+    ...settingsMcp,
   },
   skills: settingsSkills,
   materials: settingsMaterials,

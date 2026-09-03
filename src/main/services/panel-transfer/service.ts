@@ -7,6 +7,7 @@ import type {
 import { isPanelTransferCopyableComponent } from "@shared/contracts/panel-transfer.ts";
 import { PanelTransferJournal } from "../../state/panel-transfer-journal.ts";
 import type { RendererCommandService } from "../renderer-command-service.ts";
+import { dropPanelTransfer } from "./drop.ts";
 import { finishPanelTransferDrag } from "./finish-drag.ts";
 import {
   createNoopPanelTransferFilesPort,
@@ -30,7 +31,6 @@ import {
 import {
   type OverlayPreviewScheduler,
   PANEL_TRANSFER_CLAIM_TOTAL_MS,
-  PANEL_TRANSFER_DROP_WAIT_MS,
   PANEL_TRANSFER_OFFER_TTL_MS,
   PANEL_TRANSFER_TOMBSTONE_TTL_MS,
   type PanelTransferFilesPort,
@@ -415,36 +415,20 @@ export function createPanelTransferService(
     },
 
     async drop(caller, input) {
-      pruneTombstones();
-      const tombstone = tombstones.get(input.transferId);
-      if (tombstone) return tombstone.result;
-      let live = offers.get(input.transferId);
-      if (!live) {
-        live =
-          (await waitForOffer(input.transferId, PANEL_TRANSFER_DROP_WAIT_MS)) ??
-          undefined;
-      }
-      if (!live) return panelTransferFailure("expired", "offer not found");
-      if (live.source.runtimeWindowId === caller.runtimeWindowId) {
-        return panelTransferFailure(
-          "invalid_offer",
-          "drop must target a different window"
-        );
-      }
-      if (live.unsupported || live.capability === "unsupported") {
-        return panelTransferFailure(
-          "not_supported",
-          "panel transfer not supported"
-        );
-      }
-      return await tryClaim(
-        live,
+      return await dropPanelTransfer(
         {
-          kind: "managed",
-          runtimeWindowId: caller.runtimeWindowId,
-          windowRecordId: caller.windowRecordId,
+          geometry: args.geometry,
+          getOffer: (id) => offers.get(id),
+          getTombstone: (id) => tombstones.get(id)?.result,
+          pruneTombstones,
+          renderer,
+          speculative,
+          tryClaim,
+          waitForOffer,
+          windows: args.windows,
         },
-        input.placement
+        caller,
+        input
       );
     },
 

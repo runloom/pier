@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 3f0c98aba65c44b0ff033dd299649985cfc7951c..4dfe7469185bdfff3f9b6e35d81ec78577670c70 100644
+index 3f0c98aba65c44b0ff033dd299649985cfc7951c..4160d3e2cc1c64572c3558ba284c23500da8e9c8 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -52,7 +52,7 @@ const Scale = {
@@ -11,8 +11,83 @@ index 3f0c98aba65c44b0ff033dd299649985cfc7951c..4dfe7469185bdfff3f9b6e35d81ec785
  };
  
  const Theme$1 = view.EditorView.theme({
+@@ -107,10 +107,12 @@ const OverlayView = view.ViewPlugin.fromClass(class {
+         this.container = crelt__default["default"]("div", { class: "cm-minimap-overlay-container" });
+         this.dom = crelt__default["default"]("div", { class: "cm-minimap-overlay" });
+         this.container.appendChild(this.dom);
+-        // Attach event listeners for overlay
+-        this.container.addEventListener("mousedown", this.onMouseDown.bind(this));
+-        window.addEventListener("mouseup", this.onMouseUp.bind(this));
+-        window.addEventListener("mousemove", this.onMouseMove.bind(this));
++        // Bound refs so removeEventListener matches; window move/up only while dragging.
++        this.removeListeners();
++        this.boundOnMouseDown = this.onMouseDown.bind(this);
++        this.boundOnMouseUp = this.onMouseUp.bind(this);
++        this.boundOnMouseMove = this.onMouseMove.bind(this);
++        this.container.addEventListener("mousedown", this.boundOnMouseDown);
+         // Attach the overlay elements to the minimap
+         const inner = view.dom.querySelector(".cm-minimap-inner");
+         if (inner) {
+@@ -121,11 +123,38 @@ const OverlayView = view.ViewPlugin.fromClass(class {
+         this.computeHeight();
+         this.computeTop();
+     }
++    attachDragListeners() {
++        if (this._dragListenersAttached || !this.boundOnMouseUp || !this.boundOnMouseMove) {
++            return;
++        }
++        this._dragListenersAttached = true;
++        window.addEventListener("mouseup", this.boundOnMouseUp);
++        window.addEventListener("mousemove", this.boundOnMouseMove);
++    }
++    detachDragListeners() {
++        if (!this._dragListenersAttached) {
++            return;
++        }
++        this._dragListenersAttached = false;
++        if (this.boundOnMouseUp) {
++            window.removeEventListener("mouseup", this.boundOnMouseUp);
++        }
++        if (this.boundOnMouseMove) {
++            window.removeEventListener("mousemove", this.boundOnMouseMove);
++        }
++    }
++    removeListeners() {
++        this.detachDragListeners();
++        if (this.boundOnMouseDown) {
++            this.container?.removeEventListener("mousedown", this.boundOnMouseDown);
++            this.boundOnMouseDown = undefined;
++        }
++        this.boundOnMouseUp = undefined;
++        this.boundOnMouseMove = undefined;
++    }
+     remove() {
++        this.removeListeners();
+         if (this.container) {
+-            this.container.removeEventListener("mousedown", this.onMouseDown);
+-            window.removeEventListener("mouseup", this.onMouseUp);
+-            window.removeEventListener("mousemove", this.onMouseMove);
+             this.container.remove();
+         }
+     }
+@@ -202,6 +231,7 @@ const OverlayView = view.ViewPlugin.fromClass(class {
+             this._dragStartY = event.clientY;
+             this._isDragging = true;
+             this.container.classList.add("cm-minimap-overlay-active");
++            this.attachDragListeners();
+             return;
+         }
+         // Updates the scroll position of the EditorView based on the
+@@ -222,6 +252,7 @@ const OverlayView = view.ViewPlugin.fromClass(class {
+             this._isDragging = false;
+             this.container.classList.remove("cm-minimap-overlay-active");
+         }
++        this.detachDragListeners();
+     }
+     onMouseMove(event) {
+         if (!this._isDragging || !this.dom) {
 diff --git a/dist/index.js b/dist/index.js
-index c7c9a0406e1cfa2277ab6324fe47f70dd577e7c1..071247a9b8f05078cda4d49986dc8edf13ceb0c5 100644
+index c7c9a0406e1cfa2277ab6324fe47f70dd577e7c1..157dbbf0a62cd89877c54c06413aaf7d68a30e4f 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -44,7 +44,7 @@ const Scale = {
@@ -24,3 +99,78 @@ index c7c9a0406e1cfa2277ab6324fe47f70dd577e7c1..071247a9b8f05078cda4d49986dc8edf
  };
  
  const Theme$1 = /*@__PURE__*/EditorView.theme({
+@@ -99,10 +99,12 @@ const OverlayView = /*@__PURE__*/ViewPlugin.fromClass(class {
+         this.container = crelt("div", { class: "cm-minimap-overlay-container" });
+         this.dom = crelt("div", { class: "cm-minimap-overlay" });
+         this.container.appendChild(this.dom);
+-        // Attach event listeners for overlay
+-        this.container.addEventListener("mousedown", this.onMouseDown.bind(this));
+-        window.addEventListener("mouseup", this.onMouseUp.bind(this));
+-        window.addEventListener("mousemove", this.onMouseMove.bind(this));
++        // Bound refs so removeEventListener matches; window move/up only while dragging.
++        this.removeListeners();
++        this.boundOnMouseDown = this.onMouseDown.bind(this);
++        this.boundOnMouseUp = this.onMouseUp.bind(this);
++        this.boundOnMouseMove = this.onMouseMove.bind(this);
++        this.container.addEventListener("mousedown", this.boundOnMouseDown);
+         // Attach the overlay elements to the minimap
+         const inner = view.dom.querySelector(".cm-minimap-inner");
+         if (inner) {
+@@ -113,11 +115,38 @@ const OverlayView = /*@__PURE__*/ViewPlugin.fromClass(class {
+         this.computeHeight();
+         this.computeTop();
+     }
++    attachDragListeners() {
++        if (this._dragListenersAttached || !this.boundOnMouseUp || !this.boundOnMouseMove) {
++            return;
++        }
++        this._dragListenersAttached = true;
++        window.addEventListener("mouseup", this.boundOnMouseUp);
++        window.addEventListener("mousemove", this.boundOnMouseMove);
++    }
++    detachDragListeners() {
++        if (!this._dragListenersAttached) {
++            return;
++        }
++        this._dragListenersAttached = false;
++        if (this.boundOnMouseUp) {
++            window.removeEventListener("mouseup", this.boundOnMouseUp);
++        }
++        if (this.boundOnMouseMove) {
++            window.removeEventListener("mousemove", this.boundOnMouseMove);
++        }
++    }
++    removeListeners() {
++        this.detachDragListeners();
++        if (this.boundOnMouseDown) {
++            this.container?.removeEventListener("mousedown", this.boundOnMouseDown);
++            this.boundOnMouseDown = undefined;
++        }
++        this.boundOnMouseUp = undefined;
++        this.boundOnMouseMove = undefined;
++    }
+     remove() {
++        this.removeListeners();
+         if (this.container) {
+-            this.container.removeEventListener("mousedown", this.onMouseDown);
+-            window.removeEventListener("mouseup", this.onMouseUp);
+-            window.removeEventListener("mousemove", this.onMouseMove);
+             this.container.remove();
+         }
+     }
+@@ -194,6 +223,7 @@ const OverlayView = /*@__PURE__*/ViewPlugin.fromClass(class {
+             this._dragStartY = event.clientY;
+             this._isDragging = true;
+             this.container.classList.add("cm-minimap-overlay-active");
++            this.attachDragListeners();
+             return;
+         }
+         // Updates the scroll position of the EditorView based on the
+@@ -214,6 +244,7 @@ const OverlayView = /*@__PURE__*/ViewPlugin.fromClass(class {
+             this._isDragging = false;
+             this.container.classList.remove("cm-minimap-overlay-active");
+         }
++        this.detachDragListeners();
+     }
+     onMouseMove(event) {
+         if (!this._isDragging || !this.dom) {

@@ -1,6 +1,6 @@
 import {
+  classifyPreviewImageBytes,
   classifyPreviewImageSignature,
-  classifyPreviewSvgMarkup,
 } from "@main/files/image-signature.ts";
 import { describe, expect, it } from "vitest";
 
@@ -14,28 +14,24 @@ describe("classifyPreviewImageSignature", () => {
   });
 });
 
-describe("classifyPreviewSvgMarkup", () => {
-  it("accepts a bare svg root", () => {
+describe("classifyPreviewImageBytes", () => {
+  it("accepts raster signatures and svg markup", () => {
     expect(
-      classifyPreviewSvgMarkup(
+      classifyPreviewImageBytes(
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+      )
+    ).toBe("image/png");
+    expect(
+      classifyPreviewImageBytes(
         Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'></svg>")
       )
     ).toBe("image/svg+xml");
   });
 
-  it("skips BOM, xml declaration, and comments", () => {
-    const bytes = Buffer.from(
-      "\uFEFF<?xml version='1.0'?>\n<!-- icon -->\n<svg viewBox='0 0 8 8'></svg>"
-    );
-    expect(classifyPreviewSvgMarkup(bytes)).toBe("image/svg+xml");
-  });
-
-  it("rejects html and random xml", () => {
+  it("rejects html-wrapped svg and random bytes", () => {
     expect(
-      classifyPreviewSvgMarkup(Buffer.from("<!doctype html><svg></svg>"))
+      classifyPreviewImageBytes(Buffer.from("<!doctype html><svg></svg>"))
     ).toBeNull();
-    expect(
-      classifyPreviewSvgMarkup(Buffer.from("<root><svg></svg></root>"))
-    ).toBe(null);
+    expect(classifyPreviewImageBytes(Buffer.from([0, 1, 2, 3]))).toBeNull();
   });
 });

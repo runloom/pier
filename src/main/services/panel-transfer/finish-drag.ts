@@ -51,7 +51,7 @@ export interface FinishDragContext {
   windows: PanelTransferWindowPort;
 }
 
-async function resolveManagedPlacement(
+export async function resolveManagedPlacement(
   renderer: ReturnType<typeof createPanelTransferRendererPort>,
   geometry: PanelTransferGeometryPort,
   transferId: string,

@@ -3,6 +3,10 @@ import {
   mountLiveModuleExport,
   updateLiveModule,
 } from "@plugins/api/live-module-mount.ts";
+import {
+  importLiveModuleInDisposableRealm,
+  type LiveModuleRealm,
+} from "@plugins/api/live-module-realm.ts";
 import { projectLiveRootSpec } from "@shared/contracts/live-modules.ts";
 import {
   type ComponentType,
@@ -60,10 +64,17 @@ export function ExternalPluginAppletMount({
     }
     let cancelled = false;
     let unmount: (() => void) | undefined;
+    let realm: LiveModuleRealm | undefined;
     compiledRef.current = null;
     markAppletReady(el, false);
     el.dataset.retry = String(retry);
     const spec = projectLiveRootSpec({ projectRootPath });
+    const releaseGeneration = () => {
+      unmount?.();
+      unmount = undefined;
+      realm?.disposeSoon();
+      realm = undefined;
+    };
     const mount = async () => {
       await liveModules.registerRoot(spec);
       const compiled = await liveModules.compile(spec.id, moduleId);
@@ -71,27 +82,32 @@ export function ExternalPluginAppletMount({
         throw new Error(compiled.diagnostics[0]?.message ?? "compile failed");
       }
       const url = await liveModules.getUrl(spec.id, moduleId);
-      const mod = (await import(/* @vite-ignore */ url)) as Record<
-        string,
-        unknown
-      >;
+      // Disposable realm: a retried / remounted applet must not pin the
+      // previous module graph in the host module map.
+      const loaded = await importLiveModuleInDisposableRealm(url);
       if (cancelled) {
+        loaded.dispose();
         return;
       }
+      realm = loaded;
+      const mod = loaded.namespace;
       const Comp = mod.default;
       if (typeof Comp === "function") {
         compiledRef.current = Comp as ComponentType;
       }
-      unmount = await mountLiveModuleExport(el, "react", mod, {
+      unmount = mountLiveModuleExport(el, "react", mod, {
         onError,
         props: propsRef.current,
       });
-      if (!cancelled) {
-        markAppletReady(el, true);
-        setError(null);
+      if (cancelled) {
+        releaseGeneration();
+        return;
       }
+      markAppletReady(el, true);
+      setError(null);
     };
     mount().catch((caught: unknown) => {
+      releaseGeneration();
       if (!cancelled) {
         setError(caught instanceof Error ? caught.message : String(caught));
       }
@@ -100,7 +116,7 @@ export function ExternalPluginAppletMount({
       cancelled = true;
       markAppletReady(el, false);
       compiledRef.current = null;
-      unmount?.();
+      releaseGeneration();
     };
   }, [moduleId, onError, projectRootPath, retry, t]);
 

@@ -120,13 +120,25 @@ describe("agent start actions", () => {
     expect(
       actionRegistry.get("pier.agent.start.codex")?.metadata?.shortcutSourceId
     ).toBe("pier.agent.new");
+    expect(
+      actionRegistry.get("pier.agent.start.codex")?.metadata?.defaultAffordance
+    ).toBe(true);
+    expect(
+      actionRegistry.get("pier.agent.start.claude")?.metadata?.defaultAffordance
+    ).toBeUndefined();
 
     useAgentPreferencesStore.setState({ defaultAgentId: "claude" });
     expect(
       actionRegistry.get("pier.agent.start.claude")?.metadata?.shortcutSourceId
     ).toBe("pier.agent.new");
     expect(
+      actionRegistry.get("pier.agent.start.claude")?.metadata?.defaultAffordance
+    ).toBe(true);
+    expect(
       actionRegistry.get("pier.agent.start.codex")?.metadata?.shortcutSourceId
+    ).toBeUndefined();
+    expect(
+      actionRegistry.get("pier.agent.start.codex")?.metadata?.defaultAffordance
     ).toBeUndefined();
   });
 

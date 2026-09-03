@@ -5,6 +5,7 @@ import type {
 } from "@pier/ui/diff-view/index.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type {
+  GitReviewFileDocumentOk,
   GitReviewImageSide,
   GitReviewIndexEntry,
 } from "@shared/contracts/git/review.ts";
@@ -18,10 +19,43 @@ import type { ReviewDocumentResourceProjection } from "./projection-types.ts";
 import type { GitReviewDocumentResource } from "./resource.ts";
 import { conflictSectionText, stateSectionText } from "./state-text.ts";
 
-const loadedResourceProjectionCache = new WeakMap<
-  object,
+/**
+ * WeakMap keyed by the immutable document object, same as documentMetricsCache.
+ */
+const projectionsByDocument = new WeakMap<
+  GitReviewFileDocumentOk,
   Map<string, ReviewDocumentResourceProjection>
 >();
+
+/** Comment-seq churn is capped per document. */
+export const GIT_REVIEW_PROJECTIONS_PER_DOCUMENT = 8;
+
+function projectionsFor(
+  document: GitReviewFileDocumentOk
+): Map<string, ReviewDocumentResourceProjection> {
+  let projections = projectionsByDocument.get(document);
+  if (projections === undefined) {
+    projections = new Map();
+    projectionsByDocument.set(document, projections);
+  }
+  return projections;
+}
+
+function rememberProjection(
+  projections: Map<string, ReviewDocumentResourceProjection>,
+  key: string,
+  projection: ReviewDocumentResourceProjection
+): void {
+  projections.delete(key);
+  projections.set(key, projection);
+  while (projections.size > GIT_REVIEW_PROJECTIONS_PER_DOCUMENT) {
+    const oldest = projections.keys().next().value;
+    if (oldest === undefined) {
+      break;
+    }
+    projections.delete(oldest);
+  }
+}
 
 type ReviewSlot = GitReviewIndexEntry["renderSlots"][number];
 
@@ -47,50 +81,15 @@ export function projectReviewDocumentResource(
   if (resource.kind === "error") {
     return projectFailedReviewDocumentResource(resource, context);
   }
-  let projectionsByKey = loadedResourceProjectionCache.get(context);
-  if (projectionsByKey === undefined) {
-    projectionsByKey = new Map();
-    loadedResourceProjectionCache.set(context, projectionsByKey);
-  }
-  // 文档可能由 IPC 在每次权威刷新后重新物化，但 revision 是内容身份。
-  // 按内容身份缓存可避免未变化大文件重复 hash patch、复制数千个 change block。
-  // commentsSeq 纳入 key：评论变化（seq 递增）须失效缓存，否则行内评论不刷新。
+  const projections = projectionsFor(resource.document);
+  // 文档对象已是内容身份；key 只需区分阅读面 entry 映射、locale 与评论 seq
+  // （评论变化须失效缓存，否则行内评论不刷新）。
   const projectionKey = JSON.stringify([
     locale,
-    resource.document.revision,
-    resource.document.sections.map((section) => {
-      if (section.kind === "patch") {
-        return [
-          section.sectionKey,
-          section.patch.length,
-          section.changeBlocks.length,
-          section.oldContents?.length ?? -1,
-          section.newContents?.length ?? -1,
-        ];
-      }
-      if (section.kind === "conflict") {
-        return [
-          section.sectionKey,
-          section.kind,
-          section.presentation,
-          section.contentsDigest,
-          section.xy,
-        ];
-      }
-      if (section.kind === "image") {
-        return [
-          section.sectionKey,
-          section.kind,
-          section.before,
-          section.after,
-        ];
-      }
-      return [section.sectionKey, section.kind, section.reason];
-    }),
     resource.entry,
     commentsSeq ?? 0,
   ]);
-  const cached = projectionsByKey.get(projectionKey);
+  const cached = projections.get(projectionKey);
   if (cached !== undefined) {
     return cached;
   }
@@ -100,7 +99,7 @@ export function projectReviewDocumentResource(
     locale,
     comments
   );
-  projectionsByKey.set(projectionKey, projection);
+  rememberProjection(projections, projectionKey, projection);
   return projection;
 }
 

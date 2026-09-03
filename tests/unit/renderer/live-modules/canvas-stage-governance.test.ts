@@ -204,4 +204,36 @@ describe("canvas stage governance", () => {
     expect(shell).toContain("canvasFlowMeasureClass");
     expect(shell).not.toContain("max-w-5xl");
   });
+
+  it("keeps mermaid diagram stages off the world dot grid", () => {
+    const scene = read("packages/ui/src/mermaid/scene.tsx");
+    expect(scene).toContain("grid={false}");
+    expect(scene).not.toContain("radial-gradient");
+    const world = read("packages/ui/src/image-preview/world-canvas.tsx");
+    expect(world).toContain('from "./world-grid.ts"');
+    expect(world).toContain("computeWorldDotGridStyle");
+    const grid = read("packages/ui/src/image-preview/world-grid.ts");
+    expect(grid).toContain("WORLD_GRID_MIN_SCREEN_PX");
+    expect(grid).toContain("radial-gradient");
+  });
+
+  it("allows diagram/board upscale only through the shared world camera", () => {
+    const world = read("packages/ui/src/image-preview/world-canvas.tsx");
+    expect(world).toContain("allowUpscale: true");
+    const viewport = read(
+      "src/plugins/builtin/files/renderer/preview/use-canvas-stage-viewport.ts"
+    );
+    expect(viewport).toContain("allowUpscale: true");
+    expect(viewport).not.toContain("fitCamera(");
+    const photoHook = read(
+      "packages/ui/src/image-preview/use-zoom-pan-viewport.ts"
+    );
+    expect(photoHook).not.toContain("allowUpscale");
+    const fitCard = world.slice(
+      world.indexOf("function FitWorldCard"),
+      world.indexOf("function ZoomPanWorldStage")
+    );
+    expect(fitCard).toContain("measureContainScale({");
+    expect(fitCard).not.toContain("allowUpscale");
+  });
 });

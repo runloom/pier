@@ -21,7 +21,7 @@
 2. **在途隐藏 ≠ 事务提交。** 藏 tab 是视觉；真正 `removePanel` 仍在 `releaseSource`。取消 / Escape / 同窗松手必须把 tab 放回条上。
 3. **藏 tab 必须挺过 Dockview 还原。** 只给 `.dv-tab` 打 data 属性不够：`dragend` 常会重建节点。用 `html[data-pier-panel-transfer-in-transit]` + `:has([data-panel-tab-id])` 的注入样式，并在 capture-phase `dragend` / `onWillDrop` 同步 `hide`（不要只等 overlay 轮询）。
 4. **松手立刻亮原生壳。** `createForTransfer` 仍 `show:false` / 透明启动；claim 一旦有窗口就 `revealHost`（opacity 1 + show + focus），**不等** `waitForTargetWorkspaceReady`。空壳比「回落后再干等」好。面板就绪后 `runtime-moved` 的 `releaseRendererShow` 是 no-op。
-5. **光标在外时预创建。** overlay `outside` 即 `ensure` 隐藏窗口并开始 boot；`source` / `target` 则 `discard`。mouseup 复用这扇窗。分类必须忽略这些 window id，避免命中自己。
+5. **光标在外时预创建。** overlay `outside` 即 `ensure` 隐藏窗口并开始 boot；`source` / 落在**已有用户窗口**的 `target` 则 `discard`。光标落在自己的预创建窗上仍算 outside，不得 discard。mouseup 复用这扇窗。分类与 HTML5 `drop` 都必须忽略这些 window id（含正在销毁的预创建窗，直到 destroy 完成）：命中自己会当成 managed 而跳过 `revealHost`，源 tab 被摘掉、新窗仍透明。HTML5 打在预创建窗上时，若分类命中另一扇已有窗口，按该窗 placement claim，不得强制 root 撕窗。亮窗前先在透明态 `setBounds`，`revealHost` 后再设一次，避免跨屏 clamp 闪在源屏。
 6. **拖入已有窗口不抢焦点。** 光标已经在那扇窗上。只有 **新建窗口** 才 `focus` / `revealHost`（撕窗成为前台）。
 7. **禁止用假 overlay / 克隆 tab 冒充撕窗。** 源 tab 用 Dockview 自己的 `.dv-tab` 隐藏；新窗是真 `BaseWindow`。
 

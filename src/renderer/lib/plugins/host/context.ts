@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import {
   closeContentPreview,
   openImagePreview,
+  openMermaidPreview,
 } from "@/components/common/content-preview.ts";
 import { reportPluginSystemEvent } from "@/lib/plugins/notification-report.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
@@ -419,6 +420,16 @@ export function createRendererPluginContext(
           ...(request.onClose ? { onClose: request.onClose } : {}),
           source: request.source,
           title: request.title,
+        }),
+      openMermaid: (request) =>
+        openMermaidPreview({
+          "aria-label": request["aria-label"],
+          edges: [],
+          nodes: [],
+          source: request.source,
+          title: request.title,
+          ...(request.colorMode ? { colorMode: request.colorMode } : {}),
+          ...(request.onClose ? { onClose: request.onClose } : {}),
         }),
     },
     files: createPluginFilesContext(entry, assertPluginCapability),

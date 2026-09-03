@@ -66,5 +66,14 @@ describe("Mermaid flowchart from nodes", () => {
       ],
     });
     expect(source).toContain(`height:${withMeta}px`);
+    const wrapped = slotHeightPx({
+      id: "issue",
+      kind: "tool",
+      title: "已落地 · 不建第一版实现任务依赖 DAG",
+    });
+    expect(wrapped).toBeGreaterThan(short);
+    expect(wrapped).toBeGreaterThan(
+      slotHeightPx({ id: "t", kind: "tool", title: "CLI" })
+    );
   });
 });

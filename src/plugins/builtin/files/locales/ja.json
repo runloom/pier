@@ -544,6 +544,7 @@
       "description": "現在のプロジェクトを表示し、ファイルツリーを開きます。"
     }
   },
+  "description": "プロジェクトのファイルを閲覧し、ソース、Markdown、キャンバスを開いて編集します。",
   "name": "ファイル",
   "panels": {
     "pier.files.filePanel": {

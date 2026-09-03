@@ -29,25 +29,38 @@ export function appendScopedCssInjector(
   const scoped = `${scopedPart}${propertyPart}`;
   const hash = createHash("sha256").update(scoped).digest("hex").slice(0, 8);
   const key = `${moduleId}::${hash}`;
-  const injector = `
+  return `${jsSource}${cssInjectorIife(key, `${moduleId}::`, scoped)}`;
+}
+
+/**
+ * Self-invoking injector shared by the module-level and framework (Vue/Svelte)
+ * paths. Runs inside the disposable live-module realm, so styles must land in
+ * the HOST document (`parent`) — the same document `css-cleanup.ts` removes
+ * them from. Top-level evaluation (tests) falls back to its own document.
+ */
+function cssInjectorIife(key: string, prefix: string, css: string): string {
+  return `
 ;(() => {
+  let doc = document;
+  try {
+    if (globalThis.parent && globalThis.parent !== globalThis) doc = globalThis.parent.document;
+  } catch {}
   const key = ${JSON.stringify(key)};
   const attr = "data-pier-live-css";
   const sel = 'style[' + attr + '="' + key + '"]';
-  if (document.head.querySelector(sel)) return;
-  // Drop older hashes for the same moduleId prefix.
-  const prefix = ${JSON.stringify(`${moduleId}::`)};
-  document.head.querySelectorAll('style[' + attr + ']').forEach((node) => {
+  if (doc.head.querySelector(sel)) return;
+  // Drop older hashes for the same moduleId prefix (hot-reload CSS changes).
+  const prefix = ${JSON.stringify(prefix)};
+  doc.head.querySelectorAll('style[' + attr + ']').forEach((node) => {
     const value = node.getAttribute(attr);
     if (value && value.startsWith(prefix) && value !== key) node.remove();
   });
-  const s = document.createElement("style");
+  const s = doc.createElement("style");
   s.setAttribute(attr, key);
-  s.textContent = ${JSON.stringify(scoped)};
-  document.head.appendChild(s);
+  s.textContent = ${JSON.stringify(css)};
+  doc.head.appendChild(s);
 })();
 `;
-  return `${jsSource}${injector}`;
 }
 
 /** Build the injector snippet for framework plugins (Vue/Svelte) using the same attr. */
@@ -65,64 +78,49 @@ export function scopedCssInjectorSnippet(
     .slice(0, 8);
   const scoped = `@scope ([data-pier-canvas-shell]) {\n${cssText}\n}\n`;
   const key = `${moduleId}::${hash}`;
-  return `
-;(() => {
-  const key = ${JSON.stringify(key)};
-  const attr = "data-pier-live-css";
-  const sel = 'style[' + attr + '="' + key + '"]';
-  if (document.head.querySelector(sel)) return;
-  // Drop older hashes for the same moduleId prefix (hot-reload CSS changes).
-  const prefix = ${JSON.stringify(`${moduleId}::`)};
-  document.head.querySelectorAll('style[' + attr + ']').forEach((node) => {
-    const value = node.getAttribute(attr);
-    if (value && value.startsWith(prefix) && value !== key) node.remove();
-  });
-  const s = document.createElement("style");
-  s.setAttribute(attr, key);
-  s.textContent = ${JSON.stringify(scoped)};
-  document.head.appendChild(s);
-})();
-`;
+  return cssInjectorIife(key, `${moduleId}::`, scoped);
 }
 
-/** Split esbuild write:false outputs into the primary JS file and joined CSS. */
+interface EsbuildOutputFileLike {
+  contents: Uint8Array;
+  path: string;
+  text?: string;
+}
+
+function outputFileText(file: EsbuildOutputFileLike): string {
+  return typeof file.text === "string"
+    ? file.text
+    : new TextDecoder().decode(file.contents);
+}
+
+/**
+ * Split esbuild write:false outputs into the primary JS file, joined CSS, and
+ * the external sourcemap (`sourcemap: "external"` emits `out.js.map`, which
+ * esbuild may list BEFORE `out.js` — never let it be picked as the module).
+ */
 export function pickJsAndCssOutputs(
-  outputFiles: readonly {
-    contents: Uint8Array;
-    path: string;
-    text?: string;
-  }[]
+  outputFiles: readonly EsbuildOutputFileLike[]
 ): {
   cssText: string;
-  jsFile:
-    | {
-        contents: Uint8Array;
-        path: string;
-        text?: string;
-      }
-    | undefined;
+  jsFile: EsbuildOutputFileLike | undefined;
+  sourceMapText: string | undefined;
 } {
-  let jsFile:
-    | {
-        contents: Uint8Array;
-        path: string;
-        text?: string;
-      }
-    | undefined;
+  let jsFile: EsbuildOutputFileLike | undefined;
+  let sourceMapText: string | undefined;
   const cssChunks: string[] = [];
   for (const file of outputFiles) {
     const path = file.path.replaceAll("\\", "/");
     if (path.endsWith(".css")) {
-      cssChunks.push(
-        typeof file.text === "string"
-          ? file.text
-          : new TextDecoder().decode(file.contents)
-      );
+      cssChunks.push(outputFileText(file));
+      continue;
+    }
+    if (path.endsWith(".map")) {
+      sourceMapText ??= outputFileText(file);
       continue;
     }
     if (!jsFile) {
       jsFile = file;
     }
   }
-  return { cssText: cssChunks.join("\n"), jsFile };
+  return { cssText: cssChunks.join("\n"), jsFile, sourceMapText };
 }

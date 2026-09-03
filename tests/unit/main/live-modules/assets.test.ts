@@ -81,7 +81,10 @@ describe("canvas asset compile", () => {
       service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
     ).toString("utf8");
     expect(source).toContain("data:image/png;base64,");
-    expect(source).not.toContain(`${LIVE_MODULE_SCHEME}://asset/`);
+    // The only ticketed asset is the external sourcemap — the image itself
+    // must be inlined, not served over pier-live://asset.
+    const moduleBody = source.replace(/\/\/# sourceMappingURL=\S+\s*$/u, "");
+    expect(moduleBody).not.toContain(`${LIVE_MODULE_SCHEME}://asset/`);
   });
 
   it("tickets a large png and serves it over pier-live://asset", async () => {

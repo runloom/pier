@@ -53,6 +53,7 @@ export const commandPalette = {
     newAgent: "デフォルトのエージェントを起動",
     listAgents: "エージェント一覧…",
     openCollaboration: "エージェント連携…",
+    defaultAgentMark: "デフォルト",
     startAgent: "{{agent}} を起動",
     runTask: "タスクを実行…",
     terminalList: "ターミナル一覧...",

@@ -27,8 +27,15 @@ const BrowserWindow = vi.fn(function MockBrowserWindow() {
   };
 });
 
+const sessionFetch = vi.fn();
+
 vi.mock("electron", () => ({
   BrowserWindow,
+  session: {
+    fromPartition: () => ({
+      fetch: (...args: unknown[]) => sessionFetch(...args),
+    }),
+  },
 }));
 
 describe("fetchFromDocumentOrigin", () => {
@@ -47,6 +54,168 @@ describe("fetchFromDocumentOrigin", () => {
     showInactive.mockClear();
     setWindowOpenHandler.mockClear();
     BrowserWindow.mockClear();
+    sessionFetch.mockReset();
+    sessionFetch.mockRejectedValue(new Error("session fetch unavailable"));
+  });
+
+  it("uses the Chromium partition session when Cloudflare is already cleared", async () => {
+    const payload = Uint8Array.from([1, 2, 3, 4]);
+    sessionFetch.mockResolvedValue({
+      arrayBuffer: async () =>
+        payload.buffer.slice(
+          payload.byteOffset,
+          payload.byteOffset + payload.byteLength
+        ),
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === "content-type"
+            ? "application/grpc-web+proto"
+            : null,
+      },
+      ok: true,
+      status: 200,
+    });
+    const { fetchFromDocumentOrigin } = await import(
+      "@main/plugins/document-origin-fetch.ts"
+    );
+    const result = await fetchFromDocumentOrigin({
+      body: new Uint8Array([9]),
+      headers: { Accept: "application/grpc-web+proto" },
+      method: "POST",
+      origin: "https://grok.com/",
+      url: "https://grok.com/rpc",
+    });
+    expect(sessionFetch).toHaveBeenCalledOnce();
+    expect(BrowserWindow).not.toHaveBeenCalled();
+    expect(result).toEqual({ body: payload, ok: true, status: 200 });
+  });
+
+  it("falls back to the hidden window when Cloudflare sets cf-mitigated: challenge", async () => {
+    sessionFetch.mockResolvedValue({
+      arrayBuffer: async () => new ArrayBuffer(0),
+      headers: {
+        get: (name: string) => {
+          const key = name.toLowerCase();
+          if (key === "cf-mitigated") {
+            return "challenge";
+          }
+          if (key === "content-type") {
+            return "text/html";
+          }
+          return null;
+        },
+      },
+      ok: false,
+      status: 403,
+    });
+    executeJavaScriptInIsolatedWorld.mockResolvedValue({
+      base64: Buffer.from("ok").toString("base64"),
+      ok: true,
+      status: 200,
+    });
+    const { fetchFromDocumentOrigin } = await import(
+      "@main/plugins/document-origin-fetch.ts"
+    );
+    await fetchFromDocumentOrigin({
+      origin: "https://grok.com/",
+      url: "https://grok.com/rpc",
+    });
+    expect(BrowserWindow).toHaveBeenCalledOnce();
+  });
+
+  it("does not treat a non-challenge HTML error as a Cloudflare wall", async () => {
+    const html = new TextEncoder().encode("<html>upstream 500</html>");
+    sessionFetch.mockResolvedValue({
+      arrayBuffer: async () =>
+        html.buffer.slice(html.byteOffset, html.byteOffset + html.byteLength),
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === "content-type" ? "text/html" : null,
+      },
+      ok: false,
+      status: 500,
+    });
+    const { fetchFromDocumentOrigin } = await import(
+      "@main/plugins/document-origin-fetch.ts"
+    );
+    const result = await fetchFromDocumentOrigin({
+      origin: "https://grok.com/",
+      url: "https://grok.com/rpc",
+    });
+    expect(BrowserWindow).not.toHaveBeenCalled();
+    expect(result.status).toBe(500);
+    expect(result.ok).toBe(false);
+  });
+
+  it("does not open the hidden window when the session hop is aborted", async () => {
+    sessionFetch.mockImplementation(
+      (_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          const signal = init?.signal;
+          const fail = (): void => {
+            const error = new Error("aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (signal?.aborted) {
+            fail();
+            return;
+          }
+          signal?.addEventListener("abort", fail, { once: true });
+        })
+    );
+    const { fetchFromDocumentOrigin } = await import(
+      "@main/plugins/document-origin-fetch.ts"
+    );
+    const controller = new AbortController();
+    const pending = fetchFromDocumentOrigin({
+      origin: "https://grok.com/",
+      signal: controller.signal,
+      url: "https://grok.com/rpc",
+    });
+    await vi.waitFor(() => {
+      expect(sessionFetch).toHaveBeenCalled();
+    });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(BrowserWindow).not.toHaveBeenCalled();
+  });
+
+  it("times out a hung session hop without opening the hidden window", async () => {
+    vi.useFakeTimers();
+    try {
+      sessionFetch.mockImplementation(
+        (_url: string, init?: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            const signal = init?.signal;
+            const fail = (): void => {
+              const error = new Error("aborted");
+              error.name = "AbortError";
+              reject(error);
+            };
+            if (signal?.aborted) {
+              fail();
+              return;
+            }
+            signal?.addEventListener("abort", fail, { once: true });
+          })
+      );
+      const { ORIGIN_FETCH_TIMEOUT_MS, fetchFromDocumentOrigin } = await import(
+        "@main/plugins/document-origin-fetch.ts"
+      );
+      const pending = fetchFromDocumentOrigin({
+        origin: "https://grok.com/",
+        url: "https://grok.com/rpc",
+      });
+      const rejection = expect(pending).rejects.toMatchObject({
+        name: "TimeoutError",
+      });
+      await vi.advanceTimersByTimeAsync(ORIGIN_FETCH_TIMEOUT_MS);
+      await rejection;
+      expect(BrowserWindow).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("loads origin then returns isolated-world fetch body as base64 bytes", async () => {
@@ -235,5 +404,66 @@ describe("fetchFromDocumentOrigin", () => {
     expect(destroy).not.toHaveBeenCalled();
     disposeDocumentOriginWindows();
     expect(destroy).toHaveBeenCalledOnce();
+  });
+
+  it("tears down an idle origin window and recreates it on the next fetch", async () => {
+    vi.useFakeTimers();
+    try {
+      executeJavaScriptInIsolatedWorld.mockResolvedValue({
+        base64: Buffer.from("ok").toString("base64"),
+        ok: true,
+        status: 200,
+      });
+      const { fetchFromDocumentOrigin } = await import(
+        "@main/plugins/document-origin-fetch.ts"
+      );
+      const request = {
+        origin: "https://grok.com/",
+        url: "https://grok.com/rpc",
+      };
+
+      await fetchFromDocumentOrigin(request);
+      expect(BrowserWindow).toHaveBeenCalledOnce();
+      expect(destroy).not.toHaveBeenCalled();
+
+      // 下一轮轮询前（15 分钟节奏）就应释放整站 SPA 进程。
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(destroy).toHaveBeenCalledOnce();
+
+      await fetchFromDocumentOrigin(request);
+      expect(BrowserWindow).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("restarts the idle clock when a later fetch reuses the window", async () => {
+    vi.useFakeTimers();
+    try {
+      executeJavaScriptInIsolatedWorld.mockResolvedValue({
+        base64: Buffer.from("ok").toString("base64"),
+        ok: true,
+        status: 200,
+      });
+      const { fetchFromDocumentOrigin } = await import(
+        "@main/plugins/document-origin-fetch.ts"
+      );
+      const request = {
+        origin: "https://grok.com/",
+        url: "https://grok.com/rpc",
+      };
+
+      await fetchFromDocumentOrigin(request);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await fetchFromDocumentOrigin(request);
+      expect(BrowserWindow).toHaveBeenCalledOnce();
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(destroy).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(destroy).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

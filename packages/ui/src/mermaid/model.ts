@@ -46,12 +46,11 @@ export interface MermaidEdge {
 }
 
 /**
- * Card chrome: translucent wash of the family hue over the surface plus a
- * same-hue hairline. Diagrams are dense multi-card surfaces — opaque
- * colorXxxBg solids read as mud on near-black canvases, so cards take the
- * hue at low alpha instead (same recipe as widget preview swatches).
- * Kind glyphs stay foreground; run-status marks keep chromatic -fg tokens.
- * Mermaid theme CSS must not paint slotted SVG paths (see theme.ts).
+ * Card chrome: kind/tone cards always use the light pastel `status-*`
+ * wash (bright chips on a dark canvas) plus dark ink remapped on
+ * `[data-mermaid-wash=pastel]`. Kind glyphs follow that ink; run-status
+ * marks keep chromatic -fg. Mermaid theme CSS must not paint slotted SVG
+ * paths (see theme.ts).
  *
  * Every class name is a verbatim literal: Tailwind extracts candidates
  * statically and silently drops anything composed at runtime, and the
@@ -62,11 +61,11 @@ const HUE_WASH: Record<
   "danger" | "done" | "info" | "success" | "warning",
   string
 > = {
-  danger: "border-destructive/40 bg-destructive/10",
-  done: "border-done/40 bg-done/10",
-  info: "border-info/40 bg-info/10",
-  success: "border-success/40 bg-success/10",
-  warning: "border-warning/40 bg-warning/10",
+  danger: "border-status-danger-border bg-status-danger-bg",
+  done: "border-status-done-border bg-status-done-bg",
+  info: "border-status-info-border bg-status-info-bg",
+  success: "border-status-success-border bg-status-success-bg",
+  warning: "border-status-warning-border bg-status-warning-bg",
 };
 
 export const TONE_SURFACE: Partial<Record<MermaidTone, string>> = {
@@ -82,12 +81,12 @@ export const TONE_SURFACE: Partial<Record<MermaidTone, string>> = {
 export const KIND_SURFACE: Record<MermaidKind, string> = {
   actor: HUE_WASH.info,
   agent: HUE_WASH.done,
-  artifact: "border-dashed border-info/40 bg-info/10",
-  external: "border-dashed border-warning/40 bg-warning/10",
+  artifact: "border-dashed border-status-info-border bg-status-info-bg",
+  external: "border-dashed border-status-warning-border bg-status-warning-bg",
   tool: HUE_WASH.success,
 };
 
-/** Kind title-row glyph: foreground so 20px strokes read on pale fills. */
+/** Kind title-row glyph: follows the pastel-card ink (dark on wash). */
 export const KIND_GLYPH = "text-foreground!";
 
 export const SLOT_ATTR = "data-pier-slot";
@@ -101,6 +100,11 @@ const SLOT_CONTENT_RULE_PX = 1;
 const SLOT_CONTENT_PAD_PX = 6;
 const SLOT_TITLE_LINE_PX = 20;
 const SLOT_META_LINE_PX = 16;
+const SLOT_PAD_X_PX = 24;
+const SLOT_ICON_COL_PX = 28;
+const SLOT_STATUS_COL_PX = 20;
+const SLOT_TITLE_CHAR_PX = 14;
+const SLOT_META_CHAR_PX = 12;
 const SLOT_TITLE_CHARS_PER_LINE = 10;
 const SLOT_META_CHARS_PER_LINE = 14;
 
@@ -124,10 +128,41 @@ export function nodeNeedsSlot(node: MermaidNode): boolean {
   return !node.shape;
 }
 
+function wrapCharsPerLine(
+  availablePx: number,
+  charPx: number,
+  fallback: number
+): number {
+  if (availablePx <= 0) {
+    return fallback;
+  }
+  return Math.max(4, Math.min(fallback, Math.floor(availablePx / charPx)));
+}
+
+function titleColPx(node: MermaidNode): number {
+  let px = SLOT_WIDTH_PX - SLOT_PAD_X_PX;
+  if (node.kind) {
+    px -= SLOT_ICON_COL_PX;
+  }
+  if (node.status) {
+    px -= SLOT_STATUS_COL_PX;
+  }
+  return px;
+}
+
 /** Placeholder box mermaid measures before MermaidMark hydrates. */
 export function slotHeightPx(node: MermaidNode): number {
-  const titles = lineCount(node.title, SLOT_TITLE_CHARS_PER_LINE);
-  const metas = node.meta ? lineCount(node.meta, SLOT_META_CHARS_PER_LINE) : 0;
+  const col = titleColPx(node);
+  const titles = lineCount(
+    node.title,
+    wrapCharsPerLine(col, SLOT_TITLE_CHAR_PX, SLOT_TITLE_CHARS_PER_LINE)
+  );
+  const metas = node.meta
+    ? lineCount(
+        node.meta,
+        wrapCharsPerLine(col, SLOT_META_CHAR_PX, SLOT_META_CHARS_PER_LINE)
+      )
+    : 0;
   const extra = node.contentHeight ?? 0;
   const lines =
     SLOT_PAD_Y_PX +
@@ -135,6 +170,7 @@ export function slotHeightPx(node: MermaidNode): number {
     (metas > 0 ? SLOT_GAP_PX + metas * SLOT_META_LINE_PX : 0) +
     (extra > 0
       ? SLOT_CONTENT_GAP_PX + SLOT_CONTENT_RULE_PX + SLOT_CONTENT_PAD_PX + extra
-      : 0);
+      : 0) +
+    SLOT_TITLE_LINE_PX;
   return Math.max(SLOT_MIN_HEIGHT_PX, lines);
 }

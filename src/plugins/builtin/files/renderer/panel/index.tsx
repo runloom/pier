@@ -47,7 +47,7 @@ import {
 import { renderFilePanelSidebar } from "./sidebar-slot.tsx";
 import {
   asGroupHandle,
-  breadcrumbSegmentsForSource,
+  breadcrumbSegmentsForPanelSource,
   outsideWorkspaceStateFor,
   panelSourceForDocument,
   parseSourceState,
@@ -110,18 +110,12 @@ function FilePanelContent({
     stableSource,
   });
   useLayoutEffect(() => {
-    if (!stableSource) {
-      return;
-    }
-    // Outside-workspace disk docs acquire too: they render read/write with an
-    // context banner instead of being blocked at restore.
+    if (!stableSource) return;
     return controller.acquirePanel(panelSessionId, stableSource);
   }, [controller, panelSessionId, stableSource]);
 
-  // group 绑定必须是「活的」:dockview 拖拽跨组不 remount 组件,只 reparent
-  // 内容 DOM。render 期快照会指向旧 group(薄壳空白 + 旧组视图泄漏),
-  // 所以经 onDidGroupChange 把 groupId 提升为 state,变化时靠下方 effect 的
-  // cleanup/setup 对称性自动完成「旧组注销 → 新组登记」迁移。
+  // group 绑定必须活着：跨组拖拽不 remount，只 reparent。render 快照会指向旧组。
+  // onDidGroupChange 把 groupId 提升为 state，cleanup/setup 对称完成迁移。
   const [group, setGroup] = useState<PierDockviewGroupHandle | null>(() =>
     asGroupHandle(props.api?.group)
   );
@@ -346,19 +340,25 @@ function FilePanelContent({
     source: sourceFromParams,
     t,
   });
-  const diskBreadcrumb =
-    sourceFromParams == null ? null : (
-      <FilePanelBreadcrumb
-        ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
-        {...(breadcrumbContextMenu
-          ? { onContextMenu: breadcrumbContextMenu }
-          : {})}
-        onSegmentClick={(index) =>
-          handleBreadcrumbClick(index, sourceFromParams)
-        }
-        segments={breadcrumbSegmentsForSource(sourceFromParams, projectName)}
-      />
-    );
+  const diskBreadcrumb = sourceFromParams ? (
+    <FilePanelBreadcrumb
+      ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
+      {...(breadcrumbContextMenu
+        ? { onContextMenu: breadcrumbContextMenu }
+        : {})}
+      {...(outsideWorkspace
+        ? {}
+        : {
+            onSegmentClick: (index: number) =>
+              handleBreadcrumbClick(index, sourceFromParams),
+          })}
+      segments={breadcrumbSegmentsForPanelSource(
+        sourceFromParams,
+        projectName,
+        outsideWorkspace
+      )}
+    />
+  ) : null;
 
   if (sourceFromParams?.kind === "disk" && outsideWorkspace) {
     return (

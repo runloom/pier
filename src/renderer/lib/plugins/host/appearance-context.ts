@@ -71,9 +71,10 @@ export function createPluginAppearanceContext(): RendererPluginContext["appearan
 }
 
 /**
- * Markdown / plugin charts use the CSS-variable Mermaid path so diagram colors
- * inherit the surrounding document (including markdown paper appearance).
- * Canvas visualizations keep the separate official Mermaid renderer.
+ * Markdown / plugin charts and canvas visualizations share one mermaid engine
+ * (the official renderer in `@pier/ui/mermaid/theme.ts`). Diagram SVGs paint
+ * with CSS variables, so colors inherit the surrounding document tokens
+ * (including markdown paper appearance) and inline output matches fullscreen.
  */
 export function createPluginChartsContext(): RendererPluginContext["charts"] {
   return {

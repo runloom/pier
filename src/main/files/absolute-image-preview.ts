@@ -7,7 +7,7 @@ import {
   MAX_IMAGE_PREVIEW_FILE_BYTES,
   readFileWithinImagePreviewLimit,
 } from "./image-preview-file.ts";
-import { classifyPreviewImageSignature } from "./image-signature.ts";
+import { classifyPreviewImageBytes } from "./image-signature.ts";
 
 export type AbsoluteImagePreviewResolveFailure =
   | "not-found"
@@ -40,7 +40,7 @@ function revisionForAbsoluteImage(
 }
 
 /**
- * Resolve an absolute filesystem path into a signature-validated image locator
+ * Resolve an absolute filesystem path into a preview-classified image locator
  * plus bytes. Used by host media-preview issue and the protocol serve path.
  */
 export async function resolveAbsoluteImagePreview(
@@ -67,7 +67,7 @@ export async function resolveAbsoluteImagePreview(
   if (!bytes) {
     return { ok: false, reason: "too-large" };
   }
-  const mime = classifyPreviewImageSignature(bytes);
+  const mime = classifyPreviewImageBytes(bytes);
   if (!mime) {
     return { ok: false, reason: "unsupported" };
   }

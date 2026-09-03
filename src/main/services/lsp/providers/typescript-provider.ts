@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { LspServerProvider } from "@shared/contracts/lsp-provider.ts";
+import { resolvePierCanvasTsPlugin } from "../pier-canvas-ts-plugin.ts";
 import {
   matchPathExtensions,
   normalizeFsRoot,
@@ -99,11 +100,24 @@ export function createTypescriptLspProvider(): LspServerProvider {
       if (!bundled) {
         return null;
       }
+      const canvasPlugin = resolvePierCanvasTsPlugin();
       return {
         args: bundled.args,
         command: bundled.command,
         cwd: normalizeFsRoot(rootPath),
         env: { ELECTRON_RUN_AS_NODE: "1" },
+        ...(canvasPlugin
+          ? {
+              initializationOptions: {
+                plugins: [
+                  {
+                    location: canvasPlugin.location,
+                    name: canvasPlugin.name,
+                  },
+                ],
+              },
+            }
+          : {}),
       };
     },
     resolveRoot(input) {

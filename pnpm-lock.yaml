@@ -5,12 +5,10 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@pierre/diffs@1.2.12': 918729fda6100cc03c38d28e0f1e2c56f867fed69bb1a64fcf03a5677262f0e2
+  '@pierre/diffs@1.2.12': cd7c8aa6dd1cb29dfbea88449d7a4d133e35b55eb774b2ac720f676b51420ade
   '@pierre/trees@1.0.0-beta.5': 7ac39c10bcacc46591551044a9a007eb3f7c12299a8849b9a266ba78906eebc4
-  '@replit/codemirror-minimap@0.5.2': 5e97e2bd22aff8ac4ae0a278dc24443b3d60cd7f983a321b5effe6c03e6864f3
-  beautiful-mermaid@1.1.3: 4c6c0b81916bc4996405cfbc73cac13e81d94939f495d3629f22c116f64e049c
+  '@replit/codemirror-minimap@0.5.2': 31b884b79f427644be2ff88ca70dcb5f1ab266284948040919df23763adaf5f4
   dockview-core@7.0.2: 268f59c57328fdac671a7880405847f306101c839c2dae039ae66039c5099c4d
-  elkjs@0.11.1: 155acc0592f4260341eeb6963dcef693d4eab557a04ee9f115422753022ff635
 
 importers:
 
@@ -114,7 +112,7 @@ importers:
         version: link:packages/ui
       '@pierre/diffs':
         specifier: 1.2.12
-        version: 1.2.12(patch_hash=918729fda6100cc03c38d28e0f1e2c56f867fed69bb1a64fcf03a5677262f0e2)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 1.2.12(patch_hash=cd7c8aa6dd1cb29dfbea88449d7a4d133e35b55eb774b2ac720f676b51420ade)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@pierre/theme':
         specifier: ^1.1.0
         version: 1.1.0
@@ -123,7 +121,7 @@ importers:
         version: 6.0.0(@codemirror/autocomplete@6.20.3)(@codemirror/lang-css@6.3.1)(@codemirror/lang-html@6.4.11)(@codemirror/lang-javascript@6.2.5)(@codemirror/language@6.12.4)(@codemirror/state@6.7.1)(@codemirror/view@6.43.6)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@lezer/javascript@1.5.4)(@lezer/lr@1.4.10)
       '@replit/codemirror-minimap':
         specifier: 0.5.2
-        version: 0.5.2(patch_hash=5e97e2bd22aff8ac4ae0a278dc24443b3d60cd7f983a321b5effe6c03e6864f3)(@codemirror/language@6.12.4)(@codemirror/lint@6.9.7)(@codemirror/state@6.7.1)(@codemirror/view@6.43.6)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)
+        version: 0.5.2(patch_hash=31b884b79f427644be2ff88ca70dcb5f1ab266284948040919df23763adaf5f4)(@codemirror/language@6.12.4)(@codemirror/lint@6.9.7)(@codemirror/state@6.7.1)(@codemirror/view@6.43.6)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)
       '@shikijs/themes':
         specifier: ^4.3.1
         version: 4.3.1
@@ -133,9 +131,6 @@ importers:
       '@tailwindcss/oxide':
         specifier: 4.3.3
         version: 4.3.3
-      beautiful-mermaid:
-        specifier: 1.1.3
-        version: 1.1.3(patch_hash=4c6c0b81916bc4996405cfbc73cac13e81d94939f495d3629f22c116f64e049c)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -629,9 +624,12 @@ importers:
 
   packages/ui:
     dependencies:
+      '@mermaid-js/layout-elk':
+        specifier: ^0.2.3
+        version: 0.2.3(mermaid@11.12.2)
       '@pierre/diffs':
         specifier: 1.2.12
-        version: 1.2.12(patch_hash=918729fda6100cc03c38d28e0f1e2c56f867fed69bb1a64fcf03a5677262f0e2)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 1.2.12(patch_hash=cd7c8aa6dd1cb29dfbea88449d7a4d133e35b55eb774b2ac720f676b51420ade)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@pierre/trees':
         specifier: 1.0.0-beta.5
         version: 1.0.0-beta.5(patch_hash=7ac39c10bcacc46591551044a9a007eb3f7c12299a8849b9a266ba78906eebc4)(@pierre/theme@1.1.0)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(shiki@4.3.1)
@@ -1741,6 +1739,11 @@ packages:
 
   '@marijn/find-cluster-break@1.0.3':
     resolution: {integrity: sha512-FY+MKLBoTsLNJF/eLWaOsXGdz6uh3Iu1axjPf6TUq92IYumcTcXWHoS747JARLkcdlJ/Waiaxc5wQfFO8jC6NA==}
+
+  '@mermaid-js/layout-elk@0.2.3':
+    resolution: {integrity: sha512-m46RVGfvKK1PSMdAFGDz2nksI4jusEkFxvf0lb48bYWmqLQxZpjtpruiw29MbOy9rlWJtuMf9EzG9fAF8CVZbg==}
+    peerDependencies:
+      mermaid: ^11.0.2
 
   '@mermaid-js/parser@0.6.3':
     resolution: {integrity: sha512-lnjOhe7zyHjc+If7yT4zoedx2vo4sHaTmtkl1+or8BRTnCtDmcTpAjpzDSfCZrshM5bCoz0GyidzadJAH1xobA==}
@@ -3432,9 +3435,6 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  beautiful-mermaid@1.1.3:
-    resolution: {integrity: sha512-TItrtrAyHp1vwFfFVYauWGrquouk/6SS21Aq3RsxindSYZODcN4xYrPZD6BiZRU+o5mKJzDPz9MUSMvELdylyg==}
-
   bidi-js@1.0.3:
     resolution: {integrity: sha512-RKshQI1R3YQ+n9YJz2QQ147P66ELpa1FQEg20Dk8oW9t2KgLbpDLLp9aGZ7y8WHSshDknG0bknqGw5/tyCs5tw==}
 
@@ -4123,8 +4123,8 @@ packages:
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
-  elkjs@0.11.1:
-    resolution: {integrity: sha512-zxxR9k+rx5ktMwT/FwyLdPCrq7xN6e4VGGHH8hA01vVYKjTFik7nHOxBnAYtrgYUB1RpAiLvA1/U2YraWxyKKg==}
+  elkjs@0.9.3:
+    resolution: {integrity: sha512-f/ZeWvW/BCXbhGEf1Ujp29EASo/lk1FDnETgNKwJrsVvGZhUWCZyg3xLJjAsxfOmt8KjswHmI5EwCQcPMpOYhQ==}
 
   embla-carousel-react@8.6.0:
     resolution: {integrity: sha512-0/PjqU7geVmo6F734pmPqpyHqiM99olvyecY7zdweCw+6tKEXnrE90pBiBbMMU8s5tICemzpQ3hi5EpxzGW+JA==}
@@ -4166,10 +4166,6 @@ packages:
 
   entities@4.5.0:
     resolution: {integrity: sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==}
-    engines: {node: '>=0.12'}
-
-  entities@7.0.1:
-    resolution: {integrity: sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==}
     engines: {node: '>=0.12'}
 
   entities@8.0.0:
@@ -8042,6 +8038,12 @@ snapshots:
 
   '@marijn/find-cluster-break@1.0.3': {}
 
+  '@mermaid-js/layout-elk@0.2.3(mermaid@11.12.2)':
+    dependencies:
+      d3: 7.9.0
+      elkjs: 0.9.3
+      mermaid: 11.12.2
+
   '@mermaid-js/parser@0.6.3':
     dependencies:
       langium: 3.3.1
@@ -8115,7 +8117,7 @@ snapshots:
       tslib: 2.8.1
       webcrypto-core: 1.9.2
 
-  '@pierre/diffs@1.2.12(patch_hash=918729fda6100cc03c38d28e0f1e2c56f867fed69bb1a64fcf03a5677262f0e2)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@pierre/diffs@1.2.12(patch_hash=cd7c8aa6dd1cb29dfbea88449d7a4d133e35b55eb774b2ac720f676b51420ade)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@pierre/theme': 1.1.0
       '@pierre/theming': 0.0.2(@pierre/theme@1.1.0)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(shiki@4.3.1)
@@ -9018,7 +9020,7 @@ snapshots:
       '@lezer/javascript': 1.5.4
       '@lezer/lr': 1.4.10
 
-  '@replit/codemirror-minimap@0.5.2(patch_hash=5e97e2bd22aff8ac4ae0a278dc24443b3d60cd7f983a321b5effe6c03e6864f3)(@codemirror/language@6.12.4)(@codemirror/lint@6.9.7)(@codemirror/state@6.7.1)(@codemirror/view@6.43.6)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)':
+  '@replit/codemirror-minimap@0.5.2(patch_hash=31b884b79f427644be2ff88ca70dcb5f1ab266284948040919df23763adaf5f4)(@codemirror/language@6.12.4)(@codemirror/lint@6.9.7)(@codemirror/state@6.7.1)(@codemirror/view@6.43.6)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)':
     dependencies:
       '@codemirror/language': 6.12.4
       '@codemirror/lint': 6.9.7
@@ -9785,11 +9787,6 @@ snapshots:
   base64-js@1.5.1: {}
 
   baseline-browser-mapping@2.10.38: {}
-
-  beautiful-mermaid@1.1.3(patch_hash=4c6c0b81916bc4996405cfbc73cac13e81d94939f495d3629f22c116f64e049c):
-    dependencies:
-      elkjs: 0.11.1(patch_hash=155acc0592f4260341eeb6963dcef693d4eab557a04ee9f115422753022ff635)
-      entities: 7.0.1
 
   bidi-js@1.0.3:
     dependencies:
@@ -10562,7 +10559,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  elkjs@0.11.1(patch_hash=155acc0592f4260341eeb6963dcef693d4eab557a04ee9f115422753022ff635): {}
+  elkjs@0.9.3: {}
 
   embla-carousel-react@8.6.0(react@19.2.7):
     dependencies:
@@ -10602,8 +10599,6 @@ snapshots:
       strip-ansi: 6.0.1
 
   entities@4.5.0: {}
-
-  entities@7.0.1: {}
 
   entities@8.0.0: {}
 

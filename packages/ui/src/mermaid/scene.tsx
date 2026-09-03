@@ -10,6 +10,7 @@ import { MermaidMark } from "./mark.tsx";
 import { SLOT_ATTR } from "./model.ts";
 import type { MermaidProps } from "./props.ts";
 import { MermaidEmpty, MermaidShell } from "./shell.tsx";
+import { prepareMermaidSource } from "./source-prepare.ts";
 import { mermaidFlowchart, renderMermaid } from "./theme.ts";
 
 const DEFAULT_STAGE_LABELS: ImagePreviewCanvasLabels = {
@@ -45,7 +46,12 @@ export function MermaidScene(props: MermaidProps) {
   } = props;
   const isStage = presentation === "stage";
   const keyboardSelectable = onSelectNode !== undefined;
-  const mermaidSource = source ?? mermaidFlowchart({ direction, edges, nodes });
+  // Author sources go through the same prepare pass as the markdown inline
+  // facade so fullscreen and inline render byte-identical mermaid input.
+  // mermaidFlowchart() output is already canonical.
+  const mermaidSource = source
+    ? prepareMermaidSource(source)
+    : mermaidFlowchart({ direction, edges, nodes });
   const hostRef = useRef<HTMLDivElement>(null);
   const rootsRef = useRef(new Map<string, Root>());
   const paintRef = useRef<() => void>(() => undefined);
@@ -133,7 +139,9 @@ export function MermaidScene(props: MermaidProps) {
   const mermaidHost = (
     <div
       className={cn(
-        isStage ? "max-w-none" : "flex justify-center",
+        isStage
+          ? "max-w-none [&>svg]:max-w-none"
+          : "flex justify-center [&>svg]:h-auto [&>svg]:max-w-full",
         failed && "hidden"
       )}
       data-slot="mermaid-host"
@@ -168,6 +176,7 @@ export function MermaidScene(props: MermaidProps) {
         <HtmlWorldCanvas
           className="min-h-0 w-full flex-1 bg-background"
           expandable={false}
+          grid={false}
           labels={labels}
           presentation="stage"
           viewerLabel={ariaLabel}

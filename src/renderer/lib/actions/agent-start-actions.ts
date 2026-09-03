@@ -105,7 +105,9 @@ function createAgentStartAction(
       categoryKey: "run",
       group: "1_new",
       iconComponent: Bot,
-      ...(isDefault ? { shortcutSourceId: "pier.agent.new" } : {}),
+      ...(isDefault
+        ? { defaultAffordance: true, shortcutSourceId: "pier.agent.new" }
+        : {}),
       sortOrder: startAgentSortOrder(entry.id),
       titleKey: "commandPalette.action.startAgent",
     },

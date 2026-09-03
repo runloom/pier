@@ -13,6 +13,7 @@ import { reviewContentEntryKeysInOrder } from "../../../../../../src/plugins/bui
 import {
   compareReviewTreePaths,
   defaultReviewCollidingFileLabel,
+  GIT_REVIEW_PROJECTIONS_PER_DOCUMENT,
   indexReviewDocumentProjection,
   indexReviewEntrySections,
   indexReviewSectionEntries,
@@ -215,6 +216,89 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     );
 
     expect(second).toBe(first);
+  });
+
+  it("keys the projection cache by document object so it dies with the document", () => {
+    const pluginContext = context();
+    const resource = loaded(3);
+    if (resource.kind !== "loaded") {
+      throw new Error("expected loaded resource");
+    }
+    const first = projectReviewDocumentResource(resource, pluginContext, "en");
+    // 智能体持续改文件：每次刷新一个新文档对象。旧文档随 session 预算逐出后，
+    // 其投影不再有任何持有者；不存在跨文档的全局表可累积。
+    for (let i = 0; i < 1000; i += 1) {
+      projectReviewDocumentResource(
+        {
+          ...resource,
+          document: { ...resource.document, revision: `document:churn-${i}` },
+        },
+        pluginContext,
+        "en"
+      );
+    }
+    // 同一文档对象（reconcile 对 `unchanged` 复用）始终命中，与其它文档数量无关。
+    expect(projectReviewDocumentResource(resource, pluginContext, "en")).toBe(
+      first
+    );
+    // 同 revision 但重新物化的新对象只多算一次，随后按新对象缓存。
+    const rematerialized = {
+      ...resource,
+      document: { ...resource.document },
+    };
+    const second = projectReviewDocumentResource(
+      rematerialized,
+      pluginContext,
+      "en"
+    );
+    expect(second).not.toBe(first);
+    expect(
+      projectReviewDocumentResource(rematerialized, pluginContext, "en")
+    ).toBe(second);
+  });
+
+  it("caps projections kept per document as comment seq churns", () => {
+    const pluginContext = context();
+    const resource = loaded(4);
+    if (resource.kind !== "loaded") {
+      throw new Error("expected loaded resource");
+    }
+    const initial = projectReviewDocumentResource(
+      resource,
+      pluginContext,
+      "en",
+      undefined,
+      0
+    );
+    for (let seq = 1; seq <= GIT_REVIEW_PROJECTIONS_PER_DOCUMENT; seq += 1) {
+      projectReviewDocumentResource(
+        resource,
+        pluginContext,
+        "en",
+        undefined,
+        seq
+      );
+    }
+    // 最旧的 seq 0 被挤出；最新 seq 仍缓存。
+    expect(
+      projectReviewDocumentResource(resource, pluginContext, "en", undefined, 0)
+    ).not.toBe(initial);
+    const latest = projectReviewDocumentResource(
+      resource,
+      pluginContext,
+      "en",
+      undefined,
+      GIT_REVIEW_PROJECTIONS_PER_DOCUMENT
+    );
+    expect(
+      projectReviewDocumentResource(
+        resource,
+        pluginContext,
+        "en",
+        undefined,
+        GIT_REVIEW_PROJECTIONS_PER_DOCUMENT
+      )
+    ).toBe(latest);
   });
 
   it("projects Conflict, Index and Staged as isolated renderer surfaces", () => {

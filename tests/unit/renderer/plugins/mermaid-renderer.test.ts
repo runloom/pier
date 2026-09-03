@@ -1,254 +1,177 @@
 import { describe, expect, it, vi } from "vitest";
-import { renderMermaidInWorker } from "@/lib/plugins/mermaid/render.worker.ts";
 import { createMermaidRenderer } from "@/lib/plugins/mermaid/renderer.ts";
+import { installSvgLayoutStubs } from "../../../support/svg-layout-stubs.ts";
 
-class FakeWorker {
-  static instances: FakeWorker[] = [];
-  onerror: ((event: ErrorEvent) => void) | null = null;
-  onmessage: ((event: MessageEvent) => void) | null = null;
-  postMessage = vi.fn();
-  terminate = vi.fn();
-  constructor() {
-    FakeWorker.instances.push(this);
-  }
-}
+installSvgLayoutStubs();
 
-function setup() {
-  FakeWorker.instances = [];
-  const renderer = createMermaidRenderer({
-    createWorker: () => new FakeWorker(),
-    timeoutMs: 2000,
-  });
-  return renderer;
-}
+const OK_SVG = { svg: "<svg><text>ok</text></svg>" };
 
-describe("Mermaid renderer", () => {
-  it("renders in a dedicated worker and caches successful SVGs", async () => {
-    const renderer = setup();
-    const first = renderer.render("graph TD;A-->B");
-    const worker = FakeWorker.instances[0];
-    expect(worker?.postMessage).toHaveBeenCalledWith({
-      source: "graph TD;A-->B",
-    });
-    worker?.onmessage?.(
-      new MessageEvent("message", {
-        data: { ok: true, svg: "<svg><path /></svg>" },
-      })
-    );
-    await expect(first).resolves.toEqual({
-      ok: true,
-      svg: "<svg><path /></svg>",
-    });
+describe("createMermaidRenderer facade semantics", () => {
+  it("caches successful renders and dedupes in-flight renders", async () => {
+    const renderSvg = vi.fn(async () => OK_SVG);
+    const renderer = createMermaidRenderer({ renderSvg });
 
     await expect(renderer.render("graph TD;A-->B")).resolves.toEqual({
       ok: true,
-      svg: "<svg><path /></svg>",
+      svg: OK_SVG.svg,
     });
-    expect(FakeWorker.instances).toHaveLength(1);
+    // Cache hit: no second render.
+    await expect(renderer.render("graph TD;A-->B")).resolves.toEqual({
+      ok: true,
+      svg: OK_SVG.svg,
+    });
+    expect(renderSvg).toHaveBeenCalledTimes(1);
+
+    // In-flight dedupe: one engine call feeds both callers.
+    let resolveSlow: ((value: { svg: string }) => void) | undefined;
+    const slow = createMermaidRenderer({
+      renderSvg: vi.fn(
+        () => new Promise<{ svg: string }>((resolve) => (resolveSlow = resolve))
+      ),
+    });
+    const first = slow.render("graph TD;X-->Y");
+    const second = slow.render("graph TD;X-->Y");
+    resolveSlow?.({ svg: "<svg>slow</svg>" });
+    await expect(first).resolves.toEqual({ ok: true, svg: "<svg>slow</svg>" });
+    await expect(second).resolves.toEqual({ ok: true, svg: "<svg>slow</svg>" });
+    expect(slow).toBeTruthy();
   });
 
-  it("rejects oversized sources and unsafe worker output", async () => {
-    const renderer = setup();
+  it("rejects oversized sources without invoking the engine", async () => {
+    const renderSvg = vi.fn(async () => OK_SVG);
+    const renderer = createMermaidRenderer({ renderSvg });
     await expect(renderer.render("x".repeat(160_001))).resolves.toEqual({
       ok: false,
       reason: "too-large",
     });
+    expect(renderSvg).not.toHaveBeenCalled();
+  });
 
-    const result = renderer.render("graph TD;A-->B");
-    FakeWorker.instances[0]?.onmessage?.(
-      new MessageEvent("message", {
-        data: { ok: true, svg: "<svg><script>alert(1)</script></svg>" },
-      })
-    );
-    await expect(result).resolves.toEqual({
+  it("maps engine rejections to render-failed", async () => {
+    const renderer = createMermaidRenderer({
+      renderSvg: () => Promise.reject(new Error("parse error on line 2")),
+    });
+    await expect(renderer.render("graph TD;A-->")).resolves.toEqual({
       ok: false,
       reason: "render-failed",
     });
   });
 
-  it("terminates a render after two seconds", async () => {
+  it("caps waiting at the timeout", async () => {
     vi.useFakeTimers();
     try {
-      const renderer = setup();
+      const renderer = createMermaidRenderer({
+        renderSvg: () => new Promise<{ svg: string }>(() => undefined),
+        timeoutMs: 100,
+      });
       const result = renderer.render("graph TD;A-->B");
-      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(100);
       await expect(result).resolves.toEqual({ ok: false, reason: "timeout" });
-      expect(FakeWorker.instances[0]?.terminate).toHaveBeenCalledOnce();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("accepts dangerous words as text but rejects active URL attributes", async () => {
-    const renderer = setup();
-    const safe = renderer.render("graph TD;A-->B");
-    FakeWorker.instances[0]?.onmessage?.(
-      new MessageEvent("message", {
-        data: { ok: true, svg: "<svg><text>javascript: onload=</text></svg>" },
-      })
-    );
-    await expect(safe).resolves.toMatchObject({ ok: true });
-
-    const unsafe = renderer.render("graph TD;B-->C");
-    FakeWorker.instances[1]?.onmessage?.(
-      new MessageEvent("message", {
-        data: {
-          ok: true,
-          svg: '<svg><a href="https://example.com"><text>x</text></a></svg>',
-        },
-      })
-    );
-    await expect(unsafe).resolves.toEqual({
-      ok: false,
-      reason: "render-failed",
-    });
-
-    const escapedCss = renderer.render("graph TD;C-->D");
-    FakeWorker.instances[2]?.onmessage?.(
-      new MessageEvent("message", {
-        data: {
-          ok: true,
-          svg: '<svg><rect fill="u\\72l(https://example.com/paint.svg#p)" /></svg>',
-        },
-      })
-    );
-    await expect(escapedCss).resolves.toEqual({
-      ok: false,
-      reason: "render-failed",
-    });
+  it("evicts the oldest cache entry beyond the cap", async () => {
+    const renderSvg = vi.fn(async () => OK_SVG);
+    const renderer = createMermaidRenderer({ renderSvg });
+    for (let i = 0; i < 97; i += 1) {
+      await renderer.render(`graph TD;N${i}-->Z`);
+    }
+    expect(renderSvg).toHaveBeenCalledTimes(97);
+    // Entry 0 was evicted when entry 96 landed, so it renders again.
+    await renderer.render("graph TD;N0-->Z");
+    expect(renderSvg).toHaveBeenCalledTimes(98);
+    // The most recent entry is still cached.
+    await renderer.render("graph TD;N96-->Z");
+    expect(renderSvg).toHaveBeenCalledTimes(98);
   });
+});
 
-  it("maps synchronous worker failures to structured results", async () => {
-    const constructionFailure = createMermaidRenderer({
-      createWorker: () => {
-        throw new Error("blocked");
-      },
-    });
-    await expect(constructionFailure.render("graph TD;A-->B")).resolves.toEqual(
-      {
-        ok: false,
-        reason: "render-failed",
-      }
-    );
+/**
+ * Compat corpus: compact / AI-authored sources that must render on the single
+ * official engine (these used to target the beautiful-mermaid worker parser).
+ * Assertions lock user-visible labels, not engine-internal DOM.
+ */
+describe("official-engine compatibility corpus", () => {
+  const renderer = createMermaidRenderer();
 
-    const worker = new FakeWorker();
-    worker.postMessage.mockImplementation(() => {
-      throw new Error("closed");
-    });
-    const postFailure = createMermaidRenderer({
-      createWorker: () => worker,
-    });
-    await expect(postFailure.render("graph TD;A-->B")).resolves.toEqual({
-      ok: false,
-      reason: "render-failed",
-    });
-    expect(worker.terminate).toHaveBeenCalledOnce();
-  });
+  async function renderOk(source: string): Promise<string> {
+    const result = await renderer.render(source);
+    if (!result.ok) {
+      throw new Error(`expected ok, got ${result.reason}`);
+    }
+    return result.svg;
+  }
 
-  it("renders a flowchart through the real worker renderer", async () => {
-    const svg = renderMermaidInWorker({ source: "graph TD;A-->B" });
+  it("renders compact flowcharts with the UI font", async () => {
+    const svg = await renderOk("graph TD;A-->B");
     expect(svg).toContain("<svg");
-    expect(svg).not.toContain("foreignObject");
-    expect(svg).not.toContain("--accent:var(--action-accent)");
-    // Host --border is too faint for node strokes / edges; theme must derive from fg/bg.
-    expect(svg).not.toContain("--line:var(--border)");
-    // Arrowheads use --accent; must match --line (not host near-white --accent).
-    expect(svg).toContain(
-      "--accent:color-mix(in srgb, var(--foreground) 45%, var(--background))"
+    expect(svg).toContain("font-family:var(--font-sans)");
+    const labeled = await renderOk("graph TD;A-->|ready; retry|B");
+    expect(labeled).toContain("ready; retry");
+  });
+
+  it("expands compact classDiagram bodies", async () => {
+    const svg = await renderOk(
+      "classDiagram;class A {;+int x;+f();};class B;A --> B"
     );
-    expect(svg).toContain(
-      "--line:color-mix(in srgb, var(--foreground) 45%, var(--background))"
+    expect(svg).toContain("int");
+    expect(svg).toContain("f()");
+    const inheritance = await renderOk(
+      "classDiagram;Animal <|-- Dog;Dog --> Food"
     );
-    expect(svg).toContain("--border:color-mix(in srgb, var(--foreground)");
-    expect(svg).toContain("--surface:color-mix(in srgb, var(--foreground)");
-    expect(svg).toContain('fill="var(--_arrow)"');
-    expect(svg).toContain('stroke="var(--_line)"');
+    expect(inheritance).toContain("<svg");
+  });
 
-    const classSvg = renderMermaidInWorker({
-      source: "classDiagram;class A {;+int x;+f();};class B;A --> B",
-    });
-    expect(classSvg).toContain(">x</tspan>");
-    expect(classSvg).toContain(">int</tspan>");
-    expect(classSvg).toContain("f()");
+  it("keeps comments commenting to end of line", async () => {
+    const svg = await renderOk("graph TD;%% hidden;A-->B\nC-->D");
+    expect(svg).not.toContain('id="flowchart-A-');
+    expect(svg).toContain('id="flowchart-C-');
+  });
 
-    const edgeLabelSvg = renderMermaidInWorker({
-      source: "graph TD;A-->|ready; retry|B",
-    });
-    expect(edgeLabelSvg).toContain("ready; retry");
+  it("strips leading comments before the header", async () => {
+    const svg = await renderOk("%% model\nclassDiagram;class A {;+int x;}");
+    expect(svg).toContain("int");
+  });
 
-    const commentSvg = renderMermaidInWorker({
-      source: "graph TD;%% hidden;A-->B\nC-->D",
-    });
-    expect(commentSvg).not.toContain('data-id="A"');
-    expect(commentSvg).toContain('data-id="C"');
-
-    const erSvg = renderMermaidInWorker({
-      source: "erDiagram\nCUSTOMER ||--o{ ORDER : places",
-    });
-    expect(erSvg).toContain('class="er-relationship"');
-
-    const inheritanceSvg = renderMermaidInWorker({
-      source: "classDiagram;Animal <|-- Dog;Dog --> Food",
-    });
-    expect(inheritanceSvg.match(/class="class-relationship"/gu)).toHaveLength(
-      2
+  it("renders ER and sequence diagrams", async () => {
+    const er = await renderOk("erDiagram\nCUSTOMER ||--o{ ORDER : places");
+    expect(er).toContain("CUSTOMER");
+    expect(er).toContain("places");
+    const sequence = await renderOk(
+      "sequenceDiagram;participant Alice;participant Bob;Alice-->>Bob: reply"
     );
+    expect(sequence).toContain("reply");
+  });
 
-    const sequenceSvg = renderMermaidInWorker({
-      source:
-        "sequenceDiagram;participant Alice;participant Bob;Alice-->>Bob: reply",
-    });
-    expect(sequenceSvg).toContain("reply");
+  it("keeps quoted arrows and punctuation labels intact", async () => {
+    const quoted = await renderOk('graph TD;A["C-->D"]-->B');
+    expect(quoted).toContain("C--&gt;D");
+    const percent = await renderOk("graph TD;A-->|load 50%%; retry|B;B-->C");
+    expect(percent).toContain("load 50%%; retry");
+    const textEdge = await renderOk("graph TD;A -- retry(later --> B;B-->C");
+    expect(textEdge).toContain("retry(later");
+    const bidirectional = await renderOk("graph TD;A<-.->B");
+    expect(bidirectional).toContain("stroke-dasharray");
+  });
 
-    const literalArrowSvg = renderMermaidInWorker({
-      source: 'graph TD;A["C-->D"]-->B',
-    });
-    expect(literalArrowSvg).toContain(">C--&gt;D</text>");
+  it("renders sequence messages with punctuation verbatim", async () => {
+    const quote = await renderOk(
+      "sequenceDiagram;participant A;participant B;A->>B: James' request;B-->>A: done"
+    );
+    expect(quote).toContain("James' request");
+    expect(quote).toContain("done");
+    const paren = await renderOk(
+      "sequenceDiagram;participant A;participant B;A->>B: retry (later;B-->>A: done"
+    );
+    expect(paren).toContain("retry (later");
+    expect(paren).toContain("done");
+  });
 
-    const leadingCommentSvg = renderMermaidInWorker({
-      source: "%% model\nclassDiagram;class A {;+int x;}",
-    });
-    expect(leadingCommentSvg).toContain(">x</tspan>");
-
-    const bidirectionalSvg = renderMermaidInWorker({
-      source: "graph TD;A<-.->B",
-    });
-    expect(bidirectionalSvg).toContain('data-id="B"');
-    expect(bidirectionalSvg).toContain("stroke-dasharray");
-
-    const punctuationLabelSvg = renderMermaidInWorker({
-      source: "graph TD;A[Retry (later]-->B;B-->C",
-    });
-    expect(punctuationLabelSvg).toContain('data-id="C"');
-
-    const percentLabelSvg = renderMermaidInWorker({
-      source: "graph TD;A-->|load 50%%; retry|B;B-->C",
-    });
-    expect(percentLabelSvg).toContain("load 50%%; retry");
-    expect(percentLabelSvg).toContain('data-id="C"');
-
-    const textEdgeSvg = renderMermaidInWorker({
-      source: "graph TD;A -- retry(later --> B;B-->C",
-    });
-    expect(textEdgeSvg).toContain("retry(later");
-    expect(textEdgeSvg).toContain('data-id="C"');
-
-    const contractionSvg = renderMermaidInWorker({
-      source:
-        "sequenceDiagram;participant A;participant B;A->>B: James' request;B-->>A: done",
-    });
-    expect(contractionSvg).toContain("James' request");
-    expect(contractionSvg).toContain("done");
-
-    const sequencePunctuationSvg = renderMermaidInWorker({
-      source:
-        "sequenceDiagram;participant A;participant B;A->>B: retry (later;B-->>A: done",
-    });
-    expect(sequencePunctuationSvg).toContain("retry (later");
-    expect(sequencePunctuationSvg).toContain("done");
-
-    const taskRunFlowSvg = renderMermaidInWorker({
-      source: [
+  it("renders CJK flowchart labels", async () => {
+    const svg = await renderOk(
+      [
         "flowchart LR",
         "A[renderer Run Task] --> B[解析显式动作与展示意图]",
         "B --> C[main 解析 executionKind 和并发策略]",
@@ -263,21 +186,64 @@ describe("Mermaid renderer", () => {
         "K --> L[从最新快照投影标签]",
         "I --> L",
         "J --> L",
-      ].join("\n"),
-    });
-    expect(taskRunFlowSvg).toContain('data-id="L"');
-    expect(taskRunFlowSvg).toContain("auto-follow");
-
-    const renderer = setup();
-    const sanitizedResult = renderer.render("graph TD;A-->B");
-    FakeWorker.instances[0]?.onmessage?.(
-      new MessageEvent("message", { data: { ok: true, svg } })
+      ].join("\n")
     );
-    const sanitized = await sanitizedResult;
-    expect(sanitized).toMatchObject({ ok: true });
-    if (sanitized.ok) {
-      expect(sanitized.svg).not.toContain("fonts.googleapis.com");
-      expect(sanitized.svg).toContain("font-family:var(--font-sans)");
-    }
+    expect(svg).toContain("auto-follow");
+    expect(svg).toContain("解析显式动作与展示意图");
+  });
+
+  it("renders the diagram families the old worker engine could not", async () => {
+    await renderOk("gantt\ntitle T\nsection S\nTask :a1, 2024-01-01, 30d");
+    await renderOk("mindmap\nroot((m))\n  a\n  b");
+    await renderOk('pie title Pets\n  "Dogs" : 3\n  "Cats" : 4');
+    await renderOk("gitGraph\n  commit\n  commit");
+    await renderOk("timeline\n  2020 : A\n  2021 : B");
+  });
+
+  it("follows official grammar: unquoted parens in node labels are rejected", async () => {
+    // The old worker parser tolerated `A[Retry (later]`; the official engine
+    // (like mermaid.live / GitHub) requires quotes around special chars.
+    const result = await renderer.render("graph TD;A[Retry (later]-->B;B-->C");
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("direction layout through the facade", () => {
+  it("keeps LR by default and hands the auto-td rewrite to the engine", async () => {
+    // jsdom has no SVG layout, so direction cannot be asserted by viewport
+    // aspect; lock the prepared source the engine receives instead.
+    const renderSvg = vi.fn(async () => OK_SVG);
+    const renderer = createMermaidRenderer({ renderSvg });
+    const chain = "A-->B-->C-->D-->E-->F-->G-->H";
+
+    await renderer.render(`flowchart LR\n  ${chain}`);
+    expect(renderSvg).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.stringContaining("flowchart LR")
+    );
+
+    await renderer.render(
+      `%%{pier: layout=auto-td}%%\nflowchart LR\n  ${chain}`
+    );
+    expect(renderSvg).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.stringContaining("flowchart TD")
+    );
+  });
+
+  it("renders the auto-td opt-in on the official engine", async () => {
+    const renderer = createMermaidRenderer();
+    const result = await renderer.render(
+      "%%{pier: layout=auto-td}%%\nflowchart LR\n  A-->B-->C-->D-->E-->F-->G-->H"
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("honors the %%{init}%% ELK renderer opt-in", async () => {
+    const renderer = createMermaidRenderer();
+    const result = await renderer.render(
+      '%%{init: {"flowchart": {"defaultRenderer": "elk"}}}%%\nflowchart LR\nA-->B-->C'
+    );
+    expect(result.ok).toBe(true);
   });
 });

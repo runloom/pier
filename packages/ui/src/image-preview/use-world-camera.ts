@@ -43,8 +43,10 @@ export type WorldCameraZoomLevel = number | "fit";
 const INTERACT_IDLE_MS = 200;
 
 export function useWorldCamera({
+  allowUpscale = false,
   enabled = true,
   getContentSize,
+  padding,
   recall,
   resetKey,
   shouldCapturePointer,
@@ -127,12 +129,15 @@ export function useWorldCamera({
       if (!(content && viewport && content.width > 0 && content.height > 0)) {
         return;
       }
-      const next = fitCamera(content, viewport);
+      const next = fitCamera(content, viewport, {
+        allowUpscale,
+        ...(padding === undefined ? {} : { padding }),
+      });
       setMode("fit");
       lookAtRef.current = null;
       setCamera((current) => sameWorldCamera(current, next));
     },
-    [getContentSize, viewportBox]
+    [allowUpscale, getContentSize, padding, viewportBox]
   );
 
   useLayoutEffect(() => {

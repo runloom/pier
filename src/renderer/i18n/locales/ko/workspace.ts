@@ -45,6 +45,7 @@ export const workspace = {
     actionFailed: "작업을 완료하지 못했습니다. 다시 시도하세요",
     detectAgentsFailed: "에이전트를 감지하지 못했습니다. 다시 시도하세요",
     noMatches: "일치하는 항목이 없습니다",
+    manageAgents: "에이전트 관리…",
     searchPlaceholder: "패널 종류 또는 에이전트 검색…",
     title: "이 패널 그룹에 만들기",
     startAgentFailed: "에이전트를 시작하지 못했습니다. 다시 시도하세요",
