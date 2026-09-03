@@ -16,7 +16,10 @@ export interface MarkdownInternalTarget {
 }
 
 export interface MarkdownFileResources {
-  contentPreview?: Pick<RendererPluginContext["contentPreview"], "openImage">;
+  contentPreview?: Pick<
+    RendererPluginContext["contentPreview"],
+    "openImage" | "openMermaid"
+  >;
   filePreviews: Pick<
     RendererPluginContext["filePreviews"],
     "issue" | "release"

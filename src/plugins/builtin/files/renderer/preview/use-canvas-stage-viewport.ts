@@ -8,7 +8,10 @@
  * semantics, no focus gate (the world shell has no competing scroll target).
  */
 
-import { measureWorldContentBounds } from "@pier/ui/image-preview/canvas-math.ts";
+import {
+  measureWorldContentBounds,
+  WORLD_BOARD_FIT_INSETS,
+} from "@pier/ui/image-preview/canvas-math.ts";
 import type { ImagePreviewCanvasLabels } from "@pier/ui/image-preview/controls.tsx";
 import { useWorldCamera } from "@pier/ui/image-preview/use-world-camera.ts";
 import { INTERACTIVE_PAN_IGNORE } from "@pier/ui/image-preview/world-canvas.tsx";
@@ -124,8 +127,10 @@ export function useCanvasStageViewport(input: {
     };
   }, [cameraMemoryKey]);
   const camera = useWorldCamera({
+    allowUpscale: true,
     enabled: worldStage,
     getContentSize: getWorldContentSize,
+    padding: WORLD_BOARD_FIT_INSETS,
     recall: recallWorldCamera,
     // Root+path identity: hot reload (nonce) must not snap back to fit.
     resetKey: cameraMemoryKey,

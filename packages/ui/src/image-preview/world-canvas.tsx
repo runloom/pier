@@ -1,5 +1,4 @@
 import {
-  type CSSProperties,
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
   useCallback,
@@ -12,7 +11,7 @@ import { cn } from "../utils.ts";
 import {
   measureContainScale,
   measureWorldContentBounds,
-  type WorldCamera,
+  WORLD_OVERLAY_FIT_INSETS,
 } from "./canvas-math.ts";
 import {
   type ImagePreviewCanvasLabels,
@@ -20,6 +19,7 @@ import {
 } from "./controls.tsx";
 import { MediaFullscreenButton } from "./media-fullscreen-button.tsx";
 import { useWorldCamera, type WorldCameraApi } from "./use-world-camera.ts";
+import { computeWorldDotGridStyle } from "./world-grid.ts";
 
 /** Shared pan-capture ignore list — canvas world stage imports this too. */
 export const INTERACTIVE_PAN_IGNORE =
@@ -33,24 +33,6 @@ function resolveViewportCursor(camera: WorldCameraApi): string {
     return "cursor-grab";
   }
   return "cursor-default";
-}
-
-function computeDotGridStyle(
-  active: boolean,
-  camera: WorldCamera | null
-): CSSProperties | undefined {
-  if (!(active && camera)) {
-    return;
-  }
-  const spacing = 20;
-  const offsetX = ((camera.x % spacing) + spacing) % spacing;
-  const offsetY = ((camera.y % spacing) + spacing) % spacing;
-  return {
-    backgroundImage:
-      "radial-gradient(circle, var(--border) 1.25px, transparent 1.25px)",
-    backgroundPosition: `${offsetX}px ${offsetY}px`,
-    backgroundSize: `${spacing}px ${spacing}px`,
-  };
 }
 
 /**
@@ -70,6 +52,7 @@ export function WorldViewportFrame({
   "aria-label": ariaLabel,
   camera,
   children,
+  grid = true,
   onEmptyClick,
   viewportSlot,
   zoomSlot,
@@ -78,11 +61,16 @@ export function WorldViewportFrame({
   "aria-label"?: string | undefined;
   camera: WorldCameraApi;
   children: ReactNode;
+  /** World-space LOD dots. Diagram stages pass false. */
+  grid?: boolean | undefined;
   onEmptyClick?: (() => void) | undefined;
   viewportSlot: string;
   zoomSlot: string;
 }) {
-  const gridStyle = computeDotGridStyle(active, camera.camera);
+  const gridStyle =
+    active && grid && camera.camera
+      ? computeWorldDotGridStyle(camera.camera)
+      : undefined;
 
   return (
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: focusable canvas exposes zoom/pan shortcuts
@@ -247,6 +235,7 @@ function ZoomPanWorldStage({
   className,
   expandLabel,
   expandable,
+  grid = true,
   labels,
   onEmptyClick,
   onOpenFullscreen,
@@ -255,6 +244,7 @@ function ZoomPanWorldStage({
   className?: string;
   expandLabel: string;
   expandable: boolean;
+  grid?: boolean | undefined;
   labels: ImagePreviewCanvasLabels;
   onEmptyClick?: () => void;
   onOpenFullscreen?: () => void;
@@ -276,7 +266,9 @@ function ZoomPanWorldStage({
     []
   );
   const camera = useWorldCamera({
+    allowUpscale: true,
     getContentSize,
+    padding: WORLD_OVERLAY_FIT_INSETS,
     shouldCapturePointer,
   });
 
@@ -300,6 +292,7 @@ function ZoomPanWorldStage({
         active
         aria-label={labels.viewerLabel}
         camera={camera}
+        grid={grid}
         onEmptyClick={onEmptyClick}
         viewportSlot="html-world-viewport"
         zoomSlot="html-world-zoom"
@@ -337,6 +330,7 @@ export function HtmlWorldCanvas({
   className,
   expandLabel = "View fullscreen",
   expandable = true,
+  grid = true,
   labels,
   onEmptyClick,
   onOpenFullscreen,
@@ -347,6 +341,8 @@ export function HtmlWorldCanvas({
   className?: string;
   expandLabel?: string;
   expandable?: boolean;
+  /** World-space LOD dots on `stage`. Diagrams pass false. */
+  grid?: boolean | undefined;
   labels?: ImagePreviewCanvasLabels;
   onEmptyClick?: () => void;
   onOpenFullscreen?: () => void;
@@ -361,6 +357,7 @@ export function HtmlWorldCanvas({
       <ZoomPanWorldStage
         expandable={expandable}
         expandLabel={expandLabel}
+        grid={grid}
         labels={{ ...labels, viewerLabel }}
         {...(className ? { className } : {})}
         {...(onEmptyClick ? { onEmptyClick } : {})}

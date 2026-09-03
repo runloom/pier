@@ -245,6 +245,7 @@ function createMockContext(): RendererPluginContext {
     contentPreview: {
       close: vi.fn(),
       openImage: vi.fn(),
+      openMermaid: vi.fn(),
     },
     configuration: {
       get: <T,>() => "" as T,

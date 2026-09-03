@@ -90,12 +90,13 @@ export function MermaidMark({
   const toneSurface = node.tone ? TONE_SURFACE[node.tone] : undefined;
   const kindSurface = node.kind ? KIND_SURFACE[node.kind] : undefined;
   const KindIcon = node.kind ? KIND_ICON[node.kind] : undefined;
+  const pastelWash = Boolean(toneSurface || kindSurface);
   const select = () => onSelect?.(node.id);
   const label = `${node.id} ${node.title}`;
   const card = (
     <div
       className={cn(
-        "relative box-border flex h-full w-full flex-col justify-center border px-3 py-3 text-left text-card-foreground!",
+        "relative box-border flex min-h-full w-full flex-col justify-start border px-3 py-3 text-left text-card-foreground!",
         node.shape === "round" ? "rounded-full" : "rounded-md",
         toneSurface ?? kindSurface ?? "bg-card",
         selected && "border-ring ring-1 ring-ring/40"
@@ -103,8 +104,9 @@ export function MermaidMark({
       data-kind={node.kind ?? "none"}
       data-slot="mermaid-node"
       data-tone={node.tone ?? "muted"}
+      {...(pastelWash ? { "data-mermaid-wash": "pastel" } : {})}
     >
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-start gap-2">
         {KindIcon ? (
           <KindIcon
             aria-hidden="true"
@@ -116,13 +118,13 @@ export function MermaidMark({
           />
         ) : null}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="whitespace-normal break-words font-medium text-card-foreground! text-sm leading-5">
+          <div className="min-w-0 whitespace-normal break-words font-medium text-card-foreground! text-sm leading-5!">
             {node.title}
-          </span>
+          </div>
           {node.meta ? (
-            <span className="min-w-0 break-words text-muted-foreground! text-xs leading-4">
+            <div className="min-w-0 break-words text-muted-foreground! text-xs leading-4!">
               {node.meta}
-            </span>
+            </div>
           ) : null}
         </div>
         <RunStatusGlyph node={node} />
@@ -150,7 +152,7 @@ export function MermaidMark({
     return (
       <button
         aria-label={label}
-        className="w-full bg-transparent p-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="h-full w-full bg-transparent p-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         onClick={select}
         type="button"
       >
@@ -159,7 +161,7 @@ export function MermaidMark({
     );
   }
   return (
-    <div aria-label={label} role="img">
+    <div aria-label={label} className="h-full w-full" role="img">
       {card}
     </div>
   );

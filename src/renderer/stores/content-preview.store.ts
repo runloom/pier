@@ -37,6 +37,7 @@ export type ContentPreviewPayload =
     }
   | {
       "aria-label": string;
+      colorMode?: "light" | "dark";
       direction?: MermaidDirection;
       edges: readonly MermaidEdge[];
       nodes: readonly MermaidNode[];
@@ -77,6 +78,8 @@ export interface ImageLightboxRequest {
 
 export interface OpenMermaidPreviewRequest {
   "aria-label": string;
+  /** Pin overlay tokens to the markdown reading paper when set. */
+  colorMode?: "light" | "dark";
   direction?: MermaidDirection;
   edges: readonly MermaidEdge[];
   id?: string;
@@ -169,6 +172,7 @@ export function openMermaidPreview(request: OpenMermaidPreviewRequest): void {
       "aria-label": request["aria-label"],
       edges: request.edges,
       nodes: request.nodes,
+      ...(request.colorMode ? { colorMode: request.colorMode } : {}),
       ...(request.direction ? { direction: request.direction } : {}),
       ...(request.source ? { source: request.source } : {}),
     },

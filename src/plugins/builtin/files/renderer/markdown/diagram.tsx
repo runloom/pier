@@ -1,5 +1,4 @@
 import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
-import { bakeSvgForStandalonePreview } from "@pier/ui/image-preview/bake-svg-for-standalone-preview.ts";
 import { MediaFullscreenButton } from "@pier/ui/image-preview/media-fullscreen-button.tsx";
 import { isPlainSurfaceClick } from "@pier/ui/media/surface-open.ts";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
@@ -31,11 +30,11 @@ export function MarkdownDiagram({
   charts: RendererPluginContext["charts"];
   /**
    * Resolved preview color mode (fixed reading paper wins over app chrome).
-   * The fullscreen overlay pins the same mode so chrome and baked SVG agree.
+   * The fullscreen overlay pins the same mode so chrome matches the paper.
    */
   colorMode: "dark" | "light";
   contentPreview:
-    | Pick<RendererPluginContext["contentPreview"], "openImage">
+    | Pick<RendererPluginContext["contentPreview"], "openMermaid">
     | undefined;
   errorLabel: string;
   label: string;
@@ -144,14 +143,10 @@ export function MarkdownDiagram({
 
   const openPreview = () => {
     if (!(contentPreview && displaySvg)) return;
-    const liveSvg = rootRef.current?.querySelector("svg");
-    if (!liveSvg) return;
-    const markup = bakeSvgForStandalonePreview(liveSvg);
-    const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
-    contentPreview.openImage({
-      alt: label,
+    contentPreview.openMermaid({
+      "aria-label": label,
       colorMode,
-      source: { kind: "url", src },
+      source,
       title: previewTitle,
     });
   };

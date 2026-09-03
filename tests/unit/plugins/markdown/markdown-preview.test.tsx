@@ -783,7 +783,7 @@ describe("MarkdownPreview", () => {
       <MarkdownPreview
         charts={charts}
         fileResources={{
-          contentPreview: { openImage: vi.fn() },
+          contentPreview: { openImage: vi.fn(), openMermaid: vi.fn() },
           filePreviews: {
             issue: vi.fn(),
             release: vi.fn(),
@@ -856,12 +856,12 @@ describe("MarkdownPreview", () => {
         svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200"><text>Wide</text></svg>',
       })),
     };
-    const openImage = vi.fn();
+    const openMermaid = vi.fn();
     const { container } = render(
       <MarkdownPreview
         charts={charts}
         fileResources={{
-          contentPreview: { openImage },
+          contentPreview: { openImage: vi.fn(), openMermaid },
           filePreviews: { issue: vi.fn(), release: vi.fn() },
           files: { readDocument: vi.fn() },
         }}
@@ -901,16 +901,18 @@ describe("MarkdownPreview", () => {
 
     // The fullscreen button's own click must not bubble into a second open.
     fireEvent.click(screen.getByRole("button", { name: "View fullscreen" }));
-    expect(openImage).toHaveBeenCalledTimes(1);
-    // The overlay pins the resolved reading color mode (auto → app theme) so
-    // its chrome matches the baked SVG paper.
-    expect(openImage).toHaveBeenLastCalledWith(
-      expect.objectContaining({ colorMode: "dark" })
+    expect(openMermaid).toHaveBeenCalledTimes(1);
+    // The overlay pins the resolved reading color mode (auto → app theme).
+    expect(openMermaid).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        colorMode: "dark",
+        source: expect.stringContaining("graph LR"),
+      })
     );
 
     // Plain svg surface click opens the preview.
     fireEvent.click(shell.querySelector("svg")!);
-    expect(openImage).toHaveBeenCalledTimes(2);
+    expect(openMermaid).toHaveBeenCalledTimes(2);
 
     // A finished text selection never opens the preview.
     const selection = window.getSelection()!;
@@ -919,7 +921,7 @@ describe("MarkdownPreview", () => {
     selection.removeAllRanges();
     selection.addRange(range);
     fireEvent.click(shell.querySelector("svg")!);
-    expect(openImage).toHaveBeenCalledTimes(2);
+    expect(openMermaid).toHaveBeenCalledTimes(2);
   });
 
   it("caps the diagram width to the slot when the natural size is wider", async () => {
@@ -934,7 +936,7 @@ describe("MarkdownPreview", () => {
       <MarkdownPreview
         charts={charts}
         fileResources={{
-          contentPreview: { openImage: vi.fn() },
+          contentPreview: { openImage: vi.fn(), openMermaid: vi.fn() },
           filePreviews: { issue: vi.fn(), release: vi.fn() },
           files: { readDocument: vi.fn() },
         }}
@@ -986,7 +988,7 @@ describe("MarkdownPreview", () => {
       <MarkdownPreview
         charts={charts}
         fileResources={{
-          contentPreview: { openImage: vi.fn() },
+          contentPreview: { openImage: vi.fn(), openMermaid: vi.fn() },
           filePreviews: { issue: vi.fn(), release: vi.fn() },
           files: { readDocument: vi.fn() },
         }}
@@ -1105,7 +1107,7 @@ describe("MarkdownPreview", () => {
   });
 
   it("opens diagram fullscreen preview from the media control", async () => {
-    const openImage = vi.fn();
+    const openMermaid = vi.fn();
     const charts: RendererPluginContext["charts"] = {
       renderMermaid: vi.fn(async () => ({
         ok: true as const,
@@ -1116,7 +1118,7 @@ describe("MarkdownPreview", () => {
       <MarkdownPreview
         charts={charts}
         fileResources={{
-          contentPreview: { openImage },
+          contentPreview: { openImage: vi.fn(), openMermaid },
           filePreviews: {
             issue: vi.fn(),
             release: vi.fn(),
@@ -1153,14 +1155,15 @@ describe("MarkdownPreview", () => {
       expect(container.querySelector("svg text")).toHaveTextContent("Flow");
     });
     fireEvent.click(screen.getByRole("button", { name: "View fullscreen" }));
-    expect(openImage).toHaveBeenCalledTimes(1);
-    const request = openImage.mock.calls[0]?.[0] as {
-      source: { kind: string; src: string };
+    expect(openMermaid).toHaveBeenCalledTimes(1);
+    const request = openMermaid.mock.calls[0]?.[0] as {
+      colorMode: string;
+      source: string;
       title: string;
     };
     expect(request.title).toBe("Diagram preview");
-    expect(request.source.kind).toBe("url");
-    expect(request.source.src.startsWith("data:image/svg+xml")).toBe(true);
+    expect(request.colorMode).toBe("dark");
+    expect(request.source).toContain("graph TD");
   });
 
   it("routes external, anchor, and relative links through explicit host actions", async () => {
@@ -1404,7 +1407,7 @@ describe("MarkdownPreview", () => {
     render(
       <MarkdownPreview
         fileResources={{
-          contentPreview: { openImage },
+          contentPreview: { openImage, openMermaid: vi.fn() },
           filePreviews: { issue, release },
           files: { readDocument },
         }}
@@ -1512,7 +1515,7 @@ describe("MarkdownPreview", () => {
     const { container } = render(
       <MarkdownPreview
         fileResources={{
-          contentPreview: { openImage },
+          contentPreview: { openImage, openMermaid: vi.fn() },
           filePreviews: {
             issue: vi.fn(),
             release: vi.fn(),

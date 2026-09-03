@@ -1,12 +1,22 @@
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+// Same escape hatch as electron.vite.config.ts: mermaid's default entry pulls
+// @mermaid-js/parser → langium → a vscode-jsonrpc deep path that is not in
+// jsonrpc 9's exports; the esm.min bundle inlines the parser.
+const uiRequire = createRequire(
+  resolve(import.meta.dirname, "packages/ui/package.json")
+);
+const mermaidEsmMin = uiRequire.resolve("mermaid/dist/mermaid.esm.min.mjs");
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
+      mermaid: mermaidEsmMin,
       "@": resolve(import.meta.dirname, "src/renderer"),
       "@shared": resolve(import.meta.dirname, "src/shared"),
       "@main": resolve(import.meta.dirname, "src/main"),

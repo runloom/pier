@@ -239,7 +239,10 @@ export function ContentPreviewHost() {
   // zoom controls in one pass. text-foreground matters: ghost controls only
   // set hover colors and otherwise inherit currentColor — without it the
   // subtree keeps the app theme's foreground over the flipped background.
-  const colorMode = payload.type === "image" ? payload.colorMode : undefined;
+  const colorMode =
+    payload.type === "image" || payload.type === "mermaid"
+      ? payload.colorMode
+      : undefined;
 
   return (
     <div
@@ -255,12 +258,12 @@ export function ContentPreviewHost() {
     >
       <ImagePreviewPortalContainerContext.Provider value={rootEl}>
         {/*
-        pt-14 reserves the floating title / close band so images, mermaid, and
-        node graphs never layout under the chrome (header is still painted on
-        top for legibility over pan/zoom edges).
+        Paper / grid fill the overlay. An opaque title bar covers the top so
+        the filename cannot sit on the diagram. Fit insets still keep the
+        default camera out from under the bar and the zoom pill.
       */}
         <div
-          className="absolute inset-0 z-0 flex flex-col pt-14"
+          className="absolute inset-0 z-0 flex flex-col"
           data-testid="content-preview-stage"
         >
           <PreviewBody payload={payload} />
@@ -273,13 +276,13 @@ export function ContentPreviewHost() {
         steal it.
       */}
         <div
-          className="app-drag absolute inset-x-0 top-0 z-50 flex h-14 items-start justify-center px-14 py-3"
+          className="app-drag absolute inset-x-0 top-0 z-50 flex h-14 items-center justify-center bg-background px-14"
           data-testid="content-preview-header"
         >
           <div className="min-w-0 max-w-full select-none truncate text-center text-foreground text-sm">
             {title}
           </div>
-          <div className="app-no-drag pointer-events-auto absolute top-2 right-2">
+          <div className="app-no-drag pointer-events-auto absolute inset-y-0 right-2 flex items-center">
             <Button
               aria-label={t("dialog.close")}
               className="app-no-drag border-border bg-background shadow-sm hover:bg-muted hover:text-foreground"

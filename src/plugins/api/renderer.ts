@@ -337,19 +337,21 @@ export interface RendererPluginContext {
   /** 统一评论能力(对应 main CommentsService;插件按 manifest 声明 comments:read/write)。 */
   comments: RendererPluginCommentsFacade;
   configuration: PluginConfigurationApi;
-  /**
-   * Host fullscreen content preview (image lightbox). Prefer this over nesting
-   * a product Dialog for media zoom.
-   */
+  /** Host fullscreen preview for images and mermaid; prefer this over a nested Dialog. */
   contentPreview: {
     close(): void;
     openImage(request: {
       alt?: string;
-      /** Fixed overlay color mode (e.g. baked reading paper); omit = app theme. */
       colorMode?: "light" | "dark";
-      /** Release media owned by this preview when it closes or is replaced. */
       onClose?: () => void;
       source: { kind: "url"; src: string };
+      title: string;
+    }): void;
+    openMermaid(request: {
+      "aria-label": string;
+      colorMode?: "light" | "dark";
+      onClose?: () => void;
+      source: string;
       title: string;
     }): void;
   };

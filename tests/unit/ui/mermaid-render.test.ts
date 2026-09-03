@@ -21,6 +21,42 @@ describe("Mermaid render", () => {
     );
   });
 
+  it("paints default flowchart nodes with card fill and mixed connectors", async () => {
+    const source = await readFile(
+      join(import.meta.dirname, "../../../packages/ui/src/mermaid/theme.ts"),
+      "utf8"
+    );
+    expect(MERMAID_THEME_CSS).toContain(
+      "stroke: color-mix(in srgb, var(--foreground) 45%, var(--background)) !important;"
+    );
+    expect(MERMAID_THEME_CSS).toMatch(
+      /\.node rect, \.node polygon, \.node circle, \.node \.label-container, \.node \.basic \{\s*fill: var\(--card\) !important;\s*stroke: var\(--border\) !important;/
+    );
+    expect(MERMAID_THEME_CSS).not.toContain("max-width: 100%");
+    expect(source).toContain("useMaxWidth: false");
+  });
+
+  it("routes the markdown/plugin facade through the same official engine", async () => {
+    // Single-engine convergence: the charts facade (markdown inline, plugin
+    // charts) must render via this module's renderMermaid with the shared
+    // source-prepare pass, not a second engine. Fullscreen re-renders the
+    // same prepared source, so inline and fullscreen stay identical.
+    const facade = await readFile(
+      join(
+        import.meta.dirname,
+        "../../../src/renderer/lib/plugins/mermaid/renderer.ts"
+      ),
+      "utf8"
+    );
+    expect(facade).toContain('from "@pier/ui/mermaid/theme.ts"');
+    expect(facade).toContain('from "@pier/ui/mermaid/source-prepare.ts"');
+    expect(facade).not.toContain("Worker");
+    expect(facade).not.toContain("beautiful-mermaid");
+    // Diagram text follows the UI font everywhere (never the markdown
+    // reading/paper font).
+    expect(MERMAID_THEME_CSS).toContain("font-family: var(--font-sans)");
+  });
+
   it("neutralizes mermaid edge-label pill backgrounds on every layer", () => {
     // mermaid base theme emits ".edgeLabel p { background-color: hsl(…) }"
     // and ".edgeLabel rect { fill: hsl(…); opacity: .5 }" — without these
@@ -60,25 +96,40 @@ describe("Mermaid render", () => {
   });
 
   it("beats mermaid id-scoped span color on hydrated card roles", async () => {
-    // mermaid emits "#<renderId> span { color: #333 }"; an id + type rule
-    // out-specifies single-class utilities, so the two semantic text roles
-    // must carry Tailwind important variants of their own.
+    // mermaid emits "#<renderId> span { color: #333 }" and global
+    // ".label text,span,p" fill/color. Title/meta are divs (not spans) so
+    // those rules miss; important tokens still win if a wrapper matches.
     const source = await readFile(
       join(import.meta.dirname, "../../../packages/ui/src/mermaid/mark.tsx"),
       "utf8"
     );
     expect(source).toContain("text-card-foreground!");
     expect(source).toContain("text-muted-foreground!");
-    // The title span itself must carry the important color: mermaid's
-    // "#<id> span" rule is a declaration on that same element, and an
-    // inherited value (from the card root) can never beat it. Containment
-    // (not adjacency) keeps the contract while tolerating class reorder.
+    expect(source).toContain("leading-5!");
+    expect(source).toContain("leading-4!");
     expect(source).toContain("font-medium");
-    expect(source).toContain("text-card-foreground!");
     expect(source).toContain("text-sm");
     expect(source).toContain("break-words");
-    expect(source).toContain("text-muted-foreground!");
     expect(source).toContain("text-xs");
+    expect(source).toContain(
+      'className="min-w-0 whitespace-normal break-words font-medium text-card-foreground! text-sm leading-5!"'
+    );
+    expect(source).toContain("min-h-full");
+    expect(source).toContain("justify-start");
+    expect(source).toContain("data-mermaid-wash");
+    expect(source).not.toContain("justify-center");
+  });
+
+  it("fills slotted mermaid cards from the top without clipping the wash", () => {
+    expect(MERMAID_THEME_CSS).toContain(".pierSlot .nodeLabel p");
+    expect(MERMAID_THEME_CSS).toContain("font-size: 0 !important");
+    expect(MERMAID_THEME_CSS).toContain("vertical-align: top !important");
+    expect(MERMAID_THEME_CSS).toContain("overflow: visible !important");
+    expect(MERMAID_THEME_CSS).not.toContain("line-height: 0 !important");
+    expect(MERMAID_THEME_CSS).toContain(`.pierSlot .nodeLabel [${SLOT_ATTR}]`);
+    expect(MERMAID_THEME_CSS).not.toMatch(
+      /\.pierSlot foreignObject[\s\S]{0,200}overflow: hidden/
+    );
   });
 
   it("keeps htmlLabel slots in the flowchart SVG", async () => {

@@ -145,7 +145,7 @@ test("renders Markdown in the production worker and keeps scrollbar policy consi
         /Unable to render Markdown preview|无法渲染 Markdown 预览/u
       )
     ).toHaveCount(0);
-    // beautiful-mermaid does not emit official `svg.flowchart` / `g.nodes`;
+    // The single official mermaid engine emits `svg.flowchart` / `g.nodes`;
     // the preview mounts one live SVG under the diagram shell.
     const diagram = page.locator('[data-slot="markdown-diagram"] svg').first();
     await expect(diagram).toBeVisible({ timeout: 30_000 });

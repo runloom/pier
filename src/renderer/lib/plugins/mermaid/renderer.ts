@@ -1,45 +1,66 @@
-import { sanitizeMermaidSvg } from "./svg-sanitizer.ts";
-
-export { sanitizeMermaidSvg } from "./svg-sanitizer.ts";
+import { prepareMermaidSource } from "@pier/ui/mermaid/source-prepare.ts";
+import { renderMermaid } from "@pier/ui/mermaid/theme.ts";
 
 export type MermaidRenderResult =
   | { ok: true; svg: string }
   | { ok: false; reason: "render-failed" | "timeout" | "too-large" };
-
-interface MermaidWorkerRequest {
-  source: string;
-}
-
-interface MermaidWorkerResponse {
-  error?: string;
-  ok: boolean;
-  svg?: string;
-}
-
-interface MermaidWorkerLike {
-  onerror: ((event: ErrorEvent) => void) | null;
-  onmessage: ((event: MessageEvent<MermaidWorkerResponse>) => void) | null;
-  postMessage(message: MermaidWorkerRequest): void;
-  terminate(): void;
-}
 
 export interface MermaidRenderer {
   render(source: string): Promise<MermaidRenderResult>;
 }
 
 export interface MermaidRendererOptions {
-  createWorker(): MermaidWorkerLike;
+  /** Injectable for tests; defaults to the shared official-engine renderer. */
+  renderSvg?(id: string, source: string): Promise<{ svg: string }>;
   timeoutMs?: number;
 }
 
 const MAX_SOURCE_LENGTH = 160_000;
 const MAX_CACHE_ENTRIES = 96;
+const DEFAULT_TIMEOUT_MS = 10_000;
+
+class RenderTimeoutError extends Error {}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new RenderTimeoutError("mermaid render timed out")),
+      timeoutMs
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    );
+  });
+}
+
+let renderCounter = 0;
+
+/**
+ * Plugin-facade mermaid renderer. Single engine everywhere: markdown inline,
+ * fullscreen preview and canvas visualizations all render through the shared
+ * official-mermaid singleton in `@pier/ui/mermaid/theme.ts`, so a diagram
+ * looks identical inline and fullscreen. Rendering happens on the renderer
+ * main thread because the official engine measures text in the DOM (which is
+ * also what keeps CJK / mixed-script node sizing correct).
+ *
+ * Safety layers for user-authored sources: `securityLevel: "antiscript"`
+ * (DOMPurify inside mermaid) plus the insertion-side `parseSafeSvg` strip in
+ * the markdown preview shell.
+ */
 export function createMermaidRenderer(
-  options: MermaidRendererOptions
+  options: MermaidRendererOptions = {}
 ): MermaidRenderer {
+  const renderSvg = options.renderSvg ?? renderMermaid;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const cache = new Map<string, string>();
   const pending = new Map<string, Promise<MermaidRenderResult>>();
-  const timeoutMs = options.timeoutMs ?? 2000;
 
   const remember = (key: string, svg: string) => {
     cache.delete(key);
@@ -65,56 +86,34 @@ export function createMermaidRenderer(
       const existing = pending.get(source);
       if (existing) return existing;
 
-      let worker: MermaidWorkerLike;
-      try {
-        worker = options.createWorker();
-      } catch {
-        return Promise.resolve({ ok: false, reason: "render-failed" });
-      }
-      const operation = new Promise<MermaidRenderResult>((resolve) => {
-        let settled = false;
-        const finish = (result: MermaidRenderResult) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          worker.terminate();
-          resolve(result);
-        };
-        const timer = setTimeout(
-          () => finish({ ok: false, reason: "timeout" }),
-          timeoutMs
-        );
-        worker.onerror = () => finish({ ok: false, reason: "render-failed" });
-        worker.onmessage = (event) => {
-          if (!event.data.ok && event.data.error) {
-            console.error("[mermaid-renderer] worker failed", event.data.error);
+      renderCounter += 1;
+      const renderId = `md-inline-${renderCounter}`;
+      const operation = withTimeout(
+        renderSvg(renderId, prepareMermaidSource(source)),
+        timeoutMs
+      )
+        .then((result): MermaidRenderResult => {
+          remember(source, result.svg);
+          return { ok: true, svg: result.svg };
+        })
+        .catch((error: unknown): MermaidRenderResult => {
+          if (error instanceof RenderTimeoutError) {
+            console.error("[mermaid-renderer] render timed out");
+            return { ok: false, reason: "timeout" };
           }
-          const svg = event.data.ok ? event.data.svg : undefined;
-          const sanitized = svg ? sanitizeMermaidSvg(svg) : null;
-          if (!sanitized) {
-            finish({ ok: false, reason: "render-failed" });
-            return;
-          }
-          remember(source, sanitized);
-          finish({ ok: true, svg: sanitized });
-        };
-        try {
-          worker.postMessage({ source });
-        } catch {
-          finish({ ok: false, reason: "render-failed" });
-        }
-      }).finally(() => {
-        pending.delete(source);
-      });
+          console.error(
+            "[mermaid-renderer] render failed",
+            error instanceof Error ? error.message : error
+          );
+          return { ok: false, reason: "render-failed" };
+        })
+        .finally(() => {
+          pending.delete(source);
+        });
       pending.set(source, operation);
       return operation;
     },
   };
 }
 
-export const mermaidRenderer = createMermaidRenderer({
-  createWorker: () =>
-    new Worker(new URL("./render.worker.ts", import.meta.url), {
-      type: "module",
-    }),
-});
+export const mermaidRenderer = createMermaidRenderer();

@@ -44,15 +44,13 @@ const COLOR_MIX_OWNERS = new Set([
   "src/plugins/builtin/files/renderer/editor/cm-theme.ts",
   // Shared source-editor chrome (files + settings Rules/Skills); semantic token mixes only.
   "src/shared/source-editor/theme.ts",
-  // Standalone SVG previews bake fg/bg mixes so data-URL lightbox is not black.
-  "packages/ui/src/image-preview/bake-svg-for-standalone-preview.ts",
   // Table thead chrome mirrors code-block `bg-muted/40` (Tailwind class unavailable
   // in this CSS entry without @reference).
   "src/plugins/builtin/files/renderer/markdown/prose.css",
   // Pierre Diff header hover mixes muted into background inside unsafeCSS
   // (shadow DOM cannot consume Tailwind opacity utilities).
   "src/renderer/app/globals.css",
-  "src/renderer/lib/plugins/mermaid/render.worker.ts",
+  "packages/ui/src/mermaid/theme.ts",
 ]);
 
 function sourceFiles(dir: string): string[] {
@@ -433,6 +431,32 @@ describe("color token governance", () => {
     expect(cssVariable(dark, "diff-addition-fg")).toBe("#5ecc71");
     expect(cssVariable(dark, "diff-deletion-fg")).toBe("#ff6762");
     expect(cssVariable(dark, "diff-modification-fg")).toBe("#69b1ff");
+  });
+
+  it("keeps mermaid kind/tone cards on the light pastel wash in both themes", () => {
+    const globals = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const light = cssBlock(globals, ":root.light");
+    const wash = cssBlock(
+      globals,
+      '[data-slot="mermaid-node"][data-mermaid-wash="pastel"]'
+    );
+    expect(cssVariable(wash, "status-info-bg")).toBe(
+      cssVariable(light, "status-info-bg")
+    );
+    expect(cssVariable(wash, "status-success-bg")).toBe(
+      cssVariable(light, "status-success-bg")
+    );
+    expect(cssVariable(wash, "status-warning-bg")).toBe(
+      cssVariable(light, "status-warning-bg")
+    );
+    expect(cssVariable(wash, "status-danger-bg")).toBe(
+      cssVariable(light, "status-danger-bg")
+    );
+    expect(cssVariable(wash, "foreground")).toBe("oklch(0.145 0 0)");
+    expect(cssVariable(wash, "muted-foreground")).toBe("oklch(0.42 0 0)");
   });
 
   // ── Tier 3: design decision — solid status seeds vs white glyphs ────
