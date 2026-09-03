@@ -1581,7 +1581,12 @@ describe("Files file-panel", () => {
     expect(
       screen.getByText("This file is outside the current workspace")
     ).toBeVisible();
-    expect(screen.getByText(otherRoot)).toBeVisible();
+    expect(
+      screen.getByText(otherRoot, {
+        selector: '[data-slot="alert-description"]',
+      })
+    ).toBeVisible();
+    expect(screen.getByTitle(otherRoot)).toHaveTextContent(otherRoot);
 
     // Tree stays rooted at the panel root; the external doc is pinned on top.
     const tree = within(getFileTree(container));
@@ -5083,7 +5088,12 @@ describe("Files file-panel", () => {
     expect(
       await screen.findByText("This file is outside the current workspace")
     ).toBeVisible();
-    expect(screen.getByText("/other/repo")).toBeVisible();
+    expect(
+      screen.getByText("/other/repo", {
+        selector: '[data-slot="alert-description"]',
+      })
+    ).toBeVisible();
+    expect(screen.getByTitle("/other/repo")).toHaveTextContent("/other/repo");
     expect(screen.queryByText("Unable to restore file tab")).toBeNull();
     await waitFor(() => {
       expect(container.querySelector(".cm-editor")).not.toBeNull();

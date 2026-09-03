@@ -15,6 +15,8 @@
       "!pnpm-lock.yaml",
       "!src/renderer/app/globals.css",
       "!docs/**/*.html",
+      "!docs/**/*.svg",
+      "!src/main/services/usage-data/pricing-catalog.json",
       "!.pier/canvases",
       "!resources/system-skills/pier-canvas/templates",
       "!packages/plugin-tasks/applets",

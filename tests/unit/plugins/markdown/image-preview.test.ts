@@ -74,7 +74,6 @@ describe("markdownImagePreviewFromDocument", () => {
     ).toBeNull();
     expect(
       markdownImagePreviewFromDocument({
-        canonicalPath: "docs/assets/figure.svg",
         kind: "too-large",
         limit: 4,
         path: "docs/assets/figure.svg",

@@ -23,7 +23,7 @@ function geometry(
   };
 }
 
-function windowsPort(overrides?: Partial<PanelTransferWindowPort>) {
+function createWindowsPort() {
   const lease = { token: Symbol("lease") };
   return {
     closeAfterTransfer: vi.fn(async () => undefined),
@@ -35,13 +35,23 @@ function windowsPort(overrides?: Partial<PanelTransferWindowPort>) {
     destroyForTransfer: vi.fn(async () => undefined),
     focus: vi.fn(),
     holdRendererShow: vi.fn(),
-    list: () => [{ focused: true, id: "main", recordId: "record-main" }],
+    list: (): ReturnType<PanelTransferWindowPort["list"]> => [
+      { focused: true, id: "main", recordId: "record-main" },
+    ],
     releaseRendererShow: vi.fn(),
     revealHost: vi.fn(),
     runExclusive: vi.fn(async (operation) => operation(lease)),
     setBounds: vi.fn(),
-    ...overrides,
   } satisfies PanelTransferWindowPort;
+}
+
+function windowsPort(
+  overrides?: Partial<ReturnType<typeof createWindowsPort>>
+): ReturnType<typeof createWindowsPort> {
+  return {
+    ...createWindowsPort(),
+    ...overrides,
+  };
 }
 
 describe("speculative transfer window", () => {
