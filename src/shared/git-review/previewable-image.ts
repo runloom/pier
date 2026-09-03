@@ -1,12 +1,13 @@
 /**
- * Raster formats Pier can preview (magic-byte whitelist, same as files).
- * SVG/ICO/TIFF/HEIC stay binary notices — not in the image preview protocol.
+ * Formats the review image surface can show via the file-preview protocol.
+ * ICO/TIFF/HEIC stay binary notices — those codecs are not in the protocol.
  */
 export const PREVIEWABLE_REVIEW_IMAGE_EXTENSIONS = [
   "gif",
   "jpeg",
   "jpg",
   "png",
+  "svg",
   "webp",
 ] as const;
 

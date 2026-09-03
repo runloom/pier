@@ -28,7 +28,7 @@ type ReviewSlotLike = Pick<
 
 /**
  * - 明确 0+0 或纯路径 rename → meta（含预览图片的路径-only rename）
- * - previewable raster image (png/jpeg/gif/webp) → content even when binary
+ * - previewable image (png/jpeg/gif/webp/svg) → content even when binary
  * - other binary（含非预览二进制 rename）→ notice（进列表说明卡，不拉 patch）
  * - 其余有改动状态 → content
  * - 缺证据 → unknown（不进正文）
