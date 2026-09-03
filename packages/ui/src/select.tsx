@@ -13,6 +13,7 @@ import {
   MENU_ITEM_DENSITY_CLASS,
 } from "./interactive-density.ts";
 import { floatingMenuScrollViewportClassName } from "./scroll-area.tsx";
+import { OVERLAY_MENU_SEPARATOR_CLASS } from "./separator.tsx";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
@@ -211,7 +212,11 @@ function SelectSeparator({
 }: React.ComponentProps<typeof SelectPrimitive.Separator>) {
   return (
     <SelectPrimitive.Separator
-      className={cn("pointer-events-none -mx-1 my-1 h-px bg-border", className)}
+      className={cn(
+        "pointer-events-none",
+        OVERLAY_MENU_SEPARATOR_CLASS,
+        className
+      )}
       data-slot="select-separator"
       {...props}
     />

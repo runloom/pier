@@ -429,6 +429,24 @@ section 根节点下的裸子节点。
 权威规格：[`docs/superpowers/specs/2026-08-31-context-menu-order-gold-standard.md`](docs/superpowers/specs/2026-08-31-context-menu-order-gold-standard.md)。  
 检查点：`tests/unit/renderer/context-menu/order-governance.test.ts`、`tests/unit/renderer/context-menu/order-sketches.test.ts`、`tests/unit/renderer/context-menu/order-sketches-composed.test.ts`。
 
+### 跨表面偏好分工
+
+显式控制改目录；隐式学习只做副本；空间菜单位置永不漂。创建走稳定目录，找回走最近，对象操作走右键，工具箱裁剪走设置。
+
+- **A 热路径**（默认智能体 / 快捷键）与 **B 目录裁剪**（禁用智能体）写在设置；新建菜单用「默认」标记 + 「管理智能体…」发现，不改排序。
+- **C 习惯副本**只出现在命令面板空态「最近」和有 query 时的同分；新建菜单 / 右键 / 空 `/` 不按频次重排。
+- 算法三层：衰减只走 `usageFrecency`；命令/技能/动作有 query 只走 `rankSearchDocuments`（Action 经 `rankActionsForPalette`，`/` 经 skill → `SearchDocument` 薄适配）；空态共用 `presentCommandListGroups`（面板 `recentsLimit: 8`，新建菜单 `0`）。文件路径只走 `scoreFilePath`。禁止第二套 `includes` 保序或第二套半衰期。
+
+权威规格：[`docs/superpowers/specs/2026-09-03-command-surface-preference-gold-standard.md`](docs/superpowers/specs/2026-09-03-command-surface-preference-gold-standard.md)。  
+检查点：`tests/unit/renderer/command-surface-preference-governance.test.ts`、`tests/component/workspace/create-menu-preference.test.tsx`、`tests/unit/renderer/terminal/composer-skill-suggest.test.ts`。
+
+### 浮层分割线
+
+浮层发丝线贴齐菜单壳，不跟圆角行高亮左右对齐。class 只来自 `packages/ui/src/separator.tsx`。`p-1` 壳用 `OVERLAY_MENU_SEPARATOR_CLASS`（`-mx-1`）；`p-0` 壳 `overflow-hidden`，区域切开用通栏 `Separator` 或页脚 `border-t`。颜色 `bg-border/50` / `border-border/50`。Popover+Command 杂交壳的内层 Command 禁止第二层 `rounded-3xl`。禁止给页脚加 `mx-*` 追高亮，禁止手写 `hr`。
+
+权威规格：[`docs/superpowers/specs/2026-09-03-overlay-separator-gold-standard.md`](docs/superpowers/specs/2026-09-03-overlay-separator-gold-standard.md)。  
+检查点：`tests/unit/renderer/overlay-separator-governance.test.ts`。
+
 ### 命令列表分组标题
 
 命令面板空态与新建菜单共用同一套标题规则：标题只表示该块有多条同类命令；1 条不写标题；相邻无标题组合并；分类顺序稳定。使用频次只出现在命令面板「最近」块（新建菜单不设）。`pier.agent.start.*` ≥ 2 时抽成「智能体」子组。有查询的搜索结果与 Quick Pick section 不套本规则。

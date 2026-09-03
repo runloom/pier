@@ -69,6 +69,12 @@ export function ExternalPluginAppletMount({
     markAppletReady(el, false);
     el.dataset.retry = String(retry);
     const spec = projectLiveRootSpec({ projectRootPath });
+    const releaseGeneration = () => {
+      unmount?.();
+      unmount = undefined;
+      realm?.disposeSoon();
+      realm = undefined;
+    };
     const mount = async () => {
       await liveModules.registerRoot(spec);
       const compiled = await liveModules.compile(spec.id, moduleId);
@@ -94,14 +100,14 @@ export function ExternalPluginAppletMount({
         props: propsRef.current,
       });
       if (cancelled) {
-        unmount();
-        realm.disposeSoon();
+        releaseGeneration();
         return;
       }
       markAppletReady(el, true);
       setError(null);
     };
     mount().catch((caught: unknown) => {
+      releaseGeneration();
       if (!cancelled) {
         setError(caught instanceof Error ? caught.message : String(caught));
       }
@@ -110,8 +116,7 @@ export function ExternalPluginAppletMount({
       cancelled = true;
       markAppletReady(el, false);
       compiledRef.current = null;
-      unmount?.();
-      realm?.disposeSoon();
+      releaseGeneration();
     };
   }, [moduleId, onError, projectRootPath, retry, t]);
 

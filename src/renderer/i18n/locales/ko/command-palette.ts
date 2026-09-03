@@ -53,6 +53,7 @@ export const commandPalette = {
     newAgent: "기본 에이전트 시작",
     listAgents: "에이전트 목록…",
     openCollaboration: "에이전트 협업…",
+    defaultAgentMark: "기본",
     startAgent: "{{agent}} 시작",
     runTask: "작업 실행…",
     terminalList: "터미널 목록...",

@@ -47,6 +47,7 @@ export const workspace = {
     detectAgentsFailed:
       "エージェントを検出できませんでした。もう一度お試しください",
     noMatches: "一致する項目はありません",
+    manageAgents: "エージェントを管理…",
     searchPlaceholder: "パネルの種類やエージェントを検索…",
     title: "このパネルグループに作成",
     startAgentFailed:

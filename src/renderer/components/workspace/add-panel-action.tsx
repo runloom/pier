@@ -86,6 +86,7 @@ import {
   registerTerminalFullscreenWebOverlay,
   requestTerminalWebFocus,
 } from "@/stores/terminal-input-routing-slice.ts";
+import { CreateMenuManageAgents } from "./create-menu-manage-agents.tsx";
 
 const CREATE_MENU_SCOPE = "overlay:add-panel";
 const IME_PENDING_KEYCODE = 229;
@@ -337,7 +338,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
         <PopoverContent
           align="start"
           aria-labelledby={titleId}
-          className="w-80 gap-0 p-0"
+          className="w-80 gap-0 overflow-hidden p-0"
           onEscapeKeyDown={(event) => {
             if (event.isComposing || event.keyCode === IME_PENDING_KEYCODE) {
               event.preventDefault();
@@ -367,7 +368,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
             </PopoverTitle>
           </PopoverHeader>
           <Command
-            className="h-auto [&_[cmdk-item]]:rounded-2xl"
+            className="h-auto rounded-none pb-0 [&_[cmdk-item]]:rounded-2xl"
             label={t("workspace.addPanelMenu.title")}
             loop
             onKeyDown={(event) => {
@@ -401,6 +402,12 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
               {renderListBody()}
             </CommandList>
           </Command>
+          <CreateMenuManageAgents
+            onClose={() => {
+              setOpen(false);
+              setQuery("");
+            }}
+          />
         </PopoverContent>
       </Popover>
     </div>

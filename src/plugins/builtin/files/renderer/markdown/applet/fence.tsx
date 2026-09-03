@@ -96,6 +96,12 @@ export function MarkdownAppletFence({
     let unmount: (() => void) | undefined;
     let realm: LiveModuleRealm | undefined;
     const spec = projectLiveRootSpec({ projectRootPath: disk.root });
+    const releaseGeneration = () => {
+      unmount?.();
+      unmount = undefined;
+      realm?.disposeSoon();
+      realm = undefined;
+    };
     const mount = async () => {
       await liveModules.registerRoot(spec);
       const moduleId = `@pier-applet/${parsed.pluginId}/${parsed.appletId}`;
@@ -114,19 +120,18 @@ export function MarkdownAppletFence({
         props: appletFenceProps(parsed.props),
       });
       if (cancelled) {
-        unmount();
-        realm.disposeSoon();
+        releaseGeneration();
       }
     };
     mount().catch((caught: unknown) => {
+      releaseGeneration();
       if (!cancelled) {
         setError(caught instanceof Error ? caught.message : String(caught));
       }
     });
     return () => {
       cancelled = true;
-      unmount?.();
-      realm?.disposeSoon();
+      releaseGeneration();
       liveModules
         .unregisterRoot(projectLiveRootId(disk.root))
         .catch(() => undefined);

@@ -23,7 +23,10 @@ import {
   PopoverTrigger,
 } from "@pier/ui/popover.tsx";
 import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
-import { Separator } from "@pier/ui/separator.tsx";
+import {
+  OVERLAY_REGION_SEPARATOR_CLASS,
+  Separator,
+} from "@pier/ui/separator.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import {
   releaseTooltipSuppression,
@@ -244,7 +247,7 @@ function NotificationCenterPopoverBody({
           </TooltipContent>
         </Tooltip>
       </div>
-      <Separator className="opacity-50" />
+      <Separator className={OVERLAY_REGION_SEPARATOR_CLASS} />
       {listBody ?? emptyBody ?? itemGroupBody}
     </>
   );
@@ -356,7 +359,7 @@ export function NotificationCenterControl(): ReactNode {
       </Tooltip>
       <PopoverContent
         align="end"
-        className="w-96 gap-0 p-0"
+        className="w-96 gap-0 overflow-hidden p-0"
         onPointerDownOutside={(event) => {
           // 仅终端向 outside 才 mark；trigger / 其它 web 控件不补终端聚焦。
           const original = event.detail.originalEvent;

@@ -7,6 +7,7 @@ import {
   CONTROL_HEIGHT_CLASS,
   MENU_ITEM_DENSITY_CLASS,
 } from "./interactive-density.ts";
+import { OVERLAY_MENU_SEPARATOR_CLASS } from "./separator.tsx";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
@@ -207,7 +208,7 @@ function MenubarSeparator({
 }: React.ComponentProps<typeof MenubarPrimitive.Separator>) {
   return (
     <MenubarPrimitive.Separator
-      className={cn("-mx-1 my-1 h-px bg-border/50", className)}
+      className={cn(OVERLAY_MENU_SEPARATOR_CLASS, className)}
       data-slot="menubar-separator"
       {...props}
     />
