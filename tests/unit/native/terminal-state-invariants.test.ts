@@ -334,6 +334,22 @@ describe("Swift state invariants (source-level lock)", () => {
     );
   });
 
+  it("re-inserts a visible terminal only when a web layer sits below it", () => {
+    // Electron 43: terminals must sit below ViewsCompositorSuperview so web
+    // chrome paints on top. Requiring subviews.first made only one terminal
+    // legal at index 0, so applyWindowState re-inserted every other visible
+    // terminal on each snapshot. The invariant itself must be checked, and
+    // production must classify web layers by class name only — never by a
+    // test-only identifier. Behaviour lock: TerminalWindowStateTests
+    // testSteadyStateApplyKeepsVisibleTerminalOrderStable.
+    expect(SOURCE).toContain("terminalNeedsReattach");
+    expect(SOURCE).toContain("isWebCompositorLayer");
+    expect(SOURCE).not.toMatch(
+      /contentView\.subviews\.first\s*!==\s*term\.containerView/
+    );
+    expect(SOURCE).not.toContain("spike-web-compositor");
+  });
+
   it("Web ownership never clears the AppKit first responder directly", () => {
     const src = readFileSync(SWIFT_PATH, "utf8");
     const fnStart = src.indexOf("func applyFirstResponder(");

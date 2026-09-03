@@ -52,6 +52,7 @@ export const commandPalette = {
     newAgent: "启动默认智能体",
     listAgents: "智能体列表…",
     openCollaboration: "智能体协作…",
+    defaultAgentMark: "默认",
     startAgent: "启动 {{agent}}",
     runTask: "运行任务…",
     terminalList: "终端列表...",

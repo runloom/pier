@@ -42,6 +42,7 @@ export const workspace = {
     actionFailed: "无法完成操作，请重试",
     detectAgentsFailed: "无法检测智能体，请重试",
     noMatches: "没有匹配项",
+    manageAgents: "管理智能体…",
     searchPlaceholder: "搜索面板类型或智能体…",
     title: "在此标签组新建",
     startAgentFailed: "无法启动智能体，请重试",

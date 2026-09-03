@@ -1,3 +1,4 @@
+import { Badge } from "@pier/ui/badge.tsx";
 import {
   CommandGroup,
   CommandItem,
@@ -9,6 +10,7 @@ import { AGENT_START_COMMAND_PREFIX } from "@shared/commands.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { Settings } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
+import { useT } from "@/i18n/use-t.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import {
   commandListItemValue,
@@ -104,11 +106,13 @@ export function ActionCommandItem({
   onExecute: (action: Action) => Promise<void>;
   value?: string;
 }): ReactNode {
+  const t = useT();
   const Icon = action.metadata?.iconComponent ?? Settings;
   const shortcut = keybindingLabels.get(action.id);
   const disabled = action.enabled?.() === false;
   const disabledReason = disabled ? action.disabledReason?.() : null;
   const useAgentIcon = isAgentAction(action.id);
+  const defaultAffordance = action.metadata?.defaultAffordance === true;
   return (
     <CommandItem
       data-disabled={disabled}
@@ -129,6 +133,11 @@ export function ActionCommandItem({
         <Icon className="opacity-70" />
       )}
       <span className="min-w-0 flex-1 truncate">{action.title()}</span>
+      {defaultAffordance ? (
+        <Badge size="xs" variant="outline">
+          {t("commandPalette.action.defaultAgentMark")}
+        </Badge>
+      ) : null}
       {disabledReason ? (
         <span className="max-w-56 shrink-0 truncate text-muted-foreground text-xs">
           {disabledReason}

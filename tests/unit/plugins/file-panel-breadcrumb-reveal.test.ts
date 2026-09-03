@@ -1,5 +1,6 @@
 import {
   breadcrumbRevealPathForDiskSource,
+  breadcrumbSegmentsForPanelSource,
   breadcrumbSegmentsForSource,
 } from "@plugins/builtin/files/renderer/panel/source.ts";
 import { describe, expect, it } from "vitest";
@@ -66,5 +67,31 @@ describe("breadcrumbRevealPathForDiskSource", () => {
         segmentIndex: 4,
       })
     ).toBe(path);
+  });
+});
+
+describe("breadcrumbSegmentsForPanelSource", () => {
+  it("uses the disk root for outside-workspace files, not the project name", () => {
+    expect(
+      breadcrumbSegmentsForPanelSource(
+        {
+          kind: "disk",
+          path: "config.yaml",
+          root: "/Users/xyz/.config/goose",
+        },
+        "feat-bug-20260830",
+        true
+      )
+    ).toEqual(["/Users/xyz/.config/goose", "config.yaml"]);
+  });
+
+  it("keeps the project prefix for in-workspace files", () => {
+    expect(
+      breadcrumbSegmentsForPanelSource(
+        { kind: "disk", path: ".cursor/mcp.json", root: "/repo" },
+        "repo",
+        false
+      )
+    ).toEqual(["repo", ".cursor", "mcp.json"]);
   });
 });

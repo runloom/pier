@@ -3,6 +3,7 @@ import { settingsAppUpdate } from "./settings-app-update.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
+import { settingsMcp } from "./settings-mcp.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsRemoteAccess } from "./settings-remote-access.ts";
@@ -179,30 +180,7 @@ export const settings = {
     rulesOtherBody: "{{name}} 不是可编辑的普通文件。",
     rulesOtherTitle: "{{name}} 无法在此编辑",
     rulesEditorLabel: "{{name}} 的内容",
-    mcpLoading: "正在加载 MCP 服务器…",
-    mcpLoadFailed: "无法加载 MCP 列表，请重试",
-    mcpActionFailed: "无法打开配置文件，请重试",
-    mcpNoticeBody:
-      "列出各智能体配置中的 MCP 服务器，以及谁能用到它们。Pier 不会修改这些文件。",
-    mcpColAgent: "智能体",
-    mcpColPath: "路径",
-    mcpColScope: "范围",
-    mcpColStatus: "状态",
-    mcpColActions: "操作",
-    mcpScopeProject: "项目内",
-    mcpScopeUser: "用户配置",
-    mcpPresent: "已找到",
-    mcpMissing: "缺失",
-    mcpUnsupported: "不支持",
-    mcpOpen: "打开配置文件",
-    mcpSources: "配置来源",
-    mcpAvailableNone: "智能体暂不可用",
-    mcpEmptyTitle: "未发现 MCP 服务器",
-    mcpEmptyDescription:
-      "当前范围没有 MCP 服务器。在智能体配置中添加后再查看。",
-    mcpRestartTitle: "需要重启 Pier 才能加载 MCP 服务器",
-    mcpRestartDescription:
-      "当前窗口仍是旧版本。请完全退出 Pier 后重新打开，再进入此页。",
+    ...settingsMcp,
   },
   skills: settingsSkills,
   materials: settingsMaterials,

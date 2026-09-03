@@ -5,7 +5,7 @@
 范围：命令面板空态（无查询）与新建菜单空态（`+` / `pier.panel.openCreateMenu`）的分组标题、分隔和顺序。  
 不包含：有查询时的搜索结果、Quick Pick 的 section、右键菜单、应用菜单、设置 → 快捷键页。
 
-相关：右键仍以 [`2026-08-31-context-menu-order-gold-standard.md`](./2026-08-31-context-menu-order-gold-standard.md) 为准（分隔线、位置稳定、不用频次热排）。本文不把标题加回右键。
+相关：右键仍以 [`2026-08-31-context-menu-order-gold-standard.md`](./2026-08-31-context-menu-order-gold-standard.md) 为准（分隔线、位置稳定、不用频次热排）。本文不把标题加回右键。最近块归属、搜索内核复用与新建菜单「管理智能体…」以 [`2026-09-03-command-surface-preference-gold-standard.md`](./2026-09-03-command-surface-preference-gold-standard.md) 为准。发丝线怎么画以 [`2026-09-03-overlay-separator-gold-standard.md`](./2026-09-03-overlay-separator-gold-standard.md) 为准。
 
 权威实现：`src/renderer/lib/command-palette/present-groups.ts`。  
 渲染：`CommandsView`（`src/renderer/components/common/command-palette/action-rows.tsx`）。新建菜单与命令面板空态都必须调用它，禁止再各写一套 `CommandGroup heading={categoryHeading(...)}`。

@@ -298,28 +298,7 @@ export function buildComposerSkillSuggestItems(
   return [...commands, ...skills];
 }
 
-/** Case-insensitive filter over id / label / description. */
-export function filterComposerSkillSuggestItems(
-  items: readonly ComposerSkillSuggestItem[],
-  query: string
-): ComposerSkillSuggestItem[] {
-  const normalized = query.trim().toLowerCase();
-  if (normalized.length === 0) {
-    return [...items];
-  }
-  return items.filter((item) => {
-    if (item.id.toLowerCase().includes(normalized)) {
-      return true;
-    }
-    if (item.label.toLowerCase().includes(normalized)) {
-      return true;
-    }
-    if (item.description.toLowerCase().includes(normalized)) {
-      return true;
-    }
-    return false;
-  });
-}
+export { filterComposerSkillSuggestItems } from "./composer-skill-rank.ts";
 
 /**
  * Slash-namespace prefixes (`/skills …`, OMP/Pi `/skill:`) only list skills.

@@ -44,6 +44,7 @@ export const workspace = {
     actionFailed: "Couldn't complete action — try again",
     detectAgentsFailed: "Couldn't detect agents — try again",
     noMatches: "No matching items",
+    manageAgents: "Manage Agents…",
     searchPlaceholder: "Search panel types or agents…",
     title: "Create in this panel group",
     startAgentFailed: "Couldn't start agent — try again",

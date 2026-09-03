@@ -764,6 +764,31 @@ describe("filterComposerSkillSuggestItems", () => {
       filterComposerSkillSuggestItems(sample, "unit").map((i) => i.id)
     ).toEqual(["write-tests"]);
     expect(filterComposerSkillSuggestItems(sample, "").length).toBe(2);
+    expect(
+      filterComposerSkillSuggestItems(sample, "").map((i) => i.id)
+    ).toEqual(sample.map((i) => i.id));
+  });
+
+  it("ranks title prefix matches above description-only contains", () => {
+    const items = [
+      {
+        description: "Generate unit tests for code",
+        id: "write-tests",
+        invokeText: "/write-tests",
+        label: "write-tests",
+        source: "project" as const,
+      },
+      {
+        description: "Review pull requests",
+        id: "code-review",
+        invokeText: "/code-review",
+        label: "code-review",
+        source: "project" as const,
+      },
+    ];
+    expect(
+      filterComposerSkillSuggestItems(items, "co").map((i) => i.id)
+    ).toEqual(["code-review", "write-tests"]);
   });
 });
 
@@ -1153,7 +1178,7 @@ describe("createComposerSkillQueryClient", () => {
         updates.push(snap);
       },
       projectRootPath: "/tmp/proj",
-      query: "b",
+      query: "btw",
     });
     expect(updates).toHaveLength(1);
     expect(updates[0]?.items.map((item) => item.id)).toEqual(["btw"]);

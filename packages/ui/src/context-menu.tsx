@@ -5,6 +5,7 @@ import type * as React from "react";
 import { useFreezeFloatingOnClose } from "./freeze-floating-on-close.ts";
 import { MENU_ITEM_DENSITY_CLASS } from "./interactive-density.ts";
 import { floatingMenuScrollViewportClassName } from "./scroll-area.tsx";
+import { OVERLAY_MENU_SEPARATOR_CLASS } from "./separator.tsx";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
@@ -249,7 +250,7 @@ function ContextMenuSeparator({
 }: React.ComponentProps<typeof ContextMenuPrimitive.Separator>) {
   return (
     <ContextMenuPrimitive.Separator
-      className={cn("-mx-1 my-1 h-px bg-border/50", className)}
+      className={cn(OVERLAY_MENU_SEPARATOR_CLASS, className)}
       data-slot="context-menu-separator"
       {...props}
     />

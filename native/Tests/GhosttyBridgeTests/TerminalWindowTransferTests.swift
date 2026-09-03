@@ -25,21 +25,6 @@ final class TerminalWindowTransferTests: XCTestCase {
         return window
     }
 
-    private func insertMidWebCompositor(in window: NSWindow) -> NSView {
-        let contentView = try! XCTUnwrap(window.contentView)
-        let mid = NSView(frame: contentView.bounds)
-        mid.identifier = NSUserInterfaceItemIdentifier("spike-web-compositor")
-        mid.wantsLayer = true
-        mid.autoresizingMask = [.width, .height]
-        // Between terminal (bottom) and EventRouterView (top).
-        contentView.addSubview(mid, positioned: .above, relativeTo: nil)
-        // Ensure EventRouter stays top-most after inserting mid layer.
-        if let router = contentView.subviews.first(where: { $0 is EventRouterView }) {
-            contentView.addSubview(router, positioned: .above, relativeTo: nil)
-        }
-        return mid
-    }
-
     private func pidFileCommand(path: String) -> String {
         """
         /bin/sh -c 'printf %s $$ > "\(path)"; while true; do sleep 1; done'
@@ -133,8 +118,8 @@ final class TerminalWindowTransferTests: XCTestCase {
             target.orderOut(nil)
         }
 
-        let midSource = insertMidWebCompositor(in: source)
-        let midTarget = insertMidWebCompositor(in: target)
+        let midSource = insertWebCompositorStandIn(in: source)
+        let midTarget = insertWebCompositorStandIn(in: target)
 
         let viewport = NSRect(x: 12, y: 24, width: 420, height: 280)
         XCTAssertTrue(

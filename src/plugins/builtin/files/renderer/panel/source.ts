@@ -60,6 +60,19 @@ export function breadcrumbSegmentsForSource(
   return parts;
 }
 
+/** Outside-workspace docs: real root + path, never the current project name. */
+export function breadcrumbSegmentsForPanelSource(
+  source: FilesDocumentPanelSource,
+  projectName: string | null,
+  outsideWorkspace: boolean
+): string[] {
+  if (source.kind === "disk" && outsideWorkspace) {
+    const parts = source.path.split("/").filter(Boolean);
+    return [source.root, ...parts];
+  }
+  return breadcrumbSegmentsForSource(source, projectName);
+}
+
 /**
  * Map a breadcrumb segment index to a project-relative tree path for reveal.
  *

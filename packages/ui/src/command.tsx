@@ -14,6 +14,7 @@ import {
   MENU_ITEM_DENSITY_CLASS,
 } from "./interactive-density.ts";
 import { scrollFadeClassName } from "./scroll-area.tsx";
+import { OVERLAY_MENU_SEPARATOR_CLASS } from "./separator.tsx";
 import { cn } from "./utils.ts";
 
 function Command({
@@ -151,7 +152,7 @@ function CommandSeparator({
 }: React.ComponentProps<typeof CommandPrimitive.Separator>) {
   return (
     <CommandPrimitive.Separator
-      className={cn("my-1 h-px bg-border/50", className)}
+      className={cn(OVERLAY_MENU_SEPARATOR_CLASS, className)}
       data-slot="command-separator"
       {...props}
     />

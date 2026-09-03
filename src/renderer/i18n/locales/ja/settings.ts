@@ -3,6 +3,7 @@ import { settingsAppUpdate } from "./settings-app-update.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
+import { settingsMcp } from "./settings-mcp.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsRemoteAccess } from "./settings-remote-access.ts";
@@ -193,30 +194,7 @@ export const settings = {
     rulesOtherBody: "{{name}} は通常の編集可能なファイルではありません。",
     rulesOtherTitle: "{{name}} はここでは編集できません",
     rulesEditorLabel: "{{name}} の内容",
-    mcpLoading: "MCP サーバーを読み込み中…",
-    mcpLoadFailed: "MCP 一覧を読み込めませんでした。もう一度お試しください",
-    mcpActionFailed: "設定ファイルを開けませんでした。もう一度お試しください",
-    mcpNoticeBody:
-      "エージェント設定にある MCP サーバーと、どのエージェントが使えるかを一覧します。Pier はそれらのファイルを編集しません。",
-    mcpColAgent: "エージェント",
-    mcpColPath: "パス",
-    mcpColScope: "範囲",
-    mcpColStatus: "状態",
-    mcpColActions: "操作",
-    mcpScopeProject: "プロジェクト内",
-    mcpScopeUser: "ユーザー設定",
-    mcpPresent: "見つかりました",
-    mcpMissing: "ありません",
-    mcpUnsupported: "未対応",
-    mcpOpen: "設定ファイルを開く",
-    mcpSources: "設定の出所",
-    mcpAvailableNone: "エージェントは使えません",
-    mcpEmptyTitle: "MCP サーバーは見つかりません",
-    mcpEmptyDescription:
-      "この範囲に MCP サーバーはありません。エージェント設定で追加してから、もう一度確認してください。",
-    mcpRestartTitle: "MCP サーバーを読み込むには Pier を再起動してください",
-    mcpRestartDescription:
-      "このウインドウはまだ古い版です。Pier を完全に終了して起動し直し、このタブを開き直してください。",
+    ...settingsMcp,
   },
   skills: settingsSkills,
   materials: settingsMaterials,
