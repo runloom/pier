@@ -8,6 +8,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { markdownImagePreviewFromDocument } from "./image-preview.ts";
 import type { MarkdownInline } from "./ir.ts";
 
 export interface MarkdownInternalTarget {
@@ -221,11 +222,12 @@ export function MarkdownResourceImage({
     resources.files
       .readDocument({ path: targetPath, root: source.root })
       .then(async (document) => {
-        if (document.kind !== "image") throw new Error("not an image resource");
+        const preview = markdownImagePreviewFromDocument(document);
+        if (!preview) throw new Error("not an image resource");
         const issued = await resources.filePreviews.issue({
-          mime: document.mime,
+          mime: preview.mime,
           path: targetPath,
-          revision: document.revision,
+          revision: preview.revision,
           root: source.root,
         });
         if (!issued.issued) throw new Error("image preview unavailable");

@@ -22,10 +22,7 @@ import {
   MAX_IMAGE_PREVIEW_FILE_BYTES,
   readFileWithinImagePreviewLimit,
 } from "./image-preview-file.ts";
-import {
-  classifyPreviewImageSignature,
-  classifyPreviewSvgMarkup,
-} from "./image-signature.ts";
+import { classifyPreviewImageBytes } from "./image-signature.ts";
 import {
   type FilePreviewTicketRegistry,
   filePreviewTicketRegistry,
@@ -151,10 +148,7 @@ export async function resolveFilePreviewResponse(
     if (!bytes) {
       return payloadTooLarge();
     }
-    const mime =
-      entry.locator.mime === "image/svg+xml"
-        ? classifyPreviewSvgMarkup(bytes)
-        : classifyPreviewImageSignature(bytes);
+    const mime = classifyPreviewImageBytes(bytes);
     if (!mime || mime !== entry.locator.mime) {
       return notFound();
     }

@@ -63,4 +63,27 @@ describe("git blob image preview protocol", () => {
       status: 404,
     });
   });
+
+  it("serves a signature-validated SVG blob", async () => {
+    await writeFile(
+      join(root, "mark.svg"),
+      "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'></svg>"
+    );
+    await execGit(["add", "--", "mark.svg"], { cwd: root });
+    const oid = (
+      await execGit(["rev-parse", ":mark.svg"], { cwd: root })
+    ).trim();
+    const url = filePreviewTicketRegistry.issue({
+      locator: {
+        gitRoot: root,
+        mime: "image/svg+xml",
+        oid,
+        revision: oid,
+      },
+      owner,
+    }).url;
+    const response = await resolveFilePreviewResponse(url);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/svg+xml");
+  });
 });

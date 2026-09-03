@@ -329,4 +329,28 @@ describe("file preview protocol", () => {
     expect(response.headers.get("content-type")).toBe("image/png");
     expect(response.headers.get("etag")).toMatch(/^"abs-v1:[a-f0-9]+"$/);
   });
+
+  it("serves absolute-path SVG locators used by host media preview", async () => {
+    const absolutePath = join(root, "mark.svg");
+    await writeFile(
+      absolutePath,
+      "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'></svg>"
+    );
+    const { resolveAbsoluteImagePreview } = await import(
+      "@main/files/absolute-image-preview.ts"
+    );
+    const resolved = await resolveAbsoluteImagePreview(absolutePath);
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    expect(resolved.locator.mime).toBe("image/svg+xml");
+    const url = filePreviewTicketRegistry.issue({
+      locator: resolved.locator,
+      owner,
+    }).url;
+    const response = await resolveFilePreviewResponse(url);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/svg+xml");
+  });
 });

@@ -2,6 +2,10 @@
 __pycache__/
 *.pyc
 node_modules
+# Bundled tsserver plugin (tsserver loads `<probe>/node_modules/<name>`).
+!/resources/lsp-plugins/node_modules/
+!/resources/lsp-plugins/node_modules/pier-canvas-modules/
+!/resources/lsp-plugins/node_modules/pier-canvas-modules/**
 # build/ 默认忽略; 但 electron-builder buildResources (icon.*, entitlements) 必须入库.
 /build/*
 !/build/icon.icns

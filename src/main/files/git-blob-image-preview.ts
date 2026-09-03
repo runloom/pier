@@ -9,7 +9,7 @@ import {
 import type { GitExecExecutionBudget } from "../services/git/exec-raw-contract.ts";
 import { readPreviewImageDimensions } from "./image-metadata.ts";
 import { MAX_IMAGE_PREVIEW_FILE_BYTES } from "./image-preview-file.ts";
-import { classifyPreviewImageSignature } from "./image-signature.ts";
+import { classifyPreviewImageBytes } from "./image-signature.ts";
 
 const GIT_BLOB_OID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 const BATCH_HEADER_OVERHEAD = 256;
@@ -113,7 +113,7 @@ export async function resolveGitBlobImagePreview(input: {
   if (!bytes) {
     return { ok: false, reason: "not-found" };
   }
-  const mime = classifyPreviewImageSignature(bytes);
+  const mime = classifyPreviewImageBytes(bytes);
   if (!mime) {
     return { ok: false, reason: "unsupported" };
   }

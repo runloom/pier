@@ -56,6 +56,15 @@ describe("classifyReviewSlotBodyClass (gold standard)", () => {
       classifyReviewSlotBodyClass(
         slot({
           binary: true,
+          status: "modified",
+          targetPath: "assets/mark.svg",
+        })
+      )
+    ).toBe("content");
+    expect(
+      classifyReviewSlotBodyClass(
+        slot({
+          binary: true,
           oldPath: "old.png",
           status: "renamed",
           targetPath: "icon.png",

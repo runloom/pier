@@ -1376,6 +1376,101 @@ describe("MarkdownPreview", () => {
     });
   });
 
+  it("issues svg+xml tickets when a relative image is svg text", async () => {
+    const issue = vi.fn<RendererPluginContext["filePreviews"]["issue"]>(
+      async () => ({
+        expiresAt: 100,
+        issued: true,
+        ticket: "markdown-image-svg00000",
+        url: "pier-file-preview://file/markdown-image-svg00000",
+      })
+    );
+    const release = vi.fn(async () => true);
+    const readDocument = vi.fn<RendererPluginContext["files"]["readDocument"]>(
+      async (request) => ({
+        canonicalPath: request.path,
+        contents:
+          "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'></svg>",
+        eol: "lf",
+        format: { bom: false, encoding: "utf8" },
+        kind: "text",
+        mode: 0o644,
+        mtimeMs: 1,
+        path: request.path,
+        revision: "file-v1:svg",
+        root: request.root,
+        size: 64,
+        writable: true,
+      })
+    );
+    render(
+      <MarkdownPreview
+        fileResources={{
+          filePreviews: { issue, release },
+          files: { readDocument },
+        }}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-svg-image"
+        source={source}
+        value="![Wireframe](./assets/w2-main-loop.svg)"
+      />
+    );
+
+    const image = await screen.findByRole("img", { name: "Wireframe" });
+    expect(image).toHaveAttribute(
+      "src",
+      "pier-file-preview://file/markdown-image-svg00000"
+    );
+    expect(readDocument).toHaveBeenCalledWith({
+      path: "docs/assets/w2-main-loop.svg",
+      root: "/repo",
+    });
+    expect(issue).toHaveBeenCalledWith({
+      mime: "image/svg+xml",
+      path: "docs/assets/w2-main-loop.svg",
+      revision: "file-v1:svg",
+      root: "/repo",
+    });
+  });
+
+  it("falls back when a relative image is ordinary text", async () => {
+    const issue = vi.fn<RendererPluginContext["filePreviews"]["issue"]>();
+    const readDocument = vi.fn<RendererPluginContext["files"]["readDocument"]>(
+      async (request) => ({
+        canonicalPath: request.path,
+        contents: "# notes\n",
+        eol: "lf",
+        format: { bom: false, encoding: "utf8" },
+        kind: "text",
+        mode: 0o644,
+        mtimeMs: 1,
+        path: request.path,
+        revision: "file-v1:text",
+        root: request.root,
+        size: 8,
+        writable: true,
+      })
+    );
+    render(
+      <MarkdownPreview
+        fileResources={{
+          filePreviews: { issue, release: vi.fn(async () => true) },
+          files: { readDocument },
+        }}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-text-image"
+        source={source}
+        value="![Missing](./notes.md)"
+      />
+    );
+
+    const fallback = await screen.findByText("Missing");
+    expect(fallback.closest(".md-img-fallback")).not.toBeNull();
+    expect(issue).not.toHaveBeenCalled();
+  });
+
   it("opens image fullscreen from the already-issued inline preview URL", async () => {
     let ticketSerial = 0;
     const issue = vi.fn<RendererPluginContext["filePreviews"]["issue"]>(

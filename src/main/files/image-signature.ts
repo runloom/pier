@@ -1,4 +1,5 @@
 import type { FilePreviewImageMime } from "@shared/contracts/file.ts";
+import { classifyPreviewSvgMarkup } from "@shared/file-preview/svg-markup.ts";
 
 const PNG_SIGNATURE = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
@@ -29,51 +30,10 @@ export function classifyPreviewImageSignature(
   return null;
 }
 
-const SVG_SNIFF_LIMIT = 8192;
-
-export function classifyPreviewSvgMarkup(
+export function classifyPreviewImageBytes(
   bytes: Uint8Array
-): "image/svg+xml" | null {
-  const slice =
-    bytes.byteLength > SVG_SNIFF_LIMIT
-      ? bytes.subarray(0, SVG_SNIFF_LIMIT)
-      : bytes;
-  let text = Buffer.from(
-    slice.buffer,
-    slice.byteOffset,
-    slice.byteLength
-  ).toString("utf8");
-  if (text.startsWith("\uFEFF")) {
-    text = text.slice(1);
-  }
-  let index = 0;
-  const skipWhitespace = () => {
-    while (index < text.length && /\s/u.test(text[index] ?? "")) {
-      index += 1;
-    }
-  };
-  for (;;) {
-    skipWhitespace();
-    const rest = text.slice(index);
-    const lowered = rest.slice(0, 5).toLowerCase();
-    if (lowered === "<?xml") {
-      const end = rest.indexOf("?>");
-      if (end < 0) {
-        return null;
-      }
-      index += end + 2;
-      continue;
-    }
-    if (rest.startsWith("<!--")) {
-      const end = rest.indexOf("-->");
-      if (end < 0) {
-        return null;
-      }
-      index += end + 3;
-      continue;
-    }
-    break;
-  }
-  skipWhitespace();
-  return /^<svg\b/iu.test(text.slice(index)) ? "image/svg+xml" : null;
+): FilePreviewImageMime | null {
+  return (
+    classifyPreviewImageSignature(bytes) ?? classifyPreviewSvgMarkup(bytes)
+  );
 }
