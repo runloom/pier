@@ -16,12 +16,14 @@ import {
 } from "../empty.tsx";
 import { Skeleton } from "../skeleton.tsx";
 import { cn } from "../utils.ts";
+import type { ImagePreviewChrome } from "./canvas-math.ts";
 import {
   type ImagePreviewCanvasLabels,
   ImagePreviewControls,
 } from "./controls.tsx";
 import { useZoomPanViewport } from "./use-zoom-pan-viewport.ts";
 
+export type { ImagePreviewChrome } from "./canvas-math.ts";
 export {
   anchoredScrollAfterZoom,
   centeredScroll,
@@ -40,6 +42,11 @@ function corsAttrsForSrc(
 
 export interface ImagePreviewCanvasProps {
   alt: string;
+  /**
+   * Overlay reserves the floating title (`pt-14` / `WORLD_OVERLAY_FIT_INSETS`).
+   * Board is a files-tab stage: no title band, only the zoom-pill inset.
+   */
+  chrome?: ImagePreviewChrome;
   className?: string;
   labels: ImagePreviewCanvasLabels;
   /** Pulse skeleton only when there is no src to paint. */
@@ -70,6 +77,7 @@ export interface ImagePreviewCanvasProps {
  */
 export function ImagePreviewCanvas({
   alt,
+  chrome = "board",
   className,
   labels,
   loading = false,
@@ -115,6 +123,7 @@ export function ImagePreviewCanvas({
   }, []);
 
   const pan = useZoomPanViewport({
+    chrome,
     enabled: ready,
     getNaturalSize,
     resetKey: displaySrc,
@@ -241,9 +250,10 @@ export function ImagePreviewCanvas({
         aria-busy={resolvedStatus === "loading"}
         aria-label={labels.viewerLabel}
         className={cn(
-          // pb-16 reserves the bottom band for the floating zoom pill
-          // (VIEWPORT_CONTROLS_INSET_PX) so content never rests under it.
+          // pb-16 clears the zoom pill (WORLD_* bottom). Overlay also keeps
+          // pt-14 for the floating title (WORLD_OVERLAY_FIT_INSETS.top).
           "absolute inset-0 flex overflow-auto bg-background p-3 pb-16 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset",
+          chrome === "overlay" && "pt-14",
           pan.canPan && (pan.panning ? "cursor-grabbing" : "cursor-grab"),
           pan.panning && "select-none"
         )}

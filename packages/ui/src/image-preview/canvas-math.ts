@@ -14,6 +14,61 @@ export const VIEWPORT_PADDING_PX = 24;
  * leave content under the controls. Matches `pb-16` on the viewport section.
  */
 export const VIEWPORT_CONTROLS_INSET_PX = 64;
+/** Content-preview header band (`h-14`). Fit insets keep content out of it. */
+export const VIEWPORT_CHROME_TOP_PX = 56;
+
+/** Per-side insets used when fitting a world camera into a viewport. */
+export interface ViewportFitInsets {
+  bottom: number;
+  left: number;
+  right: number;
+  top: number;
+}
+
+export function uniformFitInsets(
+  totalBothSides: number = VIEWPORT_PADDING_PX
+): ViewportFitInsets {
+  const side = totalBothSides / 2;
+  return { bottom: side, left: side, right: side, top: side };
+}
+
+/** Fullscreen overlay: float title above the paper; clear the zoom pill. */
+export const WORLD_OVERLAY_FIT_INSETS: ViewportFitInsets = {
+  bottom: VIEWPORT_CONTROLS_INSET_PX,
+  left: VIEWPORT_PADDING_PX / 2,
+  right: VIEWPORT_PADDING_PX / 2,
+  top: VIEWPORT_CHROME_TOP_PX,
+};
+
+/** Files board preview: no overlay title; still clear the zoom pill. */
+export const WORLD_BOARD_FIT_INSETS: ViewportFitInsets = {
+  bottom: VIEWPORT_CONTROLS_INSET_PX,
+  left: VIEWPORT_PADDING_PX / 2,
+  right: VIEWPORT_PADDING_PX / 2,
+  top: VIEWPORT_PADDING_PX / 2,
+};
+
+/** Overlay keeps the floating title band; board is a file-tab / panel stage. */
+export type ImagePreviewChrome = "overlay" | "board";
+
+export function imagePreviewFitInsets(
+  chrome: ImagePreviewChrome
+): ViewportFitInsets {
+  return chrome === "overlay"
+    ? WORLD_OVERLAY_FIT_INSETS
+    : WORLD_BOARD_FIT_INSETS;
+}
+
+/** Total vertical padding consumed by `measureContainScale` / CSS fit. */
+export function fitInsetsPadY(insets: ViewportFitInsets): number {
+  return insets.top + insets.bottom;
+}
+
+export interface FitCameraOptions {
+  allowUpscale?: boolean | undefined;
+  padding?: number | ViewportFitInsets | undefined;
+}
+
 /** Trackpad pinch (ctrl+wheel) exponent per deltaY unit. */
 export const PINCH_ZOOM_SENSITIVITY = 0.01;
 
@@ -26,8 +81,13 @@ export function pinchZoom(base: number, deltaY: number): number {
   return clampZoom(base * Math.exp(-deltaY * PINCH_ZOOM_SENSITIVITY));
 }
 
-/** Contain scale (no upscale), same as max-width/height 100% object-contain. */
+/** Contain scale. Default matches object-contain (no upscale). */
 export function measureContainScale(args: {
+  /**
+   * When true, small content may scale above 1 to fill the padded viewport
+   * (diagram / board fit). Photos keep the default `false`.
+   */
+  allowUpscale?: boolean | undefined;
   naturalHeight: number;
   naturalWidth: number;
   /** Total padding subtracted per axis (both sides). Default VIEWPORT_PADDING_PX. */
@@ -45,9 +105,11 @@ export function measureContainScale(args: {
   if (args.naturalWidth <= 0 || args.naturalHeight <= 0) return 1;
   const availW = Math.max(1, args.viewportWidth - padX);
   const availH = Math.max(1, args.viewportHeight - padY);
-  return clampZoom(
-    Math.min(availW / args.naturalWidth, availH / args.naturalHeight, 1)
+  const ratio = Math.min(
+    availW / args.naturalWidth,
+    availH / args.naturalHeight
   );
+  return clampZoom(args.allowUpscale ? ratio : Math.min(ratio, 1));
 }
 
 /**
@@ -162,25 +224,48 @@ export function cameraLookingAtWorld(
   };
 }
 
-/** Fit pose: contain scale (no upscale) with the content centered in the viewport. */
+function resolveFitCameraOptions(
+  options: number | FitCameraOptions | undefined
+): { allowUpscale: boolean; insets: ViewportFitInsets } {
+  if (typeof options === "number") {
+    return { allowUpscale: false, insets: uniformFitInsets(options) };
+  }
+  const padding = options?.padding ?? VIEWPORT_PADDING_PX;
+  return {
+    allowUpscale: options?.allowUpscale === true,
+    insets: typeof padding === "number" ? uniformFitInsets(padding) : padding,
+  };
+}
+
+/**
+ * Fit pose: contain scale, content centered in the padded viewport.
+ * A numeric third argument is total padding on each axis (legacy).
+ */
 export function fitCamera(
   content: WorldSizeBox,
   viewport: WorldSizeBox,
-  paddingPx: number = VIEWPORT_PADDING_PX
+  options: number | FitCameraOptions = VIEWPORT_PADDING_PX
 ): WorldCamera {
+  const { allowUpscale, insets } = resolveFitCameraOptions(options);
+  const padX = insets.left + insets.right;
+  const padY = insets.top + insets.bottom;
   const scale = measureContainScale({
+    allowUpscale,
     naturalHeight: content.height,
     naturalWidth: content.width,
-    paddingPx,
+    paddingPx: padX,
+    paddingYPx: padY,
     viewportHeight: viewport.height,
     viewportWidth: viewport.width,
   });
   const originX = content.x ?? 0;
   const originY = content.y ?? 0;
+  const availW = Math.max(1, viewport.width - padX);
+  const availH = Math.max(1, viewport.height - padY);
   return {
     scale,
-    x: (viewport.width - content.width * scale) / 2 - originX * scale,
-    y: (viewport.height - content.height * scale) / 2 - originY * scale,
+    x: insets.left + (availW - content.width * scale) / 2 - originX * scale,
+    y: insets.top + (availH - content.height * scale) / 2 - originY * scale,
   };
 }
 

@@ -270,6 +270,7 @@ export function ImagePreviewBody({
   return (
     <ImagePreviewCanvas
       alt={alt}
+      chrome="overlay"
       className="min-h-0 w-full flex-1 bg-background"
       labels={labels}
       loading={status === "loading"}

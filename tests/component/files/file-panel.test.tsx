@@ -355,6 +355,7 @@ function createMockContext(overrides?: {
     contentPreview: {
       close: vi.fn(),
       openImage: vi.fn(),
+      openMermaid: vi.fn(),
     },
     contextMenu: {
       popup: vi.fn(async () => undefined),
@@ -928,9 +929,11 @@ describe("Files file-panel", () => {
 
     expect(document.querySelector('[data-slot="skeleton"]')).toBeNull();
     expect(screen.queryByRole("status")).toBeNull();
-    expect(
-      screen.getByRole("region", { name: "Image preview" })
-    ).toHaveAttribute("aria-busy", "false");
+    const imageViewport = screen.getByRole("region", { name: "Image preview" });
+    expect(imageViewport).toHaveAttribute("aria-busy", "false");
+    // Files tab has no overlay title; fit chrome must not reserve pt-14.
+    expect(imageViewport.className).not.toContain("pt-14");
+    expect(imageViewport.className).toContain("pb-16");
     const toolbar = screen.getByRole("toolbar", { name: "Image controls" });
     expect(toolbar).toBeVisible();
     expect(screen.getByText("Fit to window", { exact: true })).toBeVisible();
