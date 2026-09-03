@@ -135,6 +135,102 @@ final class TerminalWindowStateTests: XCTestCase {
         XCTAssertEqual(windowState["webOverlayRectCount"] as? Int, 1)
     }
 
+    /// `terminal-a` is created first, so `terminal-b` ends up at subviews[0].
+    /// Listing `terminal-b` first is what exposes a `subviews.first` check: it
+    /// skips `terminal-b`, re-inserts `terminal-a` at the back on every
+    /// snapshot, and flips the two. Comparing indices after a full pass with
+    /// `terminal-a` listed first cannot see that (a pass always ends in the
+    /// reverse of the list order).
+    private let bottomFirstVisibleTerminals = """
+    [
+      { "focused": true, "frame": { "height": 180, "width": 280, "x": 330, "y": 40 }, "panelId": "terminal-b", "visible": true },
+      { "focused": false, "frame": { "height": 200, "width": 300, "x": 10, "y": 20 }, "panelId": "terminal-a", "visible": true }
+    ]
+    """
+
+    private func subviewIdentities(_ view: NSView) -> [ObjectIdentifier] {
+        view.subviews.map { ObjectIdentifier($0) }
+    }
+
+    private func subviewIndex(of view: NSView, in contentView: NSView) throws -> Int {
+        try XCTUnwrap(contentView.subviews.firstIndex(where: { $0 === view }))
+    }
+
+    private func applyBottomFirstVisibleTerminals(
+        to window: NSWindow,
+        sequence: Int
+    ) -> NativeApplyResult {
+        impl.applyWindowState(
+            parent: window,
+            json: stateJSON(
+                sequence: sequence,
+                keyboardTarget: "terminal",
+                targetPanelId: "terminal-b",
+                terminals: bottomFirstVisibleTerminals
+            )
+        )
+    }
+
+    func testSteadyStateApplyKeepsVisibleTerminalOrderStable() throws {
+        let window = makeWindow(browserWindowId: 4106)
+        defer { impl.detachWindow(parent: window) }
+        createTerminal("terminal-a", in: window)
+        createTerminal("terminal-b", in: window)
+        let contentView = try XCTUnwrap(window.contentView)
+        let compositor = insertWebCompositorStandIn(in: window)
+        let first = try XCTUnwrap(impl.terminalIdentityForTests(panelId: "terminal-a"))
+            .containerView
+        let second = try XCTUnwrap(impl.terminalIdentityForTests(panelId: "terminal-b"))
+            .containerView
+        XCTAssertTrue(
+            contentView.subviews.first === second,
+            "precondition: the terminal listed first already sits at subviews[0]"
+        )
+
+        for sequence in 1...3 {
+            let before = subviewIdentities(contentView)
+            XCTAssertEqual(applyBottomFirstVisibleTerminals(to: window, sequence: sequence), .applied)
+            XCTAssertEqual(
+                subviewIdentities(contentView),
+                before,
+                "snapshot \(sequence) must not reorder an already-legal hierarchy"
+            )
+        }
+
+        let compositorIndex = try subviewIndex(of: compositor, in: contentView)
+        XCTAssertLessThan(try subviewIndex(of: first, in: contentView), compositorIndex)
+        XCTAssertLessThan(try subviewIndex(of: second, in: contentView), compositorIndex)
+    }
+
+    func testApplyRepairsTerminalsAboveWebCompositorOnceThenStaysPut() throws {
+        let window = makeWindow(browserWindowId: 4107)
+        defer { impl.detachWindow(parent: window) }
+        createTerminal("terminal-a", in: window)
+        createTerminal("terminal-b", in: window)
+        let contentView = try XCTUnwrap(window.contentView)
+        insertWebCompositorStandIn(in: window)
+        XCTAssertEqual(applyBottomFirstVisibleTerminals(to: window, sequence: 1), .applied)
+        let first = try XCTUnwrap(impl.terminalIdentityForTests(panelId: "terminal-a"))
+            .containerView
+        let second = try XCTUnwrap(impl.terminalIdentityForTests(panelId: "terminal-b"))
+            .containerView
+
+        // Chromium re-created a compositor view at the very back: both
+        // terminals now cover web content and must be pushed back below it.
+        let sunk = ViewsCompositorSuperviewStandIn(frame: contentView.bounds)
+        contentView.addSubview(sunk, positioned: .below, relativeTo: nil)
+        XCTAssertEqual(try subviewIndex(of: sunk, in: contentView), 0)
+
+        XCTAssertEqual(applyBottomFirstVisibleTerminals(to: window, sequence: 2), .applied)
+        let sunkIndex = try subviewIndex(of: sunk, in: contentView)
+        XCTAssertLessThan(try subviewIndex(of: first, in: contentView), sunkIndex)
+        XCTAssertLessThan(try subviewIndex(of: second, in: contentView), sunkIndex)
+
+        let repaired = subviewIdentities(contentView)
+        XCTAssertEqual(applyBottomFirstVisibleTerminals(to: window, sequence: 3), .applied)
+        XCTAssertEqual(subviewIdentities(contentView), repaired, "repair must be idempotent")
+    }
+
     func testDuplicateTerminalStateRepairsFirstResponderAndWebStateDeactivatesSurfaces() throws {
         let window = makeWindow(browserWindowId: 4103)
         defer { impl.detachWindow(parent: window) }

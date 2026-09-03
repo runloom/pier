@@ -1154,10 +1154,13 @@ final class GhosttyBridgeImpl {
             }
 
             if entry.visible, let viewport {
-                let needsAttach =
-                    term.containerView.superview !== contentView
-                    || contentView.subviews.first !== term.containerView
-                if needsAttach {
+                // Invariant: a visible terminal sits below every Chromium web
+                // layer so transparent web chrome paints on top. Repair only
+                // when that is violated. Requiring `subviews.first` here was
+                // wrong: only one view can be index 0, so with two or more
+                // visible terminals every other one was re-inserted on each
+                // snapshot.
+                if Self.terminalNeedsReattach(term.containerView, in: contentView) {
                     contentView.addSubview(term.containerView, positioned: .below, relativeTo: nil)
                 }
                 term.containerView.alphaValue = 1
@@ -2148,6 +2151,34 @@ final class GhosttyBridgeImpl {
     /// web 层但无 listener → click 无效, 用户感受"无法 click 终端 / 无法输入".
     private static func terminalTargetRect(viewport: NSRect) -> NSRect {
         viewport.insetBy(dx: hitInset, dy: hitInset)
+    }
+
+    /// Chromium siblings under the Electron content view (see the layering
+    /// note in createTerminal). Classified by class name only; tests use a
+    /// stand-in whose type name contains `ViewsCompositorSuperview`.
+    private static func isWebCompositorLayer(_ view: NSView) -> Bool {
+        let name = String(describing: type(of: view))
+        return name.contains("ViewsCompositorSuperview")
+            || name.contains("WebContentsView")
+    }
+
+    /// Re-insert only when the container left the hierarchy, or a web layer
+    /// currently sits behind it (terminal would cover web). Several visible
+    /// terminals may all sit below the web layers; that is correct.
+    private static func terminalNeedsReattach(
+        _ container: NSView,
+        in contentView: NSView
+    ) -> Bool {
+        guard container.superview === contentView,
+              let containerIndex = contentView.subviews.firstIndex(where: {
+                  $0 === container
+              })
+        else {
+            return true
+        }
+        return contentView.subviews.prefix(containerIndex).contains(
+            where: isWebCompositorLayer
+        )
     }
 
     private static func rectDebugPayload(_ rect: NSRect) -> [String: Double] {
