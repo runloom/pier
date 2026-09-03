@@ -66,6 +66,41 @@ final class TerminalFlickerPreventionTests: XCTestCase {
         XCTAssertEqual(after.hostRefreshRequestSequence, baseline.hostRefreshRequestSequence)
     }
 
+    func testScrollbarGeometryMatchesGhosttyUnflippedClip() {
+        XCTAssertEqual(
+            TerminalScrollbarGeometry.maxOffset(total: 1_000, length: 80),
+            920
+        )
+        // Ghostty: offsetY = (total - offset - len) * cellHeight
+        XCTAssertEqual(
+            TerminalScrollbarGeometry.clipOriginY(
+                offset: 920,
+                total: 1_000,
+                length: 80,
+                cellHeight: 16
+            ),
+            0
+        )
+        XCTAssertEqual(
+            TerminalScrollbarGeometry.clipOriginY(
+                offset: 0,
+                total: 1_000,
+                length: 80,
+                cellHeight: 16
+            ),
+            14_720
+        )
+        XCTAssertEqual(
+            TerminalScrollbarGeometry.clipOriginY(
+                offset: 100,
+                total: 1_000,
+                length: 80,
+                cellHeight: 16
+            ),
+            13_120
+        )
+    }
+
     func testBackgroundColorPropagatesThroughScrollStack() throws {
         let (container, scrollView) = try makeContainer()
         let color = NSColor(calibratedRed: 0.1, green: 0.2, blue: 0.3, alpha: 1)

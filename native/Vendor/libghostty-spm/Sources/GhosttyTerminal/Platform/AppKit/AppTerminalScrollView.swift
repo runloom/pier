@@ -23,6 +23,9 @@
         private let scrollView = FocusNotifyingScrollView()
         private let documentView = NSView()
         private var isLiveScrolling = false
+        /// GTK `setScrollbar` blocks `value-changed` while applying core state.
+        /// Same idea: programmatic `scroll(to:)` must not become `scroll_to_row`.
+        private var applyingProgrammaticClip = false
         private var lastSentRow: Int?
 
         public init(terminalView: TerminalView) {
@@ -61,7 +64,8 @@
             // Scrollbar updates must only move the document/scroller — never
             // re-fit the surface. Upstream Ghostty SurfaceScrollView keeps the
             // same decoupling; unconditional fitToSize here caused a per-frame
-            // refresh storm once scrollback grew.
+            // refresh storm once scrollback grew. Clip origin tracks core
+            // offset exactly (including 0); do not invent a follow pin.
             synchronizeScrollChrome()
             updateTrackingAreas()
         }
@@ -206,12 +210,23 @@
                cellHeight > 0,
                isScrollable
             {
-                let clampedOffset = min(scrollbarState.offset, maxOffsetRows(for: scrollbarState))
-                let bottomRows = scrollbarState.total
-                    - min(scrollbarState.total, clampedOffset + scrollbarState.length)
-                let offsetY = CGFloat(bottomRows) * cellHeight
-                scrollView.contentView.scroll(to: CGPoint(x: 0, y: offsetY))
-                lastSentRow = cappedInt(clampedOffset)
+                let offsetY = CGFloat(
+                    TerminalScrollbarGeometry.clipOriginY(
+                        offset: scrollbarState.offset,
+                        total: scrollbarState.total,
+                        length: scrollbarState.length,
+                        cellHeight: Double(cellHeight)
+                    )
+                )
+                let currentY = scrollView.contentView.documentVisibleRect.origin.y
+                if abs(currentY - offsetY) >= 0.5 {
+                    applyingProgrammaticClip = true
+                    defer { applyingProgrammaticClip = false }
+                    scrollView.contentView.scroll(to: CGPoint(x: 0, y: offsetY))
+                }
+                lastSentRow = cappedInt(
+                    min(scrollbarState.offset, maxOffsetRows(for: scrollbarState))
+                )
             }
 
             scrollView.reflectScrolledClipView(scrollView.contentView)
@@ -241,6 +256,7 @@
         }
 
         private func handleLiveScroll() {
+            guard !applyingProgrammaticClip else { return }
             guard let scrollbarState, isScrollable, cellHeight > 0 else { return }
 
             let visibleRect = scrollView.contentView.documentVisibleRect
@@ -286,8 +302,7 @@
         }
 
         private func maxOffsetRows(for state: TerminalScrollbarState) -> UInt64 {
-            guard state.total > state.length else { return 0 }
-            return state.total - state.length
+            TerminalScrollbarGeometry.maxOffset(total: state.total, length: state.length)
         }
 
         private func cappedInt(_ value: UInt64) -> Int {

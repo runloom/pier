@@ -103,6 +103,12 @@ const SPM_OWNS_NATIVE_SCROLL_VIEW_RE =
   /private let scrollView = FocusNotifyingScrollView\(\)[\s\S]*?private final class FocusNotifyingScrollView: NSScrollView/;
 const SPM_LIVE_SCROLL_RE =
   /NSScrollView\.didLiveScrollNotification[\s\S]*?scroll_to_row/;
+const SPM_SCROLL_MIRRORS_CORE_OFFSET_RE =
+  /TerminalScrollbarGeometry\.clipOriginY\(\s*offset: scrollbarState\.offset/;
+const SPM_SCROLL_PROGRAMMATIC_CLIP_RE =
+  /applyingProgrammaticClip = true[\s\S]*?contentView\.scroll\(to:[\s\S]*?handleLiveScroll\(\) \{[\s\S]*?guard !applyingProgrammaticClip/;
+const FORBIDDEN_SCROLL_FOLLOW_PIN_RE =
+  /TerminalScrollFollow|followingLiveEnd|noteUserRow/;
 const SPM_MOUSE_MOVED_METHOD_RE =
   /public override func mouseMoved\(with event: NSEvent\) \{(?<body>[\s\S]*?)\n {8}\}/;
 
@@ -302,6 +308,14 @@ describe("Swift state invariants (source-level lock)", () => {
     );
 
     expect(existsSync(SPM_APP_TERMINAL_SCROLL_VIEW_PATH)).toBe(true);
+    const geometryPath = join(
+      process.cwd(),
+      "native/Vendor/libghostty-spm/Sources/GhosttyTerminal/Metrics/TerminalScrollbarGeometry.swift"
+    );
+    expect(existsSync(geometryPath)).toBe(true);
+    expect(readFileSync(geometryPath, "utf8")).toMatch(
+      /enum TerminalScrollbarGeometry[\s\S]*clipOriginY/
+    );
     const appTerminalScrollViewSource = readFileSync(
       SPM_APP_TERMINAL_SCROLL_VIEW_PATH,
       "utf8"
@@ -309,6 +323,15 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(appTerminalScrollViewSource).toMatch(SPM_SCROLL_VIEW_CLASS_RE);
     expect(appTerminalScrollViewSource).toMatch(SPM_OWNS_NATIVE_SCROLL_VIEW_RE);
     expect(appTerminalScrollViewSource).toMatch(SPM_LIVE_SCROLL_RE);
+    expect(appTerminalScrollViewSource).toMatch(
+      SPM_SCROLL_MIRRORS_CORE_OFFSET_RE
+    );
+    expect(appTerminalScrollViewSource).toMatch(
+      SPM_SCROLL_PROGRAMMATIC_CLIP_RE
+    );
+    expect(appTerminalScrollViewSource).not.toMatch(
+      FORBIDDEN_SCROLL_FOLLOW_PIN_RE
+    );
   });
 
   it("Web ownership never clears the AppKit first responder directly", () => {
