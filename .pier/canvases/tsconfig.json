@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "comment": "tsserver/Cursor only auto-discover tsconfig.json. This file sits next to canvas sources so source-mode editing is a configured project (paths from tsconfig.canvases.json), not an inferred orphan.",
+  "extends": "../../tsconfig.canvases.json",
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "../../.pier/types/**/*.d.ts",
+    "../../src/renderer/global.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.canvas.solid.tsx",
+    "**/*.canvas.vue.tsx",
+    "**/*.canvas.svelte"
+  ]
+}

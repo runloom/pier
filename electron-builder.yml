@@ -44,6 +44,13 @@ extraResources:
     to: system-skills
     filter:
       - "**/*"
+  # tsserver plugin: remap pier/canvas + pier/host in canvas source mode.
+  # Layout must keep a node_modules folder — tsserver require()s
+  # `<pluginProbeLocations>/node_modules/<name>`.
+  - from: resources/lsp-plugins
+    to: lsp-plugins
+    filter:
+      - "**/*"
   # 项目记忆 MCP 启动器(安装到 ~/.pier/memory/launcher,见 v3 spec)
   - from: resources/memory-launcher
     to: memory-launcher
