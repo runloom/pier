@@ -89,7 +89,7 @@ export async function performInstall(
     return {
       error: {
         code: "not_found" as const,
-        message: `plugin ${id} has been retired (language support is built into Pier)`,
+        message: `plugin ${id} has been retired`,
       },
       ok: false as const,
     };

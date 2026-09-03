@@ -295,4 +295,69 @@ describe("generate-plugin-index", () => {
     expect(ssh?.latest).toBe("9.9.9");
     expect(ssh?.versions["9.9.9"]?.sha256).toBe("d".repeat(64));
   });
+
+  it("drops retired plugins that remain only in the previous index", async () => {
+    await writeCodexPackage({
+      sha256: "a".repeat(64),
+      version: "1.2.4",
+    });
+    await mkdir(join(dir, "plugins"), { recursive: true });
+    await writeFile(
+      join(dir, "plugins", "index.v1.json"),
+      JSON.stringify({
+        generatedAt: 1,
+        plugins: {
+          "pier.codex": {
+            description: "Codex account management.",
+            displayName: "Codex",
+            id: "pier.codex",
+            latest: "1.2.3",
+            versions: {
+              "1.2.3": {
+                assetUrl:
+                  "https://github.com/runloom/pier/releases/download/plugin-codex-v1.2.3/pier.codex-1.2.3.tgz",
+                pier: ">=0.1.0 <0.2.0",
+                sha256: "c".repeat(64),
+                size: 13,
+              },
+            },
+          },
+          "pier.tmux": {
+            description:
+              "Connect splits opened by assistants to workbench panels.",
+            displayName: "Native splits",
+            id: "pier.tmux",
+            latest: "1.0.0",
+            versions: {
+              "1.0.0": {
+                assetUrl:
+                  "https://github.com/runloom/pier/releases/download/plugin-tmux-v1.0.0/pier.tmux-1.0.0.tgz",
+                pier: ">=0.1.0 <0.2.0",
+                sha256: "e".repeat(64),
+                size: 42,
+              },
+            },
+          },
+        },
+        sequence: 3,
+        signature: { alg: "Ed25519", keyId: "test", value: "test" },
+        version: 1,
+      }),
+      "utf8"
+    );
+
+    await execFileAsync(process.execPath, [SCRIPT_PATH], {
+      cwd: dir,
+      env: {
+        ...process.env,
+        PIER_INDEX_GENERATED_AT: "10",
+      },
+    });
+
+    const index = JSON.parse(
+      await readFile(join(dir, "plugins", "index.v1.json"), "utf8")
+    ) as { plugins: Record<string, { latest: string }> };
+    expect(Object.keys(index.plugins).sort()).toEqual(["pier.codex"]);
+    expect(index.plugins["pier.tmux"]).toBeUndefined();
+  });
 });
