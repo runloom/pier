@@ -73,15 +73,27 @@ describe("pier.codex credential lifecycle", () => {
           values.set(key, value);
         }),
       },
-      fetchImpl: vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        text: async () =>
-          JSON.stringify({
-            plan_type: "pro",
-            rate_limit_reset_credits: { available_count: 2 },
-          }),
-      })) as unknown as typeof fetch,
+      fetchImpl: vi.fn(async (url: string) => {
+        if (
+          url.includes("/accounts/check/") ||
+          url.includes("/subscriptions")
+        ) {
+          return {
+            ok: false,
+            status: 404,
+            text: async () => "",
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              plan_type: "pro",
+              rate_limit_reset_credits: { available_count: 2 },
+            }),
+        };
+      }) as unknown as typeof fetch,
       fetchUsageImpl,
       realCodexHome: join(dir, "real-codex"),
     });

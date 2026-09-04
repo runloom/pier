@@ -1,5 +1,6 @@
 export interface CodexMembershipInfo {
   expiresAt?: number;
+  hasActiveSubscription?: boolean;
   planType: string;
 }
 
@@ -68,13 +69,52 @@ export function normalizeCodexMembershipTier(
   );
 }
 
+function resolveAccountCheckRow(
+  accounts: Record<string, unknown>,
+  accountId: string
+): Record<string, unknown> | null {
+  const direct = asRecord(accounts[accountId]);
+  if (direct) return direct;
+  for (const [key, value] of Object.entries(accounts)) {
+    if (key === "default") continue;
+    const row = asRecord(value);
+    const innerId = asRecord(row?.account)?.account_id;
+    if (innerId === accountId) return row;
+  }
+  return null;
+}
+
+function membershipFromEntitlement(
+  entitlement: Record<string, unknown> | null,
+  account: Record<string, unknown> | null,
+  planType: string
+): CodexMembershipInfo {
+  const hasActive =
+    typeof entitlement?.has_active_subscription === "boolean"
+      ? entitlement.has_active_subscription
+      : undefined;
+  // Auto-renewing ChatGPT plans expose the next bill date as renews_at.
+  // expires_at is the current (often already-elapsed) period boundary and
+  // lags after a successful renewal — never prefer it over renews_at.
+  const expiresAt =
+    parseTime(entitlement?.renews_at) ??
+    parseTime(entitlement?.expires_at) ??
+    parseTime(account?.active_until);
+  return {
+    planType,
+    ...(hasActive === undefined ? {} : { hasActiveSubscription: hasActive }),
+    ...(expiresAt === undefined ? {} : { expiresAt }),
+  };
+}
+
 export function parseCodexAccountCheckMembership(
   payload: unknown,
   accountId: string
 ): CodexMembershipInfo | null {
   const root = asRecord(payload);
   const accounts = asRecord(root?.accounts);
-  const row = asRecord(accounts?.[accountId]);
+  if (!accounts) return null;
+  const row = resolveAccountCheckRow(accounts, accountId);
   if (!row) return null;
   const entitlement = asRecord(row.entitlement);
   const account = asRecord(row.account);
@@ -88,11 +128,7 @@ export function parseCodexAccountCheckMembership(
   );
   const planType = tier ?? fallback;
   if (!planType) return null;
-  const expiresAt = parseTime(entitlement?.expires_at);
-  return {
-    planType,
-    ...(expiresAt === undefined ? {} : { expiresAt }),
-  };
+  return membershipFromEntitlement(entitlement, account, planType);
 }
 
 export function parseCodexSubscriptionsMembership(

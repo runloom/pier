@@ -48,6 +48,9 @@ export function buildAccountsSnapshot({
       id: record.id,
       label: record.email ?? record.id,
       ...(record.planType ? { planType: record.planType } : {}),
+      ...(record.hasActiveSubscription === undefined
+        ? {}
+        : { hasActiveSubscription: record.hasActiveSubscription }),
       ...(record.subscriptionExpiresAt === undefined
         ? {}
         : { subscriptionExpiresAt: record.subscriptionExpiresAt }),

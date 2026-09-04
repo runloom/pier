@@ -23,6 +23,8 @@ export interface CodexUsageSnapshot {
 
 export interface CodexAccountSummary {
   error?: string | null;
+  /** Live ChatGPT entitlement; absent when only a JWT period-end is known. */
+  hasActiveSubscription?: boolean;
   id: string;
   label: string;
   planType?: string;

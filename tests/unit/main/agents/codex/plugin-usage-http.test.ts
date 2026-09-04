@@ -231,6 +231,62 @@ describe("fetchCodexUsageHttp", () => {
     });
   });
 
+  it("prefers the live renewal date over a stale entitlement expiry", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/wham/usage")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              plan_type: "pro",
+              rate_limit: { primary_window: { used_percent: 0 } },
+            }),
+        };
+      }
+      if (url.includes("/accounts/check/")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              accounts: {
+                "acct-file": {
+                  entitlement: {
+                    expires_at: "2026-08-28T21:38:26+00:00",
+                    has_active_subscription: true,
+                    renews_at: "2026-10-04T21:38:26+00:00",
+                    subscription_plan: "chatgptpro",
+                  },
+                },
+              },
+            }),
+        };
+      }
+      if (url.includes("/wham/rate-limit-reset-credits")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ available_count: 1 }),
+        };
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await fetchCodexUsageHttp(makeAuthJson(), {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      signal: new AbortController().signal,
+    });
+
+    expect(result).toMatchObject({
+      hasActiveSubscription: true,
+      membershipResolved: true,
+      planType: "pro-20x",
+      status: "ok",
+      subscriptionExpiresAt: Date.parse("2026-10-04T21:38:26+00:00"),
+    });
+  });
+
   it("fills reset credits from the dedicated wham endpoint", async () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.includes("/wham/usage")) {

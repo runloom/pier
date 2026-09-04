@@ -89,6 +89,13 @@ function mergeHttpMetadata(
     ...fallback,
     metrics: [...fallback.metrics, ...httpScalars],
     ...(http.planType ? { planType: http.planType } : {}),
+    ...(http.membershipResolved ? { membershipResolved: true } : {}),
+    ...(http.hasActiveSubscription === undefined
+      ? {}
+      : { hasActiveSubscription: http.hasActiveSubscription }),
+    ...(http.subscriptionExpiresAt === undefined
+      ? {}
+      : { subscriptionExpiresAt: http.subscriptionExpiresAt }),
   };
 }
 

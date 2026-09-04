@@ -14,6 +14,8 @@ export type AgentAccountProviderId = "codex";
 export interface CodexAccountRecord {
   createdAt: number;
   email?: string | undefined;
+  /** Live ChatGPT `has_active_subscription`. Absent when only JWT claims exist. */
+  hasActiveSubscription?: boolean | undefined;
   id: string;
   lastAuthenticatedAt?: number | undefined;
   planType?: string | undefined;
@@ -43,6 +45,7 @@ const nonEmptyStringSchema = z.string().check(z.minLength(1));
 const accountRecordSchema = z.strictObject({
   createdAt: z.number(),
   email: z.optional(z.string()),
+  hasActiveSubscription: z.optional(z.boolean()),
   id: nonEmptyStringSchema,
   lastAuthenticatedAt: z.optional(z.number()),
   planType: z.optional(z.string()),

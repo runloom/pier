@@ -31,6 +31,8 @@ export interface AgentAccountProvider {
 
 export interface AccountUsageResult {
   error?: string;
+  /** Live `has_active_subscription` from accounts/check when resolved. */
+  hasActiveSubscription?: boolean;
   /** True when accounts/check or subscriptions resolved membership. */
   membershipResolved?: boolean;
   metrics: AccountUsageMetric[];
