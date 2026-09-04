@@ -155,48 +155,18 @@ describe("terminal focus restoration", () => {
       })),
     }));
 
+    const { stubTerminalIpcProcessEnvironment } = await import(
+      "./stub-process-environment.ts"
+    );
     const { registerTerminalIpc } = await import("@main/ipc/terminal/index.ts");
     const { terminalFocusCoordinator } = await import(
       "@main/ipc/terminal/focus-coordinator.ts"
     );
 
-    // Avoid real login-shell dumps (slow/flaky under parallel suites; may
-    // ENOENT or exceed the default 5s test timeout).
-    const processEnvironment = opts.processEnvironment ?? {
-      getHostDiagnostics: () => undefined,
-      invalidate: async () => undefined,
-      recordHostDiagnostics: () => undefined,
-      resolve: vi.fn(
-        async (request: {
-          agentEnv?: Record<string, string>;
-          clientEnv?: Record<string, string>;
-          explicitEnv?: Record<string, string>;
-          profileEnv?: Record<string, string>;
-          projectEnv?: Record<string, string>;
-        }) => ({
-          diagnostics: {
-            cacheHit: false,
-            pathChanged: false,
-            shellEnvStatus: "resolved" as const,
-            source: "agent" as const,
-          },
-          env: {
-            PATH: "/usr/bin",
-            TERM: "xterm-256color",
-            ...request.clientEnv,
-            ...request.agentEnv,
-            ...request.profileEnv,
-            ...request.projectEnv,
-            ...request.explicitEnv,
-          },
-          shellEnv: {},
-        })
-      ),
-    };
-
     registerTerminalIpc(fakeIpcMain as never, {
       loadNativeAddon: () => ({ addon: fakeAddon as never, error: null }),
-      processEnvironment: processEnvironment as never,
+      processEnvironment: (opts.processEnvironment ??
+        stubTerminalIpcProcessEnvironment()) as never,
     });
     return {
       terminalFocusCoordinator,
