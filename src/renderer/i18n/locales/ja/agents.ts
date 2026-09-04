@@ -21,7 +21,6 @@ export const agents = {
     placeholder: "エージェントを検索…",
     thisWindow: "このウインドウ",
     title: "エージェント",
-    windowLabel: "ウインドウ {{id}}",
   },
   section: {
     needsYou: "対応が必要",
@@ -48,7 +47,7 @@ export const agents = {
     attentionTitle: "対応が必要",
     attentionNext: "次：現在の画面を確認するか、パネルに移動します。",
     locationThisWindow: "このウインドウ",
-    locationWindow: "ウインドウ {{id}}",
+    locationWindow: "{{title}}",
     statusUnknown: "状態不明",
     roleWork: "作業エージェント",
     roleCoordinate: "調整エージェント",

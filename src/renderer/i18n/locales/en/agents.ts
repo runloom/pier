@@ -20,7 +20,6 @@ export const agents = {
     placeholder: "Search agents…",
     thisWindow: "This window",
     title: "Agents",
-    windowLabel: "Window {{id}}",
   },
   section: {
     needsYou: "Needs attention",
@@ -46,7 +45,7 @@ export const agents = {
     attentionTitle: "Needs attention",
     attentionNext: "Next: inspect the current scene or focus the panel.",
     locationThisWindow: "This window",
-    locationWindow: "Window {{id}}",
+    locationWindow: "{{title}}",
     statusUnknown: "Status unknown",
     roleWork: "Working agent",
     roleCoordinate: "Coordinating agent",

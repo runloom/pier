@@ -247,6 +247,7 @@ export function terminalPanelDescriptor(args: {
       ...(long ? { long } : {}),
       ...(oscTitle ? { terminalTitle: oscTitle } : {}),
     },
+    kind: "terminal",
     ...(args.effectiveTab ? { tab: args.effectiveTab } : {}),
   };
 }
@@ -304,7 +305,7 @@ export function activityTabChromeOverlay(
     return {
       state: { status: tabStatusForActivityStatus(activity.status) },
       icon: { id: agentTabIconId(activity.agentId) },
-      ...(userTitle ? { title: userTitle } : {}),
+      ...(userTitle ? { title: userTitle, titleSource: "user" as const } : {}),
     };
   }
   if (activity.kind === "task") {

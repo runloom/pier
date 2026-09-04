@@ -15,6 +15,8 @@ export interface WindowInfo {
   id: string;
   lastFocusedAt?: number | undefined;
   recordId: string;
+  /** OS / menu single-line name. Omitted until first compute. */
+  title?: string | undefined;
 }
 
 export type PreferenceChangedKey = keyof ProjectPreferences;

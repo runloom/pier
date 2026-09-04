@@ -62,6 +62,7 @@ import { executePierHomeCommand } from "./commands/pier-home.ts";
 import { executePluginCommand } from "./commands/plugin.ts";
 import { executeProjectSkillsCommand } from "./commands/project-skills.ts";
 import { executeRemoteAccessCommand } from "./commands/remote-access.ts";
+import { executeWindowWorkspaceCommand } from "./commands/window.ts";
 import { executeWorktreeCommand } from "./commands/worktree.ts";
 import { authorizeCommand } from "./permissions.ts";
 import { buildShellEnvironmentHostStatus } from "./shell-environment-commands.ts";
@@ -290,58 +291,6 @@ async function executeAppStateCommand(
   }
 }
 
-async function executeWindowWorkspaceCommand(
-  requestId: string,
-  command: PierCommand,
-  services: PierCoreServices
-): Promise<PierCommandResult | null> {
-  switch (command.type) {
-    case "window.close": {
-      const closeResult = await services.window.close(command.windowId);
-      switch (closeResult) {
-        case "closed":
-          return success(requestId, null);
-        case "not-found":
-          return failure(
-            requestId,
-            "not_found",
-            `window not found: ${command.windowId}`
-          );
-        case "veto":
-          return failure(
-            requestId,
-            "internal_error",
-            `window close was vetoed: ${command.windowId}`
-          );
-        default: {
-          const _exhaustive: never = closeResult;
-          return _exhaustive;
-        }
-      }
-    }
-    case "window.create":
-      return success(requestId, await services.window.create());
-    case "window.focus":
-      services.window.focus(command.windowId);
-      return success(requestId, null);
-    case "window.list":
-      return success(requestId, services.window.list());
-    case "workspace.layout.clear":
-      await services.workspace.clearLayout(command.recordId);
-      return success(requestId, null);
-    case "workspace.layout.read":
-      return success(
-        requestId,
-        await services.workspace.readLayout(command.recordId)
-      );
-    case "workspace.layout.save":
-      await services.workspace.saveLayout(command.layout, command.recordId);
-      return success(requestId, null);
-    default:
-      return null;
-  }
-}
-
 async function executePanelCommand(
   requestId: string,
   command: PierCommand,
@@ -412,7 +361,7 @@ async function executeCommandByDomain(
     (cmd: PierCommand) =>
       executeAppStateCommand(requestId, cmd, clients, services, context),
     (cmd: PierCommand) =>
-      executeWindowWorkspaceCommand(requestId, cmd, services),
+      executeWindowWorkspaceCommand(requestId, cmd, services, context),
     (cmd: PierCommand) => executePanelCommand(requestId, cmd, services),
     (cmd: PierCommand) =>
       executePanelTransferCommand(requestId, cmd, services, context),

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { AGENT_RUNTIME_ACTION_CONTRIBUTIONS } from "@/lib/actions/agent-runtime-actions.ts";
 import { buildAgentIndexQuickPick } from "@/lib/agent-runtime/index-quickpick.ts";
+import { titleByWindowIdFrom } from "@/stores/window-list.store.ts";
 
 function entry(
   overrides: Partial<AgentRuntimeIndexEntry> &
@@ -52,7 +53,11 @@ describe("buildAgentIndexQuickPick", () => {
           windowId: "2",
         }),
       ],
-      { now: 61_000, preferredWindowId: "1" }
+      {
+        now: 61_000,
+        preferredWindowId: "1",
+        titleByWindowId: { "2": "pier" },
+      }
     );
 
     expect(model.sections?.map((s) => s.id)).toEqual([
@@ -64,7 +69,7 @@ describe("buildAgentIndexQuickPick", () => {
     expect(waiting?.label).toBe("Claude");
     expect(waiting?.searchTerms).toContain("Awaiting confirmation");
     expect(waiting?.detail).toContain("This window");
-    expect(model.sections?.[1]?.items[0]?.detail).toMatch(/^Window 2/);
+    expect(model.sections?.[1]?.items[0]?.detail).toMatch(/^pier/);
     expect(model.sections?.[1]?.items[0]?.searchTerms).toContain("Thinking");
     expect(model.sections?.[2]?.heading).toMatch(/awaiting input/i);
   });
@@ -119,12 +124,80 @@ describe("buildAgentIndexQuickPick", () => {
           windowId: "2",
         }),
       ],
-      { preferredWindowId: "1" }
+      {
+        preferredWindowId: "1",
+        titleByWindowId: { "2": "pier" },
+      }
     );
     expect(model.sections?.[0]?.items[0]?.detail).toBe(
       "This window · /tmp/here"
     );
-    expect(model.sections?.[1]?.items[0]?.detail).toBe("Window 2 · /tmp/there");
+    expect(model.sections?.[1]?.items[0]?.detail).toBe("pier · /tmp/there");
+  });
+
+  it("maps titles by electronWindowId when WindowInfo.id is the allocator key", () => {
+    const titles = titleByWindowIdFrom([
+      {
+        electronWindowId: "1",
+        focused: true,
+        id: "main",
+        recordId: "r-main",
+        title: "here",
+      },
+      {
+        electronWindowId: "2",
+        focused: false,
+        id: "w-2",
+        recordId: "r-2",
+        title: "pier",
+      },
+    ]);
+    const model = buildAgentIndexQuickPick(
+      [
+        entry({
+          panelId: "here",
+          projectRootPath: "/tmp/here",
+          status: "waiting",
+          windowId: "1",
+        }),
+        entry({
+          panelId: "there",
+          projectRootPath: "/tmp/there",
+          status: "ready",
+          windowId: "2",
+        }),
+      ],
+      {
+        preferredWindowId: "1",
+        titleByWindowId: titles,
+      }
+    );
+    expect(model.sections?.[0]?.items[0]?.detail).toBe(
+      "This window · /tmp/here"
+    );
+    expect(model.sections?.[1]?.items[0]?.detail).toBe("pier · /tmp/there");
+  });
+
+  it("omits electron window ids when a title is not yet known", () => {
+    const model = buildAgentIndexQuickPick(
+      [
+        entry({
+          panelId: "here",
+          projectRootPath: "/tmp/here",
+          status: "waiting",
+          windowId: "1",
+        }),
+        entry({
+          panelId: "there",
+          projectRootPath: "/tmp/there",
+          status: "ready",
+          windowId: "2",
+        }),
+      ],
+      { preferredWindowId: "1" }
+    );
+    expect(model.sections?.[1]?.items[0]?.detail).toBe("/tmp/there");
+    expect(model.sections?.[1]?.items[0]?.detail).not.toMatch(/Window 2/);
   });
 
   it("labels launch (no status) as Running without fabricated duration", () => {

@@ -409,6 +409,16 @@ section 根节点下的裸子节点。
 - **身份**与标题无关：`agentId` + 路径锚点 + `panelId` + actor/session 字段；判据只在 `agent-session-actor.ts`。
 - 检查点：`tests/unit/app/cwd-derive.test.ts`、`tests/unit/agent/session-title-governance.test.ts`、`tests/unit/agent/session-title-hook-parity.test.ts`、`tests/unit/main/agents/agent-session-title-hook-event.test.ts`、`tests/unit/renderer/agent-runtime/list-title.test.ts`。
 
+### 窗口系统标题与多窗显示名
+
+权威规格：[`docs/superpowers/specs/2026-09-04-window-os-title-gold-standard.md`](docs/superpowers/specs/2026-09-04-window-os-title-gold-standard.md)。
+
+- 对外单行名只来自 `src/shared/window-display` 的 `menuLabel`。main 写入 `WindowInfo.title` 与 `setTitle`。macOS `BaseWindow` 必须显式 `setTitle`，禁止依赖 `document.title`。
+- 消歧集合是全部活窗口。撞名限定：分支 → 父目录 → 稳定 tab 名（文件名或用户钉名）→ ` · N`。OSC / cwd 派生 tab / 任务 chrome 不得进 `menuLabel` 任何一段。
+- 右键「移动/复制到其他窗口」子菜单、Index 跨窗行、协作会话跨窗定位、`window.list` 只读 `title`。本窗用「本窗口」。
+- 窗内标题栏长路径与 tab OSC 不是窗口名。
+- 检查点：`tests/unit/shared/window-display.test.ts`、`tests/unit/main/windows/os-title.test.ts`、`tests/unit/renderer/window-display-governance.test.ts`。
+
 ### 路径锚点上下文 `src/main/services/panel-context-resolver.ts` + `src/shared/contracts/panel.ts`
 
 - `PanelContext.projectRootPath` 是当前工作区路径锚点：Git 项目优先为 `gitRoot`，非 Git 目录为 `cwd`。

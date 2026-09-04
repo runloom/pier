@@ -37,6 +37,12 @@ import {
   forgetAppWindow,
   rememberAppWindow,
 } from "./identity.ts";
+import {
+  bindWindowOsTitleHost,
+  forgetWindowOsTitle,
+  guardWindowPageTitle,
+  listManagedWindowInfos,
+} from "./os-title.ts";
 import { destroyAppWindowForQuit } from "./quit-destroy.ts";
 import {
   installRendererFailureRecovery,
@@ -299,13 +305,7 @@ class WindowManager {
       terminalFocusCoordinator.setWindowFocused(window, false, "window-blur");
       sendWindowFocusChanged(window, false);
     });
-    // BrowserWindow resignKey 时 Ghostty 库的 windowDidResignKey 会把每个 surface
-    // 的 core.setFocus(false), cursor 变空心、shell 不接 stdin. becomeKey 只在
-    // firstResponder === self 时才 setFocus(true), 而我们在 blur 时已把 swift state
-    // 改成 web/null + main 端的 active terminal panel 记忆停留在 map 中, AppKit
-    // firstResponder 在跨 app switch 后也未必仍指向之前的 terminalView. 这里在 focus
-    // 事件主动 replay user 最后期望的键盘目标；main 会重新应用输入路由快照，
-    // swift 端再按 keyboardFocusTarget 恢复 first responder。
+    // Replay keyboard target on focus: Ghostty resignKey clears surface focus.
     window.host.on("focus", () => {
       this.rememberFocusedWindow(id);
       terminalFocusCoordinator.setWindowFocused(window, true, "window-focus");
@@ -318,6 +318,7 @@ class WindowManager {
       }
     });
 
+    guardWindowPageTitle(window);
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     // will-navigate deny + pier-recovery:// is installed inside
     // installRendererFailureRecovery (installRendererNavigationGuard).
@@ -392,6 +393,7 @@ class WindowManager {
       }
       forgetAppWindow(window);
       this.windows.delete(id);
+      forgetWindowOsTitle(id);
       this.closeCoordinator.resolve(id, "closed");
       this.lastFocusedAtByWindowId.delete(id);
       this.allocator.release(id);
@@ -410,6 +412,7 @@ class WindowManager {
     loadAppEntry({ rearmBoot: false });
 
     this.windows.set(id, window);
+    bindWindowOsTitleHost(this.windows, (windowId) => this.get(windowId));
     for (const cb of this.onCreateCallbacks) {
       cb({
         recordId: opts.recordId ?? id,
@@ -421,17 +424,7 @@ class WindowManager {
   }
 
   list(): WindowInfo[] {
-    return [...this.windows.entries()].map(([id, w]) => {
-      const lastFocusedAt = this.lastFocusedAtByWindowId.get(id);
-      const context = findWindowContext(w);
-      return {
-        id,
-        focused: w.isFocused(),
-        ...(lastFocusedAt === undefined ? {} : { lastFocusedAt }),
-        recordId: context?.recordId ?? id,
-        electronWindowId: context?.electronWindowId ?? String(w.id),
-      };
-    });
+    return listManagedWindowInfos(this.windows, this.lastFocusedAtByWindowId);
   }
 
   focus(id: string): void {

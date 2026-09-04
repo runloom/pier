@@ -34,6 +34,7 @@ export function pluginPanelDescriptor(
       short: shortTitle,
       ...(tab?.tooltip?.title ? { long: tab.tooltip.title } : {}),
     },
+    ...(registration?.kind ? { kind: registration.kind } : {}),
     ...(tab ? { tab } : {}),
   };
 }
