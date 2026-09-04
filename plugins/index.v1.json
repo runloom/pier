@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1788477726480,
+  "generatedAt": 1788531598171,
   "plugins": {
     "pier.agent-splits": {
       "description": "Connect splits opened by assistants to workbench panels.",
@@ -129,7 +129,7 @@
       "description": "Codex account management and usage monitoring for Pier.",
       "displayName": "Codex Account Management",
       "id": "pier.codex",
-      "latest": "1.4.14",
+      "latest": "1.4.15",
       "locales": {
         "en": {
           "name": "Codex Account Management",
@@ -226,6 +226,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "0d6bf81dd5f3b589afc36e5471d7bce6e477690ee9101a13ef1085133f995ec7",
           "size": 568895
+        },
+        "1.4.15": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.15/pier.codex-1.4.15.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "de6466e139bd6b6de2a50cdcf5f49df4378b42d9073ea42df7c0fe20ce9d0d16",
+          "size": 571967
         }
       }
     },
@@ -446,11 +452,11 @@
       }
     }
   },
-  "sequence": 40,
+  "sequence": 41,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "MiPbsIURNu2LUDOhVXwTWcQdffw7Wzr9RlqR5UT/5ff4ega8A4YIdChXDjgfbGvmTZRRHyTtg8VsvWBJF8YtDQ=="
+    "value": "BX7XyCMTttK1Yl3+RoehD0FBqiyLkF6qZ0HXkfquAjZRioEk9KF8wZKKH827KaLSlVblmyj0CU6s8AHzcb15Dw=="
   }
 }
