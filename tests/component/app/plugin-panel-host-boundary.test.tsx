@@ -45,6 +45,7 @@ describe("plugin panel host boundary", () => {
     await waitFor(() =>
       expect(usePanelDescriptorStore.getState().descriptors["file-1"]).toEqual({
         display: { short: "file.ts" },
+        kind: "web",
         tab: { icon: { id: "pier.file:file.ts" } },
       })
     );
