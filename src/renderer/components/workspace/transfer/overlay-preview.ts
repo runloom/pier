@@ -276,7 +276,9 @@ export function createPanelTransferOverlayPreviewSession(input: {
       return;
     }
     endedIds.set(id, Date.now() + ENDED_TRANSFER_TTL_MS);
-    if (liveId !== id) {
+    // Only skip idle when a different transfer is live. A leftover
+    // fullscreen web overlay with liveId == null still blocks the terminal.
+    if (liveId && liveId !== id) {
       return;
     }
     liveId = null;

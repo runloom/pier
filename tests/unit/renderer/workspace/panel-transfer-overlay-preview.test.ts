@@ -241,6 +241,31 @@ describe("panel transfer overlay preview (renderer)", () => {
     expect(tab.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)).toBe(true);
   });
 
+  it("releases a leftover fullscreen web overlay when end(id) has no live session", () => {
+    const first = createGroup({ id: "group-1", left: 0, right: 400 });
+    applyPanelTransferOverlayPreview(
+      {
+        clientX: 200,
+        clientY: 250,
+        kind: "target",
+        transferId: TRANSFER_ID,
+        windowId: "w-1",
+      },
+      { getApi: () => ({ groups: [first.group] }) as never, windowId: "w-1" }
+    );
+    expect(first.showOverlay).toHaveBeenCalledWith("center");
+    registerOverlayDispose.mockClear();
+    first.clearOverlay.mockClear();
+
+    const session = createPanelTransferOverlayPreviewSession({
+      getApi: () => ({ groups: [first.group] }) as never,
+      getWindowId: () => "w-1",
+    });
+    session.end(TRANSFER_ID);
+    expect(registerOverlayDispose).toHaveBeenCalled();
+    expect(first.clearOverlay).toHaveBeenCalled();
+  });
+
   it("clears Dockview overlay when the transfer preview session ends", () => {
     const first = createGroup({ id: "group-1", left: 0, right: 400 });
     const session = createPanelTransferOverlayPreviewSession({

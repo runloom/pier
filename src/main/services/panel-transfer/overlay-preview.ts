@@ -126,6 +126,7 @@ export function createPanelTransferOverlayPreviewController(args: {
   let active: { sourceWindowId: string; transferId: string } | null = null;
   let handle: OverlayPreviewScheduleHandle | null = null;
   let lastFingerprint: string | null = null;
+  let sawButtonDown = false;
   const sealed = new Map<string, number>();
 
   const pruneSealed = (): void => {
@@ -149,8 +150,34 @@ export function createPanelTransferOverlayPreviewController(args: {
     }
   };
 
+  const disposeTimer = (): void => {
+    handle?.dispose();
+    handle = null;
+  };
+
+  const sealTransfer = (transferId: string): void => {
+    pruneSealed();
+    sealed.set(transferId, now() + PANEL_TRANSFER_TOMBSTONE_TTL_MS);
+    if (active?.transferId === transferId) {
+      disposeTimer();
+      active = null;
+      lastFingerprint = null;
+    }
+    sawButtonDown = false;
+    emit({ kind: "clear", transferId });
+  };
+
   const tick = (): void => {
     if (!active) {
+      return;
+    }
+    // finishDrag may never run (missed dragend). After we have seen a
+    // real press, button-up means the drag is over — seal so leftover
+    // Path B cannot keep the terminal input overlay armed.
+    if (args.geometry.isLeftMouseButtonDown()) {
+      sawButtonDown = true;
+    } else if (sawButtonDown) {
+      sealTransfer(active.transferId);
       return;
     }
     const { sourceWindowId, transferId } = active;
@@ -185,22 +212,6 @@ export function createPanelTransferOverlayPreviewController(args: {
     emit({ kind: "outside", transferId });
   };
 
-  const disposeTimer = (): void => {
-    handle?.dispose();
-    handle = null;
-  };
-
-  const sealTransfer = (transferId: string): void => {
-    pruneSealed();
-    sealed.set(transferId, now() + PANEL_TRANSFER_TOMBSTONE_TTL_MS);
-    if (active?.transferId === transferId) {
-      disposeTimer();
-      active = null;
-      lastFingerprint = null;
-    }
-    emit({ kind: "clear", transferId });
-  };
-
   return {
     seal: sealTransfer,
     start(transferId, sourceWindowId) {
@@ -221,6 +232,7 @@ export function createPanelTransferOverlayPreviewController(args: {
       disposeTimer();
       active = { sourceWindowId, transferId };
       lastFingerprint = null;
+      sawButtonDown = false;
       tick();
       handle = schedule.interval(tick, intervalMs);
     },

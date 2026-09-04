@@ -44,6 +44,10 @@ describe("panel drop overlay lifecycle gold standard", () => {
     expect(spec).toContain("明确不做");
     expect(spec).toContain("finishDrag");
     expect(spec).toContain("waitForOffer");
+    expect(spec).toContain("panel-transfer-drop-preview");
+    expect(spec).toContain("看得见但点不到");
+    expect(spec).toContain("button-up");
+    expect(agents).toContain("panel-transfer-drop-preview");
   });
 
   it("keeps tear-off spec as a cross-link, not the overlay owner", () => {
@@ -74,6 +78,8 @@ describe("panel drop overlay lifecycle gold standard", () => {
     );
     expect(startGuard).toContain("sealTransfer(active.transferId)");
     expect(startGuard).not.toContain("stop(transferId)");
+    expect(startGuard).toContain("sawButtonDown");
+    expect(startGuard).toContain("isLeftMouseButtonDown()");
   });
 
   it("keys the renderer overlay session by transferId and does not steal Escape", () => {
@@ -82,6 +88,7 @@ describe("panel drop overlay lifecycle gold standard", () => {
     expect(session).toContain("end(transferId");
     expect(session).toContain("endedIds");
     expect(session).toContain("endTransfer(liveId)");
+    expect(session).toContain("liveId && liveId !== id");
     const attach = read(ATTACH);
     expect(attach).toContain("overlaySession.begin(");
     expect(attach).toContain("overlaySession.end(");

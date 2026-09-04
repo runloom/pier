@@ -13,15 +13,15 @@
 
 ## 一句话终态
 
-拖还在，浮层才能在；拖一结束，所有 Pier 窗口的落点层必须在同一拍消失，并且同一 `transferId` 不能被晚到的 Path B preview 或晚到的 `offer()` 再点亮。
+拖还在，浮层才能在；拖一结束，所有 Pier 窗口的落点层必须在同一拍消失，并且同一 `transferId` 不能被晚到的 Path B preview 或晚到的 `offer()` 再点亮。视觉层（Dockview `showOverlay` / HTML5 绝对层）和输入路由全屏命中区（`panel-transfer-drop-preview`）必须同拍 `idle()`：只拆视觉、不拆命中区，终端会「看得见但点不到」。
 
 ---
 
 ## 所有权（法律）
 
-1. **寿命主人（单一主人）**：renderer `createPanelTransferOverlayPreviewSession`。状态按 `transferId` 记，不是整窗一个 `closed` 布尔。
-2. **广播主人**：main overlay preview controller 只在未封账时 `start`；任一结束出口先 `seal(transferId)`，再做 claim / 等 offer。`seal` = 发 `clear` + 该 id 进入 sealed，之后 `start` 同 id 是 no-op。controller 只有 `seal` / `start`，没有未封账的 `stop`。`start(B)` 先 `seal(A)`。
-3. **画笔**：dockview `showOverlay` / HTML5 绝对层。`dockview-core` document-`dragleave` / document-`dragend`（`onDocumentDragEnd`）补丁只做 fail-closed 拆视觉，**不拥有**寿命，也不许在捕获阶段清 Droptarget `_state`（否则同窗 sticky 提交会坏）。
+1. **寿命主人（单一主人）**：renderer `createPanelTransferOverlayPreviewSession`。状态按 `transferId` 记，不是整窗一个 `closed` 布尔。`end(id)` 在没有 live B 时必须 `idle()`（`liveId === null` 也要拆残留命中区）；只有 `liveId === B` 时 `end(A)` 才跳过。
+2. **广播主人**：main overlay preview controller 只在未封账时 `start`；任一结束出口先 `seal(transferId)`，再做 claim / 等 offer。`seal` = 发 `clear` + 该 id 进入 sealed，之后 `start` 同 id 是 no-op。controller 只有 `seal` / `start`，没有未封账的 `stop`。`start(B)` 先 `seal(A)`。tick 见过 `isLeftMouseButtonDown() === true` 后再读到 button-up，必须 `seal`（`finishDrag` 漏掉时的 fail-closed；未 armed 不得因「按钮本来就抬着」误拆，测试与 addon 缺失走这条）。
+3. **画笔**：dockview `showOverlay` / HTML5 绝对层。`dockview-core` document-`dragleave` / document-`dragend`（`onDocumentDragEnd`）补丁只做 fail-closed 拆视觉，**不拥有**寿命，也不许在捕获阶段清 Droptarget `_state`（否则同窗 sticky 提交会坏）。拆视觉不等于释放 `registerTerminalFullscreenWebOverlay`。
 4. **禁止**：业务代码再手写一套「该不该显示」；不夺 Esc（禁止用智能体 `Esc` 关浮层）。
 
 `source` 只约束**进行中**：源窗交给 HTML5，不要用 Path B `showOverlay` 去抢。`ended` / `seal` 之后源窗也必须 `idle()`。
@@ -49,6 +49,7 @@
 - `finishDrag` **入口**（先于 `waitForOffer`）
 - `tryClaim` 接受 claim
 - 窗口销毁 / session `dispose`
+- main tick：已 armed 后 button-up（漏 `finishDrag` 时仍发 `clear`）
 
 晚到的 `offer()` 仍可登记并完成撕窗或跨窗 claim，但不得 `start` preview。
 

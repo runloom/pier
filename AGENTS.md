@@ -449,7 +449,7 @@ section 根节点下的裸子节点。
 
 ### 面板落点浮层生命周期
 
-拖还在，浮层才能在；拖一结束，所有窗口的落点层必须同一拍消失，同一 `transferId` 不能被晚到的 preview 或 `offer()` 再点亮。寿命主人是 renderer overlay session（按 `transferId`）；广播主人是 main `seal`（先于 `waitForOffer` / claim）；dockview 绝对层补丁只做 fail-closed 拆视觉，不拥有寿命。禁止用智能体 `Esc` 关浮层。不改双通道 claim，不改 `dndOverlayMounting: "absolute"`。
+拖还在，浮层才能在；拖一结束，所有窗口的落点层必须同一拍消失，同一 `transferId` 不能被晚到的 preview 或 `offer()` 再点亮。寿命主人是 renderer overlay session（按 `transferId`）；广播主人是 main `seal`（先于 `waitForOffer` / claim）；dockview 绝对层补丁只做 fail-closed 拆视觉，不拥有寿命。视觉层与 `panel-transfer-drop-preview` 全屏命中区必须同拍 `idle()`；`end(id)` 在没有 live B 时也要拆残留；main tick 见过按下再抬起则 `seal`。禁止用智能体 `Esc` 关浮层。不改双通道 claim，不改 `dndOverlayMounting: "absolute"`。
 
 权威规格：[`docs/superpowers/specs/2026-09-04-panel-drop-overlay-lifecycle-gold-standard.md`](docs/superpowers/specs/2026-09-04-panel-drop-overlay-lifecycle-gold-standard.md)。  
 检查点：`tests/unit/renderer/workspace/panel-drop-overlay-lifecycle-governance.test.ts`、`tests/unit/main/panel/transfer-overlay-preview.test.ts`、`tests/unit/renderer/workspace/panel-transfer-overlay-preview.test.ts`、`tests/unit/renderer/workspace/panel-transfer-attach.test.ts`。

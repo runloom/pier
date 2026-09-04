@@ -258,6 +258,38 @@ describe("panel transfer overlay preview controller", () => {
     ).toHaveLength(1);
   });
 
+  it("seals when the mouse button goes up after a drag was armed", () => {
+    const cursor = { x: 100, y: 80 };
+    let buttonDown = true;
+    const broadcasts: PanelTransferOverlayPreview[] = [];
+    const scheduled = manualSchedule();
+    const geometry = geometryWithCursor(cursor);
+    geometry.isLeftMouseButtonDown = () => buttonDown;
+    const controller = createPanelTransferOverlayPreviewController({
+      broadcast: (preview) => {
+        broadcasts.push(preview);
+      },
+      geometry,
+      schedule: scheduled.schedule,
+      windows: windowsPort(),
+    });
+
+    controller.start(TRANSFER_ID, "main");
+    expect(broadcasts.at(-1)?.kind).toBe("source");
+    scheduled.tick();
+    expect(broadcasts.some((preview) => preview.kind === "clear")).toBe(false);
+
+    buttonDown = false;
+    scheduled.tick();
+    expect(broadcasts.at(-1)).toEqual({
+      kind: "clear",
+      transferId: TRANSFER_ID,
+    });
+    const afterSeal = broadcasts.length;
+    scheduled.tick();
+    expect(broadcasts).toHaveLength(afterSeal);
+  });
+
   it("seal before any start still blocks a late start", () => {
     const cursor = { x: 100, y: 80 };
     const broadcasts: PanelTransferOverlayPreview[] = [];
