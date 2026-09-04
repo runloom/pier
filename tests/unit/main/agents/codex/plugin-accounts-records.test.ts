@@ -7,6 +7,8 @@ import {
 } from "../../../../../packages/plugin-codex/src/main/accounts-records.ts";
 import type { CodexAccountRecord } from "../../../../../packages/plugin-codex/src/main/state.ts";
 
+const storedExpiresAt = Date.parse("2026-08-10T14:03:28+00:00");
+
 const baseAccount: CodexAccountRecord = {
   createdAt: 1,
   email: "legacy@example.com",
@@ -14,7 +16,7 @@ const baseAccount: CodexAccountRecord = {
   planType: "pro",
   provider: "codex",
   providerAccountId: "provider-1",
-  subscriptionExpiresAt: Date.parse("2026-08-10T14:03:28+00:00"),
+  subscriptionExpiresAt: storedExpiresAt,
   updatedAt: 1,
 };
 
@@ -231,7 +233,7 @@ describe("applyLiveMembership", () => {
     const next = applyLiveMembership(
       baseAccount,
       {
-        expiresAt: baseAccount.subscriptionExpiresAt,
+        expiresAt: storedExpiresAt,
         hasActiveSubscription: true,
         planType: "pro",
       },
@@ -246,7 +248,7 @@ describe("applyLiveMembership", () => {
     const next = applyLiveMembership(
       baseAccount,
       {
-        expiresAt: baseAccount.subscriptionExpiresAt,
+        expiresAt: storedExpiresAt,
         hasActiveSubscription: false,
         planType: "pro",
       },
@@ -267,7 +269,7 @@ describe("applyLiveMembership", () => {
         hasActiveSubscription: false,
       },
       {
-        expiresAt: baseAccount.subscriptionExpiresAt,
+        expiresAt: storedExpiresAt,
         planType: "pro",
       },
       now
