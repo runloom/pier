@@ -719,8 +719,8 @@ describe("terminal content context menu actions", () => {
     const clear = actionRegistry.get("pier.terminal.clearScreen");
     expect(search?.metadata?.group).toBe("1_find");
     expect(clear?.metadata?.group).toBe("8_clear");
-    expect(action.metadata?.group).toBe("2_agent");
-    expect(action.metadata?.sortOrder).toBe(2);
+    expect(action.metadata?.group).toBe("1_new");
+    expect(action.metadata?.sortOrder).toBe(11);
     expect(ids.indexOf("pier.terminal.search")).toBeLessThan(
       ids.indexOf("pier.terminal.openAgentComposer")
     );

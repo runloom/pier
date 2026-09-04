@@ -22,6 +22,7 @@ import { registerRunActions } from "@/lib/actions/run-actions.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";
 import { registerTerminalActions } from "@/panel-kits/terminal/register-actions.ts";
+import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 function menuSketch(
@@ -144,6 +145,25 @@ function setWorkspace(options: {
   } as never);
 }
 
+function setAgentActivity(panelId: string): void {
+  useForegroundActivityStore.setState({
+    activities: {
+      [panelId]: {
+        agentId: "codex",
+        kind: "agent",
+        panelId,
+        source: "hook",
+        spawnedAt: 1,
+        status: "processing",
+        subagentCount: 0,
+        updatedAt: 2,
+        windowId: "win-1",
+      },
+    },
+    ts: 1,
+  });
+}
+
 describe("context-menu composed sketches", () => {
   const disposers: Array<() => void> = [];
 
@@ -174,6 +194,7 @@ describe("context-menu composed sketches", () => {
     }
     actionRegistry.clearForTests();
     useWorkspaceStore.getState().setApi(null);
+    useForegroundActivityStore.setState({ activities: {}, ts: 0 });
   });
 
   it("uses the first enabled item when copy is greyed out", () => {
@@ -240,7 +261,6 @@ describe("context-menu composed sketches", () => {
       "pier.panel.focusDown",
       "pier.panel.focusLeft",
       "pier.panel.focusUp",
-      "|",
       "pier.panel.equalizeSplits",
       "|",
       "pier.git.review.openDirectory",
@@ -271,6 +291,42 @@ describe("context-menu composed sketches", () => {
       "pier.panel.splitDown",
       "pier.panel.splitLeft",
       "pier.panel.splitUp",
+      "|",
+      "pier.terminal.clearScreen",
+      "|",
+      "pier.terminal.close",
+    ]);
+  });
+
+  it("sketches terminal/content session and layout without singleton separators", () => {
+    setAgentActivity("terminal-1");
+    setWorkspace({
+      groupCount: 2,
+      panel: { contentComponent: "terminal", id: "terminal-1" },
+    });
+    expect(
+      menuSketch("terminal/content", { sourcePanelId: "terminal-1" })
+    ).toEqual([
+      "pier.terminal.copy",
+      "pier.terminal.paste",
+      "pier.terminal.selectAll",
+      "pier.terminal.runSelection",
+      "|",
+      "pier.terminal.search",
+      "|",
+      "pier.panel.newTerminal",
+      "pier.terminal.renameAgentSession",
+      "pier.terminal.openAgentComposer",
+      "|",
+      "pier.panel.splitRight",
+      "pier.panel.splitDown",
+      "pier.panel.splitLeft",
+      "pier.panel.splitUp",
+      "pier.panel.focusRight",
+      "pier.panel.focusDown",
+      "pier.panel.focusLeft",
+      "pier.panel.focusUp",
+      "pier.panel.equalizeSplits",
       "|",
       "pier.terminal.clearScreen",
       "|",
@@ -395,7 +451,6 @@ describe("context-menu composed sketches", () => {
       "pier.panel.focusDown",
       "pier.panel.focusLeft",
       "pier.panel.focusUp",
-      "|",
       "pier.panel.equalizeSplits",
     ]);
   });

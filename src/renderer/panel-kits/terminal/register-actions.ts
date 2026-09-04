@@ -175,7 +175,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       const id = activeTerminalPanelId();
       return id != null && isAgentComposerEligibleForPanel(id);
     },
-    group: "2_agent",
+    group: "1_new",
     handler: () => {
       const panelId = activeTerminalPanelId();
       if (!panelId) {
@@ -190,7 +190,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       const id = activeTerminalPanelId();
       return id == null || !isAgentComposerEligibleForPanel(id);
     },
-    sortOrder: 2,
+    sortOrder: 11,
     surfaces: ["terminal/content", "command-palette"],
     title: agentComposerTitle,
     titleKey: "contextMenu.action.openRichInput",
@@ -202,7 +202,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       const id = activeTerminalPanelId();
       return id != null && isAgentComposerEligibleForPanel(id);
     },
-    group: "2_agent",
+    group: "1_new",
     handler: () => {
       const panelId = activeTerminalPanelId();
       if (!panelId) {
@@ -212,7 +212,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     },
     iconComponent: Paperclip,
     id: "pier.terminal.composerAttach",
-    sortOrder: 3,
+    sortOrder: 12,
     surfaces: ["command-palette"],
     titleKey: "contextMenu.action.attachRichInputFile",
     when: "terminal.hasActivePanel",
@@ -223,7 +223,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       const id = resolveTerminalPanelId(invocation);
       return id != null && canRenameAgentSession(id);
     },
-    group: "2_agent",
+    group: "1_new",
     handler: async (invocation) => {
       const panelId = resolveTerminalPanelId(invocation);
       if (!panelId) {
@@ -241,7 +241,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       const id = resolveTerminalPanelId(invocation);
       return id == null || !canRenameAgentSession(id);
     },
-    sortOrder: 1,
+    sortOrder: 10,
     surfaces: ["terminal/content", "dockview-tab", "command-palette"],
     titleKey: "contextMenu.action.renameAgentSession",
     when: "terminal.hasActivePanel",

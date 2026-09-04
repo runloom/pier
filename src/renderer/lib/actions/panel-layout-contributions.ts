@@ -236,9 +236,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     },
     {
       categoryKey: "panel",
-      group: "4_layout",
+      group: "2_split",
       handler: () => useWorkspaceStore.getState().toggleActivePanelMaximized(),
       id: "pier.panel.toggleMaximized",
+      sortOrder: 21,
       // 最大化只走 header 按钮 / 命令面板 / 快捷键，不进任何右键菜单。
       // 无分屏时最大化无意义（与 equalize / 组导航同一门槛）。
       surfaces: ["command-palette"],
@@ -247,13 +248,13 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     },
     {
       categoryKey: "panel",
-      group: "4_layout",
+      group: "2_split",
       handler: () => useWorkspaceStore.getState().equalizeSplits(),
       iconComponent: PanelsTopLeft,
       id: "pier.panel.equalizeSplits",
       // 单 group 整行移除（非置灰）；命令面板仍走 when 置灰/拦截。
       menuHiddenWhen: "!workspace.groupCount > 1",
-      sortOrder: 1,
+      sortOrder: 20,
       surfaces: [PANEL_LAYOUT_SURFACE, "command-palette"],
       titleKey: "commandPalette.action.equalizePanels",
       when: "workspace.groupCount > 1",
@@ -394,7 +395,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     {
       categoryKey: "panel",
       excludeFromMru: true,
-      group: "3_focus",
+      group: "2_split",
       handler: (invocation) =>
         useWorkspaceStore
           .getState()
@@ -402,7 +403,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       iconComponent: ArrowRight,
       id: "pier.panel.focusRight",
       menuHiddenWhen: "!workspace.groupCount > 1",
-      sortOrder: 1,
+      sortOrder: 11,
       submenuKey: "contextMenu.submenu.focus",
       surfaces: [PANEL_LAYOUT_SURFACE, "command-palette"],
       titleKey: "contextMenu.action.focusRight",
@@ -411,7 +412,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     {
       categoryKey: "panel",
       excludeFromMru: true,
-      group: "3_focus",
+      group: "2_split",
       handler: (invocation) =>
         useWorkspaceStore
           .getState()
@@ -419,7 +420,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       iconComponent: ArrowDown,
       id: "pier.panel.focusDown",
       menuHiddenWhen: "!workspace.groupCount > 1",
-      sortOrder: 2,
+      sortOrder: 12,
       submenuKey: "contextMenu.submenu.focus",
       surfaces: [PANEL_LAYOUT_SURFACE, "command-palette"],
       titleKey: "contextMenu.action.focusDown",
@@ -428,7 +429,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     {
       categoryKey: "panel",
       excludeFromMru: true,
-      group: "3_focus",
+      group: "2_split",
       handler: (invocation) =>
         useWorkspaceStore
           .getState()
@@ -436,7 +437,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       iconComponent: ArrowLeft,
       id: "pier.panel.focusLeft",
       menuHiddenWhen: "!workspace.groupCount > 1",
-      sortOrder: 3,
+      sortOrder: 13,
       submenuKey: "contextMenu.submenu.focus",
       surfaces: [PANEL_LAYOUT_SURFACE, "command-palette"],
       titleKey: "contextMenu.action.focusLeft",
@@ -445,7 +446,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     {
       categoryKey: "panel",
       excludeFromMru: true,
-      group: "3_focus",
+      group: "2_split",
       handler: (invocation) =>
         useWorkspaceStore
           .getState()
@@ -453,7 +454,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       iconComponent: ArrowUp,
       id: "pier.panel.focusUp",
       menuHiddenWhen: "!workspace.groupCount > 1",
-      sortOrder: 4,
+      sortOrder: 14,
       submenuKey: "contextMenu.submenu.focus",
       surfaces: [PANEL_LAYOUT_SURFACE, "command-palette"],
       titleKey: "contextMenu.action.focusUp",

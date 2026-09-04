@@ -25,12 +25,9 @@ const SLOT_GROUPS = [
   "1_reading",
   "1_review",
   "1_run",
-  "2_agent",
   "2_appearance",
   "2_split",
   "2_view",
-  "3_focus",
-  "4_layout",
   "4_window",
   "5_edit",
   "5_open",
@@ -76,6 +73,10 @@ describe("context-menu order gold standard", () => {
     expect(spec).toContain("必须字典序小于 `1_new`");
     expect(spec).toContain("菜单加速键");
     expect(spec).toContain("只显示提示");
+    expect(spec).toContain("拆分 → 聚焦 → 均分");
+    expect(spec).toContain("新建终端或重跑 / 停止 → 重命名 → 增强输入");
+    expect(spec).toContain("`2_view` / `2_appearance` / `2_split`");
+    expect(spec).toContain("| 窗口 | `4_window`");
   });
 
   it("keeps find lexicographically before other 1_* primary groups", () => {
@@ -104,10 +105,30 @@ describe("context-menu order gold standard", () => {
     expect(openFile).toMatch(/group:\s*"5_open"/);
     expect(terminal).toMatch(/group:\s*"1_find"/);
     expect(terminal).toMatch(/group:\s*"8_clear"/);
+    expect(terminal).not.toMatch(/group:\s*"2_agent"/);
+    expect(layout).not.toMatch(/group:\s*"3_focus"/);
+    expect(layout).not.toMatch(/group:\s*"4_layout"/);
     const keepOpenBlock = layout
       .split('id: "pier.panel.keepOpen"')[1]
       ?.split("id:")[0];
     expect(keepOpenBlock).toMatch(/sortOrder:\s*1/);
+    const equalizeAt = layout.indexOf('id: "pier.panel.equalizeSplits"');
+    const equalizeBlock = layout.slice(
+      Math.max(0, equalizeAt - 240),
+      equalizeAt + 240
+    );
+    expect(equalizeBlock).toMatch(/group:\s*"2_split"/);
+    expect(equalizeBlock).toMatch(/sortOrder:\s*20/);
+    const focusAt = layout.indexOf('id: "pier.panel.focusRight"');
+    const focusBlock = layout.slice(Math.max(0, focusAt - 240), focusAt + 80);
+    expect(focusBlock).toMatch(/group:\s*"2_split"/);
+    const panelActions = read("src/renderer/lib/actions/panel-actions.ts");
+    expect(panelActions).not.toMatch(/group:\s*"3_focus"/);
+    const taskRun = read(
+      "src/renderer/lib/actions/task-run-context-actions.ts"
+    );
+    expect(taskRun).toMatch(/group:\s*"1_new"/);
+    expect(taskRun).not.toMatch(/group:\s*"1_run"/);
   });
 
   it("covers every popup surface in the sketch files", () => {

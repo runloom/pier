@@ -1,6 +1,7 @@
 # 右键菜单顺序金标准
 
 日期：2026-08-31  
+修订：2026-09-04 — 布局并入 `2_split`；终端会话并入 `1_new`。  
 状态：现行权威（顺序）  
 范围：所有已登记右键表面的分组与顺序。  
 不包含：命令语义、主点击、命令面板 MRU、原生菜单滚动钉住。
@@ -49,9 +50,9 @@
 |----|------|--------|
 | 剪贴板编辑 | `0_edit` | 剪切 / 复制 / 粘贴 / 全选 / 运行选中内容 |
 | 查找 | `1_find`（名字是契约：必须字典序小于 `1_new`） | 终端查找 |
-| 表面主工作 | `1_review` / `1_new` / `1_open` / `1_run` / `1_reading` / `1_navigation` | 暂存、新建、跳转到源码、重跑、版心、转到行 |
-| 本表面视图 | `2_view` / `2_agent` / `2_appearance` / `2_split` | 展开、智能体输入、外观、拆分 |
-| 聚焦 / 窗口 | `3_focus` / `4_layout` / `4_window` | 聚焦组、均分、移到窗口 |
+| 表面主工作 | `1_review` / `1_new` / `1_open` / `1_run` / `1_reading` / `1_navigation` | 暂存、新建、跳转到源码、重跑、会话、版心、转到行 |
+| 本表面视图 | `2_view` / `2_appearance` / `2_split` | 展开、外观、拆分 / 聚焦 / 均分 |
+| 窗口 | `4_window` | 移到窗口 |
 | 离开表面但仍在应用内 | `5_open` / `5_edit` | 打开目录、审查「打开文件」、重命名 |
 | 操作系统路径 | `6_path` | 复制路径、在访达中显示 |
 | 破坏 | `7_danger` / `8_clear` | 删除、清屏 |
@@ -73,7 +74,7 @@
 
 ### `git/review-diff`（并入 `panel/edit`；多组时并入 `panel/layout`）
 
-复制 → 全选 | 跳转到源码 | （多组：聚焦 / 均分） | 打开目录 | 复制路径和所选行 → 访达
+复制 → 全选 | 跳转到源码 | （多组：聚焦 → 均分） | 打开目录 | 复制路径和所选行 → 访达
 
 无选区时复制禁用仍显示。git 插件单测只锁打开/路径段；组合草图锁宿主剪贴板与布局。
 
@@ -92,10 +93,10 @@
 - `files/breadcrumb`：复制路径 → 复制相对路径
 - `files/editor`：剪切 → 复制 → 粘贴 → 全选 | 转到行 → 符号信息 → 选出现 / 加光标 | 自动换行 | 复制路径和所选行 → 访达
 - Markdown / Canvas 预览：复制 → 全选 | 舒适 / 宽屏（当前档隐藏） | 外观（当前档隐藏；Canvas 仅自己声明的项） | 访达
-- `terminal/content`：复制 → 粘贴 → 全选 → 运行选中内容 | 查找 | 新建终端或重跑 / 停止 | 智能体输入 | 拆分 | 聚焦 / 均分 | 清屏 | 关闭终端
-- `terminal/restored`：复制 → 全选 | 重跑 / 停止 | 均分 / 聚焦 | 关闭终端
-- `dockview-tab` 文件：固定标签（预览）→ 复制路径 → 复制相对路径 | 新建 / 拆分 / 窗口 | （审查标签）打开目录 | 关闭…。复制路径 / 复制相对路径在标签上，不在编辑器 / diff 正文。终端标签仍是复制地址（目录）
-- `panel/content`：复制 → 全选 | 均分 / 聚焦（多组时）
+- `terminal/content`：复制 → 粘贴 → 全选 → 运行选中内容 | 查找 | 新建终端或重跑 / 停止 → 重命名 → 增强输入 | 拆分 → 聚焦 → 均分 | 清屏 | 关闭终端
+- `terminal/restored`：复制 → 全选 | 重跑 / 停止 | 聚焦 → 均分 | 关闭终端
+- `dockview-tab` 文件：固定标签（预览）→ 复制路径 → 复制相对路径 | 新建 / 拆分 / 窗口 | （审查标签）打开目录 | 关闭…。复制路径 / 复制相对路径在标签上，不在编辑器 / diff 正文。终端标签仍是复制地址（目录）；智能体会话的重命名与新建同组
+- `panel/content`：复制 → 全选 | 聚焦 → 均分（多组时）
 
 ---
 
@@ -108,6 +109,13 @@
 | `pier.git.review.openInEditor` | `1_open` / 0 |
 | `pier.terminal.search` | `1_find` / 0 |
 | `pier.terminal.clearScreen` | `8_clear` / 0 |
+| `pier.panel.newTerminal` | `1_new` / 1 |
+| `pier.run.rerunTask` / `pier.run.stopTask` | `1_new` / 2 / 3 |
+| `pier.terminal.renameAgentSession` | `1_new` / 10 |
+| `pier.terminal.openAgentComposer` | `1_new` / 11 |
+| `pier.panel.splitRight`…`splitUp` | `2_split` / 1–4 |
+| `pier.panel.focusRight`…`focusUp` | `2_split` / 11–14 |
+| `pier.panel.equalizeSplits` | `2_split` / 20 |
 | `pier.panel.keepOpen` | `0_edit` / 1（`copyPath` 为 2） |
 
 ---
@@ -133,6 +141,7 @@
 6. `group` 改成按 surface 变化的函数。
 7. 靠新增 `1_xxx` 组名抢第一名；把 `1_find` 改成字典序落到 `1_new` 之后的名字。
 8. 清屏与复制粘贴同一组、中间无分隔。
+9. 拆分 / 聚焦 / 均分拆成不同组，或给智能体会话项单独建组（会再出现单条一组的分隔线）。`4_window` 仍独立，不并进 `2_split`。
 
 ---
 
