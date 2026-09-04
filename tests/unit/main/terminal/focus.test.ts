@@ -156,7 +156,7 @@ describe("terminal focus restoration", () => {
     }));
 
     const { stubTerminalIpcProcessEnvironment } = await import(
-      "./stub-process-environment.ts"
+      "./harness/stub-process-environment.ts"
     );
     const { registerTerminalIpc } = await import("@main/ipc/terminal/index.ts");
     const { terminalFocusCoordinator } = await import(

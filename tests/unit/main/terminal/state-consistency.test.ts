@@ -117,7 +117,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     }));
 
     const { stubTerminalIpcProcessEnvironment } = await import(
-      "./stub-process-environment.ts"
+      "./harness/stub-process-environment.ts"
     );
     const closeTerminal = fakeAddon.closeTerminal;
     const { registerTerminalIpc } = await import("@main/ipc/terminal/index.ts");

@@ -169,7 +169,7 @@ describe("terminal close IPC reason semantics", () => {
 
     const closeTerminal = fakeAddon.closeTerminal;
     const { stubTerminalIpcProcessEnvironment } = await import(
-      "./stub-process-environment.ts"
+      "./harness/stub-process-environment.ts"
     );
     const { registerTerminalIpc } = await import("@main/ipc/terminal/index.ts");
     registerTerminalIpc(fakeIpcMain as never, {
