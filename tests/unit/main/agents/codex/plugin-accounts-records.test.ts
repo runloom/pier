@@ -258,4 +258,21 @@ describe("applyLiveMembership", () => {
       subscriptionExpiresAt: baseAccount.subscriptionExpiresAt,
     });
   });
+
+  it("keeps a stored inactive flag when live membership omits the entitlement bit", () => {
+    const now = Date.parse("2026-09-04T08:00:00.000Z");
+    const next = applyLiveMembership(
+      {
+        ...baseAccount,
+        hasActiveSubscription: false,
+      },
+      {
+        expiresAt: baseAccount.subscriptionExpiresAt,
+        planType: "pro",
+      },
+      now
+    );
+    expect(next.hasActiveSubscription).toBe(false);
+    expect(next.subscriptionExpiresAt).toBe(baseAccount.subscriptionExpiresAt);
+  });
 });

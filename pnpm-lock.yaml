@@ -8,7 +8,7 @@ patchedDependencies:
   '@pierre/diffs@1.2.12': cd7c8aa6dd1cb29dfbea88449d7a4d133e35b55eb774b2ac720f676b51420ade
   '@pierre/trees@1.0.0-beta.5': 7ac39c10bcacc46591551044a9a007eb3f7c12299a8849b9a266ba78906eebc4
   '@replit/codemirror-minimap@0.5.2': 31b884b79f427644be2ff88ca70dcb5f1ab266284948040919df23763adaf5f4
-  dockview-core@7.0.2: 268f59c57328fdac671a7880405847f306101c839c2dae039ae66039c5099c4d
+  dockview-core@7.0.2: 4f7ee324bbb2d21bf132ea8a61d8554f71ecfef53139cb23fe8b1a8b70098d90
 
 importers:
 
@@ -148,7 +148,7 @@ importers:
         version: 1.3.0
       dockview-core:
         specifier: 7.0.2
-        version: 7.0.2(patch_hash=268f59c57328fdac671a7880405847f306101c839c2dae039ae66039c5099c4d)
+        version: 7.0.2(patch_hash=4f7ee324bbb2d21bf132ea8a61d8554f71ecfef53139cb23fe8b1a8b70098d90)
       dockview-react:
         specifier: 7.0.2
         version: 7.0.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -10421,7 +10421,7 @@ snapshots:
       - electron-builder-squirrel-windows
       - supports-color
 
-  dockview-core@7.0.2(patch_hash=268f59c57328fdac671a7880405847f306101c839c2dae039ae66039c5099c4d): {}
+  dockview-core@7.0.2(patch_hash=4f7ee324bbb2d21bf132ea8a61d8554f71ecfef53139cb23fe8b1a8b70098d90): {}
 
   dockview-react@7.0.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:
@@ -10431,7 +10431,7 @@ snapshots:
 
   dockview@7.0.2:
     dependencies:
-      dockview-core: 7.0.2(patch_hash=268f59c57328fdac671a7880405847f306101c839c2dae039ae66039c5099c4d)
+      dockview-core: 7.0.2(patch_hash=4f7ee324bbb2d21bf132ea8a61d8554f71ecfef53139cb23fe8b1a8b70098d90)
 
   dom-accessibility-api@0.5.16: {}
 

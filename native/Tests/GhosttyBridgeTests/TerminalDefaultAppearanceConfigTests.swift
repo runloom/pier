@@ -36,6 +36,20 @@ final class TerminalDefaultAppearanceConfigTests: XCTestCase {
         )
     }
 
+    func testDefaultAppearanceKeepsGhosttyKeystrokeFollow() {
+        let configLines = defaultAppearanceConfigLines()
+        let value = configValue("scroll-to-bottom", in: configLines) ?? ""
+        XCTAssertFalse(
+            value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                .contains("no-keystroke"),
+            "Pier must not blanket-disable keystroke follow; nav-key skip is patch 0109. Rendered config:\n\(configLines.joined(separator: "\n"))"
+        )
+        XCTAssertFalse(
+            configLines.contains { $0.hasPrefix("scroll-to-bottom = ") },
+            "Leave Ghostty default keystroke,no-output; do not restate it in appearance. Rendered config:\n\(configLines.joined(separator: "\n"))"
+        )
+    }
+
     func testDefaultAppearanceDoesNotHardCodeCursorShape() {
         let configLines = defaultAppearanceConfigLines()
 

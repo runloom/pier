@@ -469,6 +469,13 @@ section 根节点下的裸子节点。
 权威规格：[`docs/superpowers/specs/2026-09-03-overlay-separator-gold-standard.md`](docs/superpowers/specs/2026-09-03-overlay-separator-gold-standard.md)。  
 检查点：`tests/unit/renderer/overlay-separator-governance.test.ts`。
 
+### 面板落点浮层生命周期
+
+拖还在，浮层才能在；拖一结束，所有窗口的落点层必须同一拍消失，同一 `transferId` 不能被晚到的 preview 或 `offer()` 再点亮。寿命主人是 renderer overlay session（按 `transferId`）；广播主人是 main `seal`（先于 `waitForOffer` / claim）；dockview 绝对层补丁只做 fail-closed 拆视觉，不拥有寿命。视觉层与 `panel-transfer-drop-preview` 全屏命中区必须同拍 `idle()`；`end(id)` 在没有 live B 时也要拆残留；main tick 见过按下再抬起则 `seal`。禁止用智能体 `Esc` 关浮层。不改双通道 claim，不改 `dndOverlayMounting: "absolute"`。
+
+权威规格：[`docs/superpowers/specs/2026-09-04-panel-drop-overlay-lifecycle-gold-standard.md`](docs/superpowers/specs/2026-09-04-panel-drop-overlay-lifecycle-gold-standard.md)。  
+检查点：`tests/unit/renderer/workspace/panel-drop-overlay-lifecycle-governance.test.ts`、`tests/unit/main/panel/transfer-overlay-preview.test.ts`、`tests/unit/renderer/workspace/panel-transfer-overlay-preview.test.ts`、`tests/unit/renderer/workspace/panel-transfer-attach.test.ts`。
+
 ### 命令列表分组标题
 
 命令面板空态与新建菜单共用同一套标题规则：标题只表示该块有多条同类命令；1 条不写标题；相邻无标题组合并；分类顺序稳定。使用频次只出现在命令面板「最近」块（新建菜单不设）。`pier.agent.start.*` ≥ 2 时抽成「智能体」子组。新建菜单把运行 / 智能体以外的条目收成展示组「工作区」（标签、文件、工作树、窗口、任务跟踪等打开面板的命令）；命令面板仍按领域分桶。有查询的搜索结果与 Quick Pick section 不套本规则。
@@ -530,6 +537,16 @@ section 根节点下的裸子节点。
 - 不劫持系统 `open`、不把 `TERM_PROGRAM` 伪装成 vscode、不抢 Markdown UTI、不收 `vscode://`。
 - `pier://file/<abs>{#Lline}` 与 OSC 8 同一条 Files 链。
 - 检查点：`tests/unit/main/terminal/file-open/governance.test.ts`、`tests/unit/app-core/pier-file-protocol.test.ts`、`native/Tests/GhosttyBridgeTests/HostLinkClickTests.swift`、`native/Tests/GhosttyBridgeTests/TerminalLinkWrapDetectionTests.swift`。
+
+### 终端视口按键所有权 — 金标准
+
+权威规格：[`docs/superpowers/specs/2026-09-04-terminal-viewport-key-ownership-gold-standard.md`](docs/superpowers/specs/2026-09-04-terminal-viewport-key-ownership-gold-standard.md)。
+
+- **视口归 libghostty**：宿主 `NSScrollView` 只镜像 chrome；live 拖条 / 滚轮才 `scroll_to_row`。
+- **裸 ↑↓ / Page 只进 PTY**：shell 历史、Cursor / Codex 选单。`FocusNotifyingScrollView` 不得 first responder、不得把 AppKit 文档导航变成 clip 移动；键落到壳上转给 `terminalView.keyDown`。
+- **键表不另写滚动**：禁止 `arrow_*=scroll_*` / `scroll_page_lines`。macOS `Cmd+↑↓` 仍是 Ghostty `jump_to_prompt`；`Cmd+Page*` / `Cmd+Home/End` 才是显式滚视口。
+- **keystroke follow 收窄（方案 C）**：保持 Ghostty 默认「打字回 live」。禁止 appearance 写 `no-keystroke`。裸 ↑↓ / Page 不 `scrollViewport(.bottom)`，只走 Pier patch `0109-keystroke-follow-skip-nav-keys`。
+- 检查点：`tests/unit/native/terminal-viewport-key-ownership-governance.test.ts`、`tests/unit/native/terminal-key-routing.test.ts`、`native/Tests/GhosttyBridgeTests/TerminalViewportKeyOwnershipTests.swift`、`native/Tests/GhosttyBridgeTests/TerminalScrollToBottomKeystrokeTests.swift`。
 
 ### 终端剪贴板 — 金标准
 

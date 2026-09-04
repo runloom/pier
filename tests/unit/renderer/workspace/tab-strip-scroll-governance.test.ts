@@ -112,6 +112,16 @@ describe("tab strip scroll ownership governance", () => {
     );
   });
 
+  it("clears the absolute drop overlay when HTML5 drag ends in-window", () => {
+    const patch = readFileSync(
+      join(ROOT, "patches/dockview-core@7.0.2.patch"),
+      "utf8"
+    );
+    expect(patch).toContain("onDocumentDragEnd");
+    expect(patch).toContain("document.addEventListener('dragend'");
+    expect(patch).toContain("document.removeEventListener('dragend'");
+  });
+
   it("applies the R2 patch in the installed dockview-core tree", () => {
     // package dir includes patch hash — discover via readdir.
     const pnpmDir = join(ROOT, "node_modules/.pnpm");
@@ -136,6 +146,34 @@ describe("tab strip scroll ownership governance", () => {
       }
     }
     expect(foundPierComment).toBe(true);
+  });
+
+  it("applies the document-dragend overlay clear in installed dockview-core", () => {
+    const pnpmDir = join(ROOT, "node_modules/.pnpm");
+    const entries = readdirSync(pnpmDir).filter((name) =>
+      name.startsWith("dockview-core@7.0.2")
+    );
+    expect(entries.length).toBeGreaterThan(0);
+    let foundEndClear = false;
+    for (const entry of entries) {
+      const bundled = join(
+        pnpmDir,
+        entry,
+        "node_modules/dockview-core/dist/package/main.esm.mjs"
+      );
+      if (!statSync(bundled, { throwIfNoEntry: false })?.isFile()) {
+        continue;
+      }
+      const source = readFileSync(bundled, "utf8");
+      if (
+        source.includes("onDocumentDragEnd") &&
+        source.includes("document.addEventListener('dragend'")
+      ) {
+        foundEndClear = true;
+        break;
+      }
+    }
+    expect(foundEndClear).toBe(true);
   });
 
   it("applies the document-dragleave overlay clear in installed dockview-core", () => {

@@ -2,14 +2,16 @@ diff --git a/dist/cjs/dnd/dropTargetAnchorContainer.js b/dist/cjs/dnd/dropTarget
 index f98f8a50293348a6afad0b390bb1445b3d6f83fd..219a24354c2d6a47b1952d6f0c7503ea344094dd 100644
 --- a/dist/cjs/dnd/dropTargetAnchorContainer.js
 +++ b/dist/cjs/dnd/dropTargetAnchorContainer.js
-@@ -24,8 +24,25 @@ var DropTargetAnchorContainer = /** @class */ (function (_super) {
+@@ -24,8 +24,36 @@ var DropTargetAnchorContainer = /** @class */ (function (_super) {
          _this.element = element;
          _this._disabled = false;
          _this._disabled = options.disabled;
 +        // Pier patch: `dndOverlayMounting: absolute` parks the overlay on this
 +        // host, so Droptarget.onDragLeave no-ops (entering the overlay would
 +        // otherwise flicker). HTML5 dragleave with relatedTarget outside the
-+        // document is the real "pointer left this window" signal.
++        // document is the real "pointer left this window" signal. In-window
++        // dragend often never reaches the content droptarget, so also clear
++        // when the HTML5 drag session ends.
 +        var onDocumentDragLeave = function (e) {
 +            var _a;
 +            if (_this._disabled || !_this._model) {
@@ -21,10 +23,19 @@ index f98f8a50293348a6afad0b390bb1445b3d6f83fd..219a24354c2d6a47b1952d6f0c7503ea
 +            }
 +            (_a = _this.model) === null || _a === void 0 ? void 0 : _a.clear();
 +        };
++        var onDocumentDragEnd = function () {
++            var _a;
++            if (_this._disabled || !_this._model) {
++                return;
++            }
++            (_a = _this.model) === null || _a === void 0 ? void 0 : _a.clear();
++        };
 +        document.addEventListener('dragleave', onDocumentDragLeave, true);
++        document.addEventListener('dragend', onDocumentDragEnd, true);
          _this.addDisposables(lifecycle_1.Disposable.from(function () {
              var _a;
 +            document.removeEventListener('dragleave', onDocumentDragLeave, true);
++            document.removeEventListener('dragend', onDocumentDragEnd, true);
              (_a = _this.model) === null || _a === void 0 ? void 0 : _a.clear();
          }));
          return _this;
@@ -46,14 +57,16 @@ diff --git a/dist/esm/dnd/dropTargetAnchorContainer.js b/dist/esm/dnd/dropTarget
 index f374a8c92baba5e16552a332954d90acdbdbffa6..bdef528a033a2451bcf3931d1915e321355fe5b8 100644
 --- a/dist/esm/dnd/dropTargetAnchorContainer.js
 +++ b/dist/esm/dnd/dropTargetAnchorContainer.js
-@@ -55,8 +55,25 @@ export class DropTargetAnchorContainer extends CompositeDisposable {
+@@ -55,8 +55,36 @@ export class DropTargetAnchorContainer extends CompositeDisposable {
          this.element = element;
          this._disabled = false;
          this._disabled = options.disabled;
 +        // Pier patch: `dndOverlayMounting: absolute` parks the overlay on this
 +        // host, so Droptarget.onDragLeave no-ops (entering the overlay would
 +        // otherwise flicker). HTML5 dragleave with relatedTarget outside the
-+        // document is the real "pointer left this window" signal.
++        // document is the real "pointer left this window" signal. In-window
++        // dragend often never reaches the content droptarget, so also clear
++        // when the HTML5 drag session ends.
 +        const onDocumentDragLeave = (e) => {
 +            var _a;
 +            if (this._disabled || !this._model) {
@@ -65,10 +78,19 @@ index f374a8c92baba5e16552a332954d90acdbdbffa6..bdef528a033a2451bcf3931d1915e321
 +            }
 +            (_a = this.model) === null || _a === void 0 ? void 0 : _a.clear();
 +        };
++        const onDocumentDragEnd = () => {
++            var _a;
++            if (this._disabled || !this._model) {
++                return;
++            }
++            (_a = this.model) === null || _a === void 0 ? void 0 : _a.clear();
++        };
 +        document.addEventListener('dragleave', onDocumentDragLeave, true);
++        document.addEventListener('dragend', onDocumentDragEnd, true);
          this.addDisposables(Disposable.from(() => {
              var _a;
 +            document.removeEventListener('dragleave', onDocumentDragLeave, true);
++            document.removeEventListener('dragend', onDocumentDragEnd, true);
              (_a = this.model) === null || _a === void 0 ? void 0 : _a.clear();
          }));
      }
@@ -100,14 +122,16 @@ index aa2c51060a1c2f31a87f2b43e57d81488a7f87f4..94f27f50e754d1eda1b1762b60516031
          }
      }
  }
-@@ -14751,8 +14752,25 @@ class DropTargetAnchorContainer extends CompositeDisposable {
+@@ -14751,8 +14752,36 @@ class DropTargetAnchorContainer extends CompositeDisposable {
          this.element = element;
          this._disabled = false;
          this._disabled = options.disabled;
 +        // Pier patch: `dndOverlayMounting: absolute` parks the overlay on this
 +        // host, so Droptarget.onDragLeave no-ops (entering the overlay would
 +        // otherwise flicker). HTML5 dragleave with relatedTarget outside the
-+        // document is the real "pointer left this window" signal.
++        // document is the real "pointer left this window" signal. In-window
++        // dragend often never reaches the content droptarget, so also clear
++        // when the HTML5 drag session ends.
 +        const onDocumentDragLeave = (e) => {
 +            var _a;
 +            if (this._disabled || !this._model) {
@@ -119,10 +143,19 @@ index aa2c51060a1c2f31a87f2b43e57d81488a7f87f4..94f27f50e754d1eda1b1762b60516031
 +            }
 +            (_a = this.model) === null || _a === void 0 ? void 0 : _a.clear();
 +        };
++        const onDocumentDragEnd = () => {
++            var _a;
++            if (this._disabled || !this._model) {
++                return;
++            }
++            (_a = this.model) === null || _a === void 0 ? void 0 : _a.clear();
++        };
 +        document.addEventListener('dragleave', onDocumentDragLeave, true);
++        document.addEventListener('dragend', onDocumentDragEnd, true);
          this.addDisposables(exports.DockviewDisposable.from(() => {
              var _a;
 +            document.removeEventListener('dragleave', onDocumentDragLeave, true);
++            document.removeEventListener('dragend', onDocumentDragEnd, true);
              (_a = this.model) === null || _a === void 0 ? void 0 : _a.clear();
          }));
      }
@@ -140,14 +173,16 @@ index 13e69c289de428eb9129db015c36b67ae3d6018f..827be0e95b1fe69137d3a3d69dfad0bc
          }
      }
  }
-@@ -14747,8 +14748,25 @@ class DropTargetAnchorContainer extends CompositeDisposable {
+@@ -14747,8 +14748,36 @@ class DropTargetAnchorContainer extends CompositeDisposable {
          this.element = element;
          this._disabled = false;
          this._disabled = options.disabled;
 +        // Pier patch: `dndOverlayMounting: absolute` parks the overlay on this
 +        // host, so Droptarget.onDragLeave no-ops (entering the overlay would
 +        // otherwise flicker). HTML5 dragleave with relatedTarget outside the
-+        // document is the real "pointer left this window" signal.
++        // document is the real "pointer left this window" signal. In-window
++        // dragend often never reaches the content droptarget, so also clear
++        // when the HTML5 drag session ends.
 +        const onDocumentDragLeave = (e) => {
 +            var _a;
 +            if (this._disabled || !this._model) {
@@ -159,10 +194,19 @@ index 13e69c289de428eb9129db015c36b67ae3d6018f..827be0e95b1fe69137d3a3d69dfad0bc
 +            }
 +            (_a = this.model) === null || _a === void 0 ? void 0 : _a.clear();
 +        };
++        const onDocumentDragEnd = () => {
++            var _a;
++            if (this._disabled || !this._model) {
++                return;
++            }
++            (_a = this.model) === null || _a === void 0 ? void 0 : _a.clear();
++        };
 +        document.addEventListener('dragleave', onDocumentDragLeave, true);
++        document.addEventListener('dragend', onDocumentDragEnd, true);
          this.addDisposables(Disposable.from(() => {
              var _a;
 +            document.removeEventListener('dragleave', onDocumentDragLeave, true);
++            document.removeEventListener('dragend', onDocumentDragEnd, true);
              (_a = this.model) === null || _a === void 0 ? void 0 : _a.clear();
          }));
      }

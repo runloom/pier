@@ -68,6 +68,24 @@ describe("native terminal key routing", () => {
     expect(shortcuts).not.toContain("Mod+KeyV");
     expect(shortcuts).not.toContain("Mod+ArrowLeft");
     expect(shortcuts).not.toContain("Mod+ArrowRight");
+    expect(shortcuts).not.toContain("ArrowUp");
+    expect(shortcuts).not.toContain("ArrowDown");
+    expect(shortcuts).not.toContain("PageUp");
+    expect(shortcuts).not.toContain("PageDown");
+  });
+
+  it("does not bind unmodified arrows or pages to Ghostty scroll actions", () => {
+    const source = readGhosttyBridgeSource();
+    const start = source.indexOf(
+      "nonisolated static func configureDefaultTerminalAppearance("
+    );
+    expect(start).toBeGreaterThan(-1);
+    const appearance = source.slice(start, start + 1800);
+    expect(appearance).not.toMatch(/arrow_(up|down)\s*=\s*scroll_/);
+    expect(appearance).not.toMatch(/page_(up|down)\s*=\s*scroll_/);
+    expect(appearance).not.toContain("scroll_page_lines");
+    expect(appearance).not.toContain("scroll-to-bottom");
+    expect(appearance).not.toContain("no-keystroke");
   });
 
   it("adds a Ghostty-native Cmd+Backspace binding for delete-to-line-start", () => {

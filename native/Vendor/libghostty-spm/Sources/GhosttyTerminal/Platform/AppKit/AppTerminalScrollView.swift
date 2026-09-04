@@ -152,6 +152,7 @@
             scrollView.onScrollerInteraction = { [weak self] in
                 self?.onScrollerInteraction?()
             }
+            scrollView.keyboardTarget = terminalView
             scrollView.scrollerStyle = .overlay
             scrollView.documentView = documentView
 
@@ -310,9 +311,36 @@
         }
     }
 
+    /// Scroll chrome only. Arrow / Page keys go to the terminal (PTY), never
+    /// AppKit document scrolling — Ghostty.app parity for TUI menus.
     private final class FocusNotifyingScrollView: NSScrollView {
         var shouldNotifyScrollerInteraction: () -> Bool = { true }
         var onScrollerInteraction: (() -> Void)?
+        weak var keyboardTarget: TerminalView?
+
+        override var acceptsFirstResponder: Bool { false }
+        override var canBecomeKeyView: Bool { false }
+
+        override func keyDown(with event: NSEvent) {
+            keyboardTarget?.keyDown(with: event)
+        }
+
+        override func keyUp(with event: NSEvent) {
+            keyboardTarget?.keyUp(with: event)
+        }
+
+        override func moveUp(_: Any?) {}
+        override func moveDown(_: Any?) {}
+        override func moveLeft(_: Any?) {}
+        override func moveRight(_: Any?) {}
+        override func scrollLineUp(_: Any?) {}
+        override func scrollLineDown(_: Any?) {}
+        override func pageUp(_: Any?) {}
+        override func pageDown(_: Any?) {}
+        override func scrollPageUp(_: Any?) {}
+        override func scrollPageDown(_: Any?) {}
+        override func moveToBeginningOfDocument(_: Any?) {}
+        override func moveToEndOfDocument(_: Any?) {}
 
         override func hitTest(_ point: NSPoint) -> NSView? {
             let target = super.hitTest(point)
