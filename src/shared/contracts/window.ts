@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export type WindowOpenMode = "fresh" | "restore";
 
 export interface WindowCreateOptions {
@@ -38,3 +40,23 @@ export interface WindowContext {
 export interface WindowFocusChangedPayload {
   focused: boolean;
 }
+
+export const windowCommandSchemas = [
+  z.object({ type: z.literal("window.list") }),
+  z.object({ type: z.literal("window.create") }),
+  z.object({
+    type: z.literal("window.focus"),
+    windowId: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("window.close"),
+    windowId: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("window.reportDisplayDraft"),
+    baseLabel: z.string().min(1).optional(),
+    branch: z.string().min(1).optional(),
+    projectPath: z.string().min(1).optional(),
+    stableTabQualifier: z.string().min(1).optional(),
+  }),
+] as const;

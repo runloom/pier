@@ -24,6 +24,21 @@ export function listWindows(): Promise<WindowInfo[]> {
   return window.pier.listWindows();
 }
 
+export function reportDisplayDraft(patch: {
+  baseLabel?: string;
+  branch?: string;
+  projectPath?: string;
+  stableTabQualifier?: string;
+}): Promise<void> {
+  return window.pier.reportDisplayDraft(patch);
+}
+
+export function onWindowsChanged(
+  cb: (windows: WindowInfo[]) => void
+): () => void {
+  return window.pier.window.onWindowsChanged(cb);
+}
+
 export function focusWindow(windowId: string): Promise<void> {
   return window.pier.focusWindow(windowId);
 }

@@ -6,6 +6,7 @@ export interface AppWindow {
   destroy(): void;
   focus(): void;
   getNativeWindowHandle(): Buffer;
+  getTitle(): string;
   readonly host: BaseWindow;
   readonly id: number;
   isDestroyed(): boolean;
@@ -14,6 +15,7 @@ export interface AppWindow {
   moveTop(): void;
   restore(): void;
   setBackgroundColor(color: string): void;
+  setTitle(title: string): void;
   readonly webContents: WebContents;
 }
 
@@ -34,12 +36,14 @@ export function createAppWindow(
       return host.id;
     },
     getNativeWindowHandle: () => host.getNativeWindowHandle(),
+    getTitle: () => host.getTitle(),
     isDestroyed: () => host.isDestroyed(),
     isFocused: () => host.isFocused(),
     isMinimized: () => host.isMinimized(),
     moveTop: () => host.moveTop(),
     restore: () => host.restore(),
     setBackgroundColor: (color) => host.setBackgroundColor(color),
+    setTitle: (title) => host.setTitle(title),
     webContents,
   };
 }

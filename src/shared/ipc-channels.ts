@@ -137,6 +137,8 @@ export const PIER_BROADCAST = {
   WINDOW_LAYOUT_PULSE: "pier:window:layout-pulse",
   // OS 级窗口 key-window 聚焦变化 (main → 该窗 renderer, payload WindowFocusChangedPayload).
   // 勿用 DOM window blur/focus：原生终端 firstResponder 时 document.hasFocus() 为 false。
+  /** All live windows with `title` (OS / relocate / Index). */
+  WINDOW_CHANGED: "pier://window:changed",
   WINDOW_FOCUS_CHANGED: "pier://window:focus-changed",
   // 终端工作目录变更广播 (main → renderer).
   TERMINAL_CWD_CHANGED: "pier://terminal:cwd-changed",

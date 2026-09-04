@@ -129,6 +129,8 @@ export const panelTabChromeSchema = z
     icon: panelTabIconSchema.optional(),
     state: panelTabStateSchema.optional(),
     title: z.string().min(1).optional(),
+    /** User-pinned tab title. Only `"user"` is a stable window-name qualifier. */
+    titleSource: z.literal("user").optional(),
     tooltip: panelTabTooltipSchema.optional(),
     trailing: panelTabTrailingSchema.optional(),
   })
@@ -199,6 +201,7 @@ export function normalizePanelTabChromeInput(
 export const panelDescriptorSchema = z.object({
   context: panelContextSchema.optional(),
   display: panelDisplaySchema,
+  kind: panelKindSchema.optional(),
   tab: panelTabChromeSchema.optional(),
 });
 export type PanelDescriptor = z.infer<typeof panelDescriptorSchema>;

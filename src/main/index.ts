@@ -1,3 +1,4 @@
+import { resolveUiLocale } from "@shared/i18n/locales.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
@@ -80,6 +81,7 @@ import {
 import { readPreferredOpenWindowRecordIds } from "./state/window-record-state.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/manager.ts";
+import { setWindowOsTitleLocale } from "./windows/os-title.ts";
 import { createWindowZoomController } from "./windows/zoom.ts";
 
 const isDev = isDevRuntime();
@@ -276,6 +278,10 @@ if (gotTheLock) {
         },
         readPreferences: () => appCore.services.preferences.read(),
       });
+      const preferences = await appCore.services.preferences.read();
+      setWindowOsTitleLocale(
+        resolveUiLocale(preferences.language, [app.getLocale()])
+      );
       appCore.eventBus.subscribe((event) => {
         if (event.type === "preferences.changed") {
           handlePreferencesChangedForWindows({
@@ -284,6 +290,11 @@ if (gotTheLock) {
             listWindows: () => windowManager.getAll(),
             snapshot: event.snapshot,
           });
+          if (event.changedKeys.includes("language")) {
+            setWindowOsTitleLocale(
+              resolveUiLocale(event.snapshot.language, [app.getLocale()])
+            );
+          }
         }
       });
 
