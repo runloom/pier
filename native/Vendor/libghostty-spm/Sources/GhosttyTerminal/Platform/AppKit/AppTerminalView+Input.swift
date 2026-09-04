@@ -10,6 +10,76 @@
     import GhosttyKit
 
     extension AppTerminalView {
+        static let hostLinkClickSlop: CGFloat = 4
+
+        /// OSC 8 / detected hyperlink under the pointer (from Ghostty mouse_over_link).
+        public var hoverLinkUrl: String? { core.hoverLinkUrl }
+
+        /// True while a stolen OSC 8 click is in progress. Ghostty must not
+        /// receive mouse pos / button events for this gesture.
+        public var hostLinkClickBlocksGhosttyMouse: Bool {
+            pendingHostLinkUrl != nil
+        }
+
+        /// Refresh `hoverLinkUrl` at Ghostty surface coordinates (top-left).
+        @discardableResult
+        public func refreshHoverLink(
+            surfaceX: CGFloat,
+            surfaceY: CGFloat,
+            mods: TerminalInputModifiers = []
+        ) -> String? {
+            surface?.sendMousePos(
+                x: surfaceX,
+                y: surfaceY,
+                mods: mods.ghosttyMods
+            )
+            return hoverLinkUrl
+        }
+
+        /// Refresh hover from an AppKit view-local point (bottom-left origin).
+        @discardableResult
+        public func refreshHoverLink(
+            atViewPoint point: CGPoint,
+            mods: TerminalInputModifiers = []
+        ) -> String? {
+            refreshHoverLink(
+                surfaceX: point.x,
+                surfaceY: bounds.height - point.y,
+                mods: mods
+            )
+        }
+
+        /// Steal a left click from a mouse-reporting TUI when the pointer is on
+        /// a host-owned hyperlink. Call after `sendMousePos`.
+        @discardableResult
+        public func beginHostLinkClickIfNeeded(at point: CGPoint) -> Bool {
+            guard let url = hoverLinkUrl, HostLinkClick.shouldConsume(url) else {
+                pendingHostLinkUrl = nil
+                pendingHostLinkPoint = nil
+                return false
+            }
+            pendingHostLinkUrl = url
+            pendingHostLinkPoint = point
+            return true
+        }
+
+        /// Finish a stolen click. Opens the link when the pointer barely moved.
+        @discardableResult
+        public func completeHostLinkClick(at point: CGPoint) -> Bool {
+            guard let url = pendingHostLinkUrl, let start = pendingHostLinkPoint else {
+                return false
+            }
+            pendingHostLinkUrl = nil
+            pendingHostLinkPoint = nil
+            let distance = hypot(point.x - start.x, point.y - start.y)
+            if distance > Self.hostLinkClickSlop {
+                return true
+            }
+            (delegate as? any TerminalSurfaceOpenURLDelegate)?
+                .terminalDidRequestOpenURL(url, kind: .unknown)
+            return true
+        }
+
         override open func keyDown(with event: NSEvent) {
             guard hostKeyboardActive else { return }
             inputHandler?.handleKeyDown(with: event)
@@ -171,6 +241,9 @@
             pointerSelectionStartPoint = CGPoint(x: x, y: y)
             pendingSelectionMenuPoint = nil
             surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)
+            if beginHostLinkClickIfNeeded(at: CGPoint(x: x, y: y)) {
+                return
+            }
             surface?.sendMouseButton(
                 state: GHOSTTY_MOUSE_PRESS,
                 button: GHOSTTY_MOUSE_LEFT,
@@ -181,6 +254,10 @@
         override open func mouseUp(with event: NSEvent) {
             guard hostDeliversMouseOrContinuesPress(event) else { return }
             let (x, y) = mousePoint(from: event)
+            if completeHostLinkClick(at: CGPoint(x: x, y: y)) {
+                finishPointerSelection(at: CGPoint(x: x, y: y))
+                return
+            }
             let mods = TerminalInputModifiers(from: event.modifierFlags)
             surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)
             surface?.sendMouseButton(
@@ -275,6 +352,7 @@
             guard hostDeliversMouseOrContinuesPress(event) else { return }
             let (x, y) = mousePoint(from: event)
             updatePointerSelectionRect(to: CGPoint(x: x, y: y))
+            if hostLinkClickBlocksGhosttyMouse { return }
             let mods = TerminalInputModifiers(from: event.modifierFlags)
             surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)
         }

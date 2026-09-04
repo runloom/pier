@@ -1,5 +1,8 @@
 import type { PanelContext } from "@shared/contracts/panel.ts";
 
+/** Sentinel panel id for OS `pier://file` deep links (no live terminal). */
+export const PIER_FILE_PROTOCOL_PANEL_ID = "pier-file-protocol";
+
 export interface TerminalPathLocation {
   column?: number;
   line?: number;
@@ -29,6 +32,32 @@ const EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
 
 function isAbsolutePath(path: string): boolean {
   return path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path);
+}
+
+function homeDirectory(): string | null {
+  const home =
+    typeof process === "undefined"
+      ? null
+      : (process.env.HOME ?? process.env.USERPROFILE ?? null);
+  if (!home) {
+    return null;
+  }
+  const normalized = home.replace(/\\/g, "/").replace(/\/+$/, "") || "/";
+  return isAbsolutePath(normalized) ? normalized : null;
+}
+
+function expandHomePrefix(path: string): string {
+  if (path === "~") {
+    return homeDirectory() ?? path;
+  }
+  if (path.startsWith("~/") || path.startsWith("~\\")) {
+    const home = homeDirectory();
+    if (!home) {
+      return path;
+    }
+    return `${home}/${path.slice(2).replace(/\\/g, "/")}`;
+  }
+  return path;
 }
 
 function resolveAgainstAbsoluteCwd(cwd: string, relative: string): string {
@@ -72,6 +101,59 @@ function fileUrlToPath(raw: string): string | null {
 function schemeOf(raw: string): string | null {
   const match = /^([a-z][a-z0-9+.-]*:)/i.exec(raw);
   return match?.[1]?.toLowerCase() ?? null;
+}
+
+const PIER_FILE_HASH = /^L(\d+)(?:C(\d+))?$/i;
+
+/**
+ * `pier://file/<absolute-path>{#Lline}` / `{#LlineCcol}` (1-based).
+ * Hostname must be `file`. Returns null when the URL is not this scheme.
+ */
+export function parsePierFileUrl(
+  rawInput: string
+): TerminalPathLocation | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawInput.trim());
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "pier:" || parsed.hostname !== "file") {
+    return null;
+  }
+  let path: string;
+  try {
+    path = decodeURIComponent(parsed.pathname);
+  } catch {
+    return null;
+  }
+  if (!path.startsWith("/")) {
+    return null;
+  }
+  if (/^\/[A-Za-z]:\//.test(path)) {
+    path = path.slice(1);
+  }
+  const location: TerminalPathLocation = { path };
+  const hash = parsed.hash.replace(/^#/, "");
+  if (!hash) {
+    return location;
+  }
+  const match = PIER_FILE_HASH.exec(hash);
+  if (!match) {
+    return location;
+  }
+  const line = Number(match[1]);
+  if (!Number.isInteger(line) || line < 1) {
+    return location;
+  }
+  location.line = line;
+  if (match[2]) {
+    const column = Number(match[2]);
+    if (Number.isInteger(column) && column >= 1) {
+      location.column = column;
+    }
+  }
+  return location;
 }
 
 /**
@@ -231,11 +313,23 @@ export function resolveTerminalLocalPathTargets(
       }
       return { kind: "local-paths", paths: [path], ...loc };
     }
+    if (scheme === "pier:") {
+      const pier = parsePierFileUrl(raw);
+      if (!pier) {
+        return { kind: "unresolved", reason: "invalid" };
+      }
+      return {
+        kind: "local-paths",
+        paths: [pier.path],
+        ...withLocationFields(pier),
+      };
+    }
     return { kind: "unresolved", reason: "unsupported-scheme" };
   }
 
-  if (isAbsolutePath(raw)) {
-    return { kind: "local-paths", paths: [raw], ...loc };
+  const expanded = expandHomePrefix(raw);
+  if (isAbsolutePath(expanded)) {
+    return { kind: "local-paths", paths: [expanded], ...loc };
   }
 
   const roots = listTerminalPathResolveRoots(context);
@@ -279,10 +373,22 @@ export function parseTerminalOpenUrl(
       }
       return { kind: "local-path", path, ...loc };
     }
+    if (scheme === "pier:") {
+      const pier = parsePierFileUrl(raw);
+      if (!pier) {
+        return { kind: "unresolved", reason: "invalid" };
+      }
+      return {
+        kind: "local-path",
+        path: pier.path,
+        ...withLocationFields(pier),
+      };
+    }
     return { kind: "unresolved", reason: "unsupported-scheme" };
   }
-  if (isAbsolutePath(raw)) {
-    return { kind: "local-path", path: raw, ...loc };
+  const expanded = expandHomePrefix(raw);
+  if (isAbsolutePath(expanded)) {
+    return { kind: "local-path", path: expanded, ...loc };
   }
   if (!(cwd && isAbsolutePath(cwd))) {
     return { kind: "unresolved", reason: "relative-without-cwd" };

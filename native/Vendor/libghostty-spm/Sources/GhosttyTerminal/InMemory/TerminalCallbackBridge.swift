@@ -32,6 +32,8 @@ final class TerminalCallbackBridge {
     var onMouseVisibility: ((Bool) -> Void)?
     var onRefreshRequest: (() -> Void)?
     var onRenderReady: (() -> Void)?
+    /// Last OSC 8 / detected hyperlink under the pointer. Empty payload clears.
+    var hoverLinkUrl: String?
 
     init(delegate: (any TerminalSurfaceViewDelegate)? = nil) {
         self.delegate = delegate
@@ -181,6 +183,7 @@ final class TerminalCallbackBridge {
                 .actions,
                 "callback action=mouse_over_link url=\(url.map { TerminalDebugLog.describe($0) } ?? "nil")"
             )
+            hoverLinkUrl = url
             (delegate as? any TerminalSurfaceHoverLinkDelegate)?
                 .terminalDidUpdateHoverLink(url)
 

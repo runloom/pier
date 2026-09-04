@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PanelContext } from "../../../../src/shared/contracts/panel.ts";
 import {
   listTerminalPathResolveRoots,
@@ -17,6 +17,10 @@ function panelContext(partial: Partial<PanelContext> = {}): PanelContext {
     ...partial,
   };
 }
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("normalizeTerminalPathText", () => {
   it("strips backticks quotes parens line numbers and trailing punct", () => {
@@ -147,6 +151,16 @@ describe("resolveTerminalLocalPathTargets", () => {
     });
   });
 
+  it("expands ~/ to the home directory instead of joining cwd", () => {
+    vi.stubEnv("HOME", "/Users/alex");
+    expect(
+      resolveTerminalLocalPathTargets("~/notes.txt", panelContext())
+    ).toEqual({
+      kind: "local-paths",
+      paths: ["/Users/alex/notes.txt"],
+    });
+  });
+
   it("normalizes backtick-wrapped selection text", () => {
     expect(
       resolveTerminalLocalPathTargets("`docs/a.md`", panelContext())
@@ -179,6 +193,21 @@ describe("parseTerminalOpenUrl", () => {
     expect(parseTerminalOpenUrl("zed://file/repo/a.ts", "/repo")).toEqual({
       kind: "unresolved",
       reason: "unsupported-scheme",
+    });
+    expect(parseTerminalOpenUrl("vscode://file/x", "/repo")).toEqual({
+      kind: "unresolved",
+      reason: "unsupported-scheme",
+    });
+  });
+
+  it("resolves pier://file with optional line and column", () => {
+    expect(
+      parseTerminalOpenUrl("pier://file/Users/a/repo/docs/a.md#L12C3", "/other")
+    ).toEqual({
+      column: 3,
+      kind: "local-path",
+      line: 12,
+      path: "/Users/a/repo/docs/a.md",
     });
   });
 
@@ -217,6 +246,14 @@ describe("parseTerminalOpenUrl", () => {
     expect(parseTerminalOpenUrl("docs/a.md", null)).toEqual({
       kind: "unresolved",
       reason: "relative-without-cwd",
+    });
+  });
+
+  it("expands ~/ before treating the path as relative", () => {
+    vi.stubEnv("HOME", "/Users/alex");
+    expect(parseTerminalOpenUrl("~/notes.txt", "/repo")).toEqual({
+      kind: "local-path",
+      path: "/Users/alex/notes.txt",
     });
   });
 

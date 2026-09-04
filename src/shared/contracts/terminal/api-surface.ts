@@ -139,6 +139,11 @@ export interface TerminalAPI {
    */
   onTitleChange(cb: (event: TerminalTitleEvent) => void): () => void;
   openDebugWindow(): Promise<TerminalDebugWindowOpenResult>;
+  /**
+   * Open a terminal hyperlink through the same OPEN_URL pipeline as a
+   * host-stolen OSC 8 click (Files for paths, openExternal for http(s)/mailto).
+   */
+  openUrl(panelId: string, url: string): Promise<void>;
   performOperation(
     panelId: string,
     operation: TerminalOperation

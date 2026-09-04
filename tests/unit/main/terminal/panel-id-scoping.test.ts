@@ -481,7 +481,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     );
     terminalFocusCoordinator.surfaceCreated(win as never, "terminal-3");
 
-    mouseFwd?.(win.id, "5::terminal-2", 100, 200);
+    mouseFwd?.(win.id, "5::terminal-2", 100, 200, "file:///tmp/notes.md");
     frameFwd?.(win.id, "5::terminal-6", 17, 4, 2, 3, 900, 600);
     focusFwd?.(win.id, "5::terminal-3");
     pwdFwd?.(win.id, "5::terminal-4", "/some/path");
@@ -491,7 +491,12 @@ describe("multi-window panel id scoping (#16 #30)", () => {
 
     expect(win.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:request-context-menu",
-      { panelId: "terminal-2", x: 100, y: 200 }
+      {
+        linkUrl: "file:///tmp/notes.md",
+        panelId: "terminal-2",
+        x: 100,
+        y: 200,
+      }
     );
     expect(win.webContents.send).toHaveBeenCalledWith(
       "pier:terminal:focus-request",

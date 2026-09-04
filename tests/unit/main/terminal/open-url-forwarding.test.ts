@@ -62,6 +62,18 @@ describe("handleTerminalOpenUrl", () => {
     });
   });
 
+  it("treats pier://file as a filesystem candidate", () => {
+    expect(
+      classifyTerminalOpenUrlForMain("pier://file/Users/a/repo/docs/a.md#L12")
+    ).toBe("filesystem");
+  });
+
+  it("does not treat vscode:// as filesystem", () => {
+    expect(classifyTerminalOpenUrlForMain("vscode://file/x")).toBe(
+      "app-internal"
+    );
+  });
+
   it("never opens unknown schemes externally", async () => {
     const openExternal = vi.fn(async () => undefined);
     const broadcast = vi.fn();

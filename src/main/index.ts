@@ -7,6 +7,10 @@ import { registerCliLocalControl } from "./adapters/cli/register-local-control.t
 import { registerPeerUidFromNativeAddon } from "./adapters/cli/register-peer-uid-native.ts";
 import { appCore } from "./app-core/index.ts";
 import {
+  attachPierFileProtocol,
+  createPierFileProtocolHostForServices,
+} from "./app-core/pier-file-protocol.ts";
+import {
   consumeIntentionalQuitAction,
   disarmIntentionalRelaunch,
   isIntentionalRelaunchArmed,
@@ -59,6 +63,7 @@ import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerTaskRuntimeDiagnosticsIpc } from "./ipc/task-runtime-diagnostics.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal/debug-window.ts";
 import { getTerminalAddon, registerTerminalIpc } from "./ipc/terminal/index.ts";
+import { dispatchPierFileOpenUrl } from "./ipc/terminal/open-url-forwarding.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerUsageDataIpc } from "./ipc/usage-data.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
@@ -87,6 +92,20 @@ import { createWindowZoomController } from "./windows/zoom.ts";
 const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";
 const startupLog = createLogger("startup");
+const pierFileProtocolLog = createLogger("pier-file-protocol");
+const pierFileProtocol = createPierFileProtocolHostForServices({
+  dispatchOpenUrl: (input) => {
+    dispatchPierFileOpenUrl(input).catch((error) => {
+      pierFileProtocolLog.error("failed to open pier://file", { error });
+    });
+  },
+  logError: (error) => {
+    pierFileProtocolLog.error("failed to open pier://file", { error });
+  },
+  window: {
+    list: () => appCore.services.window.list(),
+  },
+});
 const windowLog = createLogger("window");
 const windowZoomLog = createLogger("window-zoom");
 const cliLog = createLogger("cli");
@@ -116,6 +135,11 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (gotTheLock) {
   installMainDiagnosticsLogging();
   installProcessMemoryTrail();
+  attachPierFileProtocol({
+    app,
+    defaultApp: Boolean(process.defaultApp),
+    host: pierFileProtocol,
+  });
 } else {
   abortMissingSingleInstanceLock(isDev, app, (message) => {
     startupLog.error(message);
@@ -402,6 +426,7 @@ if (gotTheLock) {
       if (restored.length === 0) {
         await appCore.services.window.create({ mode: "fresh" });
       }
+      await pierFileProtocol.markReady();
 
       app.on("activate", () => {
         if (windowManager.getAll().length === 0) {
@@ -411,6 +436,7 @@ if (gotTheLock) {
               if (!restoredWindow) {
                 await appCore.services.window.create({ mode: "fresh" });
               }
+              await pierFileProtocol.markReady();
             })
             .catch((error) => {
               windowLog.error("failed to restore window on activate", {

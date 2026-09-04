@@ -549,8 +549,15 @@ final class EventRouterView: NSView {
             recordRightMouse(local: local, decision: "web-overlay", matchedPanelId: NSNull())
             return event
         }
-        if let (panelId, _) = terminalTarget(at: local) {
+        if let (panelId, target) = terminalTarget(at: local) {
             recordRightMouse(local: local, decision: "terminal", matchedPanelId: panelId)
+            if let terminalView = target.view as? TerminalView {
+                let inView = terminalView.convert(local, from: self)
+                _ = terminalView.refreshHoverLink(
+                    atViewPoint: inView,
+                    mods: TerminalInputModifiers(from: event.modifierFlags)
+                )
+            }
             TerminalContainerView.forwardFocusRequestCallback?(browserWindowId, panelId)
             EventRouterView.forwardRightMouseCallback?(
                 browserWindowId, panelId, Double(local.x), Double(local.y)
@@ -1956,6 +1963,13 @@ final class GhosttyBridgeImpl {
         return term.terminalView.readSelectionText()
     }
 
+    func hoverLinkUrl(forPanelId panelId: String) -> String? {
+        let trimmed = terminals[panelId]?.terminalView.hoverLinkUrl?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let trimmed, !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
     func readViewportText(panelId: String) -> String? {
         guard let term = terminals[panelId] else { return nil }
         return term.terminalView.readViewportText()
@@ -2779,7 +2793,9 @@ public func ghosttyBridgeFreeString(_ ptr: UnsafeMutablePointer<CChar>?) {
 public typealias CommandStartedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias KeyboardForwardCallback = @convention(c) (Int, UInt, UnsafePointer<CChar>) -> Void
 public typealias ModifierForwardCallback = @convention(c) (Int, UInt) -> Void
-public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
+public typealias MouseForwardCallback = @convention(c) (
+    Int, UnsafePointer<CChar>, Double, Double, UnsafePointer<CChar>
+) -> Void
 public typealias TerminalFocusRequestCallback = @convention(c) (Int, UnsafePointer<CChar>) -> Void
 public typealias FrameCommittedCallback = @convention(c) (
     Int, UnsafePointer<CChar>, UInt64, UInt64, UInt64, UInt64, UInt32, UInt32
@@ -2862,7 +2878,12 @@ public func ghosttyBridgeSetMouseForwardCallback(_ cb: MouseForwardCallback?) {
     MainActor.assumeIsolated {
         if let cb {
             EventRouterView.forwardRightMouseCallback = { wid, panelId, x, y in
-                panelId.withCString { ptr in cb(wid, ptr, x, y) }
+                let linkUrl = GhosttyBridgeImpl.shared.hoverLinkUrl(forPanelId: panelId) ?? ""
+                panelId.withCString { ptr in
+                    linkUrl.withCString { urlPtr in
+                        cb(wid, ptr, x, y, urlPtr)
+                    }
+                }
             }
         } else {
             EventRouterView.forwardRightMouseCallback = nil

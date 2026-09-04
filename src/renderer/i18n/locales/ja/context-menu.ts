@@ -12,6 +12,7 @@ export const contextMenu = {
     terminalOperationFailed:
       "ターミナル操作に失敗しました。もう一度お試しください",
     copy: "コピー",
+    copyLink: "リンクをコピー",
     copyPath: "パスをコピー",
     copyFilePath: "パスをコピー",
     copyRelativePath: "相対パスをコピー",
@@ -36,8 +37,15 @@ export const contextMenu = {
     renameAgentSessionFailed:
       "セッション名を変更できませんでした。もう一度お試しください",
     newTerminal: "新規ターミナル",
+    openInPier: "Pier で開く",
+    openLink: "リンクを開く",
     openRichInput: "リッチ入力を開く",
+    openWithSystemApp: "システムのアプリで開く",
+    openWithSystemFailed:
+      "システムのアプリで開けませんでした。もう一度お試しください",
     closeRichInput: "リッチ入力を閉じる",
+    revealFailed: "Finder に表示できませんでした。もう一度お試しください",
+    revealInFinder: "Finder に表示",
     attachRichInputFile: "リッチ入力にファイルを追加",
     paste: "ペースト",
     rerunTask: "タスクを再実行",

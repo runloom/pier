@@ -15,6 +15,7 @@ import {
   promptRenameAgentSession,
 } from "@/lib/agent-runtime/rename-agent-session.ts";
 import { selectedTextFromInvocation } from "@/lib/context-menu/selection-text.ts";
+import { TERMINAL_LINK_ACTION_CONTRIBUTIONS } from "@/lib/terminal/link-actions.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { isTerminalComposerOpen } from "@/stores/terminal-composer-takeover.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -89,6 +90,7 @@ function hasPinnedTerminalSelection(invocation?: ActionInvocation): boolean {
 }
 
 export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
+  ...TERMINAL_LINK_ACTION_CONTRIBUTIONS,
   terminalOperationContribution({
     // 无选区禁用；打开菜单时由 panel 钉 selectedText。
     // 显示 ⌘C/V/A，但不进 keymap（Ghostty 原生处理，禁止抢走）。

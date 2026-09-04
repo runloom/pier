@@ -2,6 +2,11 @@ appId: io.pier.app
 productName: Pier
 copyright: Copyright © 2026 Pier
 
+protocols:
+  - name: Pier
+    schemes:
+      - pier
+
 directories:
   output: dist-builder
   buildResources: build

@@ -31,11 +31,15 @@ export function useNativeTerminalContextMenuPopup(options: {
         } catch {
           // 选区读取失败时仍弹菜单，Copy 会保持 disabled。
         }
+        const linkUrl = req.linkUrl?.trim() ?? "";
         await popupContextMenuAt(
           "terminal/content",
           { x: req.x, y: req.y },
           {
-            metadata: selectedText.length > 0 ? { selectedText } : {},
+            metadata: {
+              ...(selectedText.length > 0 ? { selectedText } : {}),
+              ...(linkUrl.length > 0 ? { linkUrl } : {}),
+            },
             sourcePanelComponent: "terminal",
             ...(effectiveContext
               ? { sourcePanelContext: effectiveContext }

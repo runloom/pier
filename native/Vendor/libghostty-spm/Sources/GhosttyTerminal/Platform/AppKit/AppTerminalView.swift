@@ -19,6 +19,8 @@
         var pointerSelectionStartPoint: CGPoint?
         var lastPointerSelectionRect: CGRect?
         var pendingSelectionMenuPoint: CGPoint?
+        var pendingHostLinkUrl: String?
+        var pendingHostLinkPoint: CGPoint?
         var onFocusChange: ((Bool) -> Void)?
         public var onFramePresentationRequested: ((TerminalFramePresentationRequest) -> Void)?
         public var onFramePresented: ((TerminalFramePresentation) -> Void)?

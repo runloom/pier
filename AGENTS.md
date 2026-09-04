@@ -520,6 +520,17 @@ section 根节点下的裸子节点。
 - 检查点：`tests/unit/main/terminal/scrollback-governance.test.ts`、
  `native/Tests/GhosttyBridgeTests/TerminalScrollbackLimitTests.swift`
 
+### 终端文件链接在 Pier 中打开
+
+权威规格：[`docs/superpowers/specs/2026-09-04-terminal-file-open-in-pier-gold-standard.md`](docs/superpowers/specs/2026-09-04-terminal-file-open-in-pier-gold-standard.md)。
+
+- 终端视口里点到的文件进 Files 面板，不是 OS 默认应用。http(s)/mailto 走 `openExternal`。
+- 宿主在 AppKit `mouseDown` 消费 OSC 8 单击（`HostLinkClick.shouldConsume`），即使 TUI 开着鼠标上报；消费后禁止再把 press 发给 Ghostty。
+- 源码/文本继续 `shouldNeverSystemOpen`，禁止 `shell.openPath`。
+- 不劫持系统 `open`、不把 `TERM_PROGRAM` 伪装成 vscode、不抢 Markdown UTI、不收 `vscode://`。
+- `pier://file/<abs>{#Lline}` 与 OSC 8 同一条 Files 链。
+- 检查点：`tests/unit/main/terminal/file-open/governance.test.ts`、`tests/unit/app-core/pier-file-protocol.test.ts`、`native/Tests/GhosttyBridgeTests/HostLinkClickTests.swift`、`native/Tests/GhosttyBridgeTests/TerminalLinkWrapDetectionTests.swift`。
+
 ### 终端剪贴板 — 金标准
 
 权威规格：[`docs/superpowers/specs/2026-08-31-terminal-clipboard-gold-standard.md`](docs/superpowers/specs/2026-08-31-terminal-clipboard-gold-standard.md)。

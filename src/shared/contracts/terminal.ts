@@ -256,6 +256,8 @@ export type {
 export type { TerminalFrameCommittedEvent } from "./terminal/presentation.ts";
 
 export interface TerminalContextMenuRequest {
+  /** OSC 8 / detected hyperlink under the pointer, when present. */
+  linkUrl?: string;
   panelId: string;
   /** BrowserWindow contentView 坐标 (top-left origin, flipped). */
   x: number;

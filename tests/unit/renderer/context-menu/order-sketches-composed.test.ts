@@ -278,6 +278,74 @@ describe("context-menu composed sketches", () => {
     ]);
   });
 
+  it("sketches terminal/content file link actions before clipboard", () => {
+    setWorkspace({
+      groupCount: 1,
+      panel: { contentComponent: "terminal", id: "terminal-1" },
+    });
+    expect(
+      menuSketch("terminal/content", {
+        metadata: { linkUrl: "file:///tmp/notes.md" },
+        sourcePanelId: "terminal-1",
+      })
+    ).toEqual([
+      "pier.terminal.openLink",
+      "pier.terminal.copyLink",
+      "pier.terminal.revealLink",
+      "|",
+      "pier.terminal.copy",
+      "pier.terminal.paste",
+      "pier.terminal.selectAll",
+      "pier.terminal.runSelection",
+      "|",
+      "pier.terminal.search",
+      "|",
+      "pier.panel.newTerminal",
+      "|",
+      "pier.panel.splitRight",
+      "pier.panel.splitDown",
+      "pier.panel.splitLeft",
+      "pier.panel.splitUp",
+      "|",
+      "pier.terminal.clearScreen",
+      "|",
+      "pier.terminal.close",
+    ]);
+    expect(
+      menuSketch("terminal/content", {
+        metadata: { linkUrl: "https://example.com" },
+        sourcePanelId: "terminal-1",
+      })
+    ).toEqual([
+      "pier.terminal.openLink",
+      "pier.terminal.copyLink",
+      "|",
+      "pier.terminal.copy",
+      "pier.terminal.paste",
+      "pier.terminal.selectAll",
+      "pier.terminal.runSelection",
+      "|",
+      "pier.terminal.search",
+      "|",
+      "pier.panel.newTerminal",
+      "|",
+      "pier.panel.splitRight",
+      "pier.panel.splitDown",
+      "pier.panel.splitLeft",
+      "pier.panel.splitUp",
+      "|",
+      "pier.terminal.clearScreen",
+      "|",
+      "pier.terminal.close",
+    ]);
+    expect(
+      menuSketch("terminal/content", {
+        metadata: { linkUrl: "file:///tmp/shot.png" },
+        sourcePanelId: "terminal-1",
+      })
+    ).toContain("pier.terminal.openWithSystemApp");
+  });
+
   it("sketches terminal/restored with host clipboard then close", () => {
     setWorkspace({
       groupCount: 1,

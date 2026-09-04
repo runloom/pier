@@ -3,6 +3,9 @@ import type {
   TerminalOpenUrlKind,
 } from "@shared/contracts/terminal.ts";
 import { terminalOpenUrlEventSchema } from "@shared/contracts/terminal.ts";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER_FILE_PROTOCOL_PANEL_ID } from "@shared/terminal-local-path.ts";
+import { forwardToWindow } from "./forwarding.ts";
 
 const EXTERNAL_SCHEMES = new Set(["http", "https", "mailto"]);
 
@@ -16,6 +19,17 @@ export function classifyTerminalOpenUrlForMain(
   const protocol = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed)?.[1]?.toLowerCase();
   if (!protocol || protocol === "file") {
     return "filesystem";
+  }
+  if (protocol === "pier") {
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.hostname === "file") {
+        return "filesystem";
+      }
+    } catch {
+      return "app-internal";
+    }
+    return "app-internal";
   }
   if (EXTERNAL_SCHEMES.has(protocol)) {
     return "remote";
@@ -42,4 +56,25 @@ export async function handleTerminalOpenUrl(input: {
     url: input.url,
   });
   input.broadcast(event);
+}
+
+export function dispatchPierFileOpenUrl(input: {
+  url: string;
+  windowElectronId: number;
+}): Promise<void> {
+  return handleTerminalOpenUrl({
+    broadcast: (event) => {
+      forwardToWindow(
+        input.windowElectronId,
+        PIER_BROADCAST.TERMINAL_OPEN_URL,
+        event,
+        "pier-file-protocol"
+      );
+    },
+    kind: "unknown",
+    openExternal: async () => undefined,
+    panelId: PIER_FILE_PROTOCOL_PANEL_ID,
+    url: input.url,
+    windowId: input.windowElectronId,
+  });
 }
