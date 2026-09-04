@@ -201,9 +201,11 @@ export function applyLiveMembership(
   const normalized = membership.planType.trim();
   if (normalized.length === 0) return account;
   const isFree = normalized.toLowerCase() === "free";
+  // subscriptions fallback never carries has_active_subscription. Omitting the
+  // bit must not strip a stored inactive flag — UI treats undefined as active.
   const hasActiveSubscription = isFree
     ? undefined
-    : membership.hasActiveSubscription;
+    : (membership.hasActiveSubscription ?? account.hasActiveSubscription);
   let expiresAt: number | undefined;
   if (isFree) {
     expiresAt = undefined;
