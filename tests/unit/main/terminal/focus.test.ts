@@ -160,11 +160,43 @@ describe("terminal focus restoration", () => {
       "@main/ipc/terminal/focus-coordinator.ts"
     );
 
+    // Avoid real login-shell dumps (slow/flaky under parallel suites; may
+    // ENOENT or exceed the default 5s test timeout).
+    const processEnvironment = opts.processEnvironment ?? {
+      getHostDiagnostics: () => undefined,
+      invalidate: async () => undefined,
+      recordHostDiagnostics: () => undefined,
+      resolve: vi.fn(
+        async (request: {
+          agentEnv?: Record<string, string>;
+          clientEnv?: Record<string, string>;
+          explicitEnv?: Record<string, string>;
+          profileEnv?: Record<string, string>;
+          projectEnv?: Record<string, string>;
+        }) => ({
+          diagnostics: {
+            cacheHit: false,
+            pathChanged: false,
+            shellEnvStatus: "resolved" as const,
+            source: "agent" as const,
+          },
+          env: {
+            PATH: "/usr/bin",
+            TERM: "xterm-256color",
+            ...request.clientEnv,
+            ...request.agentEnv,
+            ...request.profileEnv,
+            ...request.projectEnv,
+            ...request.explicitEnv,
+          },
+          shellEnv: {},
+        })
+      ),
+    };
+
     registerTerminalIpc(fakeIpcMain as never, {
       loadNativeAddon: () => ({ addon: fakeAddon as never, error: null }),
-      ...(opts.processEnvironment
-        ? { processEnvironment: opts.processEnvironment as never }
-        : {}),
+      processEnvironment: processEnvironment as never,
     });
     return {
       terminalFocusCoordinator,
@@ -733,7 +765,13 @@ describe("terminal focus restoration", () => {
     try {
       const { fakeAddon, invokeHandlers, ipcWindow, sessionState } =
         await setupTerminalFocusHarness({
-          launch: { agentId: "claude", command: "claude", cwd: "/repo" },
+          launch: {
+            agentId: "claude",
+            // Absolute path skips interactive command-name probe (would hang
+            // under fake timers waiting for a timeout we cannot advance yet).
+            command: "/usr/bin/claude",
+            cwd: "/repo",
+          },
         });
       fakeAddon.sendText.mockReturnValue(false);
       await invokeHandlers.get("pier:terminal:create")?.(

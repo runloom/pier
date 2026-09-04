@@ -514,6 +514,7 @@ describe("plugin panel instances", () => {
 
     expect(usePanelDescriptorStore.getState().descriptors["file-1"]).toEqual({
       display: { short: "file.ts" },
+      kind: "web",
       tab: { icon: { id: "base:file.ts" } },
     });
   });
