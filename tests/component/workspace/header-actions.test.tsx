@@ -1101,10 +1101,16 @@ describe("WorkspaceHeaderActions", () => {
       screen.getByText("Agents", { selector: "[cmdk-group-heading]" })
     ).toBeVisible();
     expect(
+      screen.getByText("Workspace", { selector: "[cmdk-group-heading]" })
+    ).toBeVisible();
+    expect(
       screen.queryByText("Panel", { selector: "[cmdk-group-heading]" })
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText("Worktree", { selector: "[cmdk-group-heading]" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Window", { selector: "[cmdk-group-heading]" })
     ).not.toBeInTheDocument();
     const worktreeItem = await findCommandItem("Create Worktree");
     expect(worktreeItem).toHaveTextContent("Open a project first");
@@ -1500,7 +1506,7 @@ describe("WorkspaceHeaderActions", () => {
     expect(enabledOrder).toBeLessThan(handlerOrder);
   });
 
-  it("localizes plugin categories from their metadata key", async () => {
+  it("folds plugin remainder actions under the localized workspace heading", async () => {
     await i18next.changeLanguage("zh-CN");
     const disposeCreate = actionRegistry.register({
       category: "Worktree",
@@ -1529,8 +1535,14 @@ describe("WorkspaceHeaderActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "新建" }));
 
     expect(
-      await screen.findByText("工作树", { selector: "[cmdk-group-heading]" })
+      await screen.findByText("工作区", { selector: "[cmdk-group-heading]" })
     ).toBeVisible();
+    expect(
+      screen.queryByText("工作树", { selector: "[cmdk-group-heading]" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Worktree", { selector: "[cmdk-group-heading]" })
+    ).not.toBeInTheDocument();
   });
 
   it("passes the clicked group to arbitrary create-menu actions", async () => {

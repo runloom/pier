@@ -31,6 +31,8 @@ describe("command list group heading gold standard", () => {
     expect(spec).toContain("相邻无标题组合并");
     expect(spec).toContain("频次只进");
     expect(spec).toContain("智能体子组");
+    expect(spec).toContain("新建菜单工作区");
+    expect(spec).toContain("foldRemainderInto");
     expect(spec).toContain("commandListItemValue");
     expect(spec).toContain("presentCommandListGroups");
     expect(spec).toContain("CommandsView");
@@ -47,10 +49,13 @@ describe("command list group heading gold standard", () => {
     expect(createMenu).not.toContain("heading={categoryHeading");
     expect(createMenu).not.toContain("maxGroupFrecency");
     expect(createMenu).toContain("recentsLimit: 0");
+    expect(createMenu).toContain("foldRemainderInto");
+    expect(createMenu).toContain("WORKSPACE_PRESENTATION_ID");
     expect(palette).toContain("presentCommandListGroups");
     expect(palette).toContain("CommandsView");
     expect(palette).not.toContain("heading={categoryHeading");
     expect(palette).not.toContain("compareGroups(");
+    expect(palette).not.toContain("foldRemainderInto");
     expect(commandsView).toContain("heading={group.heading ?? undefined}");
     expect(commandsView).toContain("commandListItemValue(group.id, action.id)");
     expect(commandsView).not.toContain("categoryHeading");
@@ -58,5 +63,7 @@ describe("command list group heading gold standard", () => {
     expect(presenter).not.toContain("maxGroupFrecency");
     expect(presenter).toContain("AGENT_START_COMMAND_PREFIX");
     expect(presenter).toContain("recentsLimit");
+    expect(presenter).toContain("WORKSPACE_PRESENTATION_ID");
+    expect(presenter).toContain("foldRemainderInto");
   });
 });

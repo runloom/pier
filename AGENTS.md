@@ -449,7 +449,7 @@ section 根节点下的裸子节点。
 
 ### 命令列表分组标题
 
-命令面板空态与新建菜单共用同一套标题规则：标题只表示该块有多条同类命令；1 条不写标题；相邻无标题组合并；分类顺序稳定。使用频次只出现在命令面板「最近」块（新建菜单不设）。`pier.agent.start.*` ≥ 2 时抽成「智能体」子组。有查询的搜索结果与 Quick Pick section 不套本规则。
+命令面板空态与新建菜单共用同一套标题规则：标题只表示该块有多条同类命令；1 条不写标题；相邻无标题组合并；分类顺序稳定。使用频次只出现在命令面板「最近」块（新建菜单不设）。`pier.agent.start.*` ≥ 2 时抽成「智能体」子组。新建菜单把运行 / 智能体以外的条目收成展示组「工作区」（标签、文件、工作树、窗口、任务跟踪等打开面板的命令）；命令面板仍按领域分桶。有查询的搜索结果与 Quick Pick section 不套本规则。
 
 权威规格：[`docs/superpowers/specs/2026-09-02-command-list-heading-gold-standard.md`](docs/superpowers/specs/2026-09-02-command-list-heading-gold-standard.md)。  
 检查点：`tests/unit/renderer/command-list-group-heading-governance.test.ts`、`tests/unit/command/present-groups.test.ts`。

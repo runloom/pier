@@ -63,6 +63,7 @@ import {
   commandListCategoryLabel,
   compareCreateMenuItems,
   presentCommandListGroups,
+  WORKSPACE_PRESENTATION_ID,
 } from "@/lib/command-palette/present-groups.ts";
 import { useCommandPointerSelectionGate } from "@/lib/command-palette/use-command-pointer-selection-gate.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
@@ -187,6 +188,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
             categoryLabel: (category) =>
               commandListCategoryLabel(category, (key) => t(key)),
             categoryOrder: CREATE_MENU_CATEGORY_ORDER,
+            foldRemainderInto: WORKSPACE_PRESENTATION_ID,
             itemCompare: compareCreateMenuItems,
             recentLabel: t("commandPalette.recent"),
             recentsLimit: 0,

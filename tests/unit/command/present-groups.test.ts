@@ -41,6 +41,7 @@ function presentCreate(
   return presentCommandListGroups(actions, {
     categoryLabel: (category) => category,
     categoryOrder: CREATE_MENU_CATEGORY_ORDER,
+    foldRemainderInto: "workspace",
     ...(frecencyMap ? { frecencyMap } : {}),
     itemCompare: compareCreateMenuItems,
     recentLabel: "recent",
@@ -63,21 +64,80 @@ function presentPalette(
 }
 
 describe("presentCommandListGroups", () => {
-  it("merges singleton create-menu categories and omits headings", () => {
+  it("folds create-menu remainder into a headed workspace group", () => {
     const groups = presentCreate([
       action("pier.worktree.create", "worktree"),
+      action("pier.panel.newTab", "panel"),
+      action("pier.files.newFile", "file"),
+      action("pier.window.newWindow", "window"),
+      action("pier.tasks.openBoard", "panel", { sortOrder: 40 }),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.id).toBe("workspace");
+    expect(groups[0]?.heading).toBe("workspace");
+    expect(groups[0]?.actions.map((item) => item.id)).toEqual([
+      "pier.panel.newTab",
+      "pier.files.newFile",
+      "pier.worktree.create",
+      "pier.window.newWindow",
+      "pier.tasks.openBoard",
+    ]);
+  });
+
+  it("keeps run and agent ahead of the workspace remainder", () => {
+    const groups = presentCreate([
+      action("pier.panel.newTerminal", "run", { sortOrder: 1 }),
+      action("pier.agent.start.claude", "run", { sortOrder: 10 }),
+      action("pier.agent.start.codex", "run", { sortOrder: 11 }),
+      action("pier.run.task", "run", { sortOrder: 0 }),
+      action("pier.panel.newTab", "panel"),
+      action("pier.files.newFile", "file"),
+      action("pier.tasks.openBoard", "panel", { sortOrder: 40 }),
+    ]);
+
+    expect(groups.map((group) => group.id)).toEqual([
+      "run",
+      "agent",
+      "workspace",
+    ]);
+    expect(groups[2]?.heading).toBe("workspace");
+    expect(groups[2]?.actions.map((item) => item.id)).toEqual([
+      "pier.panel.newTab",
+      "pier.files.newFile",
+      "pier.tasks.openBoard",
+    ]);
+  });
+
+  it("omits workspace heading for a single remainder action", () => {
+    const groups = presentCreate([
+      action("pier.panel.newTerminal", "run"),
+      action("pier.run.task", "run"),
+      action("pier.files.newFile", "file"),
+    ]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.id).toBe("run");
+    expect(groups[1]?.heading).toBeNull();
+    expect(groups[1]?.actions.map((item) => item.id)).toEqual([
+      "pier.files.newFile",
+    ]);
+  });
+
+  it("does not fold command-palette categories into workspace", () => {
+    const groups = presentPalette([
       action("pier.panel.newTab", "panel"),
       action("pier.files.newFile", "file"),
       action("pier.window.newWindow", "window"),
     ]);
 
     expect(groups).toHaveLength(1);
+    expect(groups[0]?.id).toBe("unheaded:0");
     expect(groups[0]?.heading).toBeNull();
     expect(groups[0]?.actions.map((item) => item.id)).toEqual([
       "pier.panel.newTab",
-      "pier.files.newFile",
-      "pier.worktree.create",
       "pier.window.newWindow",
+      "pier.files.newFile",
     ]);
   });
 
