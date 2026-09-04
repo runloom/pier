@@ -260,7 +260,7 @@ function SwipeOverlayCaptions({
     >
       <span
         className={cn(
-          "rounded-md bg-background/80 px-1.5 py-0.5 font-medium text-xs backdrop-blur-sm transition-opacity",
+          "rounded-md bg-background px-1.5 py-0.5 font-medium text-xs transition-opacity",
           percent < SWIPE_CAPTION_HIDE_PCT && "opacity-0"
         )}
         data-slot="pier-image-diff-swipe-caption"
@@ -270,7 +270,7 @@ function SwipeOverlayCaptions({
       </span>
       <span
         className={cn(
-          "rounded-md bg-background/80 px-1.5 py-0.5 font-medium text-xs backdrop-blur-sm transition-opacity",
+          "rounded-md bg-background px-1.5 py-0.5 font-medium text-xs transition-opacity",
           percent > 100 - SWIPE_CAPTION_HIDE_PCT && "opacity-0"
         )}
         data-slot="pier-image-diff-swipe-caption"

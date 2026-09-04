@@ -322,6 +322,18 @@ outline 抑制、Chart/DataChart/Mermaid 默认、状态徽标不进 Tab、`tabI
   色相对比提供额外辨识线索，由设计决策覆盖，测试只验证 token 存在。如设计
   变更需恢复严格检查，把 `:root` 加回 Tier 1 循环。
 
+### 透明 web 叠 Ghostty 合成
+
+macOS 是透明 `WebContentsView` 叠 Ghostty。终端洞必须透出 native；洞上的 web 不得再开会采样或缓存旧像素的合成层。
+
+权威规格：[`docs/superpowers/specs/2026-09-04-transparent-web-over-ghostty-compositing-gold-standard.md`](docs/superpowers/specs/2026-09-04-transparent-web-over-ghostty-compositing-gold-standard.md)。
+
+- 禁止产品源码 `backdrop-filter` / `backdrop-blur*` / `filter: blur()`，以及 `translate3d` / `translateZ` / `transform-gpu` / `will-change: transform`。预览字号、图片 diff 字幕用不透明 `bg-background`。
+- 扫描必须包括 `packages/ui/src`、`src/renderer`、`src/plugins/builtin`。只扫 renderer 会漏掉共享控件。
+- 分栏 / 浮层改大小不藏 native，只拦输入（`62b82e2f`）。
+- 例外必须在治理测试 allowlist 写明无法用不透明底或 2D 定位的原因。
+- 检查点在 `tests/unit/renderer/app/gpu-compositing-governance.test.ts`。
+
 ### shadcn 组件使用规范
 
 宿主 renderer 与官方插件 renderer 的业务界面统一以 `packages/ui` 中的 shadcn 组件为

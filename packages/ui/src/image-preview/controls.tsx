@@ -107,7 +107,9 @@ export function ImagePreviewControls({
       {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: stop empty-click dismiss on toolbar */}
       <div
         aria-label={labels.controlsLabel}
-        className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-border/60 bg-background/90 p-1 shadow-sm backdrop-blur-sm"
+        // Opaque fill. Backdrop blur samples the transparent WebContentsView
+        // and leaves Ghostty afterimages while the panel resizes.
+        className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-border/60 bg-background p-1 shadow-sm"
         data-slot="image-preview-controls"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}

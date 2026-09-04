@@ -78,6 +78,13 @@ describe("ImageDiffView", () => {
     fireEvent.click(screen.getByText("Swipe"));
     expect(screen.getByText("Added")).toBeTruthy();
     expect(screen.getByText("Deleted")).toBeTruthy();
+    for (const caption of container.querySelectorAll(
+      "[data-slot='pier-image-diff-swipe-caption']"
+    )) {
+      expect(caption.className).not.toMatch(/backdrop-blur|backdrop-filter/u);
+      expect(caption.className).toContain("bg-background");
+      expect(caption.className).not.toMatch(/bg-background\/\d+/u);
+    }
     const swipeBar = screen.getByRole("slider", { name: "Swipe" });
     expect(swipeBar.className).toContain("cursor-col-resize");
     expect(swipeBar).toHaveAttribute("aria-valuetext", "50%");

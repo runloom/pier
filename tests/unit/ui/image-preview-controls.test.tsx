@@ -31,6 +31,30 @@ describe("ImagePreviewControls", () => {
     ).toContain("rounded-full");
   });
 
+  it("uses an opaque pill without backdrop-filter over the Ghostty hole", () => {
+    render(
+      <ImagePreviewControls
+        effectiveZoom={1}
+        includeFit={false}
+        labels={{
+          actualSize: "Reset text size",
+          controlsLabel: "Text size",
+          zoomIn: "Increase text size",
+          zoomLevel: "Text size",
+          zoomOut: "Decrease text size",
+        }}
+        onZoomChange={vi.fn()}
+        onZoomIn={vi.fn()}
+        onZoomOut={vi.fn()}
+        zoom={1}
+      />
+    );
+    const pill = screen.getByRole("toolbar", { name: "Text size" }).className;
+    expect(pill).not.toMatch(/backdrop-blur|backdrop-filter/u);
+    expect(pill).toContain("bg-background");
+    expect(pill).not.toMatch(/bg-background\/\d+/u);
+  });
+
   it("uses percent labels and the same pill when Fit is omitted", () => {
     render(
       <ImagePreviewControls
