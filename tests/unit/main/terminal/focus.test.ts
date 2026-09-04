@@ -155,6 +155,9 @@ describe("terminal focus restoration", () => {
       })),
     }));
 
+    const { stubTerminalIpcProcessEnvironment } = await import(
+      "./harness/stub-process-environment.ts"
+    );
     const { registerTerminalIpc } = await import("@main/ipc/terminal/index.ts");
     const { terminalFocusCoordinator } = await import(
       "@main/ipc/terminal/focus-coordinator.ts"
@@ -162,9 +165,8 @@ describe("terminal focus restoration", () => {
 
     registerTerminalIpc(fakeIpcMain as never, {
       loadNativeAddon: () => ({ addon: fakeAddon as never, error: null }),
-      ...(opts.processEnvironment
-        ? { processEnvironment: opts.processEnvironment as never }
-        : {}),
+      processEnvironment: (opts.processEnvironment ??
+        stubTerminalIpcProcessEnvironment()) as never,
     });
     return {
       terminalFocusCoordinator,
@@ -733,7 +735,13 @@ describe("terminal focus restoration", () => {
     try {
       const { fakeAddon, invokeHandlers, ipcWindow, sessionState } =
         await setupTerminalFocusHarness({
-          launch: { agentId: "claude", command: "claude", cwd: "/repo" },
+          launch: {
+            agentId: "claude",
+            // Absolute path skips interactive command-name probe (would hang
+            // under fake timers waiting for a timeout we cannot advance yet).
+            command: "/usr/bin/claude",
+            cwd: "/repo",
+          },
         });
       fakeAddon.sendText.mockReturnValue(false);
       await invokeHandlers.get("pier:terminal:create")?.(

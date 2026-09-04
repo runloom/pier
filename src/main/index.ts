@@ -1,3 +1,4 @@
+import { resolveUiLocale } from "@shared/i18n/locales.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
@@ -5,6 +6,10 @@ import { createLocalControlRegistrationOwner } from "./adapters/cli/local-contro
 import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
 import { registerPeerUidFromNativeAddon } from "./adapters/cli/register-peer-uid-native.ts";
 import { appCore } from "./app-core/index.ts";
+import {
+  attachPierFileProtocol,
+  createPierFileProtocolHostForServices,
+} from "./app-core/pier-file-protocol.ts";
 import {
   consumeIntentionalQuitAction,
   disarmIntentionalRelaunch,
@@ -58,6 +63,7 @@ import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerTaskRuntimeDiagnosticsIpc } from "./ipc/task-runtime-diagnostics.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal/debug-window.ts";
 import { getTerminalAddon, registerTerminalIpc } from "./ipc/terminal/index.ts";
+import { dispatchPierFileOpenUrl } from "./ipc/terminal/open-url-forwarding.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerUsageDataIpc } from "./ipc/usage-data.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
@@ -80,11 +86,26 @@ import {
 import { readPreferredOpenWindowRecordIds } from "./state/window-record-state.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/manager.ts";
+import { setWindowOsTitleLocale } from "./windows/os-title.ts";
 import { createWindowZoomController } from "./windows/zoom.ts";
 
 const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";
 const startupLog = createLogger("startup");
+const pierFileProtocolLog = createLogger("pier-file-protocol");
+const pierFileProtocol = createPierFileProtocolHostForServices({
+  dispatchOpenUrl: (input) => {
+    dispatchPierFileOpenUrl(input).catch((error) => {
+      pierFileProtocolLog.error("failed to open pier://file", { error });
+    });
+  },
+  logError: (error) => {
+    pierFileProtocolLog.error("failed to open pier://file", { error });
+  },
+  window: {
+    list: () => appCore.services.window.list(),
+  },
+});
 const windowLog = createLogger("window");
 const windowZoomLog = createLogger("window-zoom");
 const cliLog = createLogger("cli");
@@ -114,6 +135,11 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (gotTheLock) {
   installMainDiagnosticsLogging();
   installProcessMemoryTrail();
+  attachPierFileProtocol({
+    app,
+    defaultApp: Boolean(process.defaultApp),
+    host: pierFileProtocol,
+  });
 } else {
   abortMissingSingleInstanceLock(isDev, app, (message) => {
     startupLog.error(message);
@@ -276,6 +302,10 @@ if (gotTheLock) {
         },
         readPreferences: () => appCore.services.preferences.read(),
       });
+      const preferences = await appCore.services.preferences.read();
+      setWindowOsTitleLocale(
+        resolveUiLocale(preferences.language, [app.getLocale()])
+      );
       appCore.eventBus.subscribe((event) => {
         if (event.type === "preferences.changed") {
           handlePreferencesChangedForWindows({
@@ -284,6 +314,11 @@ if (gotTheLock) {
             listWindows: () => windowManager.getAll(),
             snapshot: event.snapshot,
           });
+          if (event.changedKeys.includes("language")) {
+            setWindowOsTitleLocale(
+              resolveUiLocale(event.snapshot.language, [app.getLocale()])
+            );
+          }
         }
       });
 
@@ -391,6 +426,7 @@ if (gotTheLock) {
       if (restored.length === 0) {
         await appCore.services.window.create({ mode: "fresh" });
       }
+      await pierFileProtocol.markReady();
 
       app.on("activate", () => {
         if (windowManager.getAll().length === 0) {
@@ -400,6 +436,7 @@ if (gotTheLock) {
               if (!restoredWindow) {
                 await appCore.services.window.create({ mode: "fresh" });
               }
+              await pierFileProtocol.markReady();
             })
             .catch((error) => {
               windowLog.error("failed to restore window on activate", {

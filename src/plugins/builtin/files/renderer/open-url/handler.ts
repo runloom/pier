@@ -22,6 +22,16 @@ import { resolveTerminalLocalPathTargets } from "./resolve.ts";
 
 type SystemOpenFallbackReason = "open-instance-failed" | "open-project-failed";
 
+function panelContextForDiskRoot(root: string): PanelContext {
+  return {
+    contextId: `pier-file:${root}`,
+    cwd: root,
+    projectRootPath: root,
+    source: "command",
+    updatedAt: Date.now(),
+  };
+}
+
 type DiskOpenResult = "failed" | "missing" | "opened";
 
 const inflight = new Map<string, Promise<void>>();
@@ -210,12 +220,9 @@ async function openDiskTarget(input: {
   const openContext = withTerminalOpenAnchor(input.panelContext, root);
 
   if (relativePath === "") {
-    if (!openContext) {
-      return "failed";
-    }
     return await openProjectDirectoryFromUrl(
       input.context,
-      openContext,
+      openContext ?? panelContextForDiskRoot(root),
       root,
       "",
       absolutePath
@@ -232,14 +239,20 @@ async function openDiskTarget(input: {
   }
 
   if (stat.isDirectory) {
-    if (!openContext) {
-      return "failed";
+    if (openContext) {
+      return await openProjectDirectoryFromUrl(
+        input.context,
+        openContext,
+        root,
+        relativePath,
+        absolutePath
+      );
     }
     return await openProjectDirectoryFromUrl(
       input.context,
-      openContext,
-      root,
-      relativePath,
+      panelContextForDiskRoot(absolutePath),
+      absolutePath,
+      "",
       absolutePath
     );
   }

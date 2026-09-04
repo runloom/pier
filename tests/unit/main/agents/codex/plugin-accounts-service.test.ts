@@ -751,6 +751,128 @@ describe("pier.codex accounts service", () => {
     service.dispose();
   });
 
+  it("replaces a stale JWT period-end with the live renewal after refreshUsage", async () => {
+    const stateFile = join(dir, "accounts.json");
+    const managedBaseDir = join(dir, "managed");
+    const staleExpiry = Date.parse("2026-08-10T14:03:28+00:00");
+    const renewsAt = Date.parse("2026-10-04T21:38:26+00:00");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        activeAccountId: "account-1",
+        accounts: [
+          {
+            createdAt: 1,
+            email: "renewed@example.com",
+            id: "account-1",
+            planType: "pro",
+            provider: "codex",
+            providerAccountId: "provider-1",
+            subscriptionExpiresAt: staleExpiry,
+            updatedAt: 1,
+          },
+        ],
+        revision: 1,
+        schemaVersion: 1,
+      }),
+      "utf8"
+    );
+    const provider = createProvider({
+      fetchUsage: vi.fn(async () => ({
+        hasActiveSubscription: true,
+        membershipResolved: true,
+        planType: "pro-20x",
+        status: "ok" as const,
+        subscriptionExpiresAt: renewsAt,
+        metrics: [usageWindow(0)],
+      })),
+      readIdentity: vi.fn(async () => ({
+        email: "renewed@example.com",
+        planType: "pro",
+        providerAccountId: "provider-1",
+        subscriptionExpiresAt: staleExpiry,
+      })),
+    });
+    const service = createCodexAccountsService({
+      managedBaseDir,
+      onChanged: vi.fn(),
+      provider,
+      stateStore: createCodexAccountsStateStore(stateFile),
+    });
+    await service.init();
+
+    await service.refreshUsage({ accountId: "account-1", force: true });
+
+    const account = service
+      .snapshot()
+      .accounts.find((entry) => entry.id === "account-1");
+    expect(account?.planType).toBe("pro-20x");
+    expect(account?.hasActiveSubscription).toBe(true);
+    expect(account?.subscriptionExpiresAt).toBe(renewsAt);
+    service.dispose();
+  });
+
+  it("keeps live membership when identity is stale and accounts/check is unresolved", async () => {
+    const stateFile = join(dir, "accounts.json");
+    const managedBaseDir = join(dir, "managed");
+    const staleExpiry = Date.parse("2026-08-10T14:03:28+00:00");
+    const renewsAt = Date.parse("2026-10-04T21:38:26+00:00");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        activeAccountId: "account-1",
+        accounts: [
+          {
+            createdAt: 1,
+            email: "renewed@example.com",
+            hasActiveSubscription: true,
+            id: "account-1",
+            planType: "pro-20x",
+            provider: "codex",
+            providerAccountId: "provider-1",
+            subscriptionExpiresAt: renewsAt,
+            updatedAt: 1,
+          },
+        ],
+        revision: 1,
+        schemaVersion: 1,
+      }),
+      "utf8"
+    );
+    const provider = createProvider({
+      fetchUsage: vi.fn(async () => ({
+        planType: "pro",
+        status: "ok" as const,
+        metrics: [usageWindow(0)],
+      })),
+      readIdentity: vi.fn(async () => ({
+        email: "renewed@example.com",
+        planType: "pro",
+        providerAccountId: "provider-1",
+        subscriptionExpiresAt: staleExpiry,
+      })),
+    });
+    const service = createCodexAccountsService({
+      managedBaseDir,
+      onChanged: vi.fn(),
+      provider,
+      stateStore: createCodexAccountsStateStore(stateFile),
+    });
+    await service.init();
+
+    await service.refreshUsage({ accountId: "account-1", force: true });
+
+    const account = service
+      .snapshot()
+      .accounts.find((entry) => entry.id === "account-1");
+    expect(account?.planType).toBe("pro-20x");
+    expect(account?.hasActiveSubscription).toBe(true);
+    expect(account?.subscriptionExpiresAt).toBe(renewsAt);
+    service.dispose();
+  });
+
   it("refreshes every managed account with bounded concurrency", async () => {
     const stateFile = join(dir, "accounts.json");
     const managedBaseDir = join(dir, "managed");

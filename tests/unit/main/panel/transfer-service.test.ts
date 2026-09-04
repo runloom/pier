@@ -1211,6 +1211,37 @@ describe("PanelTransferService", () => {
     expect(createForTransfer).toHaveBeenCalledOnce();
   });
 
+  it("late offer after finishDrag does not start overlay preview", async () => {
+    cursor = { x: 5000, y: 5000 };
+    const broadcasts: PanelTransferOverlayPreview[] = [];
+    const service = createService({
+      broadcastOverlayPreview: (preview) => {
+        broadcasts.push(preview);
+      },
+      overlayPreviewSchedule: {
+        interval: () => ({
+          dispose() {
+            return;
+          },
+        }),
+      },
+    });
+    const source = caller("main", "record-main", 1);
+    const finishPromise = service.finishDrag(source, TRANSFER_A);
+    await Promise.resolve();
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(finishPromise).resolves.toMatchObject({
+      ok: true,
+      targetPanelId: "panel-1",
+    });
+    expect(broadcasts.some((preview) => preview.kind === "source")).toBe(false);
+    expect(broadcasts.some((preview) => preview.kind === "target")).toBe(false);
+    expect(broadcasts.at(0)).toEqual({
+      kind: "clear",
+      transferId: TRANSFER_A,
+    });
+  });
+
   it("finishDrag outside cursor creates transfer window via createForTransfer", async () => {
     cursor = { x: 5000, y: 5000 }; // outside both windows
     const service = createService();

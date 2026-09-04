@@ -35,6 +35,8 @@ final class TerminalSurfaceCoordinator {
 
     var surface: TerminalSurface?
     private var bridge: TerminalCallbackBridge?
+    /// OSC 8 / detected hyperlink currently under the pointer.
+    var hoverLinkUrl: String? { bridge?.hoverLinkUrl }
 
     // MARK: - Platform Hooks
 

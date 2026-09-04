@@ -144,12 +144,22 @@ export function registerTerminalIpc(
     taskService: deps.taskService ?? null,
   });
   // Swift 收到 scoped panelId, renderer 使用 raw panel id.
-  addon?.setMouseForwardCallback((id, panelId, x, y) => {
-    recordNativeTerminalRoute(id, "right-mouse", panelId, { x, y });
+  addon?.setMouseForwardCallback((id, panelId, x, y, linkUrl) => {
+    const trimmedLink = linkUrl?.trim() ?? "";
+    recordNativeTerminalRoute(id, "right-mouse", panelId, {
+      x,
+      y,
+      ...(trimmedLink.length > 0 ? { linkUrl: trimmedLink } : {}),
+    });
     forwardToWindow(
       id,
       "pier:terminal:request-context-menu",
-      { panelId: fromNativePanelKey(panelId), x, y },
+      {
+        panelId: fromNativePanelKey(panelId),
+        x,
+        y,
+        ...(trimmedLink.length > 0 ? { linkUrl: trimmedLink } : {}),
+      },
       "pier-mouse-forward"
     );
   });
@@ -200,30 +210,57 @@ export function registerTerminalIpc(
       );
     }
   );
-  addon?.setOpenUrlForwardCallback((id, panelId, url, kind) => {
-    const rawPanelId = fromNativePanelKey(panelId);
-    recordNativeTerminalRoute(id, "open-url", panelId, { kind, url });
+  function dispatchOpenUrl(input: {
+    kind?: string;
+    panelId: string;
+    url: string;
+    windowId: number;
+  }): void {
+    const rawPanelId = fromNativePanelKey(input.panelId);
+    recordNativeTerminalRoute(input.windowId, "open-url", input.panelId, {
+      url: input.url,
+      ...(input.kind === undefined ? {} : { kind: input.kind }),
+    });
     handleTerminalOpenUrl({
       broadcast: (event) => {
         forwardToWindow(
-          id,
+          input.windowId,
           PIER_BROADCAST.TERMINAL_OPEN_URL,
           event,
           "pier-open-url-forward"
         );
       },
-      kind: kind === "html" || kind === "text" ? kind : "unknown",
+      kind:
+        input.kind === "html" || input.kind === "text" ? input.kind : "unknown",
       openExternal: async (target) => {
         const { shell } = await import("electron");
         await shell.openExternal(target);
       },
       panelId: rawPanelId,
-      url,
-      windowId: id,
+      url: input.url,
+      windowId: input.windowId,
     }).catch((err) => {
       console.error("[pier-open-url] failed:", err);
     });
+  }
+
+  addon?.setOpenUrlForwardCallback((id, panelId, url, kind) => {
+    dispatchOpenUrl({ kind, panelId, url, windowId: id });
   });
+  ipcMain.handle(
+    "pier:terminal:open-url",
+    (event, panelId: unknown, url: unknown) => {
+      if (typeof panelId !== "string" || typeof url !== "string") {
+        return { ok: false as const };
+      }
+      const win = windowFromWebContents(event.sender);
+      if (!win) {
+        return { ok: false as const };
+      }
+      dispatchOpenUrl({ panelId, url, windowId: win.id });
+      return { ok: true as const };
+    }
+  );
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
     recordNativeTerminalRoute(id, "cwd", panelId, { cwd });
     const rawPanelId = fromNativePanelKey(panelId);

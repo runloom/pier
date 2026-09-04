@@ -11,10 +11,15 @@ import { tabShortByPanelIdFrom } from "@/lib/agent-runtime/list-title.ts";
 import { preferredAgentIndexSortOptions } from "@/lib/agent-runtime/preferred-sort-options.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import type { QuickPick } from "@/lib/command-palette/types.ts";
+import { listWindows } from "@/lib/ipc/window-ipc.ts";
 import { useAgentRuntimeIndexStore } from "@/stores/agent-runtime-index.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import {
+  titleByWindowIdFrom,
+  useWindowListStore,
+} from "@/stores/window-list.store.ts";
 
 function buildQuickPickSession(
   options: { limit?: number } | undefined,
@@ -33,6 +38,7 @@ function buildQuickPickSession(
     tabShortByPanelId: tabShortByPanelIdFrom(
       usePanelDescriptorStore.getState().descriptors
     ),
+    titleByWindowId: titleByWindowIdFrom(useWindowListStore.getState().windows),
   });
 
   return {
@@ -105,15 +111,21 @@ export async function openAgentIndexQuickPick(options?: {
   const unsubFa = useForegroundActivityStore.subscribe(refresh);
   // tab short 随 OSC / 改名变化，列表必须同步刷新才能始终与 tab 一致。
   const unsubDescriptors = usePanelDescriptorStore.subscribe(refresh);
+  const unsubWindows = useWindowListStore.subscribe(refresh);
   unsubscribe = () => {
     unsubIndex();
     unsubFa();
     unsubDescriptors();
+    unsubWindows();
   };
 
   try {
-    const snapshot = await window.pier.agentRuntimeIndex.list();
+    const [snapshot, windows] = await Promise.all([
+      window.pier.agentRuntimeIndex.list(),
+      listWindows().catch(() => [] as const),
+    ]);
     useAgentRuntimeIndexStore.getState().applySnapshot(snapshot);
+    useWindowListStore.getState().apply(windows);
     refresh();
   } catch (err) {
     unsubscribe();

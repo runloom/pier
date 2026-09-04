@@ -150,7 +150,7 @@ export const PANEL_TAB_FOCUS_ACTION_CONTRIBUTIONS: readonly ActionContribution[]
   TAB_FOCUS_INDICES.map(
     (index): ActionContribution => ({
       categoryKey: "panel",
-      group: "3_focus",
+      group: "2_split",
       handler: () => {
         useWorkspaceStore.getState().activateTabInActiveGroup(index - 1);
       },
@@ -168,7 +168,7 @@ export const PANEL_TAB_CYCLE_ACTION_CONTRIBUTIONS: readonly ActionContribution[]
     {
       categoryKey: "panel",
       excludeFromMru: true,
-      group: "3_focus",
+      group: "2_split",
       handler: () => {
         useWorkspaceStore.getState().cycleActiveGroupTab(1);
       },
@@ -181,7 +181,7 @@ export const PANEL_TAB_CYCLE_ACTION_CONTRIBUTIONS: readonly ActionContribution[]
     {
       categoryKey: "panel",
       excludeFromMru: true,
-      group: "3_focus",
+      group: "2_split",
       handler: () => {
         useWorkspaceStore.getState().cycleActiveGroupTab(-1);
       },

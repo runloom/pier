@@ -388,6 +388,9 @@ export async function fetchCodexUsageHttp(
           ...withCredits,
           membershipResolved: true,
           planType: membership.planType,
+          ...(membership.hasActiveSubscription === undefined
+            ? {}
+            : { hasActiveSubscription: membership.hasActiveSubscription }),
           ...(membership.expiresAt === undefined
             ? {}
             : { subscriptionExpiresAt: membership.expiresAt }),

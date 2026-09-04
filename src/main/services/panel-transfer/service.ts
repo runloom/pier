@@ -166,7 +166,7 @@ export function createPanelTransferService(
   };
 
   const clearOffer = (transferId: string) => {
-    overlayPreview?.stop(transferId);
+    overlayPreview?.seal(transferId);
     speculative.discard(transferId);
     const live = offers.get(transferId);
     if (!live) return;
@@ -204,7 +204,7 @@ export function createPanelTransferService(
     if (now() > live.expiresAt) {
       return panelTransferFailure("expired", "offer expired");
     }
-    overlayPreview?.stop(live.transferId);
+    overlayPreview?.seal(live.transferId);
     const deferred = Promise.withResolvers<PanelTransferResult>();
     live.claim = {
       deferred,
@@ -415,6 +415,7 @@ export function createPanelTransferService(
     },
 
     async drop(caller, input) {
+      overlayPreview?.seal(input.transferId);
       return await dropPanelTransfer(
         {
           geometry: args.geometry,
@@ -433,6 +434,7 @@ export function createPanelTransferService(
     },
 
     async finishDrag(caller, transferId) {
+      overlayPreview?.seal(transferId);
       const tombstone = tombstones.get(transferId);
       if (tombstone) {
         return tombstone.result;

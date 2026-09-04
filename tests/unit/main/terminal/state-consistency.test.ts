@@ -116,24 +116,14 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       })),
     }));
 
-    // Avoid real login-shell dumps (slow/flaky under parallel suites; may
-    // ENOENT or exceed the default 5s test timeout).
-    const processEnvironment = {
-      resolve: vi.fn(async () => ({
-        env: { PATH: "/usr/bin", TERM: "xterm-256color" },
-        hostStatus: {
-          disabled: false,
-          platform: "darwin",
-          timeoutMs: 5000,
-        },
-      })),
-    };
-
+    const { stubTerminalIpcProcessEnvironment } = await import(
+      "./harness/stub-process-environment.ts"
+    );
     const closeTerminal = fakeAddon.closeTerminal;
     const { registerTerminalIpc } = await import("@main/ipc/terminal/index.ts");
     registerTerminalIpc(fakeIpcMain as never, {
       loadNativeAddon: () => ({ addon: fakeAddon as never, error: null }),
-      processEnvironment: processEnvironment as never,
+      processEnvironment: stubTerminalIpcProcessEnvironment(),
       recordAgentLaunch: opts.recordAgentLaunch as never,
     });
 

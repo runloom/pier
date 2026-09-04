@@ -117,26 +117,30 @@ export function QuotaGroup({
 }
 
 export function codexAccountMembership(
-  account: Pick<CodexAccountSummary, "planType" | "subscriptionExpiresAt">,
+  account: Pick<
+    CodexAccountSummary,
+    "hasActiveSubscription" | "planType" | "subscriptionExpiresAt"
+  >,
   updatedAt: number,
   now = Date.now()
 ): AccountMembershipSnapshot | undefined {
   if (!account.planType) return;
   const tier = account.planType.toLowerCase();
   const free = tier === "free" || tier === "none";
+  // JWT `chatgpt_subscription_active_until` / entitlement.expires_at is a
+  // billing-period boundary and lags after renewal. Only a live inactive
+  // entitlement is "expired".
   let status: AccountMembershipSnapshot["status"] = "active";
   if (free) {
     status = "free";
-  } else if (
-    account.subscriptionExpiresAt !== undefined &&
-    account.subscriptionExpiresAt <= now
-  ) {
+  } else if (account.hasActiveSubscription === false) {
     status = "expired";
   }
+  const expiresAt = account.subscriptionExpiresAt;
+  const includeExpiry =
+    expiresAt !== undefined && (status === "expired" || expiresAt > now);
   return {
-    ...(account.subscriptionExpiresAt === undefined
-      ? {}
-      : { expiresAt: account.subscriptionExpiresAt }),
+    ...(includeExpiry ? { expiresAt } : {}),
     status,
     tier,
     updatedAt,
@@ -145,17 +149,25 @@ export function codexAccountMembership(
 
 /** Text fallback for compact menu rows that cannot host metadata badges. */
 export function accountPlanSummary(
-  account: Pick<CodexAccountSummary, "planType" | "subscriptionExpiresAt">,
+  account: Pick<
+    CodexAccountSummary,
+    "hasActiveSubscription" | "planType" | "subscriptionExpiresAt"
+  >,
   language: string,
   t: Translate,
   now = Date.now()
 ): string | null {
   if (!account.planType) return null;
   const tier = account.planType.toUpperCase();
+  if (tier === "FREE" || tier === "NONE") {
+    return tier;
+  }
+  if (account.hasActiveSubscription === false) {
+    return `${tier} · ${t("pier.codex.accounts.settings.expired", "Expired")}`;
+  }
   if (
     account.subscriptionExpiresAt === undefined ||
-    tier === "FREE" ||
-    tier === "NONE"
+    account.subscriptionExpiresAt <= now
   ) {
     return tier;
   }
@@ -170,7 +182,7 @@ export function AccountBadges({
 }: {
   account: Pick<
     CodexAccountSummary,
-    "planType" | "subscriptionExpiresAt" | "usage"
+    "hasActiveSubscription" | "planType" | "subscriptionExpiresAt" | "usage"
   >;
   language: string;
   mode?: AccountMetadataBadgeMode;

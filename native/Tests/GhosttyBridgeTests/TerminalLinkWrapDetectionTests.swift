@@ -187,4 +187,127 @@ final class TerminalLinkWrapDetectionTests: XCTestCase {
         XCTAssertTrue(clicked)
         XCTAssertEqual(capture.openedUrls.last, head)
     }
+
+    func testPlainClickOnOsc8FileOpensWithoutCmd() async throws {
+        let fixture = try makeFixture(size: NSSize(width: 640, height: 400))
+        await settleRendering()
+        let path = "/tmp/pier-host-link.md"
+        let osc8 =
+            "\u{1b}]8;;file://\(path)\u{1b}\\docs/pier-host-link.md\u{1b}]8;;\u{1b}\\\n"
+        fixture.session.receive(osc8)
+        let painted = await waitUntil {
+            fixture.session.readViewportText()?.contains("pier-host-link.md")
+                == true
+        }
+        XCTAssertTrue(painted)
+        await settleRendering()
+
+        capture.hoverUrls.removeAll()
+        capture.openedUrls.removeAll()
+
+        hoverOverCell(fixture, column: 2, row: 0)
+        let hovered = await lastHoverUrl(fixture)
+        XCTAssertEqual(hovered, "file://\(path)")
+
+        let point = CGPoint(x: 8, y: 8)
+        XCTAssertTrue(
+            fixture.view.beginHostLinkClickIfNeeded(at: point),
+            "host must steal a plain click on an OSC 8 file link"
+        )
+        XCTAssertTrue(fixture.view.completeHostLinkClick(at: point))
+        XCTAssertEqual(capture.openedUrls.last, "file://\(path)")
+    }
+
+    func testHostLinkDragDoesNotOpen() async throws {
+        let fixture = try makeFixture(size: NSSize(width: 640, height: 400))
+        await settleRendering()
+        fixture.session.receive("https://example.com/drag\n")
+        let painted = await waitUntil {
+            fixture.session.readViewportText()?.contains("example.com") == true
+        }
+        XCTAssertTrue(painted)
+        await settleRendering()
+        hoverOverCell(fixture, column: 3, row: 0)
+        _ = await lastHoverUrl(fixture)
+        capture.openedUrls.removeAll()
+        XCTAssertTrue(fixture.view.beginHostLinkClickIfNeeded(at: CGPoint(x: 8, y: 8)))
+        XCTAssertTrue(
+            fixture.view.completeHostLinkClick(at: CGPoint(x: 40, y: 8)),
+            "drag still consumes the press"
+        )
+        XCTAssertTrue(
+            capture.openedUrls.isEmpty,
+            "a drag must not open the link"
+        )
+    }
+
+    func testPendingHostLinkClickBlocksGhosttyMouse() async throws {
+        let fixture = try makeFixture(size: NSSize(width: 640, height: 400))
+        await settleRendering()
+        fixture.session.receive("https://example.com/block\n")
+        let painted = await waitUntil {
+            fixture.session.readViewportText()?.contains("example.com") == true
+        }
+        XCTAssertTrue(painted)
+        await settleRendering()
+        hoverOverCell(fixture, column: 3, row: 0)
+        _ = await lastHoverUrl(fixture)
+        XCTAssertFalse(fixture.view.hostLinkClickBlocksGhosttyMouse)
+        XCTAssertTrue(fixture.view.beginHostLinkClickIfNeeded(at: CGPoint(x: 8, y: 8)))
+        XCTAssertTrue(
+            fixture.view.hostLinkClickBlocksGhosttyMouse,
+            "stolen press must not forward mouse to Ghostty"
+        )
+        XCTAssertTrue(fixture.view.completeHostLinkClick(at: CGPoint(x: 8, y: 8)))
+        XCTAssertFalse(fixture.view.hostLinkClickBlocksGhosttyMouse)
+    }
+
+    func testRefreshHoverLinkUsesTheClickCellNotStaleHover() async throws {
+        let fixture = try makeFixture(size: NSSize(width: 640, height: 400))
+        await settleRendering()
+        let first = "/tmp/pier-link-a.md"
+        let second = "/tmp/pier-link-b.md"
+        let osc8 =
+            "\u{1b}]8;;file://\(first)\u{1b}\\first.md\u{1b}]8;;\u{1b}\\ "
+            + "\u{1b}]8;;file://\(second)\u{1b}\\second.md\u{1b}]8;;\u{1b}\\\n"
+        fixture.session.receive(osc8)
+        let painted = await waitUntil {
+            fixture.session.readViewportText()?.contains("second.md") == true
+        }
+        XCTAssertTrue(painted)
+        await settleRendering()
+
+        hoverOverCell(fixture, column: 2, row: 0)
+        let firstHover = await lastHoverUrl(fixture)
+        XCTAssertEqual(firstHover, "file://\(first)")
+
+        hoverOverCell(fixture, column: 12, row: 0)
+        let secondHover = await lastHoverUrl(fixture)
+        XCTAssertEqual(
+            secondHover,
+            "file://\(second)",
+            "second OSC 8 on the same row must be hoverable"
+        )
+
+        hoverOverCell(fixture, column: 2, row: 0)
+        _ = await lastHoverUrl(fixture)
+        capture.hoverUrls.removeAll()
+
+        let metrics = try XCTUnwrap(fixture.view.surface?.size())
+        let scale = fixture.window.screen?.backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor ?? 2
+        let cellWidth = CGFloat(metrics.cellWidthPixels) / scale
+        let cellHeight = CGFloat(metrics.cellHeightPixels) / scale
+        _ = fixture.view.refreshHoverLink(
+            surfaceX: 12 * cellWidth + 1,
+            surfaceY: cellHeight / 2,
+            mods: .super_
+        )
+        let refreshed = await lastHoverUrl(fixture)
+        XCTAssertEqual(
+            refreshed,
+            "file://\(second)",
+            "right-click must refresh hover at the click cell"
+        )
+    }
 }

@@ -58,10 +58,10 @@ export const TASK_RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       }
     },
     id: "pier.run.stopTask",
-    group: "1_run",
+    group: "1_new",
     iconComponent: Square,
     menuHidden: (invocation) => activeStopTarget(invocation) === null,
-    sortOrder: 2,
+    sortOrder: 3,
     surfaces: ["dockview-tab", "terminal/content", "terminal/restored"],
     titleKey: "terminal.runtimeControl.stop",
     title: (invocation) => {
@@ -83,10 +83,10 @@ export const TASK_RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       }
     },
     id: "pier.run.rerunTask",
-    group: "1_run",
+    group: "1_new",
     iconComponent: RotateCcw,
     menuHidden: (invocation) => resolveTaskRunActionTarget(invocation) === null,
-    sortOrder: 1,
+    sortOrder: 2,
     surfaces: [
       "dockview-tab",
       "terminal/content",

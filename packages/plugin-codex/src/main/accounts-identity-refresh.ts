@@ -10,6 +10,7 @@ function identityFieldsEqual(
     left.email === right.email &&
     left.planType === right.planType &&
     left.providerAccountId === right.providerAccountId &&
+    left.hasActiveSubscription === right.hasActiveSubscription &&
     left.subscriptionExpiresAt === right.subscriptionExpiresAt
   );
 }

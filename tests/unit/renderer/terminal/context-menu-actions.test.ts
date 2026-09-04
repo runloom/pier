@@ -276,6 +276,67 @@ describe("terminal content context menu actions", () => {
       "运行选中内容",
       "查找",
     ]);
+    expect(ids).not.toContain("pier.terminal.openLink");
+    expect(ids).not.toContain("pier.terminal.copyLink");
+    expect(ids).not.toContain("pier.terminal.revealLink");
+  });
+
+  it("puts open-in-pier first on a file hyperlink", async () => {
+    await registerActions();
+    const entries = buildMenuEntries("terminal/content", {
+      metadata: { linkUrl: "file:///tmp/notes.md" },
+      sourcePanelId: "terminal-1",
+      surface: "terminal/content",
+    });
+    const ids = collectActionIds(entries);
+    expect(ids[0]).toBe("pier.terminal.openLink");
+    expect(ids[1]).toBe("pier.terminal.copyLink");
+    expect(ids[2]).toBe("pier.terminal.revealLink");
+    expect(topLevelActionLabels(entries)[0]).toBe("在 Pier 中打开");
+    expect(ids).not.toContain("pier.terminal.openWithSystemApp");
+  });
+
+  it("hides open reveal and system-open for a relative path without cwd", async () => {
+    await registerActions();
+    const ids = collectActionIds(
+      buildMenuEntries("terminal/content", {
+        metadata: { linkUrl: "docs/a.md" },
+        sourcePanelId: "terminal-1",
+        surface: "terminal/content",
+      })
+    );
+    expect(ids[0]).not.toBe("pier.terminal.openLink");
+    expect(ids).not.toContain("pier.terminal.openLink");
+    expect(ids).toContain("pier.terminal.copyLink");
+    expect(ids).not.toContain("pier.terminal.revealLink");
+    expect(ids).not.toContain("pier.terminal.openWithSystemApp");
+  });
+
+  it("opens http links and copies the URL without reveal", async () => {
+    await registerActions();
+    const entries = buildMenuEntries("terminal/content", {
+      metadata: { linkUrl: "https://example.com/docs" },
+      sourcePanelId: "terminal-1",
+      surface: "terminal/content",
+    });
+    expect(topLevelActionLabels(entries)[0]).toBe("打开链接");
+    const ids = collectActionIds(entries);
+    expect(ids).toContain("pier.terminal.copyLink");
+    expect(ids).not.toContain("pier.terminal.revealLink");
+    expect(ids).not.toContain("pier.terminal.openWithSystemApp");
+  });
+
+  it("hides vscode:// link actions", async () => {
+    await registerActions();
+    const ids = collectActionIds(
+      buildMenuEntries("terminal/content", {
+        metadata: { linkUrl: "vscode://file/tmp/a.ts" },
+        sourcePanelId: "terminal-1",
+        surface: "terminal/content",
+      })
+    );
+    expect(ids[0]).toBe("pier.terminal.copy");
+    expect(ids).not.toContain("pier.terminal.openLink");
   });
 
   it("includes focus/equalize on terminal content when multiple groups exist", async () => {
@@ -658,8 +719,8 @@ describe("terminal content context menu actions", () => {
     const clear = actionRegistry.get("pier.terminal.clearScreen");
     expect(search?.metadata?.group).toBe("1_find");
     expect(clear?.metadata?.group).toBe("8_clear");
-    expect(action.metadata?.group).toBe("2_agent");
-    expect(action.metadata?.sortOrder).toBe(2);
+    expect(action.metadata?.group).toBe("1_new");
+    expect(action.metadata?.sortOrder).toBe(11);
     expect(ids.indexOf("pier.terminal.search")).toBeLessThan(
       ids.indexOf("pier.terminal.openAgentComposer")
     );

@@ -92,6 +92,9 @@ export const terminalApi: TerminalAPI = {
   writeComposerPasteText: (data) =>
     ipcRenderer.invoke("pier:terminal:composer-write-paste-text", data),
   openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),
+  openUrl: async (panelId, url) => {
+    await ipcRenderer.invoke("pier:terminal:open-url", panelId, url);
+  },
   performOperation: (panelId, operation) =>
     ipcRenderer.invoke("pier:terminal:perform-operation", panelId, operation),
   pickComposerFiles: () =>

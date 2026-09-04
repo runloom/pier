@@ -1,5 +1,5 @@
 /**
- * 命令面板 / 新建菜单空态分组：标题门槛、合并单项、智能体子组、最近块。
+ * 命令面板 / 新建菜单空态分组：标题门槛、合并单项、智能体子组、最近块、新建菜单工作区。
  * 权威：docs/superpowers/specs/2026-09-02-command-list-heading-gold-standard.md
  */
 
@@ -15,6 +15,7 @@ export const COMMAND_PALETTE_RECENTS_LIMIT = 8;
 
 export const RECENT_PRESENTATION_ID = "recent";
 export const AGENT_PRESENTATION_ID = "agent";
+export const WORKSPACE_PRESENTATION_ID = "workspace";
 
 export const CREATE_MENU_CATEGORY_ORDER: Readonly<Record<string, number>> = {
   run: 0,
@@ -69,6 +70,11 @@ export function commandListHasItemValue(
 export interface PresentCommandListGroupsOptions {
   categoryLabel: (category: string) => string;
   categoryOrder: Readonly<Record<string, number>>;
+  /**
+   * 新建菜单：运行 / 智能体以外的条目收成一个展示组（工作区）。
+   * 命令面板不传。动作上的 categoryKey 不变。
+   */
+  foldRemainderInto?: string;
   frecencyMap?: ReadonlyMap<string, number>;
   itemCompare: (a: Action, b: Action) => number;
   recentLabel: string;
@@ -102,7 +108,20 @@ function createMenuFallbackPriority(action: Action): number {
   if (action.id === "pier.run.task") {
     return 100;
   }
-  return 200 + (action.metadata?.sortOrder ?? 0);
+  if (action.id === "pier.panel.newTab") {
+    return 200;
+  }
+  const category = actionCategoryKey(action);
+  if (category === "file") {
+    return 300 + (action.metadata?.sortOrder ?? 0);
+  }
+  if (category === "worktree") {
+    return 400 + (action.metadata?.sortOrder ?? 0);
+  }
+  if (category === "window") {
+    return 500 + (action.metadata?.sortOrder ?? 0);
+  }
+  return 600 + (action.metadata?.sortOrder ?? 0);
 }
 
 export function compareCreateMenuItems(a: Action, b: Action): number {
@@ -165,6 +184,40 @@ function recentActions(
     })
     .slice(0, recentsLimit)
     .map((entry) => entry.action);
+}
+
+function isSessionPresentationId(id: string): boolean {
+  return id === "run" || id === AGENT_PRESENTATION_ID;
+}
+
+function foldNonSessionRemainder(
+  groups: readonly PresentedCommandGroup[],
+  options: PresentCommandListGroupsOptions
+): PresentedCommandGroup[] {
+  const remainderId = options.foldRemainderInto;
+  if (!remainderId) {
+    return [...groups];
+  }
+  const session: PresentedCommandGroup[] = [];
+  const remainderActions: Action[] = [];
+  for (const group of groups) {
+    if (isSessionPresentationId(group.id)) {
+      session.push(group);
+      continue;
+    }
+    remainderActions.push(...group.actions);
+  }
+  if (remainderActions.length === 0) {
+    return session;
+  }
+  remainderActions.sort(options.itemCompare);
+  session.push({
+    actions: remainderActions,
+    heading:
+      remainderActions.length >= 2 ? options.categoryLabel(remainderId) : null,
+    id: remainderId,
+  });
+  return session;
 }
 
 function mergeAdjacentUnheaded(
@@ -261,7 +314,10 @@ export function presentCommandListGroups(
       ];
     });
 
-  const merged = mergeAdjacentUnheaded(categoryGroups);
+  const folded = options.foldRemainderInto
+    ? foldNonSessionRemainder(categoryGroups, options)
+    : categoryGroups;
+  const merged = mergeAdjacentUnheaded(folded);
   if (presented[0]?.id === RECENT_PRESENTATION_ID && merged.length > 0) {
     presented[0] = { ...presented[0], separatorAfter: true };
   }

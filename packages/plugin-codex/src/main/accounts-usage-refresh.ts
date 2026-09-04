@@ -122,6 +122,9 @@ export function createCodexUsageRefreshRunner(options: {
                 current,
                 {
                   planType: result.planType,
+                  ...(result.hasActiveSubscription === undefined
+                    ? {}
+                    : { hasActiveSubscription: result.hasActiveSubscription }),
                   ...(result.subscriptionExpiresAt === undefined
                     ? {}
                     : { expiresAt: result.subscriptionExpiresAt }),

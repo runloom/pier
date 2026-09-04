@@ -1,0 +1,50 @@
+diff --git a/src/Surface.zig b/src/Surface.zig
+--- a/src/Surface.zig
++++ b/src/Surface.zig
+@@ -2816,20 +2816,45 @@
+         if (self.config.selection_clear_on_typing or
+             event.key == .escape)
+         {
+             try self.setSelection(null);
+         }
+ 
+-        if (self.config.scroll_to_bottom.keystroke) self.io.terminal.scrollViewport(.bottom);
++        if (self.config.scroll_to_bottom.keystroke and keystrokeFollowsViewport(event))
++            self.io.terminal.scrollViewport(.bottom);
+ 
+         try self.queueRender();
+     }
+ 
+     return .consumed;
+ }
+ 
++/// Pier patch (0109): keystroke follow still snaps typing / Enter /
++/// Backspace back to live, but bare arrows and Page stay put so Codex /
++/// Cursor menus do not yank the host scrollbar. Ctrl/Alt/Super chords
++/// keep the Ghostty default (prompt editing). Shift-only stays nav.
++fn keystrokeFollowsViewport(event: input.KeyEvent) bool {
++    if (event.mods.ctrl or event.mods.alt or event.mods.super) return true;
++    return switch (event.key) {
++        .arrow_up,
++        .arrow_down,
++        .arrow_left,
++        .arrow_right,
++        .page_up,
++        .page_down,
++        .numpad_up,
++        .numpad_down,
++        .numpad_left,
++        .numpad_right,
++        .numpad_page_up,
++        .numpad_page_down,
++        => false,
++        else => true,
++    };
++}
++
+ /// Maybe handles a binding for a given event and if so returns the effect.
+ /// Returns null if the event is not handled in any way and processing should
+ /// continue.
+ fn maybeHandleBinding(
+     self: *Surface,
+     event: input.KeyEvent,

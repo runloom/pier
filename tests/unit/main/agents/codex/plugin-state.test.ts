@@ -117,6 +117,39 @@ describe("Codex accounts data schema", () => {
     expect(state.activeAccountId).toBe("acc-1");
   });
 
+  it("accepts optional hasActiveSubscription written by live membership", async () => {
+    await writeFile(
+      statePath,
+      JSON.stringify({
+        accounts: [
+          {
+            createdAt: 1,
+            email: "user@example.com",
+            hasActiveSubscription: true,
+            id: "acc-1",
+            planType: "pro",
+            provider: "codex",
+            subscriptionExpiresAt: 1_800_000_000_000,
+            updatedAt: 2,
+          },
+        ],
+        activeAccountId: "acc-1",
+        revision: 3,
+        schemaVersion: 1,
+      })
+    );
+    const store = createCodexAccountsStateStore(statePath, "1.0.3");
+
+    await expect(store.init()).resolves.toMatchObject({
+      accounts: [
+        {
+          hasActiveSubscription: true,
+          id: "acc-1",
+        },
+      ],
+    });
+  });
+
   it("accepts optional subscriptionExpiresAt written by newer account metadata", async () => {
     await writeFile(
       statePath,

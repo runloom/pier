@@ -75,6 +75,45 @@ describe("handleFilesTerminalOpenUrl", () => {
     } as unknown as RendererPluginContext;
   });
 
+  it("opens pier://file into the Files panel", async () => {
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "text",
+        panelId: "t1",
+        url: "pier://file/Users/a/repo/README.md",
+      })
+    ).resolves.toBe(true);
+    expect(openInstance).toHaveBeenCalled();
+    expect(openPath).not.toHaveBeenCalled();
+  });
+
+  it("opens a pier://file directory in Files when there is no terminal panel context", async () => {
+    getPanelContext.mockReturnValue(null);
+    stat.mockResolvedValue({
+      exists: true,
+      isDirectory: true,
+      mtimeMs: 1,
+      path: "repo",
+      root: "/Users/a",
+      size: 0,
+    });
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "unknown",
+        panelId: "pier-file-protocol",
+        url: "pier://file/Users/a/repo",
+      })
+    ).resolves.toBe(true);
+    expect(openProjectDirectory).toHaveBeenCalledWith({
+      context: expect.objectContaining({
+        projectRootPath: "/Users/a/repo",
+      }),
+      path: "",
+      root: "/Users/a/repo",
+    });
+    expect(openInstance).not.toHaveBeenCalled();
+  });
+
   it("ignores remote urls", async () => {
     await expect(
       handleFilesTerminalOpenUrl(context, {

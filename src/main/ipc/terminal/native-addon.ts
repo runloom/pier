@@ -195,7 +195,8 @@ export interface NativeAddon {
           browserWindowId: number,
           panelId: string,
           x: number,
-          y: number
+          y: number,
+          linkUrl?: string
         ) => void)
       | null
   ): void;

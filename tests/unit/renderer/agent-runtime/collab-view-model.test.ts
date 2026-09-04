@@ -4,6 +4,7 @@
 import type { AgentRuntimeIndexEntry } from "@shared/contracts/agent/runtime-index.ts";
 import { describe, expect, it } from "vitest";
 import { buildCollaborationViewModel } from "@/lib/agent-runtime/collab-view-model.ts";
+import { titleByWindowIdFrom } from "@/stores/window-list.store.ts";
 
 function entry(
   partial: Partial<AgentRuntimeIndexEntry> &
@@ -171,6 +172,70 @@ describe("buildCollaborationViewModel (W5-S1)", () => {
     });
     // first needsYou is a; attention points to b — selected must follow attention
     expect(vm.selected?.agentRef).toBe("w\0b");
+  });
+
+  it("uses WindowInfo.title for other-window location, not the electron id", () => {
+    const vm = buildCollaborationViewModel({
+      entries: [
+        entry({
+          agentRef: "w\0a",
+          agentId: "codex",
+          panelId: "a",
+          windowId: "2",
+          status: "processing",
+        }),
+      ],
+      activities: [],
+      currentWindowId: "1",
+      titleByWindowId: { "2": "pier · main" },
+    });
+    expect(vm.sessions[0]?.locationKey).toBe("agents.collab.locationWindow");
+    expect(vm.sessions[0]?.locationParams).toEqual({ title: "pier · main" });
+  });
+
+  it("resolves collab location from electronWindowId when WindowInfo.id differs", () => {
+    const titles = titleByWindowIdFrom([
+      {
+        electronWindowId: "2",
+        focused: false,
+        id: "w-2",
+        recordId: "r-2",
+        title: "pier · main",
+      },
+    ]);
+    const vm = buildCollaborationViewModel({
+      entries: [
+        entry({
+          agentRef: "w\0a",
+          agentId: "codex",
+          panelId: "a",
+          windowId: "2",
+          status: "processing",
+        }),
+      ],
+      activities: [],
+      currentWindowId: "1",
+      titleByWindowId: titles,
+    });
+    expect(vm.sessions[0]?.locationParams).toEqual({ title: "pier · main" });
+  });
+
+  it("omits other-window location when a title is not yet known", () => {
+    const vm = buildCollaborationViewModel({
+      entries: [
+        entry({
+          agentRef: "w\0a",
+          agentId: "codex",
+          panelId: "a",
+          windowId: "2",
+          status: "processing",
+        }),
+      ],
+      activities: [],
+      currentWindowId: "1",
+    });
+    expect(vm.sessions[0]?.locationKey).toBeUndefined();
+    expect(vm.sessions[0]?.locationParams).toBeUndefined();
   });
 
   it("marks same-window location for current window id", () => {

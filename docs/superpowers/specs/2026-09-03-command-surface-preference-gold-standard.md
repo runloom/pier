@@ -32,7 +32,7 @@
 
 1. **公式层。** 衰减只走 `src/shared/frecency.ts` 的 `usageFrecency`（14 天半衰期）。禁止第二套 `0.5 **`。
 2. **搜索内核（有 query）。** 命令 / 技能 / 动作只走 `rankSearchDocuments`：标题/别名主带 > 分类等次带 > frecency 同分 > fuzzy 名次。Action 表面经 `rankActionsForPalette` → `buildActionSearchDocument`。增强输入 `/` 经薄适配把 skill 收成 `SearchDocument`（`kind: "suggest"`），再调同一函数。
-3. **空态政策。** 命令面板与新建菜单共用 `presentCommandListGroups`：面板 `recentsLimit: 8`，新建菜单 `0`。空 `/` 是领域目录（内置命令优先，再 skill，各组 id 序），不是命令面板最近块。右键无搜索、无 MRU。
+3. **空态政策。** 命令面板与新建菜单共用 `presentCommandListGroups`：面板 `recentsLimit: 8`，新建菜单 `0` 且 `foldRemainderInto: workspace`（工作区展示组见分组标题金标准）。空 `/` 是领域目录（内置命令优先，再 skill，各组 id 序），不是命令面板最近块。右键无搜索、无 MRU。
 
 领域打分器可换、优先级不可换：文件路径只走 `scoreFilePath`（Cmd+P / 树搜索 / `@` 已共用），禁止把路径塞进命令标题 uFuzzy。
 
@@ -45,7 +45,7 @@
 | 用途 | 唯一实现 | 调用方 |
 |------|----------|--------|
 | 命令/技能/动作有 query | `rankSearchDocuments` | 命令面板、新建菜单（经 `rankActionsForPalette`）、增强输入 `/` |
-| 命令面板 + 新建菜单空态 | `presentCommandListGroups` | 两处只改 `recentsLimit` / `itemCompare` / `categoryOrder` |
+| 命令面板 + 新建菜单空态 | `presentCommandListGroups` | 两处只改 `recentsLimit` / `itemCompare` / `categoryOrder` / `foldRemainderInto` |
 | 衰减 | `usageFrecency` | 命令 MRU、`rankAgents` |
 | 文件路径 | `scoreFilePath` / `fileQuery` | Cmd+P、树搜索、`@` |
 

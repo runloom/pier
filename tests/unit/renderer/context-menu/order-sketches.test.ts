@@ -254,6 +254,12 @@ describe("context-menu order sketches", () => {
       })
     ).toBe("pier.panel.copySelection");
     expect(firstAction("terminal/content")).toBe("pier.terminal.copy");
+    expect(
+      firstAction("terminal/content", {
+        metadata: { linkUrl: "file:///tmp/notes.md" },
+        sourcePanelId: "terminal-1",
+      })
+    ).toBe("pier.terminal.openLink");
     expect(firstAction("terminal/restored")).toBe("pier.panel.copySelection");
   });
 

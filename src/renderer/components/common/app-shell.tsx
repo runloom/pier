@@ -20,6 +20,7 @@ import { TerminalDebugSnapshotBridge } from "@/components/common/terminal-debug/
 import { TerminalEndStateBridge } from "@/components/common/terminal-end-state-bridge.tsx";
 import { TitleBar } from "@/components/common/title-bar.tsx";
 import { UsageDataBridge } from "@/components/common/usage-data-bridge.tsx";
+import { WindowDisplayBridge } from "@/components/common/window-display-bridge.tsx";
 import { Toaster } from "@/components/primitives/sonner.tsx";
 import { WorkspaceHost } from "@/components/workspace/host.tsx";
 import { SettingsDialog } from "@/pages/settings/dialog.tsx";
@@ -30,6 +31,7 @@ export function AppShell() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <DocumentTitle />
+      <WindowDisplayBridge />
       {IS_MAC ? <TitleBar /> : <AgentIndexChromeBar />}
       <div className="min-h-0 flex-1 overflow-hidden">
         <DiffWorkerHost>

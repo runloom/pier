@@ -75,8 +75,8 @@ extern "C" {
     void ghostty_bridge_set_modifier_forward_callback(ModifierForwardFn cb);
     void ghostty_bridge_set_app_shortcut_keys(const char** keys, long count);
     // Mouse forward: swift NSEvent monitor 命中 terminal 区域 rightMouseDown → JS.
-    // 签名 (browserWindowId, panelId UTF-8, x, y). 用于触发 native 右键菜单.
-    typedef void (*MouseForwardFn)(long browserWindowId, const char* panelId, double x, double y);
+    // 签名 (browserWindowId, panelId UTF-8, x, y, linkUrl UTF-8). linkUrl 无悬停时为空串.
+    typedef void (*MouseForwardFn)(long browserWindowId, const char* panelId, double x, double y, const char* linkUrl);
     void ghostty_bridge_set_mouse_forward_callback(MouseForwardFn cb);
     typedef void (*TerminalFocusRequestFn)(long browserWindowId, const char* panelId);
     void ghostty_bridge_set_terminal_focus_request_callback(TerminalFocusRequestFn cb);
@@ -710,18 +710,26 @@ struct MouseForwardPayload {
     std::string panelId;
     double x;
     double y;
+    std::string linkUrl;
     void callJs(Napi::Env env, Napi::Function jsCallback) {
         jsCallback.Call({
             Napi::Number::New(env, static_cast<double>(windowId)),
             Napi::String::New(env, panelId),
             Napi::Number::New(env, x),
             Napi::Number::New(env, y),
+            Napi::String::New(env, linkUrl),
         });
     }
 };
 static ForwardChannel<MouseForwardPayload> g_mouseChannel("PierMouseForward");
-static void g_mouseForwardTrampoline(long windowId, const char* panelId, double x, double y) {
-    g_mouseChannel.emit({ windowId, std::string(panelId), x, y });
+static void g_mouseForwardTrampoline(long windowId, const char* panelId, double x, double y, const char* linkUrl) {
+    g_mouseChannel.emit({
+        windowId,
+        std::string(panelId),
+        x,
+        y,
+        linkUrl ? std::string(linkUrl) : std::string(),
+    });
 }
 static Napi::Value JsSetMouseForwardCallback(const Napi::CallbackInfo& info) {
     return JsSetForwardCallback(info, g_mouseChannel,

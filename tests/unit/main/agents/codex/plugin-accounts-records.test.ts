@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyLiveMembership,
   applyLivePlanType,
   buildAccountRecord,
   mergeIdentityIntoAccount,
 } from "../../../../../packages/plugin-codex/src/main/accounts-records.ts";
 import type { CodexAccountRecord } from "../../../../../packages/plugin-codex/src/main/state.ts";
+
+const storedExpiresAt = Date.parse("2026-08-10T14:03:28+00:00");
 
 const baseAccount: CodexAccountRecord = {
   createdAt: 1,
@@ -13,7 +16,7 @@ const baseAccount: CodexAccountRecord = {
   planType: "pro",
   provider: "codex",
   providerAccountId: "provider-1",
-  subscriptionExpiresAt: Date.parse("2026-08-10T14:03:28+00:00"),
+  subscriptionExpiresAt: storedExpiresAt,
   updatedAt: 1,
 };
 
@@ -53,6 +56,68 @@ describe("mergeIdentityIntoAccount", () => {
       baseAccount.subscriptionExpiresAt
     );
     expect(merged.providerAccountId).toBe("provider-1");
+  });
+
+  it("does not let a JWT pro label replace a live precise SKU", () => {
+    const merged = mergeIdentityIntoAccount(
+      {
+        ...baseAccount,
+        hasActiveSubscription: true,
+        planType: "pro-20x",
+      },
+      {
+        email: "legacy@example.com",
+        planType: "pro",
+        providerAccountId: "provider-1",
+      },
+      100
+    );
+
+    expect(merged.planType).toBe("pro-20x");
+    expect(merged.hasActiveSubscription).toBe(true);
+  });
+
+  it("does not let a stale JWT period-end replace a live renewal date", () => {
+    const renewsAt = Date.parse("2026-10-04T21:38:26+00:00");
+    const staleJwt = Date.parse("2026-08-10T14:03:28+00:00");
+    const merged = mergeIdentityIntoAccount(
+      {
+        ...baseAccount,
+        hasActiveSubscription: true,
+        subscriptionExpiresAt: renewsAt,
+      },
+      {
+        email: "legacy@example.com",
+        planType: "pro",
+        providerAccountId: "provider-1",
+        subscriptionExpiresAt: staleJwt,
+      },
+      100
+    );
+
+    expect(merged.hasActiveSubscription).toBe(true);
+    expect(merged.subscriptionExpiresAt).toBe(renewsAt);
+  });
+
+  it("keeps a live inactive period-end instead of a JWT claim", () => {
+    const merged = mergeIdentityIntoAccount(
+      {
+        ...baseAccount,
+        hasActiveSubscription: false,
+      },
+      {
+        email: "legacy@example.com",
+        planType: "pro",
+        providerAccountId: "provider-1",
+        subscriptionExpiresAt: Date.parse("2026-09-01T00:00:00.000Z"),
+      },
+      100
+    );
+
+    expect(merged.hasActiveSubscription).toBe(false);
+    expect(merged.subscriptionExpiresAt).toBe(
+      baseAccount.subscriptionExpiresAt
+    );
   });
 });
 
@@ -103,5 +168,113 @@ describe("applyLivePlanType", () => {
     expect(next.planType).toBe("plus");
     expect(next.subscriptionExpiresAt).toBeUndefined();
     expect(next.updatedAt).toBe(200);
+  });
+
+  it("drops a stale past period-end when live usage still reports a paid plan", () => {
+    const now = baseAccount.subscriptionExpiresAt! + 86_400_000;
+    const next = applyLivePlanType(baseAccount, "pro", now);
+    expect(next.planType).toBe("pro");
+    expect(next.subscriptionExpiresAt).toBeUndefined();
+    expect(next.hasActiveSubscription).toBeUndefined();
+    expect(next.updatedAt).toBe(now);
+  });
+
+  it("keeps a live inactive flag when membership is unresolved", () => {
+    const now = baseAccount.subscriptionExpiresAt! + 86_400_000;
+    const next = applyLivePlanType(
+      { ...baseAccount, hasActiveSubscription: false },
+      "pro",
+      now
+    );
+    expect(next.hasActiveSubscription).toBe(false);
+    expect(next.subscriptionExpiresAt).toBe(baseAccount.subscriptionExpiresAt);
+  });
+
+  it("keeps a live inactive flag on a precise SKU when usage only reports pro", () => {
+    const now = baseAccount.subscriptionExpiresAt! + 86_400_000;
+    const next = applyLivePlanType(
+      {
+        ...baseAccount,
+        hasActiveSubscription: false,
+        planType: "pro-20x",
+      },
+      "pro",
+      now
+    );
+    expect(next.planType).toBe("pro-20x");
+    expect(next.hasActiveSubscription).toBe(false);
+    expect(next.subscriptionExpiresAt).toBe(baseAccount.subscriptionExpiresAt);
+  });
+});
+
+describe("applyLiveMembership", () => {
+  it("replaces a stale past period-end with the live renewal date", () => {
+    const now = Date.parse("2026-09-04T08:00:00.000Z");
+    const renewsAt = Date.parse("2026-10-04T21:38:26+00:00");
+    const next = applyLiveMembership(
+      baseAccount,
+      {
+        expiresAt: renewsAt,
+        hasActiveSubscription: true,
+        planType: "pro-20x",
+      },
+      now
+    );
+    expect(next).toMatchObject({
+      hasActiveSubscription: true,
+      planType: "pro-20x",
+      subscriptionExpiresAt: renewsAt,
+      updatedAt: now,
+    });
+  });
+
+  it("drops a past period-end when the live entitlement is still active", () => {
+    const now = Date.parse("2026-09-04T08:00:00.000Z");
+    const next = applyLiveMembership(
+      baseAccount,
+      {
+        expiresAt: storedExpiresAt,
+        hasActiveSubscription: true,
+        planType: "pro",
+      },
+      now
+    );
+    expect(next.hasActiveSubscription).toBe(true);
+    expect(next.subscriptionExpiresAt).toBeUndefined();
+  });
+
+  it("keeps a past period-end when the live entitlement is inactive", () => {
+    const now = Date.parse("2026-09-04T08:00:00.000Z");
+    const next = applyLiveMembership(
+      baseAccount,
+      {
+        expiresAt: storedExpiresAt,
+        hasActiveSubscription: false,
+        planType: "pro",
+      },
+      now
+    );
+    expect(next).toMatchObject({
+      hasActiveSubscription: false,
+      planType: "pro",
+      subscriptionExpiresAt: baseAccount.subscriptionExpiresAt,
+    });
+  });
+
+  it("keeps a stored inactive flag when live membership omits the entitlement bit", () => {
+    const now = Date.parse("2026-09-04T08:00:00.000Z");
+    const next = applyLiveMembership(
+      {
+        ...baseAccount,
+        hasActiveSubscription: false,
+      },
+      {
+        expiresAt: storedExpiresAt,
+        planType: "pro",
+      },
+      now
+    );
+    expect(next.hasActiveSubscription).toBe(false);
+    expect(next.subscriptionExpiresAt).toBe(baseAccount.subscriptionExpiresAt);
   });
 });

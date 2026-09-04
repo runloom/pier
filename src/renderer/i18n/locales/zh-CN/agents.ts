@@ -19,7 +19,6 @@ export const agents = {
     placeholder: "搜索智能体…",
     thisWindow: "本窗口",
     title: "智能体",
-    windowLabel: "窗口 {{id}}",
   },
   section: {
     needsYou: "需要你处理",
@@ -45,7 +44,7 @@ export const agents = {
     attentionTitle: "需要你处理",
     attentionNext: "下一步：查看当前画面或聚焦到对应面板。",
     locationThisWindow: "本窗口",
-    locationWindow: "窗口 {{id}}",
+    locationWindow: "{{title}}",
     statusUnknown: "状态未知",
     roleWork: "工作智能体",
     roleCoordinate: "协调智能体",
