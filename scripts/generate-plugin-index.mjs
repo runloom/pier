@@ -13,11 +13,17 @@
 
 import { createPrivateKey, sign } from "node:crypto";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(process.cwd());
 const packagesDir = join(repoRoot, "packages");
 const outFile = join(repoRoot, "plugins", "index.v1.json");
+const retiredPluginsSource = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "src/main/services/managed-plugins/retired-plugins.ts"
+);
 
 // GitHub release asset URL scheme:
 //   https://github.com/runloom/pier/releases/download/plugin-<id-tail>-v<version>/<id>-<version>.tgz
@@ -224,6 +230,23 @@ function nextSequence(existingIndex) {
   return sequence;
 }
 
+async function loadRetiredPluginIds() {
+  const source = await readFile(retiredPluginsSource, "utf8");
+  const match = source.match(
+    /export const RETIRED_MANAGED_PLUGIN_IDS[\s\S]*?new Set\(\[([\s\S]*?)\]\)/
+  );
+  if (!match) {
+    throw new Error(
+      `could not parse RETIRED_MANAGED_PLUGIN_IDS from ${retiredPluginsSource}`
+    );
+  }
+  return new Set(
+    [...match[1].matchAll(/"(pier\.[a-z0-9][a-z0-9.-]*)"/g)].map(
+      (item) => item[1]
+    )
+  );
+}
+
 /**
  * Prefer already-indexed digests for a version that was published before.
  * Local `plugins:pack` rebuilds are not bit-stable across machines / deps, so
@@ -260,11 +283,19 @@ for (const d of dirents) {
 }
 
 const existingIndex = await readExistingIndex();
+const retiredIds = await loadRetiredPluginIds();
 
 // Merge: keep previously indexed plugins that were not re-packed in this run
 // (partial packs / single-plugin recovery must not erase the catalog). Same
-// version digests stay immutable even when a local rebuild drifts.
-const plugins = { ...packedPlugins };
+// version digests stay immutable even when a local rebuild drifts. Retired
+// ids (renames / folded-into-host packs) must not re-enter the catalog.
+const plugins = {};
+for (const [id, packed] of Object.entries(packedPlugins)) {
+  if (retiredIds.has(id)) {
+    continue;
+  }
+  plugins[id] = packed;
+}
 const previousPlugins = existingIndex?.plugins;
 if (
   previousPlugins &&
@@ -272,6 +303,9 @@ if (
   !Array.isArray(previousPlugins)
 ) {
   for (const [id, previous] of Object.entries(previousPlugins)) {
+    if (retiredIds.has(id)) {
+      continue;
+    }
     const packed = packedPlugins[id];
     if (!packed) {
       plugins[id] = previous;

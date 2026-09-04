@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1788334961593,
+  "generatedAt": 1788477726480,
   "plugins": {
     "pier.agent-splits": {
       "description": "Connect splits opened by assistants to workbench panels.",
@@ -444,45 +444,13 @@
           "size": 714313
         }
       }
-    },
-    "pier.tmux": {
-      "description": "Connect splits opened by assistants to workbench panels.",
-      "displayName": "Native splits",
-      "id": "pier.tmux",
-      "latest": "1.0.0",
-      "locales": {
-        "en": {
-          "name": "Native splits",
-          "description": "Connect splits opened by assistants to workbench panels."
-        },
-        "zh-CN": {
-          "name": "工作台分屏",
-          "description": "将智能体打开的分屏接到工作台面板。"
-        },
-        "ja": {
-          "name": "ワークベンチ分割",
-          "description": "エージェントが開いた分割をワークベンチのパネルにつなぎます。"
-        },
-        "ko": {
-          "name": "워크벤치 분할",
-          "description": "에이전트가 연 분할을 워크벤치 패널에 연결합니다."
-        }
-      },
-      "versions": {
-        "1.0.0": {
-          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-tmux-v1.0.0/pier.tmux-1.0.0.tgz",
-          "pier": ">=0.1.0 <0.2.0",
-          "sha256": "ff1ad0e9f5b9552e6346b37df625c99dff648175fb5fe95704a6ba638b1ebb79",
-          "size": 47127
-        }
-      }
     }
   },
-  "sequence": 39,
+  "sequence": 40,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "gG7SZmZ/O/fDGNMXB+GxR77Mgw9vtoRysHLsulybA3floXhIrTk+cIQqK8//zKu4R0cLaqtg0YzVsVAtJwm1Aw=="
+    "value": "MiPbsIURNu2LUDOhVXwTWcQdffw7Wzr9RlqR5UT/5ff4ega8A4YIdChXDjgfbGvmTZRRHyTtg8VsvWBJF8YtDQ=="
   }
 }

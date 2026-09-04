@@ -2,7 +2,9 @@
  * Official plugins that were retired from the product and must not stay in
  * the install index or catalog (even as "installed but not loaded").
  *
- * Language packs were collapsed into Files/L0 PATH providers (scheme A).
+ * - Language packs were collapsed into Files/L0 PATH providers (scheme A).
+ * - `pier.tmux` was renamed to `pier.agent-splits`; the old id must not keep
+ *   a second "Native splits / 工作台分屏" row in Settings → Plugins.
  */
 
 import { rm } from "node:fs/promises";
@@ -27,6 +29,7 @@ export const RETIRED_MANAGED_PLUGIN_IDS: ReadonlySet<string> = new Set([
   "pier.lsp-swift",
   "pier.lsp-toml",
   "pier.lsp-zig",
+  "pier.tmux",
 ]);
 
 export function isRetiredManagedPluginId(id: string): boolean {
