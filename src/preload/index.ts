@@ -205,6 +205,12 @@ export interface PierWindowAPI {
   projectSkills: PierProjectSkillsAPI;
   remoteAccess: RemoteAccessPreloadApi;
   rendererCommand: PierRendererCommandAPI;
+  reportDisplayDraft: (patch: {
+    baseLabel?: string;
+    branch?: string;
+    projectPath?: string;
+    stableTabQualifier?: string;
+  }) => Promise<void>;
   resources: PierResourceAPI;
   settings: PierSettingsAPI;
   shellEnvironment: PierShellEnvironmentAPI;
@@ -435,6 +441,11 @@ const api: PierWindowAPI = {
   htmlPreviews: htmlPreviewApi,
   keybinding: keybindingApi,
   listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),
+  reportDisplayDraft: (patch) =>
+    invokePierCommand<void>({
+      type: "window.reportDisplayDraft",
+      ...patch,
+    }),
   liveModules: liveModulesApi,
   menu: menuApi,
   memory: memoryApi,

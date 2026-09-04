@@ -1,3 +1,4 @@
+import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { RendererRuntimeFailureReport } from "@shared/contracts/renderer-runtime-failure.ts";
 import type {
   WindowContext,
@@ -17,6 +18,7 @@ export interface PierWindowNsAPI {
     cb: (payload: WindowFocusChangedPayload) => void
   ) => () => void;
   onLayoutPulse: (cb: (pulse: WindowLayoutPulse) => void) => () => void;
+  onWindowsChanged: (cb: (windows: WindowInfo[]) => void) => () => void;
   readyToShow: () => void;
   /** Soft-reload current WebContents (error recovery). Prefer over app.relaunch. */
   reload: () => Promise<void>;
@@ -30,6 +32,7 @@ export function createWindowApi(readyToShow: () => void): PierWindowNsAPI {
     onFocusChanged: (cb) =>
       subscribeIpc(PIER_BROADCAST.WINDOW_FOCUS_CHANGED, cb),
     onLayoutPulse: (cb) => subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
+    onWindowsChanged: (cb) => subscribeIpc(PIER_BROADCAST.WINDOW_CHANGED, cb),
     readyToShow,
     reload: () => ipcRenderer.invoke(PIER.WINDOW_RELOAD),
     reportRuntimeFailure: (failure) =>

@@ -25,10 +25,10 @@ export interface CollaborationSessionVm {
   agentId: string;
   agentRef: string;
   cwd?: string;
-  locationKey:
+  locationKey?:
     | "agents.collab.locationThisWindow"
     | "agents.collab.locationWindow";
-  locationParams?: { id: string };
+  locationParams?: { title: string };
   needsYou: boolean;
   panelId: string;
   projectRootPath?: string;
@@ -96,10 +96,28 @@ function sessionTitle(
   });
 }
 
+function windowLocation(
+  sameWindow: boolean,
+  windowTitle: string | undefined
+): Pick<CollaborationSessionVm, "locationKey" | "locationParams"> {
+  if (sameWindow) {
+    return { locationKey: "agents.collab.locationThisWindow" };
+  }
+  const title = windowTitle?.trim();
+  if (!title) {
+    return {};
+  }
+  return {
+    locationKey: "agents.collab.locationWindow",
+    locationParams: { title },
+  };
+}
+
 export function buildCollaborationSession(
   entry: AgentRuntimeIndexEntry,
   currentWindowId: string | null,
-  tabShort?: string | null | undefined
+  tabShort?: string | null | undefined,
+  windowTitle?: string | undefined
 ): CollaborationSessionVm {
   const sameWindow =
     currentWindowId !== null && entry.windowId === currentWindowId;
@@ -115,12 +133,7 @@ export function buildCollaborationSession(
     needsYou,
     roleKey,
     statusKey: statusKeyFor(entry),
-    ...(sameWindow
-      ? { locationKey: "agents.collab.locationThisWindow" as const }
-      : {
-          locationKey: "agents.collab.locationWindow" as const,
-          locationParams: { id: entry.windowId },
-        }),
+    ...windowLocation(sameWindow, windowTitle),
     ...(entry.worktreeKey ? { worktreeKey: entry.worktreeKey } : {}),
     ...(entry.cwd ? { cwd: entry.cwd } : {}),
     ...(entry.projectRootPath
@@ -270,12 +283,15 @@ export function buildCollaborationViewModel(input: {
   selectedAgentRef?: string | null;
   /** panelId → 已解析 tab short（PanelDescriptorStore）；列表主标题与 tab 一致。 */
   tabShortByPanelId?: Readonly<Record<string, string>>;
+  /** windowId → OS/menu title from WindowInfo.title */
+  titleByWindowId?: Readonly<Record<string, string>>;
 }): CollaborationViewModel {
   const sessions = input.entries.map((entry) =>
     buildCollaborationSession(
       entry,
       input.currentWindowId,
-      input.tabShortByPanelId?.[entry.panelId]
+      input.tabShortByPanelId?.[entry.panelId],
+      input.titleByWindowId?.[entry.windowId]
     )
   );
   const attention = pickAttention(sessions, input.notifications ?? []);

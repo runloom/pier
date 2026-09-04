@@ -29,6 +29,8 @@ export interface BuildAgentIndexQuickPickOptions {
    * 列表主标题与 tab 完全一致；缺席（跨窗）时按 tab 优先级降级。
    */
   tabShortByPanelId?: Readonly<Record<string, string>> | undefined;
+  /** windowId → OS/menu title from WindowInfo.title */
+  titleByWindowId?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface AgentIndexQuickPickModel {
@@ -82,20 +84,22 @@ function windowDetail(
   options: {
     preferredWindowId: string | undefined;
     showWindowLabels: boolean;
+    titleByWindowId: Readonly<Record<string, string>> | undefined;
   }
 ): string {
   const pathHint = entry.projectRootPath ?? entry.cwd;
   if (!options.showWindowLabels) {
     return pathHint ?? "";
   }
-  const windowHint =
-    options.preferredWindowId && entry.windowId === options.preferredWindowId
-      ? i18next.t("agents.quickPick.thisWindow")
-      : i18next.t("agents.quickPick.windowLabel", { id: entry.windowId });
-  if (pathHint) {
+  const isCurrent =
+    options.preferredWindowId && entry.windowId === options.preferredWindowId;
+  const windowHint = isCurrent
+    ? i18next.t("agents.quickPick.thisWindow")
+    : options.titleByWindowId?.[entry.windowId];
+  if (windowHint && pathHint) {
     return `${windowHint} · ${pathHint}`;
   }
-  return windowHint;
+  return windowHint || pathHint || "";
 }
 
 function toItem(
@@ -105,6 +109,7 @@ function toItem(
     preferredWindowId?: string;
     showWindowLabels: boolean;
     tabShortByPanelId: Readonly<Record<string, string>> | undefined;
+    titleByWindowId: Readonly<Record<string, string>> | undefined;
   }
 ): QuickPickItem {
   const statusLabel = statusSearchLabel(entry);
@@ -112,6 +117,7 @@ function toItem(
   const detail = windowDetail(entry, {
     preferredWindowId: options.preferredWindowId,
     showWindowLabels: options.showWindowLabels,
+    titleByWindowId: options.titleByWindowId,
   });
   const description = statusDurationLabel(entry, options.now);
   return {
@@ -212,6 +218,7 @@ export function buildAgentIndexQuickPick(
     now,
     showWindowLabels: distinctWindowIds.size > 1,
     tabShortByPanelId: options.tabShortByPanelId,
+    titleByWindowId: options.titleByWindowId,
     ...(options.preferredWindowId
       ? { preferredWindowId: options.preferredWindowId }
       : {}),

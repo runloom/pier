@@ -69,6 +69,8 @@ const electronMock = vi.hoisted(() => {
     }),
     restore: vi.fn(),
     setBackgroundColor: vi.fn(),
+    getTitle: vi.fn(() => ""),
+    setTitle: vi.fn(),
     setOpacity: vi.fn(),
     show: vi.fn(),
     showInactive: vi.fn(),

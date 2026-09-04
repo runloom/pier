@@ -55,6 +55,7 @@ import {
   terminalStatusBarItemOverridePatchSchema,
   terminalStatusBarOverridePatchesSchema,
 } from "./terminal/status-bar.ts";
+import { windowCommandSchemas } from "./window.ts";
 import {
   type WorktreeOperationErrorReason,
   worktreeCheckRequestSchema,
@@ -214,16 +215,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("terminal.profile.delete"),
     profileId: z.string().min(1),
   }),
-  z.object({ type: z.literal("window.list") }),
-  z.object({ type: z.literal("window.create") }),
-  z.object({
-    type: z.literal("window.focus"),
-    windowId: z.string().min(1),
-  }),
-  z.object({
-    type: z.literal("window.close"),
-    windowId: z.string().min(1),
-  }),
+  ...windowCommandSchemas,
   z.object({
     type: z.literal("panel.list"),
     windowId: z.string().min(1).optional(),

@@ -322,6 +322,18 @@ outline 抑制、Chart/DataChart/Mermaid 默认、状态徽标不进 Tab、`tabI
   色相对比提供额外辨识线索，由设计决策覆盖，测试只验证 token 存在。如设计
   变更需恢复严格检查，把 `:root` 加回 Tier 1 循环。
 
+### 透明 web 叠 Ghostty 合成
+
+macOS 是透明 `WebContentsView` 叠 Ghostty。终端洞必须透出 native；洞上的 web 不得再开会采样或缓存旧像素的合成层。
+
+权威规格：[`docs/superpowers/specs/2026-09-04-transparent-web-over-ghostty-compositing-gold-standard.md`](docs/superpowers/specs/2026-09-04-transparent-web-over-ghostty-compositing-gold-standard.md)。
+
+- 禁止产品源码 `backdrop-filter` / `backdrop-blur*` / `filter: blur()`，以及 `translate3d` / `translateZ` / `transform-gpu` / `will-change: transform`。预览字号、图片 diff 字幕用不透明 `bg-background`。
+- 扫描必须包括 `packages/ui/src`、`src/renderer`、`src/plugins/builtin`。只扫 renderer 会漏掉共享控件。
+- 分栏 / 浮层改大小不藏 native，只拦输入（`62b82e2f`）。
+- 例外必须在治理测试 allowlist 写明无法用不透明底或 2D 定位的原因。
+- 检查点在 `tests/unit/renderer/app/gpu-compositing-governance.test.ts`。
+
 ### shadcn 组件使用规范
 
 宿主 renderer 与官方插件 renderer 的业务界面统一以 `packages/ui` 中的 shadcn 组件为
@@ -408,6 +420,16 @@ section 根节点下的裸子节点。
 - **OSC 展示**：折叠空白后进 short；安全上限 `MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH`；视觉截断 CSS。落盘可更长。
 - **身份**与标题无关：`agentId` + 路径锚点 + `panelId` + actor/session 字段；判据只在 `agent-session-actor.ts`。
 - 检查点：`tests/unit/app/cwd-derive.test.ts`、`tests/unit/agent/session-title-governance.test.ts`、`tests/unit/agent/session-title-hook-parity.test.ts`、`tests/unit/main/agents/agent-session-title-hook-event.test.ts`、`tests/unit/renderer/agent-runtime/list-title.test.ts`。
+
+### 窗口系统标题与多窗显示名
+
+权威规格：[`docs/superpowers/specs/2026-09-04-window-os-title-gold-standard.md`](docs/superpowers/specs/2026-09-04-window-os-title-gold-standard.md)。
+
+- 对外单行名只来自 `src/shared/window-display` 的 `menuLabel`。main 写入 `WindowInfo.title` 与 `setTitle`。macOS `BaseWindow` 必须显式 `setTitle`，禁止依赖 `document.title`。
+- 消歧集合是全部活窗口。撞名限定：分支 → 父目录 → 稳定 tab 名（文件名或用户钉名）→ ` · N`。OSC / cwd 派生 tab / 任务 chrome 不得进 `menuLabel` 任何一段。
+- 右键「移动/复制到其他窗口」子菜单、Index 跨窗行、协作会话跨窗定位、`window.list` 只读 `title`。本窗用「本窗口」。
+- 窗内标题栏长路径与 tab OSC 不是窗口名。
+- 检查点：`tests/unit/shared/window-display.test.ts`、`tests/unit/main/windows/os-title.test.ts`、`tests/unit/renderer/window-display-governance.test.ts`。
 
 ### 路径锚点上下文 `src/main/services/panel-context-resolver.ts` + `src/shared/contracts/panel.ts`
 

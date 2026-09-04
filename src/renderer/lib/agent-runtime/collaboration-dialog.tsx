@@ -33,6 +33,10 @@ import {
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { useNotificationCenterStore } from "@/stores/notification-center.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import {
+  titleByWindowIdFrom,
+  useWindowListStore,
+} from "@/stores/window-list.store.ts";
 
 const COLLAB_DIALOG_ID = "agent-collaboration";
 
@@ -74,9 +78,11 @@ function SessionCard({
             {session.agentId}
           </ItemDescription>
           <div className="grid gap-0.5 text-muted-foreground text-xs">
-            <span className="truncate">
-              {t(session.locationKey, session.locationParams)}
-            </span>
+            {session.locationKey ? (
+              <span className="truncate">
+                {t(session.locationKey, session.locationParams)}
+              </span>
+            ) : null}
             {(session.worktreeKey || session.cwd) && (
               <span className="truncate">
                 {session.worktreeKey ?? session.cwd}
@@ -121,6 +127,7 @@ function CollaborationBody({
   const activityRecord = useForegroundActivityStore((s) => s.activities);
   const notifications = useNotificationCenterStore((s) => s.items);
   const descriptors = usePanelDescriptorStore((s) => s.descriptors);
+  const windows = useWindowListStore((s) => s.windows);
   const [selectedAgentRef, setSelectedAgentRef] = useState<string | null>(
     initialSelectedRef ?? null
   );
@@ -136,6 +143,10 @@ function CollaborationBody({
     () => tabShortByPanelIdFrom(descriptors),
     [descriptors]
   );
+  const titleByWindowId = useMemo(
+    () => titleByWindowIdFrom(windows),
+    [windows]
+  );
 
   const vm: CollaborationViewModel = useMemo(
     () =>
@@ -146,6 +157,7 @@ function CollaborationBody({
         currentWindowId: windowId,
         selectedAgentRef,
         tabShortByPanelId,
+        titleByWindowId,
       }),
     [
       activities,
@@ -153,6 +165,7 @@ function CollaborationBody({
       notifications,
       selectedAgentRef,
       tabShortByPanelId,
+      titleByWindowId,
       windowId,
     ]
   );
@@ -227,9 +240,11 @@ function CollaborationBody({
                 <span>
                   {t(vm.selected.roleKey)} · {t(vm.selected.statusKey)}
                 </span>
-                <span>
-                  {t(vm.selected.locationKey, vm.selected.locationParams)}
-                </span>
+                {vm.selected.locationKey ? (
+                  <span>
+                    {t(vm.selected.locationKey, vm.selected.locationParams)}
+                  </span>
+                ) : null}
                 {(vm.selected.worktreeKey || vm.selected.cwd) && (
                   <span className="break-all">
                     {vm.selected.worktreeKey ?? vm.selected.cwd}

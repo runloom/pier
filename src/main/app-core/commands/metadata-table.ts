@@ -237,6 +237,10 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "window.create": { capabilities: ["window:create"] },
   "window.focus": { capabilities: ["window:focus"] },
   "window.list": { capabilities: ["window:read"] },
+  "window.reportDisplayDraft": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:read"],
+  },
   "worktree.check": { capabilities: ["worktree:read"] },
   "worktree.create": { capabilities: ["worktree:write"] },
   "worktree.creationDefaults": { capabilities: ["worktree:read"] },

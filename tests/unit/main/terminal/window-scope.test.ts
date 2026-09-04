@@ -22,6 +22,7 @@ function fakeWin(id: number): AppWindow & { markDestroyed: () => void } {
     destroy: vi.fn(),
     focus: vi.fn(),
     getNativeWindowHandle: () => Buffer.from(`handle-${id}`),
+    getTitle: vi.fn(() => ""),
     host: {} as AppWindow["host"],
     isDestroyed: () => destroyed,
     isFocused: () => true,
@@ -32,6 +33,7 @@ function fakeWin(id: number): AppWindow & { markDestroyed: () => void } {
     moveTop: vi.fn(),
     restore: vi.fn(),
     setBackgroundColor: vi.fn(),
+    setTitle: vi.fn(),
     webContents: {} as AppWindow["webContents"],
   };
 }

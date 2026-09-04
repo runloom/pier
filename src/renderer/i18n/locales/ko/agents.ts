@@ -20,7 +20,6 @@ export const agents = {
     placeholder: "에이전트 검색…",
     thisWindow: "이 윈도우",
     title: "에이전트",
-    windowLabel: "윈도우 {{id}}",
   },
   section: {
     needsYou: "처리 필요",
@@ -46,7 +45,7 @@ export const agents = {
     attentionTitle: "처리 필요",
     attentionNext: "다음: 현재 화면을 확인하거나 패널로 이동하세요.",
     locationThisWindow: "이 윈도우",
-    locationWindow: "윈도우 {{id}}",
+    locationWindow: "{{title}}",
     statusUnknown: "상태 알 수 없음",
     roleWork: "작업 에이전트",
     roleCoordinate: "조율 에이전트",
