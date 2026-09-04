@@ -3,8 +3,11 @@
  *
  * Source window: Dockview's HTML5 overlay owns UX. A dockview-core patch
  * clears the absolute-mounted sticky overlay when the pointer leaves this
- * document (`dragleave` relatedTarget outside documentElement). The source
- * tab is visually torn off (`tear-off.ts`) so dragend cannot snap it back.
+ * document (`dragleave` relatedTarget outside documentElement) or the HTML5
+ * drag ends (`dragend`). The source tab is visually torn off (`tear-off.ts`)
+ * so dragend cannot snap it back. This session owns overlay lifetime by
+ * `transferId`: `end(id)` seals that id so a late Path B tick cannot
+ * re-arm it, and `clear` for A cannot tear down live B.
  *
  * Target window: HTML5 dragover never arrives across WebContentsView, so
  * we drive Dockview's own `contentDropTarget.showOverlay` (the keyboard-
@@ -233,14 +236,20 @@ export function applyPanelTransferOverlayPreview(
   idle(api);
 }
 
+const ENDED_TRANSFER_TTL_MS = 10 * 60_000;
+
 export function createPanelTransferOverlayPreviewSession(input: {
   getApi: () => DockviewApi | null;
   getWindowId: () => string | null;
 }): {
   apply(preview: unknown): void;
+  begin(transferId: string): void;
   dispose(): void;
+  end(transferId?: string): void;
   refresh(): void;
 } {
+  let liveId: string | null = null;
+  const endedIds = new Map<string, number>();
   let lastPreview: PanelTransferOverlayPreview | null = null;
   const run = (preview: PanelTransferOverlayPreview): void => {
     applyPanelTransferOverlayPreview(preview, {
@@ -248,23 +257,80 @@ export function createPanelTransferOverlayPreviewSession(input: {
       windowId: input.getWindowId(),
     });
   };
+  const pruneEnded = (): void => {
+    const t = Date.now();
+    for (const [id, expiresAt] of endedIds) {
+      if (expiresAt <= t) {
+        endedIds.delete(id);
+      }
+    }
+  };
+  const isEnded = (transferId: string): boolean => {
+    pruneEnded();
+    return endedIds.has(transferId);
+  };
+  const endTransfer = (transferId?: string): void => {
+    const id = transferId ?? liveId;
+    if (!id) {
+      idle(input.getApi());
+      return;
+    }
+    endedIds.set(id, Date.now() + ENDED_TRANSFER_TTL_MS);
+    if (liveId !== id) {
+      return;
+    }
+    liveId = null;
+    lastPreview = null;
+    idle(input.getApi());
+  };
   return {
     apply(preview) {
       const parsed = panelTransferOverlayPreviewSchema.safeParse(preview);
       if (!parsed.success) {
         return;
       }
-      lastPreview = parsed.data;
-      run(parsed.data);
+      const next = parsed.data;
+      if (isEnded(next.transferId)) {
+        return;
+      }
+      if (next.kind === "clear") {
+        endTransfer(next.transferId);
+        return;
+      }
+      if (liveId && liveId !== next.transferId) {
+        return;
+      }
+      if (!liveId) {
+        liveId = next.transferId;
+      }
+      lastPreview = next;
+      run(next);
+    },
+    begin(transferId) {
+      pruneEnded();
+      endedIds.delete(transferId);
+      if (liveId && liveId !== transferId) {
+        endTransfer(liveId);
+      }
+      liveId = transferId;
     },
     dispose() {
+      liveId = null;
       lastPreview = null;
+      endedIds.clear();
       idle(input.getApi());
     },
+    end(transferId) {
+      endTransfer(transferId);
+    },
     refresh() {
-      if (lastPreview) {
-        run(lastPreview);
+      if (!lastPreview || isEnded(lastPreview.transferId)) {
+        return;
       }
+      if (liveId && liveId !== lastPreview.transferId) {
+        return;
+      }
+      run(lastPreview);
     },
   };
 }

@@ -2,8 +2,8 @@
  * Path B live drop preview. HTML5 dragover does not reach other
  * WebContentsView windows, so main polls the cursor against window bounds
  * and broadcasts classification. Source overlay hide is dockview-core's
- * document-dragleave patch plus renderer `clearOverlay`; the hovered
- * target drives Dockview `showOverlay` from these coordinates.
+ * document-dragleave / document-dragend patch plus renderer `clearOverlay`;
+ * the hovered target drives Dockview `showOverlay` from these coordinates.
  */
 
 import type { PanelTransferOverlayPreview } from "@shared/contracts/panel-transfer.ts";
@@ -21,6 +21,7 @@ import type {
 import {
   PANEL_TRANSFER_OVERLAY_PREVIEW_INTERVAL_MS,
   PANEL_TRANSFER_OVERLAY_PREVIEW_QUANTIZE_PX,
+  PANEL_TRANSFER_TOMBSTONE_TTL_MS,
 } from "./types.ts";
 
 export type {
@@ -29,8 +30,8 @@ export type {
 } from "./types.ts";
 
 export interface PanelTransferOverlayPreviewController {
+  seal(transferId: string): void;
   start(transferId: string, sourceWindowId: string): void;
-  stop(transferId: string): void;
 }
 
 function defaultScheduler(): OverlayPreviewScheduler {
@@ -110,6 +111,7 @@ export function createPanelTransferOverlayPreviewController(args: {
   geometry: PanelTransferGeometryPort;
   ignoreWindowIds?: () => ReadonlySet<string>;
   intervalMs?: number;
+  now?: () => number;
   onPreview?: (
     preview: PanelTransferOverlayPreview,
     sourceWindowId: string
@@ -118,11 +120,22 @@ export function createPanelTransferOverlayPreviewController(args: {
   windows: PanelTransferWindowPort;
 }): PanelTransferOverlayPreviewController {
   const schedule = args.schedule ?? defaultScheduler();
+  const now = args.now ?? Date.now;
   const intervalMs =
     args.intervalMs ?? PANEL_TRANSFER_OVERLAY_PREVIEW_INTERVAL_MS;
   let active: { sourceWindowId: string; transferId: string } | null = null;
   let handle: OverlayPreviewScheduleHandle | null = null;
   let lastFingerprint: string | null = null;
+  const sealed = new Map<string, number>();
+
+  const pruneSealed = (): void => {
+    const t = now();
+    for (const [id, expiresAt] of sealed) {
+      if (expiresAt <= t) {
+        sealed.delete(id);
+      }
+    }
+  };
 
   const emit = (preview: PanelTransferOverlayPreview): void => {
     const fingerprint = fingerprintOf(preview);
@@ -177,8 +190,24 @@ export function createPanelTransferOverlayPreviewController(args: {
     handle = null;
   };
 
+  const sealTransfer = (transferId: string): void => {
+    pruneSealed();
+    sealed.set(transferId, now() + PANEL_TRANSFER_TOMBSTONE_TTL_MS);
+    if (active?.transferId === transferId) {
+      disposeTimer();
+      active = null;
+      lastFingerprint = null;
+    }
+    emit({ kind: "clear", transferId });
+  };
+
   return {
+    seal: sealTransfer,
     start(transferId, sourceWindowId) {
+      pruneSealed();
+      if (sealed.has(transferId)) {
+        return;
+      }
       if (
         active?.transferId === transferId &&
         active.sourceWindowId === sourceWindowId &&
@@ -187,23 +216,13 @@ export function createPanelTransferOverlayPreviewController(args: {
         return;
       }
       if (active && active.transferId !== transferId) {
-        args.broadcast({ kind: "clear", transferId: active.transferId });
+        sealTransfer(active.transferId);
       }
       disposeTimer();
       active = { sourceWindowId, transferId };
       lastFingerprint = null;
       tick();
       handle = schedule.interval(tick, intervalMs);
-    },
-    stop(transferId) {
-      if (active?.transferId !== transferId) {
-        return;
-      }
-      disposeTimer();
-      const stoppedId = active.transferId;
-      active = null;
-      lastFingerprint = null;
-      args.broadcast({ kind: "clear", transferId: stoppedId });
     },
   };
 }

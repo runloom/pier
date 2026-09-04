@@ -7,9 +7,11 @@
  * (HTML5 channel). Main's tryClaim arbitrates whichever fires first.
  *
  * Live overlay: main broadcasts cursor classification. Source overlay
- * hide is the dockview-core document-dragleave patch. This window drives
- * Dockview `contentDropTarget.showOverlay` when it is the hovered foreign
- * target (HTML5 dragover never arrives).
+ * hide is the dockview-core document-dragleave / document-dragend patch.
+ * This window drives Dockview `contentDropTarget.showOverlay` when it is
+ * the hovered foreign target (HTML5 dragover never arrives). Local dragend
+ * ends the preview session after Dockview's bubble-phase commit so a
+ * leftover overlay cannot stick or be re-armed by a late broadcast.
  */
 
 import type { DockviewApi } from "dockview-react";
@@ -48,6 +50,9 @@ export function attachWorkspacePanelTransfer(api: DockviewApi): () => void {
   const willDragPanelDispose = api.onWillDragPanel((e) => {
     // Stamp MIME first, then capture the returned transferId for dragend.
     activeTransferId = transferHandlers.onWillDragPanel(e);
+    if (activeTransferId) {
+      overlaySession.begin(activeTransferId);
+    }
   });
   const unhandledDragOverDispose = api.onUnhandledDragOver((e) => {
     transferHandlers.onUnhandledDragOver(e as never);
@@ -62,8 +67,14 @@ export function attachWorkspacePanelTransfer(api: DockviewApi): () => void {
     transferHandlers.onWillDrop(e as never);
   });
   const handleDragEnd = (event: DragEvent): void => {
-    transferHandlers.onDragEnd(activeTransferId, event);
+    const endedTransferId = activeTransferId;
+    transferHandlers.onDragEnd(endedTransferId, event);
     activeTransferId = null;
+    // After Dockview's bubble-phase dragend (it still needs `_state` to
+    // commit an in-window sticky drop). Clearing in capture would wipe that.
+    queueMicrotask(() => {
+      overlaySession.end(endedTransferId ?? undefined);
+    });
   };
   const handleWindowDrop = (event: DragEvent): void => {
     transferHandlers.onWindowDrop(event);

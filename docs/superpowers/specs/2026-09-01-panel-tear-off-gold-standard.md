@@ -3,9 +3,9 @@
 日期：2026-09-01
 状态：现行权威（拖出成新窗口的视觉交接）
 范围：把面板 tab 拖出所有 Pier 窗口、松手变成新窗口。
-不包含：拖入另一扇已有 Pier 窗口的落点 overlay（见 panel-transfer overlay-preview）、菜单「移到新窗口」（无 HTML5 ghost，但仍走同一套 show-hold；新建窗在 materialize 时同样 `revealHost`）。
+不包含：拖入另一扇已有 Pier 窗口的落点 overlay（见面板落点浮层生命周期金标准）、菜单「移到新窗口」（无 HTML5 ghost，但仍走同一套 show-hold；新建窗在 materialize 时同样 `revealHost`）。
 
-相关：跨窗口 claim 仍是 Path B（`finishDrag` → `createForTransfer`）；Dockview sticky overlay 由 `dockview-core` document-`dragleave` patch 清理。
+相关：跨窗口 claim 仍是 Path B（`finishDrag` → `createForTransfer`）。落点预览寿命见 [`2026-09-04-panel-drop-overlay-lifecycle-gold-standard.md`](./2026-09-04-panel-drop-overlay-lifecycle-gold-standard.md)。
 
 ---
 

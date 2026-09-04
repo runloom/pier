@@ -123,7 +123,7 @@ describe("panel transfer overlay preview controller", () => {
     scheduled.tick();
     expect(broadcasts).toHaveLength(beforeStop);
 
-    controller.stop(TRANSFER_ID);
+    controller.seal(TRANSFER_ID);
     expect(broadcasts.at(-1)).toEqual({
       kind: "clear",
       transferId: TRANSFER_ID,
@@ -152,7 +152,7 @@ describe("panel transfer overlay preview controller", () => {
     scheduled.tick();
     expect(broadcasts).toHaveLength(2);
     expect(broadcasts[1]?.kind).toBe("target");
-    controller.stop(TRANSFER_ID);
+    controller.seal(TRANSFER_ID);
   });
 
   it("notifies onPreview when classification changes", () => {
@@ -173,7 +173,7 @@ describe("panel transfer overlay preview controller", () => {
     cursor.x = 4000;
     scheduled.tick();
     expect(previews.at(-1)?.kind).toBe("outside");
-    controller.stop(TRANSFER_ID);
+    controller.seal(TRANSFER_ID);
   });
 
   it("clears the previous transfer when a new offer starts", () => {
@@ -196,6 +196,85 @@ describe("panel transfer overlay preview controller", () => {
       { kind: "clear", transferId: TRANSFER_ID },
       { kind: "source", transferId: nextId, windowId: "main" },
     ]);
-    controller.stop(nextId);
+    controller.seal(nextId);
+  });
+
+  it("starting a new transfer seals the previous id so it cannot restart", () => {
+    const cursor = { x: 100, y: 80 };
+    const broadcasts: PanelTransferOverlayPreview[] = [];
+    const scheduled = manualSchedule();
+    const controller = createPanelTransferOverlayPreviewController({
+      broadcast: (preview) => {
+        broadcasts.push(preview);
+      },
+      geometry: geometryWithCursor(cursor),
+      schedule: scheduled.schedule,
+      windows: windowsPort(),
+    });
+    const nextId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    controller.start(TRANSFER_ID, "main");
+    controller.start(nextId, "main");
+    const afterNext = broadcasts.length;
+    controller.start(TRANSFER_ID, "main");
+    scheduled.tick();
+    expect(broadcasts).toHaveLength(afterNext);
+    expect(
+      broadcasts.filter((preview) => preview.transferId === TRANSFER_ID)
+    ).toEqual([
+      { kind: "source", transferId: TRANSFER_ID, windowId: "main" },
+      { kind: "clear", transferId: TRANSFER_ID },
+    ]);
+    controller.seal(nextId);
+  });
+
+  it("seal emits clear and ignores later start of the same transfer", () => {
+    const cursor = { x: 100, y: 80 };
+    const broadcasts: PanelTransferOverlayPreview[] = [];
+    const scheduled = manualSchedule();
+    const controller = createPanelTransferOverlayPreviewController({
+      broadcast: (preview) => {
+        broadcasts.push(preview);
+      },
+      geometry: geometryWithCursor(cursor),
+      schedule: scheduled.schedule,
+      windows: windowsPort(),
+    });
+
+    controller.start(TRANSFER_ID, "main");
+    expect(broadcasts).toEqual([
+      { kind: "source", transferId: TRANSFER_ID, windowId: "main" },
+    ]);
+    controller.seal(TRANSFER_ID);
+    expect(broadcasts.at(-1)).toEqual({
+      kind: "clear",
+      transferId: TRANSFER_ID,
+    });
+    const afterSeal = broadcasts.length;
+    controller.start(TRANSFER_ID, "main");
+    scheduled.tick();
+    expect(broadcasts).toHaveLength(afterSeal);
+    expect(
+      broadcasts.filter((preview) => preview.kind === "source")
+    ).toHaveLength(1);
+  });
+
+  it("seal before any start still blocks a late start", () => {
+    const cursor = { x: 100, y: 80 };
+    const broadcasts: PanelTransferOverlayPreview[] = [];
+    const scheduled = manualSchedule();
+    const controller = createPanelTransferOverlayPreviewController({
+      broadcast: (preview) => {
+        broadcasts.push(preview);
+      },
+      geometry: geometryWithCursor(cursor),
+      schedule: scheduled.schedule,
+      windows: windowsPort(),
+    });
+
+    controller.seal(TRANSFER_ID);
+    expect(broadcasts).toEqual([{ kind: "clear", transferId: TRANSFER_ID }]);
+    controller.start(TRANSFER_ID, "main");
+    scheduled.tick();
+    expect(broadcasts).toEqual([{ kind: "clear", transferId: TRANSFER_ID }]);
   });
 });

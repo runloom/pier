@@ -447,6 +447,13 @@ section 根节点下的裸子节点。
 权威规格：[`docs/superpowers/specs/2026-09-03-overlay-separator-gold-standard.md`](docs/superpowers/specs/2026-09-03-overlay-separator-gold-standard.md)。  
 检查点：`tests/unit/renderer/overlay-separator-governance.test.ts`。
 
+### 面板落点浮层生命周期
+
+拖还在，浮层才能在；拖一结束，所有窗口的落点层必须同一拍消失，同一 `transferId` 不能被晚到的 preview 或 `offer()` 再点亮。寿命主人是 renderer overlay session（按 `transferId`）；广播主人是 main `seal`（先于 `waitForOffer` / claim）；dockview 绝对层补丁只做 fail-closed 拆视觉，不拥有寿命。禁止用智能体 `Esc` 关浮层。不改双通道 claim，不改 `dndOverlayMounting: "absolute"`。
+
+权威规格：[`docs/superpowers/specs/2026-09-04-panel-drop-overlay-lifecycle-gold-standard.md`](docs/superpowers/specs/2026-09-04-panel-drop-overlay-lifecycle-gold-standard.md)。  
+检查点：`tests/unit/renderer/workspace/panel-drop-overlay-lifecycle-governance.test.ts`、`tests/unit/main/panel/transfer-overlay-preview.test.ts`、`tests/unit/renderer/workspace/panel-transfer-overlay-preview.test.ts`、`tests/unit/renderer/workspace/panel-transfer-attach.test.ts`。
+
 ### 命令列表分组标题
 
 命令面板空态与新建菜单共用同一套标题规则：标题只表示该块有多条同类命令；1 条不写标题；相邻无标题组合并；分类顺序稳定。使用频次只出现在命令面板「最近」块（新建菜单不设）。`pier.agent.start.*` ≥ 2 时抽成「智能体」子组。新建菜单把运行 / 智能体以外的条目收成展示组「工作区」（标签、文件、工作树、窗口、任务跟踪等打开面板的命令）；命令面板仍按领域分桶。有查询的搜索结果与 Quick Pick section 不套本规则。

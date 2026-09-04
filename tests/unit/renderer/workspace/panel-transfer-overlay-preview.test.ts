@@ -5,6 +5,7 @@ import {
 } from "@/components/workspace/transfer/dnd.ts";
 import {
   applyPanelTransferOverlayPreview,
+  createPanelTransferOverlayPreviewSession,
   resetPanelTransferOverlayPreviewForTests,
 } from "@/components/workspace/transfer/overlay-preview.ts";
 import {
@@ -238,5 +239,132 @@ describe("panel transfer overlay preview (renderer)", () => {
       { getApi: () => ({ groups: [group] }) as never, windowId: "main" }
     );
     expect(tab.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)).toBe(true);
+  });
+
+  it("clears Dockview overlay when the transfer preview session ends", () => {
+    const first = createGroup({ id: "group-1", left: 0, right: 400 });
+    const session = createPanelTransferOverlayPreviewSession({
+      getApi: () => ({ groups: [first.group] }) as never,
+      getWindowId: () => "w-1",
+    });
+    session.apply({
+      clientX: 200,
+      clientY: 250,
+      kind: "target",
+      transferId: TRANSFER_ID,
+      windowId: "w-1",
+    });
+    expect(first.showOverlay).toHaveBeenCalledWith("center");
+    first.clearOverlay.mockClear();
+    first.showOverlay.mockClear();
+
+    session.end();
+    expect(first.clearOverlay).toHaveBeenCalled();
+
+    session.apply({
+      clientX: 20,
+      clientY: 250,
+      kind: "target",
+      transferId: TRANSFER_ID,
+      windowId: "w-1",
+    });
+    expect(first.showOverlay).not.toHaveBeenCalled();
+    expect(first.clearOverlay).toHaveBeenCalled();
+  });
+
+  it("accepts live previews again after a new drag begins", () => {
+    const first = createGroup({ id: "group-1", left: 0, right: 400 });
+    const session = createPanelTransferOverlayPreviewSession({
+      getApi: () => ({ groups: [first.group] }) as never,
+      getWindowId: () => "w-1",
+    });
+    session.end();
+    session.begin(TRANSFER_ID);
+    session.apply({
+      clientX: 200,
+      clientY: 250,
+      kind: "target",
+      transferId: TRANSFER_ID,
+      windowId: "w-1",
+    });
+    expect(first.showOverlay).toHaveBeenCalledWith("center");
+  });
+
+  it("does not let a stale clear for A tear down live B", () => {
+    const first = createGroup({ id: "group-1", left: 0, right: 400 });
+    const nextId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const session = createPanelTransferOverlayPreviewSession({
+      getApi: () => ({ groups: [first.group] }) as never,
+      getWindowId: () => "w-1",
+    });
+    session.begin(TRANSFER_ID);
+    session.apply({
+      clientX: 200,
+      clientY: 250,
+      kind: "target",
+      transferId: TRANSFER_ID,
+      windowId: "w-1",
+    });
+    session.begin(nextId);
+    session.apply({
+      clientX: 200,
+      clientY: 250,
+      kind: "target",
+      transferId: nextId,
+      windowId: "w-1",
+    });
+    expect(first.showOverlay).toHaveBeenCalled();
+    first.clearOverlay.mockClear();
+    first.showOverlay.mockClear();
+
+    session.apply({ kind: "clear", transferId: TRANSFER_ID });
+    expect(first.clearOverlay).not.toHaveBeenCalled();
+
+    session.apply({
+      clientX: 20,
+      clientY: 250,
+      kind: "target",
+      transferId: TRANSFER_ID,
+      windowId: "w-1",
+    });
+    expect(first.showOverlay).not.toHaveBeenCalled();
+    expect(first.clearOverlay).not.toHaveBeenCalled();
+  });
+
+  it("begin of B ends A so a late A preview cannot return after B ends", () => {
+    const first = createGroup({ id: "group-1", left: 0, right: 400 });
+    const nextId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const session = createPanelTransferOverlayPreviewSession({
+      getApi: () => ({ groups: [first.group] }) as never,
+      getWindowId: () => "w-1",
+    });
+    session.begin(TRANSFER_ID);
+    session.apply({
+      clientX: 200,
+      clientY: 250,
+      kind: "target",
+      transferId: TRANSFER_ID,
+      windowId: "w-1",
+    });
+    session.begin(nextId);
+    session.apply({
+      clientX: 200,
+      clientY: 250,
+      kind: "target",
+      transferId: nextId,
+      windowId: "w-1",
+    });
+    session.end(nextId);
+    first.showOverlay.mockClear();
+    first.clearOverlay.mockClear();
+
+    session.apply({
+      clientX: 20,
+      clientY: 250,
+      kind: "target",
+      transferId: TRANSFER_ID,
+      windowId: "w-1",
+    });
+    expect(first.showOverlay).not.toHaveBeenCalled();
   });
 });
