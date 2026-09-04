@@ -37,7 +37,7 @@ export async function performListCatalogSnapshot(
   const plugins: ManagedPluginCatalogRow[] = [];
   const seen = new Set<string>();
   for (const [pluginId, entry] of Object.entries(state.plugins)) {
-    // Retired language packs (etc.) must not appear even if index still has them.
+    // Retired ids must not appear even if a cached official index still has them.
     if (isRetiredManagedPluginId(pluginId)) {
       continue;
     }

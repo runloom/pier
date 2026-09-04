@@ -545,6 +545,13 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 命令授权走 `CommandMetadata.allowedClientKinds`：`plugin.catalog.list` 允许 `desktop-renderer` + `cli-local`；其它 managed 命令 + `app.relaunch` 只允许 `desktop-renderer`
 - 插件 RPC 走独立 IPC 通道（`PIER.PLUGIN_RPC_INVOKE`），不进 `PierCommand`、不经 CLI local-control
 
+### 退役官方插件彻底不可见
+
+退役 id 在产品里彻底不可见：签名官方索引不卖、设置已安装/未安装不出现、不能安装。宿主 `RETIRED_MANAGED_PLUGIN_IDS` 挡住旧缓存索引；`generate-plugin-index` 合并历史条目时丢掉退役 id。改名（`pier.tmux` → `pier.agent-splits`）与折入宿主（语言包）同一纪律，不做「已退役」灰名、不双卖。
+
+权威规格：[`docs/superpowers/specs/2026-09-04-retired-managed-plugin-invisibility-gold-standard.md`](docs/superpowers/specs/2026-09-04-retired-managed-plugin-invisibility-gold-standard.md)。  
+检查点：`tests/unit/main/plugins/retired-plugin-invisibility-governance.test.ts`。
+
 ### 项目设置贡献点 `projectSettings`
 
 插件可经 manifest `projectSettings` 声明 + renderer 运行时 `context.projectSettings.register` 注册「设置 → 项目」详情 tab：
