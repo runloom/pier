@@ -1,5 +1,6 @@
 export const contextMenu = {
   action: {
+    scrollToBottom: "回到底部",
     clearScreen: "清屏",
     closeAll: "关闭所有面板",
     closeOthers: "关闭其他面板",

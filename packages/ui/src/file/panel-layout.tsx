@@ -180,6 +180,7 @@ export function FilePanelLayout({
           }
         }}
         orientation="horizontal"
+        resizeTargetMinimumSize={{ coarse: 0, fine: 0 }}
       >
         <ResizablePanel
           aria-hidden={!sidebarVisible}
@@ -214,9 +215,12 @@ export function FilePanelLayout({
         >
           {sidebar}
         </ResizablePanel>
+        {/* Keep the entire resize target outside the tree's native scrollbar. */}
         <ResizableHandle
           className={cn(
-            "data-[resize-handle-state=drag]:bg-primary data-[resize-handle-state=hover]:bg-primary/60",
+            // 4px 布局宽度：更宽会把 50% 夹宽契约（End → 组宽一半）压出容差；
+            // 命中区只能向右扩展（after:w-2.5），不得向左侵入树的原生滚动条。
+            "pointer-coarse:w-5 w-1 border-border border-l bg-transparent after:left-0 after:w-2.5 after:translate-x-0 after:bg-transparent data-[separator=active]:border-primary data-[separator=hover]:border-primary/60",
             !sidebarVisible && "hidden"
           )}
           disabled={!sidebarVisible}

@@ -1,5 +1,6 @@
 export const contextMenu = {
   action: {
+    scrollToBottom: "Scroll to Bottom",
     clearScreen: "Clear Screen",
     closeAll: "Close All Panels",
     closeOthers: "Close Other Panels",

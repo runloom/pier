@@ -14,6 +14,7 @@ const TERMINAL_OPERATION_BINDINGS: Record<TerminalOperation, string> = {
   clearScreen: "clear_screen",
   copy: "copy_to_clipboard",
   paste: "paste_from_clipboard",
+  scrollToBottom: "scroll_to_bottom",
   selectAll: "select_all",
 };
 
@@ -22,7 +23,8 @@ function isTerminalOperation(value: unknown): value is TerminalOperation {
     value === "copy" ||
     value === "paste" ||
     value === "selectAll" ||
-    value === "clearScreen"
+    value === "clearScreen" ||
+    value === "scrollToBottom"
   );
 }
 

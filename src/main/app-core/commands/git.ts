@@ -119,6 +119,14 @@ async function dispatchGitCommand(
   services: PierCoreServices
 ): Promise<PierCommandResult | null> {
   switch (command.type) {
+    case "git.getFileBaseline":
+      return success(
+        requestId,
+        await services.git.getFileBaseline({
+          root: command.root,
+          path: command.path,
+        })
+      );
     case "git.getStatus":
       return success(requestId, await services.git.getStatus(command.cwd));
     case "git.openReviewPanel":

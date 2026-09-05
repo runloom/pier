@@ -39,8 +39,8 @@ export interface DemoSession {
   worktree: string;
   /** 会话目录属于 git 仓库时才出现「变更」入口（与桌面一致）。 */
   hasGit: boolean;
-  /** 工作台大卡摘要：等待时是审批问句，运行中是正在做什么。 */
-  ask?: string;
+  /** 只在宿主登记了未决交互时提供；waiting 本身不代表可以远程回应。 */
+  pendingInteractionId?: string | undefined;
   screen: ScreenLine[];
 }
 
@@ -134,16 +134,18 @@ const RUNNING_SCREEN: ScreenLine[] = [
   { text: "• Reading src/main/services/foreground-activity/" },
   { text: "• Reading src/shared/contracts/foreground-activity.ts" },
   { text: "• Reading tests/unit/main/panel/turn-state-machine.test.ts" },
-  { text: "• Reading tests/unit/main/panel/foreground-activity-transcript-unseal.test.ts" },
+  {
+    text: "• Reading tests/unit/main/panel/foreground-activity-transcript-unseal.test.ts",
+  },
   { text: "• Ran pnpm vitest run tests/unit/main/panel", tone: "ok" },
   { text: "  ✓ 24 passed (24)", tone: "ok" },
   { text: "" },
   { text: "• Editing tests/unit/main/panel/…transcript-unseal.test.ts" },
-  { text: "  + it(\"unseals on fresh ToolStart after seal\", …)", tone: "ok" },
-  { text: "  + it(\"does not unseal on ToolComplete\", …)", tone: "ok" },
+  { text: '  + it("unseals on fresh ToolStart after seal", …)', tone: "ok" },
+  { text: '  + it("does not unseal on ToolComplete", …)', tone: "ok" },
   { text: "" },
   { text: "• Writing tests/unit/main/panel/turn-state-machine.test.ts" },
-  { text: "  + it(\"keeps sealed turn until fresh ToolStart\", …)", tone: "ok" },
+  { text: '  + it("keeps sealed turn until fresh ToolStart", …)', tone: "ok" },
   { text: "" },
   { text: "▌ Thinking… (12s)", tone: "accent" },
 ];
@@ -163,54 +165,6 @@ const TERMINAL_SCREEN: ScreenLine[] = [
   { text: "" },
   { text: "~/dev/ghostty on  main [!?]", tone: "dim" },
   { text: "❯ ", tone: "prompt" },
-];
-
-/** 审批键回写后，终端继续跑；画面用同一条命令的执行结果。 */
-function respondedScreen(key: string): ScreenLine[] {
-  const declined = key === "Esc" || key === "n" || key === "3";
-  if (declined) {
-    return [
-      { text: "❯ claude", tone: "prompt" },
-      { text: "" },
-      { text: "● Bash(git diff --staged)" },
-      { text: "  ⎿  Permission denied by user", tone: "warn" },
-      { text: "" },
-      { text: "● 好，我不再直接读暂存区，改为让你在电脑上" },
-      { text: "  运行 `git diff --staged` 后把要点告诉我。" },
-      { text: "" },
-      { text: "▌ 等待你的输入…", tone: "accent" },
-    ];
-  }
-  return [
-    { text: "❯ claude", tone: "prompt" },
-    { text: "" },
-    { text: "● Bash(git diff --staged)" },
-    { text: "  ⎿  diff --git a/apps/mobile-web/src/app.tsx", tone: "dim" },
-    { text: "     +import { ConnectionBanner } from …", tone: "ok" },
-    { text: "     … 3 files changed, 116 insertions(+), 7 deletions(-)", tone: "dim" },
-    { text: "" },
-    { text: "● 暂存区里是连接横幅和它的单测。我先跑一遍" },
-    { text: "  mobile-web 的单测，再帮你整理提交说明。" },
-    { text: "" },
-    { text: "● Bash(pnpm vitest run tests/unit/mobile-web)" },
-    { text: "  ⎿  Running…", tone: "accent" },
-  ];
-}
-
-const FINISHED_SCREEN: ScreenLine[] = [
-  { text: "❯ claude", tone: "prompt" },
-  { text: "" },
-  { text: "● Bash(pnpm vitest run tests/unit/mobile-web)" },
-  { text: "  ⎿  Test Files  18 passed (18)", tone: "ok" },
-  { text: "         Tests  131 passed (131)", tone: "ok" },
-  { text: "      Duration  6.4s", tone: "dim" },
-  { text: "" },
-  { text: "● 单测全绿。提交说明建议：" },
-  { text: "  feat(mobile-web): 连接横幅明示断线与重连" },
-  { text: "" },
-  { text: "  要我现在提交吗？（我会先给你看 diff --staged）" },
-  { text: "" },
-  { text: "▌ 等待你的输入…", tone: "accent" },
 ];
 
 export const INITIAL_DEMO: DemoState = {
@@ -234,7 +188,7 @@ export const INITIAL_DEMO: DemoState = {
   ],
   notifications: [
     {
-      body: "feat-mobile 在等你确认一条命令，点按打开该会话",
+      body: "智能体想运行 git diff --staged，正在等待你的回应。",
       hostId: HOST_MINI,
       id: "n-waiting",
       read: false,
@@ -243,7 +197,7 @@ export const INITIAL_DEMO: DemoState = {
       when: "刚刚",
     },
     {
-      body: "xyz 已停在当前屏幕",
+      body: "上一回合已完成。可以打开 xyz 查看当时的输出和后续进展。",
       hostId: HOST_MINI,
       id: "n-finished",
       read: true,
@@ -265,7 +219,7 @@ export const INITIAL_DEMO: DemoState = {
   sessions: [
     {
       agent: "Claude Code",
-      ask: "Bash · git diff --staged",
+      pendingInteractionId: "ix-feat-mobile-read",
       hasGit: true,
       hostId: HOST_MINI,
       id: SESSION_WAITING,
@@ -277,7 +231,6 @@ export const INITIAL_DEMO: DemoState = {
     },
     {
       agent: "Codex",
-      ask: "正在补 foreground-activity 单测",
       hasGit: true,
       hostId: HOST_MINI,
       id: SESSION_RUNNING,
@@ -313,13 +266,9 @@ export const PAIRED_HOST: DemoHost = {
 export type DemoAction =
   | { type: "host.add"; host: DemoHost }
   | { type: "host.remove"; hostId: string }
-  | { type: "session.respond"; sessionId: string; key: string }
-  | { type: "session.turnFinished"; sessionId: string }
   | { type: "notification.read"; id: string }
   | { type: "notification.readAll" }
   | { type: "push.set"; state: PushState };
-
-let notificationSeq = 0;
 
 export function reduceDemo(state: DemoState, action: DemoAction): DemoState {
   switch (action.type) {
@@ -332,51 +281,6 @@ export function reduceDemo(state: DemoState, action: DemoAction): DemoState {
         ...state,
         hosts: state.hosts.filter((host) => host.id !== action.hostId),
       };
-    case "session.respond":
-      return {
-        ...state,
-        notifications: state.notifications.map((item) =>
-          item.sessionId === action.sessionId ? { ...item, read: true } : item
-        ),
-        sessions: state.sessions.map((session) =>
-          session.id === action.sessionId
-            ? {
-                ...session,
-                screen: respondedScreen(action.key),
-                status: "processing",
-              }
-            : session
-        ),
-      };
-    case "session.turnFinished": {
-      const session = state.sessions.find(
-        (item) => item.id === action.sessionId
-      );
-      if (session === undefined || session.status !== "processing") {
-        return state;
-      }
-      notificationSeq += 1;
-      return {
-        ...state,
-        notifications: [
-          {
-            body: `${session.title} 已停在当前屏幕，等你下一步`,
-            hostId: session.hostId,
-            id: `n-turn-${notificationSeq}`,
-            read: false,
-            sessionId: session.id,
-            title: "回合已完成",
-            when: "刚刚",
-          },
-          ...state.notifications,
-        ],
-        sessions: state.sessions.map((item) =>
-          item.id === session.id
-            ? { ...item, screen: FINISHED_SCREEN, status: "ready" }
-            : item
-        ),
-      };
-    }
     case "notification.read":
       return {
         ...state,
@@ -420,63 +324,36 @@ export function sessionsOf(state: DemoState, hostId: string): DemoSession[] {
   ];
 }
 
-export interface InboxThread {
-  key: string;
-  latest: DemoNotification;
-  sessionId: string | null;
-  title: string;
-  unread: boolean;
-  waiting: boolean;
+/** 与现有 agent.attention.respond 的 13 个键一致；没有选项或语义动作。 */
+export const DEMO_RESPONSE_KEYS = [
+  "enter",
+  "escape",
+  "y",
+  "n",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+] as const;
+export type DemoResponseKey = (typeof DEMO_RESPONSE_KEYS)[number];
+export type DemoKeyResult = "accepted" | "stale" | "failed";
+
+/** 仅模拟宿主接受按键；不能据此改终端文本、会话状态或生成完成消息。 */
+export function demoKeyDelivery(
+  session: DemoSession,
+  interactionId: string
+): DemoKeyResult {
+  return session.status === "waiting" &&
+    session.pendingInteractionId === interactionId
+    ? "accepted"
+    : "stale";
 }
 
-/**
- * 收件箱按会话收成一行：新事件更新同一行，需要你处理钉顶。
- * 没有会话身份的主机消息单独成行，排在后面。
- */
-export function inboxThreads(
-  items: readonly DemoNotification[],
-  sessions: readonly DemoSession[]
-): InboxThread[] {
-  const bySession = new Map<string, DemoNotification[]>();
-  const hostLevel: DemoNotification[] = [];
-  for (const item of items) {
-    if (item.sessionId === null) {
-      hostLevel.push(item);
-      continue;
-    }
-    const list = bySession.get(item.sessionId) ?? [];
-    list.push(item);
-    bySession.set(item.sessionId, list);
-  }
-  const threads: InboxThread[] = [];
-  for (const [sessionId, list] of bySession) {
-    const latest = list[0];
-    if (latest === undefined) {
-      continue;
-    }
-    const session = sessions.find((item) => item.id === sessionId);
-    threads.push({
-      key: sessionId,
-      latest,
-      sessionId,
-      title: session?.title ?? latest.title,
-      unread: list.some((item) => !item.read),
-      waiting: session?.status === "waiting",
-    });
-  }
-  for (const item of hostLevel) {
-    threads.push({
-      key: item.id,
-      latest: item,
-      sessionId: null,
-      title: item.title,
-      unread: !item.read,
-      waiting: false,
-    });
-  }
-  return [
-    ...threads.filter((thread) => thread.waiting),
-    ...threads.filter((thread) => !thread.waiting && thread.unread),
-    ...threads.filter((thread) => !(thread.waiting || thread.unread)),
-  ];
+export function screenText(lines: readonly ScreenLine[]): string {
+  return lines.map((line) => line.text).join("\n");
 }

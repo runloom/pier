@@ -91,4 +91,24 @@ describe("parseGrokUserSubscriptionResult", () => {
       })
     ).toEqual({ planType: "free", status: "none" });
   });
+
+  it.each([
+    { subscriptionTier: null },
+    { subscriptionTier: "" },
+    { subscription_tier: null },
+    { user: { subscriptionTier: null } },
+  ])("recognizes an explicitly empty live subscription: %j", (payload) => {
+    expect(parseGrokUserSubscriptionResult(payload)).toEqual({
+      planType: "free",
+      status: "none",
+    });
+  });
+
+  it.each([
+    {},
+    { user: {} },
+    { subscriptionTier: 42 },
+  ])("leaves unavailable or malformed membership unresolved: %j", (payload) => {
+    expect(parseGrokUserSubscriptionResult(payload)).toBeNull();
+  });
 });

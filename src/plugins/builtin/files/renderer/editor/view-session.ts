@@ -10,6 +10,7 @@ import type {
   FilesDocument,
   FilesDocumentLanguage,
 } from "../document/types.ts";
+import { setFileChangePeek } from "../git-changes/source-widget.ts";
 import {
   cancelQueuedFilesLspHover,
   clearFilesLspHover,
@@ -135,7 +136,6 @@ export class FileEditorViewSession {
   ): void {
     const restoreScroll = options?.restoreScroll !== false;
     if (this.#view) {
-      // 已有 view（Activity 隐藏后 parent 可能换了）：先快照 scroll，append 后恢复。
       this.#captureScrollFromView(this.#view);
       if (this.#view.dom.parentElement !== parent) {
         parent.appendChild(this.#view.dom);
@@ -261,20 +261,20 @@ export class FileEditorViewSession {
     if (!view) {
       return false;
     }
-    // display:none / 已卸下时 scrollTop 可能是 0：先靠监听累计，有非零 live 再覆盖。
     this.#captureScrollFromView(view);
     if (
       parent &&
       view.dom.parentElement !== parent &&
       view.dom.parentElement !== null
     ) {
-      // 仍挂在别的 host 上：只保存滚动，不 destroy。
       return false;
     }
     this.#unbindScrollCapture();
     clearFilesLspHover(view);
     resetEditorSearch(view);
-    this.#savedState = view.state;
+    this.#savedState = view.state.update({
+      effects: setFileChangePeek.of(null),
+    }).state;
     view.destroy();
     this.#view = null;
     return true;
@@ -330,7 +330,6 @@ export class FileEditorViewSession {
     }
     const view = this.#view;
     if (!view) return;
-    // Selection owns Y; content reveal resets X. Pixel restore only for remount seed.
     if (snapshot.selection) {
       revealFileEditorOffset(view, snapshot.selection.anchor, {
         head: snapshot.selection.head,
@@ -359,6 +358,7 @@ export class FileEditorViewSession {
   hasView(): boolean {
     return this.#view !== null;
   }
+  getEditorView = (): EditorView | null => this.#view;
   currentLine(): number | null {
     return editorStateCurrentLine(this.#view?.state ?? this.#savedState);
   }

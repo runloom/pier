@@ -28,6 +28,7 @@ import {
   vi,
 } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
+import { actionRegistry } from "@/lib/actions/registry.ts";
 import {
   resetTerminalLaunchConfirmationsForTest,
   waitForTerminalLaunch,
@@ -35,6 +36,7 @@ import {
 import { TERMINAL_COMPOSER_GAP_PX } from "@/panel-kits/terminal/composer-helpers.ts";
 import { hasRegisteredTerminalAnchor } from "@/panel-kits/terminal/layout-coordinator.ts";
 import { TerminalPanel } from "@/panel-kits/terminal/panel.tsx";
+import { registerTerminalActions } from "@/panel-kits/terminal/register-actions.ts";
 import {
   TERMINAL_STATUS_BAR_HEIGHT_PX,
   terminalStatusItemRegistry,
@@ -199,6 +201,17 @@ function createDeferred<T>() {
   return { promise, reject, resolve };
 }
 
+function activeTerminalScrollAction() {
+  const panel = { id: "terminal-1", view: { contentComponent: "terminal" } };
+  useWorkspaceStore.getState().setApi({
+    activePanel: panel,
+    panels: [panel],
+  } as never);
+  const action = actionRegistry.get("pier.terminal.scrollToBottom");
+  if (!action) throw new Error("scroll to bottom action missing");
+  return action;
+}
+
 function createPanelProps(
   options: {
     isActive?: boolean;
@@ -354,6 +367,8 @@ describe("TerminalPanel lifecycle", () => {
     }
   };
 
+  let disposeTerminalActions: (() => void) | undefined;
+
   beforeAll(async () => {
     await initI18n();
   });
@@ -498,6 +513,7 @@ describe("TerminalPanel lifecycle", () => {
             };
           }),
           onChildExited: vi.fn(() => () => undefined),
+          performOperation: vi.fn(async () => ({ ok: true })),
           injectDisplayText: vi.fn(async () => ({ ok: true })),
           onTitleChange: vi.fn((cb) => {
             const listener = { cb };
@@ -514,9 +530,12 @@ describe("TerminalPanel lifecycle", () => {
         },
       },
     });
+    disposeTerminalActions = registerTerminalActions();
   });
 
   afterEach(() => {
+    disposeTerminalActions?.();
+    useWorkspaceStore.getState().setApi(null);
     terminalStatusItemRegistry.clearForTests();
     resetTerminalInputRoutingForTests();
     HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
@@ -537,6 +556,31 @@ describe("TerminalPanel lifecycle", () => {
     unmount();
 
     expect(window.pier.terminal.close).not.toHaveBeenCalled();
+  });
+
+  it("enables viewport actions only between native creation and lifecycle cleanup", async () => {
+    const creation = createDeferred<{ ok: true }>();
+    vi.mocked(window.pier.terminal.create).mockImplementationOnce(
+      () => creation.promise
+    );
+    const action = activeTerminalScrollAction();
+    const { unmount } = render(<TerminalPanel {...createPanelProps()} />);
+    await waitFor(() => expect(window.pier.terminal.create).toHaveBeenCalled());
+    expect(action.enabled?.()).toBe(false);
+    await action.handler({ surface: "command-palette" });
+    expect(window.pier.terminal.performOperation).not.toHaveBeenCalled();
+
+    await act(async () => creation.resolve({ ok: true }));
+    await waitFor(() => expect(action.enabled?.()).toBe(true));
+    await action.handler({ surface: "command-palette" });
+    expect(
+      window.pier.terminal.performOperation
+    ).toHaveBeenCalledExactlyOnceWith("terminal-1", "scrollToBottom");
+
+    unmount();
+    expect(action.enabled?.()).toBe(false);
+    await action.handler({ surface: "command-palette" });
+    expect(window.pier.terminal.performOperation).toHaveBeenCalledTimes(1);
   });
 
   it("closes its workspace panel after the exited terminal accepts a key", async () => {
@@ -1723,6 +1767,7 @@ describe("TerminalPanel lifecycle", () => {
   });
 
   it("renders restored exited agent as a result view without native terminal", async () => {
+    const action = activeTerminalScrollAction();
     vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
       agent: {
         agentId: "claude",
@@ -1772,6 +1817,9 @@ describe("TerminalPanel lifecycle", () => {
     expect(restartButton.parentElement).toHaveClass("justify-center");
     expect(restartButton.parentElement).not.toHaveClass("justify-end");
     expect(window.pier.terminal.create).not.toHaveBeenCalled();
+    expect(action.enabled?.()).toBe(false);
+    await action.handler({ surface: "command-palette" });
+    expect(window.pier.terminal.performOperation).not.toHaveBeenCalled();
   });
 
   it("skips native create for exited agent even when an anchor would be available", async () => {

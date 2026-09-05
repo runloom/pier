@@ -309,12 +309,12 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
     transport: ["hook-command"],
     evidence: {
       lifecycle: "native",
-      ready: "unsupported",
+      ready: "native",
       processing: "native",
       tool: "native",
       waiting: "unsupported",
       error: "unsupported",
-      completed: "unsupported",
+      completed: "native",
       // 取消不发 Stop 只发 Notification（官方文档）；binary 0.202.0 实测
       // notification_type=idle_prompt 唯一发射点在 requestCancelledByUser
       // 路径 → TurnInterrupted 可信中断。
@@ -324,7 +324,12 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
     eventMappings: facts(
       nativeFact("lifecycle", "SessionStart", "SessionStart"),
       nativeFact("lifecycle", "SessionEnd", "SessionEnd"),
-      nativeFact("control", "Stop", "Stop"),
+      // 官方 Stop 只在主 agent 完成回复（回合终态）时发射；取消不发 Stop
+      // 只发 Notification（binary 0.202.0 实测）→ 可信完成事实，按
+      // copilot `agentStop` 同款直接映射 TurnCompleted，不经 advisory
+      // pier Stop（否则 ready 永不可达）。
+      nativeFact("ready", "Stop", "TurnCompleted"),
+      nativeFact("completed", "Stop", "TurnCompleted"),
       nativeFact("processing", "UserPromptSubmit", "PromptSubmit"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
       nativeFact("processing", "PreCompact", "processing"),

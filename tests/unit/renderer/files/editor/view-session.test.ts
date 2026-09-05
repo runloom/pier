@@ -4,6 +4,10 @@ import { EditorView, ViewPlugin } from "@codemirror/view";
 import type { FilesDocument } from "@plugins/builtin/files/renderer/document/types.ts";
 import type { FilesEditorPrefs } from "@plugins/builtin/files/renderer/editor/prefs.ts";
 import { FileEditorViewSession } from "@plugins/builtin/files/renderer/editor/view-session.ts";
+import {
+  fileChangePeekField,
+  mountFileChangePeek,
+} from "@plugins/builtin/files/renderer/git-changes/source-widget.ts";
 import type * as FilesLspClientModule from "@plugins/builtin/files/renderer/lsp/client.ts";
 import type * as FilesLspHoverModule from "@plugins/builtin/files/renderer/lsp/hover.ts";
 import {
@@ -191,6 +195,26 @@ function findView(parent: HTMLElement): EditorView {
 }
 
 describe("FileEditorViewSession scroll restore", () => {
+  it("does not restore a transient change widget after detach precedes parent cleanup", () => {
+    const session = new FileEditorViewSession({
+      documentId: document.id,
+      editorSessionId: "peek-restore",
+      editorPrefs: initialPrefs,
+      minimapEnabled: false,
+      onChange: vi.fn(),
+      presentation: { ...viewPresentationDefaults, ariaLabel: "File editor" },
+    });
+    const parent = documentNode();
+    session.mount(parent, document);
+    const view = findView(parent);
+    const close = mountFileChangePeek(view, 1, documentNode());
+    expect(view.state.field(fileChangePeekField).size).toBe(1);
+    session.detach(parent);
+    close();
+    session.mount(parent, document);
+    expect(findView(parent).state.field(fileChangePeekField).size).toBe(0);
+    session.dispose();
+  });
   it("restores scrollTop after detach and remount (tab switch)", async () => {
     const longDoc: FilesDocument = {
       ...document,

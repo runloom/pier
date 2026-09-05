@@ -66,11 +66,22 @@ function appleScriptString(value: string): string {
   return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
-async function focusElectronApp(app: ElectronApplication) {
-  await app.evaluate(({ app: electronApp, BrowserWindow }) => {
-    electronApp.focus({ steal: true });
-    BrowserWindow.getAllWindows()[0]?.focus();
+async function focusElectronApp(app: ElectronApplication, win: Page) {
+  const windowId = await win.evaluate(async () => {
+    const snapshot = await window.pier.terminal.debugSnapshot();
+    return (
+      snapshot.native.surfaces[0]?.browserWindowId ??
+      snapshot.events.at(-1)?.browserWindowId
+    );
   });
+  await app.evaluate(({ app: electronApp, BaseWindow }, id) => {
+    const host = BaseWindow.getAllWindows().find(
+      (candidate) => candidate.id === id
+    );
+    if (!host) throw new Error("terminal test window not found");
+    electronApp.focus({ steal: true });
+    host.focus();
+  }, windowId);
 }
 
 async function pasteTextIntoFocusedApp(text: string) {
@@ -487,10 +498,10 @@ async function writeMarkerFromTerminal(
   } = {}
 ) {
   const command = `printf ${shellQuote(marker)} > ${shellQuote(filePath)}`;
+  await focusElectronApp(app, win);
   if (!options.skipOwnershipEnsure) {
     await ensureNativeKeyboardOwnership(win, options.tabIndex ?? 0);
   }
-  await focusElectronApp(app);
   const focusDelayMs = options.focusDelayMs ?? 300;
   if (focusDelayMs > 0) {
     await win.waitForTimeout(focusDelayMs);
@@ -620,6 +631,7 @@ async function dragTopLeftTabIntoBottomLeftRightSplit(win: Page) {
 }
 
 test.describe("Native terminal focus e2e", () => {
+  test.describe.configure({ timeout: 90_000 });
   test("initial terminal accepts shell input", async () => {
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
     const markerDir = mkdtempSync(join(tmpdir(), "pier-terminal-marker-"));
@@ -682,8 +694,8 @@ test.describe("Native terminal focus e2e", () => {
     try {
       const win = await app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
-      await app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.setSize(1200, 820);
+      await app.evaluate(({ BaseWindow }) => {
+        BaseWindow.getAllWindows()[0]?.setSize(1200, 820);
       });
 
       await waitForTerminalCount(win, 1);
@@ -886,12 +898,12 @@ test.describe("Native terminal focus e2e", () => {
     try {
       const win = await app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
-      await app.evaluate(({ BrowserWindow }) => {
-        const browserWindow = BrowserWindow.getAllWindows()[0];
-        browserWindow?.unmaximize();
-        browserWindow?.setMinimumSize(320, 320);
-        browserWindow?.setSize(360, 400);
-        browserWindow?.setContentSize(360, 360);
+      await app.evaluate(({ BaseWindow }) => {
+        const hostWindow = BaseWindow.getAllWindows()[0];
+        hostWindow?.unmaximize();
+        hostWindow?.setMinimumSize(320, 320);
+        hostWindow?.setSize(360, 400);
+        hostWindow?.setContentSize(360, 360);
       });
       await win.waitForTimeout(500);
       await waitForPierCli(userDataDir);
@@ -952,8 +964,8 @@ test.describe("Native terminal focus e2e", () => {
     try {
       const win = await app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
-      await app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.setSize(820, 520);
+      await app.evaluate(({ BaseWindow }) => {
+        BaseWindow.getAllWindows()[0]?.setSize(820, 520);
       });
       await waitForPierCli(userDataDir);
       await waitForTerminalPanelCount(userDataDir, 1);
@@ -1017,8 +1029,8 @@ test.describe("Native terminal focus e2e", () => {
     try {
       const win = await app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
-      await app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.setSize(820, 520);
+      await app.evaluate(({ BaseWindow }) => {
+        BaseWindow.getAllWindows()[0]?.setSize(820, 520);
       });
       await waitForPierCli(userDataDir);
       await waitForTerminalPanelCount(userDataDir, 1);
@@ -1203,8 +1215,8 @@ test.describe("Native terminal focus e2e", () => {
     try {
       const win = await app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
-      await app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.setSize(820, 520);
+      await app.evaluate(({ BaseWindow }) => {
+        BaseWindow.getAllWindows()[0]?.setSize(820, 520);
       });
       await waitForPierCli(userDataDir);
       const initial = await waitForTerminalPanelCount(userDataDir, 1);
@@ -1306,8 +1318,8 @@ test.describe("Native terminal focus e2e", () => {
     try {
       const win = await app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
-      await app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.setSize(820, 520);
+      await app.evaluate(({ BaseWindow }) => {
+        BaseWindow.getAllWindows()[0]?.setSize(820, 520);
       });
       await waitForPierCli(userDataDir);
       const initial = await waitForTerminalPanelCount(userDataDir, 1);

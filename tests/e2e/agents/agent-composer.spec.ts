@@ -8,6 +8,7 @@ import {
   type Page,
   test,
 } from "@playwright/test";
+import type { TerminalDebugSnapshot } from "../../../src/shared/contracts/terminal/debug.ts";
 
 const OUT_MAIN = join(
   import.meta.dirname,
@@ -28,27 +29,19 @@ test.skip(process.platform !== "darwin", "native terminal is macOS-only");
  * unmounts. sendText IPC stays independent of UI mount.
  */
 
-interface DebugCoordinator {
-  desired?: {
-    webRequestCount?: number;
-  };
-}
-
-interface DebugSnapshot {
-  coordinator?: DebugCoordinator;
-}
-
-function readSnapshot(win: Page): Promise<DebugSnapshot> {
+function readSnapshot(win: Page): Promise<TerminalDebugSnapshot> {
   return win.evaluate(() =>
     (
       window as unknown as {
-        pier: { terminal: { debugSnapshot: () => Promise<DebugSnapshot> } };
+        pier: {
+          terminal: { debugSnapshot: () => Promise<TerminalDebugSnapshot> };
+        };
       }
     ).pier.terminal.debugSnapshot()
   );
 }
 
-function webRequestCount(snapshot: DebugSnapshot): number {
+function webRequestCount(snapshot: TerminalDebugSnapshot): number {
   return snapshot.coordinator?.desired?.webRequestCount ?? 0;
 }
 
@@ -56,6 +49,19 @@ async function waitForTerminalCount(win: Page, count: number): Promise<void> {
   await expect(win.locator(".terminal-anchor")).toHaveCount(count, {
     timeout: 10_000,
   });
+}
+
+async function waitForTerminalReady(win: Page, panelId: string): Promise<void> {
+  // The anchor and native view exist before Ghostty presents its first frame.
+  await expect
+    .poll(
+      async () =>
+        (await readSnapshot(win)).renderer?.panels.find(
+          (panel) => panel.panelId === panelId
+        )?.terminalLifecycle,
+      { timeout: 15_000 }
+    )
+    .toMatchObject({ nativeTerminalReady: true });
 }
 
 async function readTerminalPanelId(win: Page): Promise<string> {
@@ -165,6 +171,9 @@ async function openComposer(win: Page, panelId: string): Promise<void> {
 }
 
 test.describe("Agent composer e2e", () => {
+  // Fresh profiles install bundled plugins before exercising the input flow.
+  test.describe.configure({ timeout: 90_000 });
+
   test("on-demand open mounts composer; agent alone does not", async () => {
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-composer-e2e-"));
     const app = await electron.launch({
@@ -173,8 +182,13 @@ test.describe("Agent composer e2e", () => {
     try {
       const win = await app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
+      await app.evaluate(({ app: electronApp, BaseWindow }) => {
+        electronApp.focus({ steal: true });
+        BaseWindow.getAllWindows()[0]?.focus();
+      });
       await waitForTerminalCount(win, 1);
       const panelId = await readTerminalPanelId(win);
+      await waitForTerminalReady(win, panelId);
 
       const composer = win.locator('[data-testid="terminal-composer"]');
       const input = win.locator('[data-testid="terminal-composer-input"]');
@@ -247,8 +261,13 @@ test.describe("Agent composer e2e", () => {
     try {
       const win = await app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
+      await app.evaluate(({ app: electronApp, BaseWindow }) => {
+        electronApp.focus({ steal: true });
+        BaseWindow.getAllWindows()[0]?.focus();
+      });
       await waitForTerminalCount(win, 1);
       const panelId = await readTerminalPanelId(win);
+      await waitForTerminalReady(win, panelId);
 
       const okResult = await win.evaluate(
         (id) =>

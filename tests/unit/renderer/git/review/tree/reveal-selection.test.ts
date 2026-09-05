@@ -1,8 +1,32 @@
 import type { PierFileTreeApi } from "@pier/ui/file/tree.tsx";
 import { revealGitReviewTreeSelection } from "@plugins/builtin/git/renderer/review/tree-reveal-selection.ts";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+afterEach(() => vi.useRealTimers());
 
 describe("revealGitReviewTreeSelection", () => {
+  it.each([
+    true,
+    false,
+  ])("does not replay a reveal after a newer user scroll (settled: %s)", async (settled) => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame"] });
+    let scrollTop = 0;
+    const revealPath = vi.fn(() => {
+      scrollTop = 500;
+      return settled;
+    });
+    const api = { revealPath } as unknown as PierFileTreeApi;
+
+    revealGitReviewTreeSelection(api, "Changes", { preserveFocus: true });
+    await Promise.resolve();
+    expect(scrollTop).toBe(500);
+    scrollTop = 200;
+    await vi.runAllTimersAsync();
+
+    expect(scrollTop).toBe(200);
+    expect(revealPath).toHaveBeenCalledTimes(1);
+  });
+
   it("calls revealPath with explicit intent and no expandTarget", async () => {
     const revealPath = vi.fn(() => true);
     const api = { revealPath } as unknown as PierFileTreeApi;

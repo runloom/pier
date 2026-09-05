@@ -32,6 +32,15 @@
     },
     "pier.files.revealActiveFileInTree": {
       "title": "파일 트리에서 현재 파일 표시"
+    },
+    "pier.files.changes.current": {
+      "title": "변경 보기"
+    },
+    "pier.files.changes.previous": {
+      "title": "이전 변경"
+    },
+    "pier.files.changes.next": {
+      "title": "다음 변경"
     }
   },
   "messages": {
@@ -86,9 +95,9 @@
     "filePanel.markdown.appletMountFailedBody": "다시 시도하세요. 계속 실패하면 플러그인이 설치되어 있는지 확인하세요.",
     "filePanel.markdown.toc.title": "개요",
     "filePanel.markdown.gitBars.track": "커밋하지 않은 변경",
-    "filePanel.markdown.gitBars.added": "{{line}}번째 줄의 추가 내용 보기",
-    "filePanel.markdown.gitBars.modified": "{{line}}번째 줄의 수정 내용 보기",
-    "filePanel.markdown.gitBars.deleted": "{{line}}번째 줄의 삭제 내용 보기",
+    "filePanel.markdown.gitBars.added": "{{line}}행의 추가 보기",
+    "filePanel.markdown.gitBars.modified": "{{line}}행의 수정 보기",
+    "filePanel.markdown.gitBars.deleted": "{{line}}행의 삭제 보기",
     "filePanel.markdown.measure.comfortable": "읽기 편한 너비",
     "filePanel.markdown.measure.wide": "넓은 너비",
     "filePanel.markdown.appearance.auto": "앱 모양에 맞추기",
@@ -536,7 +545,43 @@
     "filePanel.markdown.comment.title": "댓글",
     "filePanel.markdown.comment.updateFailed": "댓글을 업데이트하지 못했습니다",
     "filePanel.markdown.comment.view": "댓글 보기",
-    "filePanel.markdown.comment.viewCount": "댓글 {{count}}개 보기"
+    "filePanel.markdown.comment.viewCount": "댓글 {{count}}개 보기",
+    "filePanel.changes.display": "변경 표시 방식",
+    "filePanel.changes.rendered": "미리보기",
+    "filePanel.changes.source": "소스",
+    "filePanel.changes.removed": "삭제됨",
+    "filePanel.changes.added": "추가됨",
+    "filePanel.changes.modified": "수정됨",
+    "filePanel.changes.linkAddress": "링크 주소 변경",
+    "filePanel.changes.linkTitle": "링크 제목 변경",
+    "filePanel.changes.before": "변경 전",
+    "filePanel.changes.after": "변경 후",
+    "filePanel.changes.imageDetails": "이미지 변경",
+    "filePanel.changes.historicalImages": "이전 버전의 이미지는 불러오지 않습니다. 소스에서 주소와 설명을 확인하세요.",
+    "filePanel.changes.htmlDetails": "일부 HTML 변경은 표시되지 않을 수 있습니다. 소스에서 전체 변경을 확인하세요.",
+    "filePanel.changes.previewUnavailable": "미리보기를 표시할 수 없어 소스 변경을 표시합니다.",
+    "filePanel.changes.sourceRequired": "이 변경의 모든 세부 정보는 소스 보기에서 확인하세요.",
+    "filePanel.changes.retryPreview": "미리보기 다시 시도",
+    "filePanel.changes.linkUnavailable": "링크를 열 수 없습니다. 파일 트리에서 해당 파일을 여세요.",
+    "filePanel.changes.show": "변경 보기",
+    "filePanel.changes.preview": "변경 미리 보기",
+    "filePanel.changes.previous": "이전 변경",
+    "filePanel.changes.next": "다음 변경",
+    "filePanel.changes.close": "미리 보기 닫기",
+    "filePanel.changes.baseline": "HEAD → 현재 내용",
+    "filePanel.changes.unsaved": "HEAD → 현재 내용 · 저장하지 않은 변경 포함",
+    "filePanel.changes.unsavedLabel": "저장 안 됨",
+    "filePanel.changes.savedOnly": "전체 검토에는 저장된 변경만 포함됩니다.",
+    "filePanel.changes.fullReview": "전체 검토 열기",
+    "filePanel.changes.savedReview": "저장된 변경 보기",
+    "filePanel.changes.saveFirst": "먼저 파일을 저장하세요",
+    "filePanel.changes.loading": "변경 비교 중…",
+    "filePanel.changes.empty": "HEAD와 비교해 변경이 없습니다.",
+    "filePanel.changes.onDemand": "큰 파일입니다. 필요할 때 비교하세요.",
+    "filePanel.changes.failed": "변경을 비교할 수 없습니다. 다시 시도하세요.",
+    "filePanel.changes.retry": "다시 비교",
+    "filePanel.changes.reviewUnavailable": "검토할 저장된 변경이 없습니다.",
+    "filePanel.changes.reviewFailed": "변경을 열 수 없습니다"
   },
   "terminalStatusItems": {
     "pier.files.project": {

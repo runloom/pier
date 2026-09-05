@@ -367,7 +367,7 @@ export const NESTED_HOOK_STATUS_TRACES = [
   nestedTrace(
     "droid",
     DROID_HOOK_EVENTS,
-    ["lifecycle", "processing", "tool", "interrupted"],
+    ["lifecycle", "processing", "tool", "interrupted", "ready", "completed"],
     [
       ...commonTraceActions({
         promptNativeEvent: "UserPromptSubmit",
@@ -375,7 +375,7 @@ export const NESTED_HOOK_STATUS_TRACES = [
         toolStartNativeEvent: "PreToolUse",
       }),
       // 取消不发 Stop 只发 Notification（官方文档）；idle_prompt 唯一
-      // 发射点是用户取消路径 → TurnInterrupted 可信中断。
+      // 发射点是用户取消路径 → TurnInterrupted 可信中断（回合 1 被取消）。
       {
         ...traceAction(
           "Notification",
@@ -388,7 +388,6 @@ export const NESTED_HOOK_STATUS_TRACES = [
           }
         ),
         checkpoints: [
-          // 矩阵 ready 仍 unsupported（无 completed 信号），只认领 interrupted。
           {
             dimension: "interrupted",
             expectedEvent: "TurnInterrupted",
@@ -398,6 +397,36 @@ export const NESTED_HOOK_STATUS_TRACES = [
           },
         ],
         scenarios: ["interrupted"],
+      },
+      // 回合 2：重新提问后正常完成。官方 Stop 只在主 agent 完成回复时
+      // 发射（取消不发 Stop）→ 可信终态直接映射 TurnCompleted（copilot
+      // agentStop 同款）；advisory pier Stop 候选会让 ready 永不可达
+      //（2026-09-05 修复）。
+      traceAction(
+        "UserPromptSubmit",
+        "PromptSubmit",
+        "processing",
+        { expectedStatus: "processing" },
+        { prompt: "Second turn after cancel" }
+      ),
+      {
+        ...traceAction("Stop", "TurnCompleted", "ready", {
+          expectedStatus: "ready",
+        }),
+        checkpoints: [
+          {
+            dimension: "ready",
+            expectedEvent: "TurnCompleted",
+            expectedNativeEvent: "Stop",
+            expectedStatus: "ready",
+          },
+          {
+            dimension: "completed",
+            expectedEvent: "TurnCompleted",
+            expectedNativeEvent: "Stop",
+            expectedStatus: "ready",
+          },
+        ],
       },
       traceAction("SessionEnd", "SessionEnd", "lifecycle", {
         expectedAbsent: true,

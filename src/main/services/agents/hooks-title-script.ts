@@ -25,5 +25,9 @@
  *     继承 PIER_* env 的 GUI 进程树（`cursor .` 开 IDE 后 IDE 内 agent
  *     触发共享 hook）冒充面板事件；判定在消费端（tty ≠ 面板 PTY 且未
  *     点亮该 agent 才拒），脚本侧只采集不拒发。
+ * 17 = droid 官方 Stop 是回合可信终态（主 agent 完成回复；取消不发 Stop
+ *     只发 Notification），pierEvent `Stop→TurnCompleted`——advisory
+ *     候选让 droid 永远到不了 ready，turn-finished 通知与 Index ready
+ *     桶失效。
  */
-export const PIER_HOOK_COMMAND_GENERATION = 16;
+export const PIER_HOOK_COMMAND_GENERATION = 17;

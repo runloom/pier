@@ -32,10 +32,6 @@ function rangesOverlap(
   return startA <= endB && startB <= endA;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
 /**
  * Paint only the overlapping line span inside a source box, not the whole
  * outer list / blockquote.
@@ -69,62 +65,44 @@ export function clipBoxToGitRange(
 }
 
 /**
- * Map a click in scroll-content pixels to a disk-side line inside the hunk.
- */
-export function resolveGitBarClickLine(input: {
-  readonly blocks: readonly MarkdownGitBarSourceBox[];
-  readonly newLineFrom: number;
-  readonly newLineTo: number;
-  readonly y: number;
-}): number {
-  const overlapping: MarkdownGitBarSourceBox[] = [];
-  for (const block of input.blocks) {
-    if (
-      rangesOverlap(
-        input.newLineFrom,
-        input.newLineTo,
-        block.startLine,
-        block.endLine
-      )
-    ) {
-      overlapping.push(block);
-    }
-  }
-  if (overlapping.length === 0) {
-    return input.newLineFrom;
-  }
-  let hit =
-    overlapping.find(
-      (block) => input.y >= block.top && input.y <= block.top + block.height
-    ) ?? null;
-  if (!hit) {
-    hit = overlapping.reduce((best, block) => {
-      const mid = block.top + block.height / 2;
-      const bestMid = best.top + best.height / 2;
-      return Math.abs(input.y - mid) < Math.abs(input.y - bestMid)
-        ? block
-        : best;
-    });
-  }
-  const span = hit.endLine - hit.startLine + 1;
-  let line = hit.startLine;
-  if (hit.height > 0 && span > 1) {
-    const t = clamp((input.y - hit.top) / hit.height, 0, 1);
-    line = Math.round(hit.startLine + t * (span - 1));
-  }
-  return clamp(line, input.newLineFrom, input.newLineTo);
-}
-
-/**
  * Project git change ranges onto rendered (or placeholder) source boxes.
  * Output is in scroll-content pixels so bars scroll with the article.
  */
 export function mapGitRangesToPreviewBars(input: {
   readonly blocks: readonly MarkdownGitBarSourceBox[];
   readonly ranges: readonly GitGutterChangeRange[];
+  readonly unrenderedPages?: readonly Pick<
+    MarkdownGitBarSourceBox,
+    "startLine" | "endLine"
+  >[];
 }): MarkdownGitBarSegment[] {
   const segments: MarkdownGitBarSegment[] = [];
+  const sorted = [...input.blocks].sort((a, b) => a.startLine - b.startLine);
   for (const range of input.ranges) {
+    if (range.kind === "deleted" && input.blocks.length > 0) {
+      const next = sorted.find((block) => block.endLine >= range.newLineFrom);
+      const anchor = next ?? sorted.at(-1);
+      const lazy = input.unrenderedPages?.some((page) =>
+        next
+          ? page.endLine >= range.newLineFrom &&
+            page.startLine <= next.startLine
+          : page.endLine > (anchor?.endLine ?? 0)
+      );
+      if (lazy) continue;
+      if (anchor)
+        segments.push({
+          id: range.id,
+          kind: range.kind,
+          newLineFrom: range.newLineFrom,
+          newLineTo: range.newLineTo,
+          height: MARKDOWN_GIT_BAR_MIN_HEIGHT_PX,
+          top:
+            anchor.endLine < range.newLineFrom
+              ? anchor.top + anchor.height
+              : anchor.top,
+        });
+      continue;
+    }
     let top = Number.POSITIVE_INFINITY;
     let bottom = Number.NEGATIVE_INFINITY;
     for (const block of input.blocks) {

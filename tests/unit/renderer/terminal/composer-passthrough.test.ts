@@ -117,4 +117,15 @@ describe("passthroughKeyPressForKey", () => {
       })
     ).toBeNull();
   });
+
+  it.each([
+    ["End", true],
+    ["End", false],
+    ["ArrowDown", true],
+    ["ArrowDown", false],
+  ])("keeps Cmd+%s in the composer when empty=%s", (key, empty) => {
+    expect(
+      passthroughKeyPressForKey({ ...base, empty, key, metaKey: true })
+    ).toBeNull();
+  });
 });

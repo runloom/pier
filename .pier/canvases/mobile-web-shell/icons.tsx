@@ -17,12 +17,14 @@ export type IconName =
   | "folder"
   | "image"
   | "inbox"
+  | "keyboard"
   | "laptop"
   | "lock"
   | "mini"
   | "minus"
   | "monitor"
   | "plus"
+  | "panels"
   | "refresh"
   | "scan"
   | "sparkle"
@@ -83,6 +85,12 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1" />
     </>
   ),
+  keyboard: (
+    <>
+      <rect height="14" rx="2" width="20" x="2" y="5" />
+      <path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M7 15h10" />
+    </>
+  ),
   laptop: (
     <>
       <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9H4z" />
@@ -114,6 +122,12 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <path d="M12 5v14" />
       <path d="M5 12h14" />
+    </>
+  ),
+  panels: (
+    <>
+      <rect height="14" rx="2" width="14" x="3" y="7" />
+      <path d="M7 3h12a2 2 0 0 1 2 2v12" />
     </>
   ),
   refresh: (

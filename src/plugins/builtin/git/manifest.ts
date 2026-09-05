@@ -380,7 +380,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       overflowPinned: true,
       overflowPriority: 0,
       permissions: ["worktree:read", "workspace:open"],
-      title: "git Branch",
+      title: "GIT Branch",
     },
     {
       alignment: "right",
@@ -388,7 +388,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       order: 11,
       overflowPriority: 30,
       permissions: ["git:read", "panel:open"],
-      title: "git Changes",
+      title: "GIT Changes",
     },
     {
       alignment: "right",
@@ -396,7 +396,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       order: 10,
       overflowPriority: 20,
       permissions: ["git:read", "git:write"],
-      title: "git Sync",
+      title: "GIT Sync",
     },
   ],
   version: "1.0.0",

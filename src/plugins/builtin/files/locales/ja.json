@@ -32,6 +32,15 @@
     },
     "pier.files.revealActiveFileInTree": {
       "title": "ファイルツリーで現在のファイルを表示"
+    },
+    "pier.files.changes.current": {
+      "title": "変更を表示"
+    },
+    "pier.files.changes.previous": {
+      "title": "前の変更"
+    },
+    "pier.files.changes.next": {
+      "title": "次の変更"
     }
   },
   "messages": {
@@ -86,9 +95,9 @@
     "filePanel.markdown.appletMountFailedBody": "再試行してください。まだ失敗する場合はプラグインがインストールされているか確認してください。",
     "filePanel.markdown.toc.title": "目次",
     "filePanel.markdown.gitBars.track": "未コミットの変更",
-    "filePanel.markdown.gitBars.added": "{{line}} 行目の追加を見る",
-    "filePanel.markdown.gitBars.modified": "{{line}} 行目の編集を見る",
-    "filePanel.markdown.gitBars.deleted": "{{line}} 行目の削除を見る",
+    "filePanel.markdown.gitBars.added": "{{line}} 行目の追加を表示",
+    "filePanel.markdown.gitBars.modified": "{{line}} 行目の変更を表示",
+    "filePanel.markdown.gitBars.deleted": "{{line}} 行目の削除を表示",
     "filePanel.markdown.measure.comfortable": "読みやすい幅",
     "filePanel.markdown.measure.wide": "広い幅",
     "filePanel.markdown.appearance.auto": "アプリの外観に合わせる",
@@ -536,7 +545,43 @@
     "filePanel.markdown.comment.title": "コメント",
     "filePanel.markdown.comment.updateFailed": "コメントを更新できませんでした",
     "filePanel.markdown.comment.view": "コメントを見る",
-    "filePanel.markdown.comment.viewCount": "{{count}} 件のコメントを見る"
+    "filePanel.markdown.comment.viewCount": "{{count}} 件のコメントを見る",
+    "filePanel.changes.display": "変更の表示方法",
+    "filePanel.changes.rendered": "プレビュー",
+    "filePanel.changes.source": "ソース",
+    "filePanel.changes.removed": "削除",
+    "filePanel.changes.added": "追加",
+    "filePanel.changes.modified": "変更",
+    "filePanel.changes.linkAddress": "リンク先を変更",
+    "filePanel.changes.linkTitle": "リンクタイトルを変更",
+    "filePanel.changes.before": "変更前",
+    "filePanel.changes.after": "変更後",
+    "filePanel.changes.imageDetails": "画像の変更",
+    "filePanel.changes.historicalImages": "過去の画像は読み込まれていません。ソースでアドレスと説明を確認してください。",
+    "filePanel.changes.htmlDetails": "一部の HTML の変更は表示されない場合があります。ソースですべての変更を確認してください。",
+    "filePanel.changes.previewUnavailable": "プレビューを表示できないため、ソースの差分を表示しています。",
+    "filePanel.changes.sourceRequired": "この変更の詳細はソース表示で確認してください。",
+    "filePanel.changes.retryPreview": "プレビューを再試行",
+    "filePanel.changes.linkUnavailable": "リンクを開けませんでした。ファイルツリーから対象のファイルを開いてください。",
+    "filePanel.changes.show": "変更を表示",
+    "filePanel.changes.preview": "変更プレビュー",
+    "filePanel.changes.previous": "前の変更",
+    "filePanel.changes.next": "次の変更",
+    "filePanel.changes.close": "プレビューを閉じる",
+    "filePanel.changes.baseline": "HEAD → 現在の内容",
+    "filePanel.changes.unsaved": "HEAD → 現在の内容・未保存の変更を含む",
+    "filePanel.changes.unsavedLabel": "未保存",
+    "filePanel.changes.savedOnly": "全体レビューには保存済みの変更のみが含まれます。",
+    "filePanel.changes.fullReview": "全体レビューを開く",
+    "filePanel.changes.savedReview": "保存済みの変更を表示",
+    "filePanel.changes.saveFirst": "先にファイルを保存してください",
+    "filePanel.changes.loading": "変更を比較中…",
+    "filePanel.changes.empty": "HEAD と比較して変更はありません。",
+    "filePanel.changes.onDemand": "大きなファイルです。必要に応じて比較してください。",
+    "filePanel.changes.failed": "変更を比較できません。再試行してください。",
+    "filePanel.changes.retry": "再比較",
+    "filePanel.changes.reviewUnavailable": "レビューできる保存済みの変更はありません。",
+    "filePanel.changes.reviewFailed": "変更を開けませんでした"
   },
   "terminalStatusItems": {
     "pier.files.project": {

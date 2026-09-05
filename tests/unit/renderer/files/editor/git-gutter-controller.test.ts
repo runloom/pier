@@ -1,175 +1,111 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { FilesDocument } from "@plugins/builtin/files/renderer/document/types.ts";
+import {
+  clearFilesDocumentStore,
+  ensureDiskDocument,
+  markDocumentLoaded,
+  updateDocumentContents,
+} from "@plugins/builtin/files/renderer/document/store.ts";
 import { FilesEditorGitGutterController } from "@plugins/builtin/files/renderer/editor/git-gutter-controller.ts";
 import type { FileEditorViewSession } from "@plugins/builtin/files/renderer/editor/view-session.ts";
-import type { GitDiffPatch } from "@shared/contracts/git.ts";
-import { describe, expect, it, vi } from "vitest";
+import { compareFileContents } from "@plugins/builtin/files/renderer/git-changes/compare.ts";
+import { registerFileChangeRequests } from "@plugins/builtin/files/renderer/git-changes/requests.ts";
+import type { CompareRequest } from "@plugins/builtin/files/renderer/git-changes/types.ts";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-function makeSession(): FileEditorViewSession {
-  return {
-    setGitGutterMarkers: vi.fn(),
+vi.mock("@plugins/builtin/files/renderer/git-changes/worker-client.ts", () => ({
+  FileChangesWorker: class {
+    compare(input: CompareRequest) {
+      return Promise.resolve(compareFileContents(input));
+    }
+    cancel() {}
+  },
+}));
+const controllers: FilesEditorGitGutterController[] = [];
+afterEach(async () => {
+  for (const controller of controllers.splice(0)) controller.dispose();
+  await Promise.resolve();
+  clearFilesDocumentStore();
+  vi.useRealTimers();
+});
+function setup() {
+  vi.useFakeTimers();
+  const document = ensureDiskDocument({ root: "/repo", path: "a.ts" });
+  markDocumentLoaded(document.id, "head\ncurrent\n");
+  const baseline = {
+    status: "ready" as const,
+    gitRoot: "/repo",
+    path: "a.ts",
+    basePath: "a.ts",
+    headOid: "a".repeat(40),
+    contents: "head\n",
+    existsAtHead: true,
+  };
+  const stop = vi.fn();
+  const context = {
+    git: {
+      getFileBaseline: vi.fn(async () => baseline),
+      watch: vi.fn(() => stop),
+    },
+  } as unknown as RendererPluginContext;
+  const controller = new FilesEditorGitGutterController(context);
+  controllers.push(controller);
+  const session = {
     setGitGutterModel: vi.fn(),
     setGitGutterNavigate: vi.fn(),
     clearGitGutterMarkers: vi.fn(),
-    getPanelContext: vi.fn(() => undefined),
+    getEditorView: () => null,
   } as unknown as FileEditorViewSession;
+  return { controller, session, document, context, stop, baseline };
 }
-
-function makeContext(
-  getDiffPatch: (
-    cwd: string,
-    opts?: { from?: string; path?: string }
-  ) => Promise<GitDiffPatch>
-): { context: RendererPluginContext; unsub: ReturnType<typeof vi.fn> } {
-  const unsub = vi.fn();
-  const context = {
-    git: {
-      getDiffPatch: vi.fn(getDiffPatch),
-      watch: vi.fn(() => unsub),
-    },
-  } as unknown as RendererPluginContext;
-  return { context, unsub };
-}
-
-function diskDocument(root: string, path: string): FilesDocument {
-  return {
-    id: `${root}/${path}`,
-    source: { kind: "disk", path, root },
-  } as unknown as FilesDocument;
-}
-
-function untitledDocument(id: string): FilesDocument {
-  return {
-    id,
-    source: { kind: "untitled", id, name: "x", language: "text" },
-  } as unknown as FilesDocument;
-}
-
-describe("FilesEditorGitGutterController", () => {
-  it("does nothing for untitled documents (clears only)", () => {
-    const { context } = makeContext(async () => ({ files: [] }));
-    const ctrl = new FilesEditorGitGutterController(context);
-    const session = makeSession();
-    ctrl.attach("s1", untitledDocument("u1"), session);
-    expect(
-      session.setGitGutterModel as ReturnType<typeof vi.fn>
-    ).not.toHaveBeenCalled();
-    expect(
-      session.clearGitGutterMarkers as ReturnType<typeof vi.fn>
-    ).toHaveBeenCalled();
-  });
-
-  it("fetches diff on attach and sets model (markers + ranges)", async () => {
-    const filePatch: GitDiffPatch["files"][number] = {
-      binary: false,
-      path: "src/a.ts",
-      oldPath: "src/a.ts",
-      hunks: [
-        {
-          newStart: 1,
-          newLines: 2,
-          oldStart: 1,
-          oldLines: 1,
-          lines: [
-            { kind: "context", text: "a" },
-            { kind: "add", text: "b" },
-          ],
-        },
-      ],
-    };
-    const { context } = makeContext(async () => ({ files: [filePatch] }));
-    const ctrl = new FilesEditorGitGutterController(context);
-    const session = makeSession();
-    ctrl.attach("s1", diskDocument("/repo", "src/a.ts"), session);
-    await Promise.resolve();
-    await Promise.resolve();
-    const setSpy = session.setGitGutterModel as ReturnType<typeof vi.fn>;
-    expect(setSpy).toHaveBeenCalled();
-    const model = setSpy.mock.calls[0]?.[0] as {
-      markers: Map<number, unknown>;
-      ranges: unknown[];
-    };
-    expect(model.markers.get(2)).toEqual({ count: 1, kind: "added" });
-    expect(model.ranges).toHaveLength(1);
-  });
-
-  it("clears markers when diff fetch fails", async () => {
-    const { context } = makeContext(async () =>
-      Promise.reject(new Error("boom"))
-    );
-    const ctrl = new FilesEditorGitGutterController(context);
-    const session = makeSession();
-    ctrl.attach("s1", diskDocument("/repo", "src/a.ts"), session);
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(
-      session.clearGitGutterMarkers as ReturnType<typeof vi.fn>
-    ).toHaveBeenCalled();
-  });
-
-  it("detach unsubscribes watch when last session for root leaves", () => {
-    const { context, unsub } = makeContext(async () => ({ files: [] }));
-    const ctrl = new FilesEditorGitGutterController(context);
-    const session = makeSession();
-    ctrl.attach("s1", diskDocument("/repo", "src/a.ts"), session);
-    ctrl.detach("s1");
-    expect(unsub).toHaveBeenCalled();
-  });
-
-  it("clearSession clears without fetch", () => {
-    const { context } = makeContext(async () => ({ files: [] }));
-    const ctrl = new FilesEditorGitGutterController(context);
-    const session = makeSession();
-    ctrl.attach("s1", diskDocument("/repo", "src/a.ts"), session);
-    ctrl.clearSession("s1");
-    expect(
-      session.clearGitGutterMarkers as ReturnType<typeof vi.fn>
-    ).toHaveBeenCalled();
-  });
-
-  it("empty patch files clears markers via empty model", async () => {
-    const { context } = makeContext(async () => ({ files: [] }));
-    const ctrl = new FilesEditorGitGutterController(context);
-    const session = makeSession();
-    ctrl.attach("s1", diskDocument("/repo", "src/a.ts"), session);
-    await Promise.resolve();
-    await Promise.resolve();
-    const setSpy = session.setGitGutterModel as ReturnType<typeof vi.fn>;
-    expect(setSpy).toHaveBeenCalledTimes(1);
-    const model = setSpy.mock.calls[0]?.[0] as {
-      markers: Map<number, unknown>;
-      ranges: unknown[];
-    };
-    expect(model.markers.size).toBe(0);
-    expect(model.ranges).toEqual([]);
-  });
-
-  it("merged root fetch: one IPC call dispatches to all sessions for that root", async () => {
-    const getDiffPatch = vi.fn(
-      async (_cwd: string, _options?: { from?: string; path?: string }) => ({
-        files: [
-          { binary: false, path: "src/a.ts", oldPath: "src/a.ts", hunks: [] },
-          { binary: false, path: "src/b.ts", oldPath: "src/b.ts", hunks: [] },
-        ],
+describe("Files current-document gutter controller", () => {
+  it("shares the document baseline between source sessions and follows unsaved edits", async () => {
+    const { controller, session, document, context, stop } = setup();
+    controller.attach("s1", document, session);
+    controller.attach("s2", document, session);
+    await vi.advanceTimersByTimeAsync(151);
+    expect(context.git.getFileBaseline).toHaveBeenCalledTimes(1);
+    expect(context.git.watch).toHaveBeenCalledTimes(1);
+    expect(session.setGitGutterModel).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        ranges: [expect.objectContaining({ newLineFrom: 2, kind: "added" })],
       })
     );
-    const context = {
-      git: { getDiffPatch, watch: vi.fn(() => () => undefined) },
-    } as unknown as RendererPluginContext;
-    const ctrl = new FilesEditorGitGutterController(context);
-    const s1 = makeSession();
-    const s2 = makeSession();
-    ctrl.attach("s1", diskDocument("/repo", "src/a.ts"), s1);
-    ctrl.attach("s2", diskDocument("/repo", "src/b.ts"), s2);
+    updateDocumentContents(document.id, "draft\n");
+    await vi.advanceTimersByTimeAsync(151);
+    expect(session.setGitGutterModel).toHaveBeenLastCalledWith(
+      expect.objectContaining({ contents: "draft\n" })
+    );
+    controller.detach("s1");
     await Promise.resolve();
+    expect(stop).not.toHaveBeenCalled();
+    controller.detach("s2");
     await Promise.resolve();
-    // 单次 root 级拉取分发到两个会话（attach 触发两次，但每次都是 root 级无 path 调用）。
-    expect(getDiffPatch).toHaveBeenCalled();
-    for (const call of getDiffPatch.mock.calls) {
-      expect(call[1]).toEqual({ from: "HEAD" });
-    }
-    expect(s1.setGitGutterModel as ReturnType<typeof vi.fn>).toHaveBeenCalled();
-    expect(s2.setGitGutterModel as ReturnType<typeof vi.fn>).toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+  it("routes a gutter click to its own panel's local peek", async () => {
+    const { controller, session, document } = setup();
+    const request = vi.fn();
+    const unregister = registerFileChangeRequests("s1", request);
+    controller.attach("s1", document, session);
+    await vi.advanceTimersByTimeAsync(151);
+    vi.mocked(session.setGitGutterNavigate).mock.calls.at(-1)?.[0]?.(2);
+    expect(request).toHaveBeenCalledWith({ kind: "line", line: 2 });
+    unregister();
+  });
+  it("clears old HEAD markers immediately while a new baseline is being compared", async () => {
+    const { controller, session, document, baseline, context } = setup();
+    controller.attach("s1", document, session);
+    await vi.advanceTimersByTimeAsync(151);
+    const calls = vi.mocked(session.clearGitGutterMarkers).mock.calls.length;
+    vi.mocked(context.git.getFileBaseline).mockResolvedValue({
+      ...baseline,
+      headOid: "b".repeat(40),
+      contents: "different\n",
+    });
+    controller.refreshByRoot("/repo");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(
+      vi.mocked(session.clearGitGutterMarkers).mock.calls.length
+    ).toBeGreaterThan(calls);
   });
 });

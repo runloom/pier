@@ -315,7 +315,12 @@ export const terminalOpenUrlEventSchema = z.object({
 });
 export type TerminalOpenUrlEvent = z.infer<typeof terminalOpenUrlEventSchema>;
 
-export type TerminalOperation = "copy" | "paste" | "selectAll" | "clearScreen";
+export type TerminalOperation =
+  | "copy"
+  | "paste"
+  | "selectAll"
+  | "clearScreen"
+  | "scrollToBottom";
 
 export interface TerminalOperationResult {
   error?: string | undefined;

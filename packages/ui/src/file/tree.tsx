@@ -279,6 +279,7 @@ export function PierFileTree({
     endProgrammaticScroll,
     requestLayoutCompensate,
     scrollOwner,
+    withProgrammaticScroll,
   } = usePierFileTreeScrollController({
     containerRef,
     onScrollSnapshotChange,
@@ -327,6 +328,7 @@ export function PierFileTree({
     renderSignature,
     revealPath,
     subscribeUserClaim: scrollOwner.subscribeUserClaim,
+    withProgrammaticScroll,
   });
 
   React.useImperativeHandle(

@@ -24,6 +24,7 @@ export const CANVAS_HOST_ALLOWED_COMMANDS = [
   "file.readText",
   "file.stat",
   "git.getDiffPatch",
+  "git.getFileBaseline",
   "git.getStatus",
   "git.listBranches",
   "git.listIgnored",

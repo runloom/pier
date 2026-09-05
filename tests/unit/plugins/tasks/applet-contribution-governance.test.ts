@@ -103,10 +103,18 @@ describe("canvas applet contribution governance", () => {
       "utf8"
     );
     expect(setup).toContain("openConnectDialog");
+    expect(setup).toContain("authorizeLinear");
+    expect(setup).not.toContain("openExternal");
     expect(setup).not.toContain('type="password"');
     expect(dialog).toContain("setFooter");
     expect(dialog).toContain("DIALOG_FOOTER_ACTIONS_CLASS");
     expect(dialog).toContain("dialogs.open");
+    expect(dialog).toContain('data-slot="dialog-commit-form"');
+    expect(dialog).toContain('size: "sm"');
+    expect(dialog).toContain("InputGroup");
+    expect(dialog).toContain("openExternal");
+    expect(dialog).toContain("LINEAR_PERSONAL_API_KEYS_URL");
+    expect(dialog).toContain("JIRA_API_TOKENS_URL");
   });
 
   it("mounts panel applets with panel chrome, not island cards", () => {

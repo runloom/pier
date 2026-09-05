@@ -38,11 +38,12 @@ export function MarkdownTableView({
   const header = block.rows[0];
   const body = block.rows.slice(1);
   const widthsKey = tableWidthsKey(block);
-  const resizable = widthsKey !== null && Boolean(context.source);
+  const resizable =
+    !context.readOnly && widthsKey !== null && Boolean(context.source);
   const resize = useTableColumnResize({
     columnCount: header ? header.cells.length : 0,
     containerRef: wrapRef,
-    sourcePath: context.source?.path,
+    sourcePath: context.readOnly ? undefined : context.source?.path,
     tableRef,
     widthsKey: widthsKey ?? "",
   });

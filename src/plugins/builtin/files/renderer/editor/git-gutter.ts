@@ -8,6 +8,7 @@ import {
 } from "@codemirror/state";
 import { GutterMarker, gutter } from "@codemirror/view";
 import type { EditorView } from "codemirror";
+import { fileChangePeekField } from "../git-changes/source-widget.ts";
 import type {
   GitGutterChangeRange,
   GitGutterKind,
@@ -18,7 +19,7 @@ import { EMPTY_GIT_GUTTER_MODEL, resolveRangeAtLine } from "./git-markers.ts";
 
 /**
  * Files 插件 SCM 装饰：行号右侧可点 git gutter + minimap 色轨。
- * 点击色条 → 打开/聚焦 Git Changes 并 pendingReveal 到该行（无编辑器内 peek）。
+ * 点击色条打开当前文档的局部只读预览。
  * 扩展顺序须在 basicSetup（lineNumbers）之后，色条才落在行号右侧。
  *
  * @see https://codemirror.net/examples/gutter/
@@ -32,14 +33,14 @@ export interface ScmDiffColors {
 
 export interface GitGutterState {
   readonly gutterMarkers: RangeSet<GutterMarker>;
-  /** 语义真源：磁盘 diff 行号 → kind/count。 */
+  /** 语义真源：HEAD → 当前文档行号。 */
   readonly markers: ReadonlyMap<number, GitGutterLineMarker>;
   /** minimap 单轨：行号 → 已解析 CSS 色。空对象 = 无点。 */
   readonly minimapGutter: Readonly<Record<number, string>>;
   readonly ranges: readonly GitGutterChangeRange[];
 }
 
-/** 点击 gutter 时导航到 review（由 session / controller 注入）。 */
+/** 点击 gutter 时打开局部预览（由 session / controller 注入）。 */
 export type GitGutterNavigateHandler = (lineNumber: number) => void;
 
 export const gitGutterNavigateFacet = Facet.define<
@@ -233,10 +234,25 @@ export const gitGutterField = StateField.define<GitGutterState>({
       }
     }
     if (tr.docChanged && next.markers.size > 0) {
-      const rebuilt = buildGutterMarkers(next.markers, tr.state.doc);
-      if (!RangeSet.eq([next.gutterMarkers], [rebuilt])) {
-        next = { ...next, gutterMarkers: rebuilt };
+      const markers = new Map<number, GitGutterLineMarker>();
+      const minimapGutter: Record<number, string> = {};
+      for (const [number, marker] of value.markers) {
+        if (number > tr.startState.doc.lines) continue;
+        const line = tr.startState.doc.line(number);
+        if (tr.changes.touchesRange(line.from, line.to)) continue;
+        const mapped = tr.state.doc.lineAt(
+          tr.changes.mapPos(line.from, 1)
+        ).number;
+        markers.set(mapped, marker);
+        const color = value.minimapGutter[number];
+        if (color) minimapGutter[mapped] = color;
       }
+      next = {
+        markers,
+        minimapGutter,
+        ranges: [],
+        gutterMarkers: buildGutterMarkers(markers, tr.state.doc),
+      };
     }
     return next;
   },
@@ -348,5 +364,5 @@ function createGitGutterTrack(): Extension {
 
 /** 主题 resync 见 createGitGutterThemeResyncPlugin（由 view-extensions 并列装配）。 */
 export function createGitGutterExtension(): Extension {
-  return [gitGutterField, createGitGutterTrack()];
+  return [gitGutterField, fileChangePeekField, createGitGutterTrack()];
 }

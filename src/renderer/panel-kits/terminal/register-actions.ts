@@ -15,6 +15,7 @@ import {
   promptRenameAgentSession,
 } from "@/lib/agent-runtime/rename-agent-session.ts";
 import { selectedTextFromInvocation } from "@/lib/context-menu/selection-text.ts";
+import { isMac } from "@/lib/keybindings/matcher.ts";
 import { TERMINAL_LINK_ACTION_CONTRIBUTIONS } from "@/lib/terminal/link-actions.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { isTerminalComposerOpen } from "@/stores/terminal-composer-takeover.ts";
@@ -24,6 +25,7 @@ import {
   dispatchTerminalOpenComposer,
 } from "./composer-events.ts";
 import { isAgentComposerEligibleForPanel } from "./composer-mount.ts";
+import { hasRegisteredTerminalAnchor } from "./layout-coordinator.ts";
 import { dispatchTerminalOpenSearch } from "./search-events.ts";
 
 function resolveTerminalPanelId(invocation?: ActionInvocation): string | null {
@@ -43,15 +45,21 @@ async function runTerminalOperation(
   panelId: string,
   operation: TerminalOperation
 ): Promise<void> {
-  const result = await window.pier.terminal.performOperation(
-    panelId,
-    operation
-  );
-  if (result.ok) {
-    return;
+  let error: string | undefined;
+  try {
+    const result = await window.pier.terminal.performOperation(
+      panelId,
+      operation
+    );
+    if (result.ok) {
+      return;
+    }
+    error = result.error;
+  } catch (cause) {
+    error = cause instanceof Error ? cause.message : String(cause);
   }
   await showAppAlert({
-    body: result.error,
+    body: error,
     title: i18next.t("contextMenu.action.terminalOperationFailed"),
   });
 }
@@ -63,6 +71,7 @@ function terminalOperationContribution(opts: {
   id: string;
   operation: TerminalOperation;
   sortOrder: number;
+  surfaces?: ActionContribution["surfaces"];
   titleKey: string;
 }): ActionContribution {
   return {
@@ -79,7 +88,7 @@ function terminalOperationContribution(opts: {
     },
     id: opts.id,
     sortOrder: opts.sortOrder,
-    surfaces: ["terminal/content"],
+    surfaces: opts.surfaces ?? ["terminal/content"],
     titleKey: opts.titleKey,
     when: "terminal.hasActivePanel",
   };
@@ -133,6 +142,21 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     titleKey: "contextMenu.action.find",
     when: "terminal.hasActivePanel",
   },
+  terminalOperationContribution({
+    // Ghostty owns Cmd+Down. This hint does not register a host/composer shortcut.
+    ...(isMac() ? { displayChord: "Mod+ArrowDown" } : {}),
+    enabled: (invocation) => {
+      const panelId = resolveTerminalPanelId(invocation);
+      // The lifecycle registers an anchor only after native creation succeeds.
+      return panelId != null && hasRegisteredTerminalAnchor(panelId);
+    },
+    group: "1_navigation",
+    id: "pier.terminal.scrollToBottom",
+    operation: "scrollToBottom",
+    sortOrder: 0,
+    surfaces: ["terminal/content", "command-palette"],
+    titleKey: "contextMenu.action.scrollToBottom",
+  }),
   terminalOperationContribution({
     group: "8_clear",
     id: "pier.terminal.clearScreen",

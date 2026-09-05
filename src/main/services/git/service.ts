@@ -1,5 +1,9 @@
 import type { z } from "zod";
 import type {
+  GitFileBaselineInput,
+  GitFileBaselineResult,
+} from "../../../shared/contracts/git/file-baseline.ts";
+import type {
   GitApplyPatchResult,
   GitBranchRef,
   GitCheckoutResult,
@@ -48,6 +52,8 @@ import {
   type TrashItem,
   trashViaElectronShell,
 } from "./discard-operations.ts";
+import type { ExecGitRaw } from "./exec.ts";
+import { createGitFileBaselineReader } from "./file-baseline/index.ts";
 import { listIgnoredPaths } from "./ignored.ts";
 import { WRITE_TIMEOUT_MS } from "./operation-helpers.ts";
 import {
@@ -155,6 +161,7 @@ export interface GitService {
     options?: GitDiffOptions
   ): Promise<GitDiffSummary>;
   getDiffText(cwd: string, options?: GitDiffOptions): Promise<string>;
+  getFileBaseline(input: GitFileBaselineInput): Promise<GitFileBaselineResult>;
   getFileContent(cwd: string, options: GetFileContentOptions): Promise<string>;
   getLog(cwd: string, options?: GitLogOptions): Promise<GitCommit[]>;
   getRepoInfo(cwd: string): Promise<GitRepoInfo>;
@@ -198,6 +205,7 @@ export interface GitService {
 
 export interface CreateGitServiceOptions {
   execGit?: GitServiceExec;
+  execGitRaw?: ExecGitRaw;
   resolveEnvironment?: (
     cwd: string
   ) => Promise<Readonly<Record<string, string>>>;
@@ -214,11 +222,16 @@ export interface CreateGitServiceOptions {
  */
 export function createGitService({
   execGit = defaultExecGit,
+  execGitRaw,
   resolveEnvironment,
   trashItem = trashViaElectronShell,
 }: CreateGitServiceOptions = {}): GitService {
   const runGit = withResolvedEnvironment(execGit, resolveEnvironment);
   return {
+    getFileBaseline: createGitFileBaselineReader({
+      ...(execGitRaw === undefined ? {} : { execGitRaw }),
+      ...(resolveEnvironment === undefined ? {} : { resolveEnvironment }),
+    }),
     abortCherryPick: (cwd) => abortCherryPick(runGit, cwd),
     abortMerge: (cwd) => abortMerge(runGit, cwd),
     abortRebase: (cwd) => abortRebase(runGit, cwd),

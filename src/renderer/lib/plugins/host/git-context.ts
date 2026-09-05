@@ -16,6 +16,10 @@ export function createPluginGitContext(
   assertPluginCapability: AssertPluginCapability
 ): RendererPluginContext["git"] {
   return {
+    getFileBaseline: (input) => {
+      assertPluginCapability(entry, "git:read");
+      return window.pier.git.getFileBaseline(input);
+    },
     applyReviewPathMutation: (request) => {
       assertPluginCapability(entry, "git:read");
       assertPluginCapability(entry, "git:write");

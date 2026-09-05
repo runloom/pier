@@ -7,6 +7,8 @@
 
 Pier 是本地 AI 开发工作台。参考 loomdesk 产品形态，使用 bay 的工具链栈重写。
 
+跨端产品定义见 [`PRODUCT.md`](PRODUCT.md)：桌面端与所有移动端（Web / PWA、后续 iOS / Android App、小程序等）共同遵循同一份用户目标、定位、术语与能力边界。各端专项文档只补充平台差异与交付阶段；架构、交互和工程治理仍以本文为准。
+
 - 核心能力：稳定终端、dockview panel 布局、代码变更预览、文件查看、多 agent 状态可见性。
 - 不做：任务生命周期、SQLite 任务台账、看板、自动调度。
 - **核心逻辑优先，拒绝业界能力二次封装**：只实现本产品独有、且依赖 Pier 宿主身份/运行时才能成立的能力；业界已成熟支持的能力（如各 agent 原生 one-shot CLI）直接走原生入口，禁止为「统一抽象 / 便利封装」再造第二套 API 或宿主服务。判定：去掉 Pier 后用户仍能用原生工具完成同一动作 → 不做 Pier 产品封装。
@@ -169,7 +171,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 - **说用户动作，不说内部概念。** 反例：「没有可打开的终端选区」；正例：「请先在终端中选中文本。」
 - **失败与空态要带下一步。** 反例：「无项目上下文」；正例：「未打开项目」+「请先打开项目文件夹以浏览文件。」
-- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、Canvas 发现面「物料」（仓库 `.pier/canvases/canvas-kit`，后续官网文档；不要做进设置）、需要你处理（中文不要直出 Needs you）、git 产品名用全大写 GIT（插件名、设置页标题、命令面板分组头与命令前缀）；正文与说明仍用小写 git，不要写成 Git；GitHub 等专有名除外。界面语言与根 README 的语言集合均为 `SUPPORTED_LOCALES`（`zh-CN` / `en` / `ja` / `ko`）。
+- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、Canvas 发现面「物料」（仓库 `.pier/canvases/canvas-kit`，后续官网文档；不要做进设置）、需要你处理（中文不要直出 Needs you）、git 产品名用全大写 GIT（插件名、设置页标题、命令面板分组头、命令前缀与终端状态栏芯片标签）；正文与说明仍用小写 git，不要写成 Git；GitHub 等专有名除外。界面语言与根 README 的语言集合均为 `SUPPORTED_LOCALES`（`zh-CN` / `en` / `ja` / `ko`）。
 - **根 README 与产品语言集合一致。** `README.md` 为简体中文真源；并列 `README.en.md` / `README.ja.md` / `README.ko.md`。语言标签只用上述四项，不要 `zh` / `zh_CN` / `jp` / `kr`。改中文前门必须同步三份译文。检查点在 `tests/unit/docs/readme-locale-governance.test.ts`。
 - **CLI GitHub 手册同样四语。** `.pier/canvases/pier-cli-user-manual/README.md` 为简体中文真源；并列同目录 `README.en.md` / `README.ja.md` / `README.ko.md`。命令语义仍以同目录 `data.json` 为真源，不要把 `data.json` 复制成四份。应用内 Canvas 暂不按语言分文件。检查点同上。
 - **实现词禁止进入前台主路径文案。** 包括但不限于：选区、上下文、面板参数、耐久性、绑定、运行标识、运行态、renderer、清单预览、hook（首次可写「钩子（hook）」）、tip tree、upstream（应写「上游分支」）。
@@ -203,7 +205,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 3. **共享几何**：顶距比例、细轨槽位宽、浮层面板宽、右边距、底边预留、tick 尺寸只来自 `markdown-preview-toc-layout.ts` 常量 / `markdownOutlineHoverMaxHeightPx` / `markdownOutlineHoverWidthPx` / `markdownTocTickWidthPx`。hover 卡片必须落在预览框内的右侧槽位（`inset-0`），禁止浮层再写 `max-h-[min(70%,…)]` 或另一套 px 公式；禁止 TOC 与布局各自手写 `top-2` / `right-3` / `w-56` 而不读共享常量。
 4. **版心单一来源**：可见行宽由 `[data-slot="markdown-prose"]` 的 `--md-measure`（CSS）决定；舒适档为根 `42rem`（禁止 `ch`）；TS 只允许与 CSS 同值的 `MARKDOWN_COMFORTABLE_MEASURE_REM` 作治理锁定，禁止平行测宽 helper。权威规格：[`docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md`](docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md)。
 5. **默认不遮挡正文**：持久态只显示细轨横线（按 heading depth 变宽，active 高亮并跟随滚动）；完整标题列表仅在 hover / focus-within 淡入，**相对细轨垂直居中**覆盖；槽位宽高按预览框 clamp（`markdownOutlineHoverWidthPx` / `markdownOutlineHoverMaxHeightPx`），禁止卡片溢出 `overflow-hidden` 预览根；有大纲时滚动区右侧使用 `MARKDOWN_TOC_CONTENT_INSET_PX`（宽屏 `100%` 版心也不得压到细轨）；离开即隐藏；浮层无关闭按钮，不提供左右位置切换。Scroll-spy 必须每次滚动重新 query heading DOM（适配懒加载分页），不得缓存节点。
-6. **git 变更色条在左侧、随正文滚动**：磁盘预览用 `data-slot="markdown-preview-git-bars"` 画块级色条，槽位 `MARKDOWN_GIT_BAR_SLOT_PX` 加在评论左缘 **外侧**（不得压评论图标、不得给 TOC tick 上 diff 色、不得复用 CodeMirror minimap / 右侧 overview）。几何只来自 `markdown/git-bars/layout.ts`。点击与源码 gutter 同构：打开变更并 pendingReveal。
+6. **git 变更色条在左侧、随正文滚动**：文件预览用 `data-slot="markdown-preview-git-bars"` 画块级色条，槽位 `MARKDOWN_GIT_BAR_SLOT_PX` 加在评论左缘 **外侧**（不得压评论图标、不得给 TOC tick 上 diff 色、不得复用 CodeMirror minimap / 右侧 overview）。几何只来自 `markdown/git-bars/layout.ts`。点击与源码 gutter 同构：打开只读局部修改预览（HEAD → 当前文档，包含未保存修改）。两处共享 `files/renderer/git-changes/` 的文档资源；Markdown 仅在渲染文本与差异快照相同后画色条，按 range ID 打开，不从像素猜源码行。完整审查仅作为显式次级动作，并校验已保存内容后定位。规格见 [`docs/superpowers/specs/2026-09-05-files-local-diff-peek-design.md`](docs/superpowers/specs/2026-09-05-files-local-diff-peek-design.md)。
 
 反例（禁止）：
 
@@ -544,7 +546,7 @@ section 根节点下的裸子节点。
 
 - **视口归 libghostty**：宿主 `NSScrollView` 只镜像 chrome；live 拖条 / 滚轮才 `scroll_to_row`。
 - **裸 ↑↓ / Page 只进 PTY**：shell 历史、Cursor / Codex 选单。`FocusNotifyingScrollView` 不得 first responder、不得把 AppKit 文档导航变成 clip 移动；键落到壳上转给 `terminalView.keyDown`。
-- **键表不另写滚动**：禁止 `arrow_*=scroll_*` / `scroll_page_lines`。macOS `Cmd+↑↓` 仍是 Ghostty `jump_to_prompt`；`Cmd+Page*` / `Cmd+Home/End` 才是显式滚视口。
+- **键表由 Ghostty 执行**：禁止裸 `arrow_*=scroll_*` / `scroll_page_lines`。macOS 仅增加 `super+arrow_down=scroll_to_bottom`，让 `Cmd+↓` 在无 shell 提示符标记的 TUI 中也能回到底部；`Cmd+End` 仍可用。`Cmd+↑` / `Cmd+Shift+↑↓` 保留 Ghostty `jump_to_prompt`。不得注册宿主全局滚动键；增强输入框 `Cmd+↓` 保留文本编辑语义。
 - **keystroke follow 收窄（方案 C）**：保持 Ghostty 默认「打字回 live」。禁止 appearance 写 `no-keystroke`。裸 ↑↓ / Page 不 `scrollViewport(.bottom)`，只走 Pier patch `0109-keystroke-follow-skip-nav-keys`。
 - 检查点：`tests/unit/native/terminal-viewport-key-ownership-governance.test.ts`、`tests/unit/native/terminal-key-routing.test.ts`、`native/Tests/GhosttyBridgeTests/TerminalViewportKeyOwnershipTests.swift`、`native/Tests/GhosttyBridgeTests/TerminalScrollToBottomKeystrokeTests.swift`。
 

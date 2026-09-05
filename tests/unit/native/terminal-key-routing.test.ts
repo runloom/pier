@@ -68,6 +68,8 @@ describe("native terminal key routing", () => {
     expect(shortcuts).not.toContain("Mod+KeyV");
     expect(shortcuts).not.toContain("Mod+ArrowLeft");
     expect(shortcuts).not.toContain("Mod+ArrowRight");
+    expect(shortcuts).not.toContain("Mod+ArrowDown");
+    expect(shortcuts).not.toContain("Mod+End");
     expect(shortcuts).not.toContain("ArrowUp");
     expect(shortcuts).not.toContain("ArrowDown");
     expect(shortcuts).not.toContain("PageUp");
@@ -81,8 +83,7 @@ describe("native terminal key routing", () => {
     );
     expect(start).toBeGreaterThan(-1);
     const appearance = source.slice(start, start + 1800);
-    expect(appearance).not.toMatch(/arrow_(up|down)\s*=\s*scroll_/);
-    expect(appearance).not.toMatch(/page_(up|down)\s*=\s*scroll_/);
+    expect(appearance).not.toMatch(/"(?:arrow|page)_(up|down)\s*=\s*scroll_/);
     expect(appearance).not.toContain("scroll_page_lines");
     expect(appearance).not.toContain("scroll-to-bottom");
     expect(appearance).not.toContain("no-keystroke");

@@ -988,15 +988,15 @@
   "terminalStatusItems": {
     "pier.worktree.status": {
       "description": "在终端面板中显示 git 分支；点击打开状态操作。",
-      "title": "git 分支"
+      "title": "GIT 分支"
     },
     "pier.git.status.changes": {
       "description": "显示增删行数；点击打开审查面板。",
-      "title": "git 更改"
+      "title": "GIT 更改"
     },
     "pier.git.status.sync": {
       "description": "显示领先/落后计数与一键同步。",
-      "title": "git 同步"
+      "title": "GIT 同步"
     }
   },
   "panels": {

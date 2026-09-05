@@ -107,6 +107,22 @@ export function SourceSetup({
               {t("pier.tasks.connection.authorize", "Authorize GitHub")}
             </Button>
           ) : null}
+          {reason === "linear-need-auth" && status.credential.linearProbed ? (
+            <Button
+              disabled={pending}
+              onClick={() =>
+                run(async () => {
+                  await context.rpc.invoke("connection.authorizeLinear");
+                })
+              }
+              type="button"
+            >
+              {t(
+                "pier.tasks.connection.authorizeLinear",
+                "Use Linear key on this device"
+              )}
+            </Button>
+          ) : null}
           {reason === "linear-need-auth" || reason === "jira-need-auth" ? (
             <Button
               disabled={pending}
@@ -124,6 +140,11 @@ export function SourceSetup({
                 })
               }
               type="button"
+              variant={
+                reason === "linear-need-auth" && status.credential.linearProbed
+                  ? "outline"
+                  : "default"
+              }
             >
               {t("pier.tasks.panel.connect", "Connect")}
             </Button>
@@ -229,7 +250,7 @@ function setupBody(reason: SourceEmptyReason, t: Translate): string {
   if (reason === "linear-need-auth") {
     return t(
       "pier.tasks.panel.linearNeedAuthBody",
-      "Paste a Linear API token here. Teams are picked automatically when the token works."
+      "Open Linear to create an access key, then paste it back here. Teams are picked automatically when it works."
     );
   }
   if (reason === "linear-need-team") {
@@ -241,7 +262,7 @@ function setupBody(reason: SourceEmptyReason, t: Translate): string {
   if (reason === "jira-need-auth") {
     return t(
       "pier.tasks.panel.jiraNeedAuthBody",
-      "Paste the Jira site URL and API token here. Projects are picked automatically when they load."
+      "Create an API token at Atlassian, then paste the site URL and token here. Projects are picked automatically when they load."
     );
   }
   return t(

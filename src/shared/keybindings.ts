@@ -310,6 +310,16 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "panel:pier.files.filePanel",
   },
   {
+    commandId: "pier.files.changes.next",
+    keys: "Alt+F5",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.files.changes.previous",
+    keys: "Alt+Shift+F5",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
     commandId: "pier.files.editor.selectNextOccurrence",
     keys: "Mod+KeyD",
     scope: "panel:pier.files.filePanel",
