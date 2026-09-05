@@ -9,11 +9,19 @@ const MARK = "PIER_AGENT_HOOKS_DIR";
 const HIGHER_HOOK_GENERATION = PIER_HOOK_COMMAND_GENERATION + 1;
 
 function hookCommands(settings: Record<string, unknown>): string[] {
-  const hooks = (settings.hooks ?? {}) as Record<
-    string,
-    Array<{ hooks: Array<{ command: string }> }>
-  >;
-  return Object.values(hooks)
+  // flat（hooks.json 顶层事件键）与 wrapped（settings.json `hooks` 记录）
+  // 两形态的 command 一并收集；空 `hooks` 键是对象不是数组，天然跳过。
+  const entryGroups: unknown[] = [
+    ...Object.values((settings.hooks ?? {}) as Record<string, unknown>),
+    ...Object.entries(settings)
+      .filter(([key]) => key !== "hooks")
+      .map(([, value]) => value),
+  ];
+  return entryGroups
+    .filter(
+      (entries): entries is Array<{ hooks: Array<{ command: string }> }> =>
+        Array.isArray(entries)
+    )
     .flat()
     .flatMap((m) => m.hooks.map((h) => h.command));
 }
@@ -70,11 +78,13 @@ describe("droidIntegration", () => {
     expect(integration.detect()).toBe(true);
   });
 
-  it("只安装可形成完整状态事实的官方事件", async () => {
+  it("只安装可形成完整状态事实的官方事件（flat 顶层事件键）", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
-    const hooks = installed.hooks as Record<string, unknown[]>;
+    // 官方规范：独立 hooks.json 事件键直接在顶层；`hooks` 包裹仅用于
+    // settings.json。droid 0.213.0 实测 wrapped 独立文件整份被忽略。
+    const hooks = installed as Record<string, unknown[]>;
 
     interface Matcher {
       hooks: Array<{ command: string }>;
@@ -127,8 +137,12 @@ describe("droidIntegration", () => {
       expect(cmd).toContain('"droid"');
       expect(cmd).toContain('"agentEventV3"');
     }
-    // pierEvent 名称核验
-    expect(typedHooks.Stop?.[0]?.hooks[0]?.command).toContain('"Stop"');
+    // pierEvent 名称核验：官方 Stop 只在主 agent 完成回复（回合终态）时
+    // 发射，取消不发 Stop 只发 Notification → 可信终态直接映射
+    // TurnCompleted（copilot agentStop 同款），不经 advisory pier Stop。
+    expect(typedHooks.Stop?.[0]?.hooks[0]?.command).toContain(
+      '"TurnCompleted"'
+    );
     expect(typedHooks.PreToolUse?.[0]?.hooks[0]?.command).toContain(
       '"ToolStart"'
     );
@@ -182,8 +196,56 @@ describe("droidIntegration", () => {
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
     expect(installed.model).toBe("droid-1");
-    const stop = (installed.hooks as Record<string, unknown[]>).Stop;
-    expect(stop).toHaveLength(2);
+    // 用户 wrapped 条目原样保留；Pier 条目改写 flat 顶层（官方规范）。
+    const wrappedStop = (
+      installed.hooks as Record<
+        string,
+        Array<{ hooks: Array<{ command: string }> }>
+      >
+    ).Stop;
+    expect(wrappedStop).toHaveLength(1);
+    expect(wrappedStop?.[0]?.hooks[0]?.command).toBe("say done");
+    const flatStop = installed.Stop as unknown[];
+    expect(flatStop).toHaveLength(1);
+  });
+
+  it("迁移：旧 wrapped Pier 条目清理进 flat 顶层，用户 wrapped 条目保留", async () => {
+    await mkdir(join(homeDir, ".factory"), { recursive: true });
+    // 旧安装器把 wrapped 结构误写进独立 hooks.json——droid 整份忽略。
+    // 第三方（如 orca）的 wrapped 用户条目同样死于该形态，但只清理 Pier
+    // 自己的条目，用户条目原样保留。
+    await writeFile(
+      configPath(),
+      JSON.stringify({
+        hooks: {
+          Stop: [
+            { hooks: [{ type: "command", command: "orca-user-stop" }] },
+            {
+              hooks: [
+                {
+                  type: "command",
+                  command: `pier-hook-gen=1; "\${${MARK}}/emit" legacy`,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      "utf8"
+    );
+    const integration = await loadIntegration();
+    await integration.install();
+    const installed = JSON.parse(await readFile(configPath(), "utf8"));
+    const wrappedStop = installed.hooks.Stop;
+    expect(wrappedStop).toHaveLength(1);
+    expect(wrappedStop[0].hooks[0].command).toBe("orca-user-stop");
+    expect(installed.Stop).toHaveLength(1);
+    expect(installed.Stop[0].hooks[0].command).toContain(MARK);
+    // 卸载：flat Pier 条目移除，wrapped 用户条目保留。
+    await integration.uninstall();
+    const cleaned = JSON.parse(await readFile(configPath(), "utf8"));
+    expect(cleaned.Stop).toBeUndefined();
+    expect(cleaned.hooks.Stop).toHaveLength(1);
   });
 
   it("卸载只移除 pier 条目，保留用户 hook", async () => {
@@ -299,9 +361,25 @@ describe("droid 从 settings.json fallback 迁移到官方 hooks.json", () => {
 
   it("fallback 合并不覆盖 canonical 同名非数组用户值", async () => {
     await mkdir(join(homeDir, ".factory"), { recursive: true });
+    // canonical 已有 flat 顶层同名非数组用户值 + wrapped 旧 Pier 条目
+    //（触发 fallback 迁移合并）。
     await writeFile(
       configPath(),
-      JSON.stringify({ hooks: { Custom: { user: true } } }),
+      JSON.stringify({
+        Custom: { user: true },
+        hooks: {
+          Stop: [
+            {
+              hooks: [
+                {
+                  type: "command",
+                  command: `pier-hook-gen=1; "\${${MARK}}/emit" legacy`,
+                },
+              ],
+            },
+          ],
+        },
+      }),
       "utf8"
     );
     await writeFile(
@@ -316,10 +394,17 @@ describe("droid 从 settings.json fallback 迁移到官方 hooks.json", () => {
     await integration.install();
 
     const canonical = JSON.parse(await readFile(configPath(), "utf8"));
-    expect(canonical.hooks.Custom).toEqual({ user: true });
+    // canonical 同名非数组用户值所有权优先，不被 fallback 覆盖。
+    expect(canonical.Custom).toEqual({ user: true });
+    // wrapped 旧 Pier 条目仍被迁移清理进 flat 顶层。
+    const flatStop = canonical.Stop as Array<{
+      hooks: Array<{ command: string }>;
+    }>;
+    expect(flatStop).toHaveLength(1);
+    expect(flatStop[0]?.hooks[0]?.command).toContain(MARK);
   });
 
-  it("hooks.json 不存在时把 settings 用户 hooks 合并到新文件，避免 fallback 被遮蔽", async () => {
+  it("hooks.json 不存在时把 settings 用户 hooks 合并进新文件 flat 顶层，避免 fallback 被遮蔽", async () => {
     await mkdir(join(homeDir, ".factory"), { recursive: true });
     await writeFile(
       settingsPath(),
@@ -329,6 +414,12 @@ describe("droid 从 settings.json fallback 迁移到官方 hooks.json", () => {
           Stop: [
             { hooks: [{ type: "command", command: "settings-user-stop" }] },
           ],
+          // Pier 不安装的事件也迁移——flat 顶层键 droid 都会读取。
+          SubagentStop: [
+            {
+              hooks: [{ type: "command", command: "settings-user-subagent" }],
+            },
+          ],
         },
       }),
       "utf8"
@@ -337,11 +428,37 @@ describe("droid 从 settings.json fallback 迁移到官方 hooks.json", () => {
     await integration.install();
     const canonical = JSON.parse(await readFile(configPath(), "utf8"));
     const settings = JSON.parse(await readFile(settingsPath(), "utf8"));
-    expect(hookCommands(canonical)).toContain("settings-user-stop");
+    // 合并目标是 flat 顶层事件键（droid 唯一读取形态），不是死掉的 wrapped
+    // 记录——新文件一旦存在 settings fallback 即被遮蔽，只有落对位置用户
+    // hook 才继续生效。
+    const flatStop = canonical.Stop as Array<{
+      hooks: Array<{ command: string }>;
+    }>;
     expect(
-      hookCommands(canonical).some((command) => command.includes(MARK))
+      flatStop.some((entry) => entry.hooks[0]?.command === "settings-user-stop")
     ).toBe(true);
-    expect(hookCommands(settings)).toEqual(["settings-user-stop"]);
+    expect(
+      flatStop.some((entry) => entry.hooks[0]?.command.includes(MARK))
+    ).toBe(true);
+    const flatSubagent = canonical.SubagentStop as Array<{
+      hooks: Array<{ command: string }>;
+    }>;
+    expect(flatSubagent).toHaveLength(1);
+    expect(flatSubagent[0]?.hooks[0]?.command).toBe("settings-user-subagent");
+    // 不得把用户 hooks 写进 wrapped 记录（droid 忽略该形态）。
+    expect(canonical.hooks).toBeUndefined();
+    expect(hookCommands(settings)).toEqual(
+      expect.arrayContaining(["settings-user-stop", "settings-user-subagent"])
+    );
+    // 卸载：flat Pier 条目移除，迁移进来的用户条目继续保留（不再被遮蔽）。
+    await integration.uninstall();
+    const cleaned = JSON.parse(await readFile(configPath(), "utf8"));
+    const cleanedStop = cleaned.Stop as Array<{
+      hooks: Array<{ command: string }>;
+    }>;
+    expect(cleanedStop).toHaveLength(1);
+    expect(cleanedStop[0]?.hooks[0]?.command).toBe("settings-user-stop");
+    expect(cleaned.SubagentStop).toHaveLength(1);
   });
 
   it("hooks.json 不存在且 settings.json 损坏时不创建会遮蔽 fallback 的新文件", async () => {

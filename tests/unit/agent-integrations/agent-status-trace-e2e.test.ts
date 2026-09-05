@@ -143,7 +143,10 @@ describe("智能体状态官方轨迹跨层验收", () => {
     // +1：droid interrupted（Notification.idle_prompt→TurnInterrupted，
     // 2026-08-29 取消路径修复）；−1：kilo ready（idle 降级 advisory 候选，
     // 对齐同源 opencode）。
-    expect(actualCoverage.size).toBe(156);
+    // +2：droid ready/completed（Stop→TurnCompleted，2026-09-05 修复：
+    // 官方 Stop 只在主 agent 完成回复时发射，取消不发 Stop）——此前这两维
+    // 分别是 host-Esc 兜底（不入集合）与 unsupported，矩阵与 fixture 同步入集。
+    expect(actualCoverage.size).toBe(158);
     // Fixture covers must not invent dimensions outside the matrix claim.
     for (const key of actualCoverage) {
       expect(

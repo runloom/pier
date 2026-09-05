@@ -38,7 +38,7 @@ export async function createNestedHookCommandProducer(
       runtime: { stopAuthority: "none" },
     }
   );
-  const hookRecord = installed.hooks as Record<
+  const hookRecord = (installed.hooks ?? installed) as Record<
     string,
     Array<{ hooks: Array<{ command: string }> }>
   >;

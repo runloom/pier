@@ -7,7 +7,6 @@ import { PIER_HOOK_COMMAND_GENERATION } from "../hooks-install.ts";
 import {
   commandExistsOnPath,
   createNestedJsonIntegration,
-  isPierHookCommand,
   maxPierHookGenerationInSettings,
   type NestedJsonIntegrationSpec,
   pierHookCommandV3WithStdin,
@@ -16,17 +15,24 @@ import {
   readJsonConfig,
   transformJsonConfig,
   transformPierHooksUnlessNewer,
+  withoutPierNestedHooks,
   withPierNestedHooks,
 } from "./shared.ts";
 
 /**
- * Droid (Factory AI) 当前规范 hook 配置路径是
- * **~/.factory/hooks.json** 的顶层 `hooks` 字段。
+ * Droid (Factory AI) 当前规范 hook 配置路径是 **~/.factory/hooks.json**，
+ * 且独立 hooks.json 的事件键**直接在顶层**（官方 hooks 文档：「Standalone
+ * hooks.json files are keyed directly by event name」；`hooks` 包裹结构
+ * 仅用于 settings.json）。历史实现误把 wrapped 结构写进独立文件——
+ * droid 0.213.0 一手对照实验（2026-09-06）：wrapped 独立文件整份被忽略、
+ * hook 永不执行，flat 顶层结构正常执行；据此修复为 flat 写入，并在安装
+ * 时迁移清理旧 wrapped Pier 条目（用户/orca 条目原样保留）。
  *
  * 自 v0.136.0 起官方将 hooks 路径标准化为 hooks.json；只有该文件不存在时
  * 才回退读取 matching settings.json 的 `hooks`。因此首次创建 hooks.json
- * 时必须先合并 fallback 中的用户 hooks，否则新文件会遮蔽它们；成功后只
- * 剔除 settings.json 内的旧 Pier 条目，用户设置与用户 hooks 均保留。
+ * 时必须先合并 fallback 中的用户 hooks——写入 **flat 顶层事件键**（droid
+ * 唯一读取的形态；写进 wrapped 记录等于静默丢弃），否则新文件会遮蔽它们；
+ * 成功后只剔除 settings.json 内的旧 Pier 条目，用户设置与用户 hooks 均保留。
  *
  * 官方事件全集（docs.factory.ai 9 事件表）：PreToolUse, PostToolUse,
  * UserPromptSubmit, Notification, Stop, SubagentStop, PreCompact,
@@ -76,70 +82,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * 按 command 粒度清理 Pier hook。Factory 允许同一 matcher 含多个 handler，
- * 不能因为其中一个由 Pier 管理就连同用户 handler 一起删除。
+ * 按 command 粒度清理 Pier hook（wrapped settings.json 与 flat hooks.json
+ * 两形态共用）。Factory 允许同一 matcher 含多个 handler，不能因为其中一个
+ * 由 Pier 管理就连同用户 handler 一起删除。
  */
 function withoutPierDroidHooks(
   settings: Record<string, unknown>
 ): Record<string, unknown> {
-  if (!isRecord(settings.hooks)) {
-    return settings;
-  }
-  const hooks: Record<string, unknown> = {};
-  let changed = false;
-  for (const [event, entries] of Object.entries(settings.hooks)) {
-    if (!Array.isArray(entries)) {
-      hooks[event] = entries;
-      continue;
-    }
-    const keptEntries: unknown[] = [];
-    for (const entry of entries) {
-      if (!isRecord(entry)) {
-        keptEntries.push(entry);
-        continue;
-      }
-      if (
-        typeof entry.command === "string" &&
-        isPierHookCommand(entry.command)
-      ) {
-        changed = true;
-        continue;
-      }
-      if (!Array.isArray(entry.hooks)) {
-        keptEntries.push(entry);
-        continue;
-      }
-      const handlers = entry.hooks.filter(
-        (handler) =>
-          !(
-            isRecord(handler) &&
-            typeof handler.command === "string" &&
-            isPierHookCommand(handler.command)
-          )
-      );
-      if (handlers.length === entry.hooks.length) {
-        keptEntries.push(entry);
-        continue;
-      }
-      changed = true;
-      if (handlers.length > 0) {
-        keptEntries.push({ ...entry, hooks: handlers });
-      }
-    }
-    if (keptEntries.length > 0) {
-      hooks[event] = keptEntries;
-    }
-  }
-  if (!changed) {
-    return settings;
-  }
-  if (Object.keys(hooks).length === 0) {
-    const { hooks: _removed, ...rest } = settings;
-    return rest;
-  }
-  return { ...settings, hooks };
+  return withoutPierNestedHooks(settings, DROID_SPEC);
 }
 
+/**
+ * 把 settings.json fallback 内的用户 hooks（wrapped 记录）迁移进独立
+ * hooks.json 的 **flat 顶层事件键**——droid 只读 flat 形态，写进 wrapped
+ * `hooks` 记录等于静默丢弃（新文件一旦存在，settings fallback 即被遮蔽）。
+ */
 function mergeDroidUserHooks(
   canonical: Record<string, unknown>,
   fallback: Record<string, unknown>
@@ -147,22 +104,24 @@ function mergeDroidUserHooks(
   if (!isRecord(fallback.hooks)) {
     return canonical;
   }
-  const hooks = isRecord(canonical.hooks) ? { ...canonical.hooks } : {};
+  const next: Record<string, unknown> = { ...canonical };
   let changed = false;
   for (const [event, fallbackEntries] of Object.entries(fallback.hooks)) {
-    if (Object.hasOwn(hooks, event) && !Array.isArray(hooks[event])) {
+    // 事件名恰为 "hooks" 会覆盖 legacy wrapped 记录，禁止迁移该键。
+    if (event === "hooks") {
+      continue;
+    }
+    if (Object.hasOwn(next, event) && !Array.isArray(next[event])) {
       // canonical 用户值所有权优先；不得把未知结构当空数组后用 fallback 覆盖。
       continue;
     }
+    // flat 事件键必须是数组：非数组 fallback 值不迁移（写入畸形值会让
+    // droid 忽略整份新文件），原值留在 settings.json 不丢失。
     if (!Array.isArray(fallbackEntries)) {
-      if (!(event in hooks)) {
-        hooks[event] = fallbackEntries;
-        changed = true;
-      }
       continue;
     }
-    const canonicalEntries = Array.isArray(hooks[event])
-      ? [...(hooks[event] as unknown[])]
+    const canonicalEntries = Array.isArray(next[event])
+      ? [...(next[event] as unknown[])]
       : [];
     const serialized = new Set(
       canonicalEntries.map((entry) => JSON.stringify(entry))
@@ -176,10 +135,10 @@ function mergeDroidUserHooks(
       }
     }
     if (canonicalEntries.length > 0) {
-      hooks[event] = canonicalEntries;
+      next[event] = canonicalEntries;
     }
   }
-  return changed ? { ...canonical, hooks } : canonical;
+  return changed ? next : canonical;
 }
 
 type StandardV3Event = Exclude<
@@ -197,6 +156,9 @@ function droidStandardCommand(
 
 const DROID_SPEC: NestedJsonIntegrationSpec = {
   agentId: "droid",
+  // 独立 hooks.json 事件键在顶层（官方规范）；settings.json fallback 才用
+  // `hooks` 包裹。见文件头「2026-09-06」对照实验。
+  hooksKeyStyle: "flat",
   runtime: { stopAuthority: "advisory" },
   configPath: droidConfigPath,
   detect: () =>
@@ -228,9 +190,16 @@ const DROID_SPEC: NestedJsonIntegrationSpec = {
       pierEvent: "PromptSubmit",
     },
     {
-      buildCommand: droidStandardCommand("Stop", "Stop"),
+      // 官方 Stop 只在主 agent 完成回复（回合终态）时发射；取消不发 Stop
+      // 只发 Notification（见文件头「取消路径」）。因此 Stop 是可信完成
+      // 事实，按 copilot `agentStop→TurnCompleted` 同款直接映射
+      // TurnCompleted（trusted terminal）。若映射 advisory pier Stop 只能
+      // 产生 completionObserved 候选：droid 无 transcript 对账、无原生
+      // ready 兜底，终态永远到不了 ready——agent.turn-finished 通知与
+      // 智能体列表 ready 桶全部失效（2026-09-05 修复）。
+      buildCommand: droidStandardCommand("TurnCompleted", "Stop"),
       nativeEvent: "Stop",
-      pierEvent: "Stop",
+      pierEvent: "TurnCompleted",
     },
     {
       // 取消不发 Stop 只发 Notification（见文件头「取消路径」）。matcher
