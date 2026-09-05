@@ -1,0 +1,51 @@
+diff --git a/src/Surface.zig b/src/Surface.zig
+--- a/src/Surface.zig
++++ b/src/Surface.zig
+@@ -663,7 +663,11 @@
+         try termio.Termio.init(&self.io, alloc, .{
+             .size = size,
+             .full_config = config,
+-            .config = try termio.Termio.DerivedConfig.init(alloc, config),
++            .config = try termio.Termio.DerivedConfig.init(
++                alloc,
++                config,
++                self.config_conditional_state,
++            ),
+             .backend = backend,
+             .mailbox = io_mailbox,
+             .renderer_state = &self.renderer_state,
+@@ -1795,7 +1799,11 @@
+     errdefer renderer_message.deinit();
+     var termio_config_ptr = try self.alloc.create(termio.Termio.DerivedConfig);
+     errdefer self.alloc.destroy(termio_config_ptr);
+-    termio_config_ptr.* = try termio.Termio.DerivedConfig.init(self.alloc, config);
++    termio_config_ptr.* = try termio.Termio.DerivedConfig.init(
++        self.alloc,
++        config,
++        self.config_conditional_state,
++    );
+     errdefer termio_config_ptr.deinit();
+ 
+     _ = self.renderer_thread.mailbox.push(renderer_message, .{ .forever = {} });
+diff --git a/src/termio/Termio.zig b/src/termio/Termio.zig
+--- a/src/termio/Termio.zig
++++ b/src/termio/Termio.zig
+@@ -181,6 +181,7 @@
+     pub fn init(
+         alloc_gpa: Allocator,
+         config: *const configpkg.Config,
++        conditional_state: configpkg.ConditionalState,
+     ) !DerivedConfig {
+         var arena = ArenaAllocator.init(alloc_gpa);
+         errdefer arena.deinit();
+@@ -212,7 +213,9 @@
+             .osc_color_report_format = config.@"osc-color-report-format",
+             .clipboard_write = config.@"clipboard-write",
+             .enquiry_response = try alloc.dupe(u8, config.@"enquiry-response"),
+-            .conditional_state = config._conditional_state,
++            // The config may skip conditional replay when no theme-dependent
++            // options exist. Reports must still follow the surface appearance.
++            .conditional_state = conditional_state,
+ 
+             // This has to be last so that we copy AFTER the arena allocations
+             // above happen (Zig assigns in order).

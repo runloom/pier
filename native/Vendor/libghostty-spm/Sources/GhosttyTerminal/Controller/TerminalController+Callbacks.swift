@@ -124,10 +124,35 @@ enum TerminalCallbacks {
     }
 
     static func action(
-        appPtr _: ghostty_app_t?,
+        appPtr: ghostty_app_t?,
         target: ghostty_target_s,
         action: ghostty_action_s
     ) -> Bool {
+        if action.tag == GHOSTTY_ACTION_RELOAD_CONFIG,
+           action.action.reload_config.soft,
+           let appPtr, let userdata = ghostty_app_userdata(appPtr)
+        {
+            let controller = Unmanaged<TerminalController>.fromOpaque(userdata)
+                .takeUnretainedValue()
+            // Ghostty requests a soft reload after changing its conditional
+            // state on the main thread. Complete it before returning: the next
+            // queued scheme report reads the reloaded config, not pending state.
+            return MainActor.assumeIsolated {
+                guard let config = controller.config else { return false }
+                switch target.tag {
+                case GHOSTTY_TARGET_APP:
+                    guard let app = controller.app else { return false }
+                    ghostty_app_update_config(app, config)
+                case GHOSTTY_TARGET_SURFACE:
+                    guard let surface = target.target.surface else { return false }
+                    ghostty_surface_update_config(surface, config)
+                default:
+                    return false
+                }
+                return true
+            }
+        }
+
         guard target.tag == GHOSTTY_TARGET_SURFACE,
               let surfacePtr = target.target.surface,
               let bridgePtr = ghostty_surface_userdata(surfacePtr)

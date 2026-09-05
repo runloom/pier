@@ -35,7 +35,13 @@ export async function launchApp(): Promise<AppContext> {
   const app = await electron.launch({
     args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
     cwd: PROJECT_ROOT,
-    env: { ...process.env, CODEX_HOME: join(userDataDir, "codex-home") },
+    env: {
+      ...process.env,
+      CODEX_HOME: join(userDataDir, "codex-home"),
+      // A test launched inside Pier must not inherit its live profile or HMR URL.
+      ELECTRON_USER_DATA_DIR: userDataDir,
+      ELECTRON_RENDERER_URL: "",
+    },
   });
   const win = await app.firstWindow();
   await waitForAppShellReady(win);
@@ -204,6 +210,8 @@ export async function installCodexPlugin(context: AppContext): Promise<void> {
     env: {
       ...process.env,
       CODEX_HOME: join(context.userDataDir, "codex-home"),
+      ELECTRON_USER_DATA_DIR: context.userDataDir,
+      ELECTRON_RENDERER_URL: "",
     },
   });
   context.win = await context.app.firstWindow();
