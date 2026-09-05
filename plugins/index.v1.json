@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1788531598171,
+  "generatedAt": 1788645978133,
   "plugins": {
     "pier.agent-splits": {
       "description": "Connect splits opened by assistants to workbench panels.",
@@ -239,7 +239,7 @@
       "description": "Manage Grok accounts, login, and switch for Pier.",
       "displayName": "Grok Account Management",
       "id": "pier.grok",
-      "latest": "1.1.15",
+      "latest": "1.1.16",
       "locales": {
         "en": {
           "name": "Grok Account Management",
@@ -342,6 +342,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "6afea6279f075e32c32f5399d01a4001bdc292a0c1e9c5d60227cbd36b022e1f",
           "size": 633412
+        },
+        "1.1.16": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.16/pier.grok-1.1.16.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "6c9ec76bac2dba67ff609fb27ee7d1525a3e28448edccc8652bb34d101079eb9",
+          "size": 633412
         }
       }
     },
@@ -423,7 +429,7 @@
       "description": "Show GitHub, Linear, or Jira issues in a project panel and on canvases.",
       "displayName": "Task tracker",
       "id": "pier.tasks",
-      "latest": "1.0.0",
+      "latest": "1.0.1",
       "locales": {
         "en": {
           "name": "Task tracker",
@@ -448,15 +454,21 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "c2827e5c1e22e867ea62c5c2db61056598ea4bd42ef1c7891d064d350c53235b",
           "size": 714313
+        },
+        "1.0.1": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-tasks-v1.0.1/pier.tasks-1.0.1.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "7c896a0f3dd2f92791a70d960b50ca3dcccb9a799697f6e9950f9c854e3dc3c8",
+          "size": 724558
         }
       }
     }
   },
-  "sequence": 41,
+  "sequence": 42,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "BX7XyCMTttK1Yl3+RoehD0FBqiyLkF6qZ0HXkfquAjZRioEk9KF8wZKKH827KaLSlVblmyj0CU6s8AHzcb15Dw=="
+    "value": "W3Gi6cF1vclcOJLyzAR6+eAK/g6wZXFfAyJrTrE4zXMNu26I25oB8uwwyfBOdWwKUfPQAkcN7/GE4tYoNrBEAQ=="
   }
 }
