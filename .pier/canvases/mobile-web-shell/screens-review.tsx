@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { cx, IconButton, NavBar, PhoneShell, QuietEmpty } from "./chrome.tsx";
+import { Icon } from "./icons.tsx";
 import type { ChangeLetter, DemoChange, DiffLine } from "./model.ts";
 import {
   basename,
@@ -36,19 +37,16 @@ function Delta(props: { added: number; removed: number }): ReactNode {
 function MonoPath(props: { path: string }): ReactNode {
   const dir = parentPath(props.path);
   const name = basename(props.path);
-  const parts = dir.length === 0 ? [] : dir.split("/");
-  const dirLabel =
-    parts.length === 0
-      ? ""
-      : parts.length === 1
-        ? `${parts[0]}/`
-        : `${parts.slice(0, -1).join("/")}/…/`;
   return (
-    <span className="flex min-w-0 items-baseline font-mono">
-      {dirLabel.length > 0 ? (
-        <span className="min-w-0 truncate text-muted-foreground">{dirLabel}</span>
-      ) : null}
-      <span className="shrink-0 text-foreground">{name}</span>
+    <span className="block min-w-0">
+      <span className="block font-medium text-[14px] text-foreground leading-5 [overflow-wrap:anywhere]">
+        {name}
+      </span>
+      {dir.length === 0 ? null : (
+        <span className="mt-1 block truncate font-mono text-[11px] text-muted-foreground leading-4">
+          {dir}
+        </span>
+      )}
     </span>
   );
 }
@@ -154,10 +152,10 @@ export function ChangesScreen(props: {
               title="没有变更"
             />
           ) : (
-            <div className="flex flex-col">
+            <div className="mx-4 mt-4 flex flex-col divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70 bg-card">
               {props.repo.changes.map((change) => (
                 <button
-                  className="flex min-h-11 w-full items-center gap-3 px-4 text-left transition-colors duration-75 active:bg-interactive-active"
+                  className="flex min-h-[76px] w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-75 active:bg-interactive-active"
                   key={change.path}
                   onClick={() => {
                     setSelected(change.path);
@@ -204,7 +202,7 @@ const DIFF_MARK: Record<DiffLine["kind"], string> = {
 
 function DiffBlock(props: { change: DemoChange }): ReactNode {
   return (
-    <div className="min-h-0 flex-1 overflow-auto pt-[52px] font-mono text-[12px] leading-[18px] [scrollbar-width:thin]">
+    <div className="min-h-0 flex-1 overflow-auto py-3 font-mono text-[13px] leading-5 [scrollbar-width:thin]">
       {props.change.hunks.map((hunk) => (
         <div key={hunk.header}>
           <p className="px-3 py-1.5 text-muted-foreground">{hunk.header}</p>
@@ -272,18 +270,24 @@ export function FilesScreen(props: {
           backIconOnly
           ghost
           layout="split"
-          title={title}
+          title={file === null && atRoot ? "文件" : title}
+          subtitle={
+            <span className="font-mono">
+              {props.scope}
+              {dir.length === 0 ? "" : ` / ${dir}`}
+            </span>
+          }
         />
       }
       tone="terminal"
     >
       {file === null ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-[52px] pb-8 font-mono text-[13px] leading-[22px] [scrollbar-width:none]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-8 text-[14px] leading-[22px] [scrollbar-width:none]">
           {entries.map((entry) => {
             const dirEntry = entry.kind === "dir";
             return (
               <button
-                className="flex min-h-11 w-full items-center text-left transition-colors duration-75 active:bg-interactive-active"
+                className="flex min-h-[52px] w-full items-center gap-3 border-b border-border/50 px-1 text-left transition-colors duration-75 active:bg-interactive-active"
                 key={entry.name}
                 onClick={() => {
                   if (dirEntry) {
@@ -294,14 +298,23 @@ export function FilesScreen(props: {
                 }}
                 type="button"
               >
-                <span
-                  className={cx(
-                    "min-w-0 truncate",
-                    dirEntry ? "text-foreground/80" : "text-foreground/90"
-                  )}
-                >
-                  {dirEntry ? `${entry.name}/` : entry.name}
+                <Icon
+                  className="size-[19px] shrink-0 text-muted-foreground"
+                  name={dirEntry ? "folder" : "file"}
+                />
+                <span className="min-w-0 flex-1 py-3 [overflow-wrap:anywhere]">
+                  {entry.name}
                 </span>
+                {dirEntry ? (
+                  <Icon
+                    className="size-4 shrink-0 text-muted-foreground"
+                    name="chevron-right"
+                  />
+                ) : (
+                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                    {entry.name.split(".").pop()?.toUpperCase()}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -319,10 +332,18 @@ export function FilesScreen(props: {
 function FilePreview(props: { text: string }): ReactNode {
   const lines = props.text.replace(/\n$/, "").split("\n");
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-4 pt-[52px] pb-8 font-mono text-[12px] leading-[18px] [scrollbar-width:thin]">
+    <div className="min-h-0 flex-1 overflow-auto px-3 pt-4 pb-8 font-mono text-[13px] leading-5 [scrollbar-width:thin]">
       {lines.map((line, index) => (
-        <div className="whitespace-pre-wrap break-words" key={`${index}-${line}`}>
-          {line.length === 0 ? " " : tintCodeLine(line)}
+        <div className="flex" key={`${index}-${line}`}>
+          <span
+            aria-hidden="true"
+            className="w-7 shrink-0 select-none pr-3 text-right text-muted-foreground"
+          >
+            {index + 1}
+          </span>
+          <span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+            {line.length === 0 ? " " : tintCodeLine(line)}
+          </span>
         </div>
       ))}
     </div>
@@ -338,13 +359,13 @@ function tintCodeLine(line: string): ReactNode {
     trimmed.startsWith("/*") ||
     trimmed.startsWith("*/")
   ) {
-    return <span className="text-muted-foreground/70">{line}</span>;
+    return <span className="text-muted-foreground">{line}</span>;
   }
   const parts = line.split(/("[^"]*"|'[^']*')/g);
   return parts.map((part, index) => {
     if (part.startsWith('"') || part.startsWith("'")) {
       return (
-        <span className="text-success/65" key={`${index}-${part}`}>
+        <span className="text-status-success-fg" key={`${index}-${part}`}>
           {part}
         </span>
       );

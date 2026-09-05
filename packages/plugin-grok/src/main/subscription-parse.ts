@@ -40,9 +40,17 @@ export function parseGrokUserSubscriptionResult(
   const root = asRecord(payload);
   const user = asRecord(root?.user) ?? root;
   if (!user) return null;
-  const planType = normalizePlanType(
-    user.subscriptionTier ?? user.subscription_tier
-  );
+  const tier =
+    user.subscriptionTier === undefined
+      ? user.subscription_tier
+      : user.subscriptionTier;
+  // /user?include=subscription returns null (or an empty string) when no
+  // subscription remains. Keep that distinct from a missing/malformed field
+  // so a successful downgrade clears a previously saved paid membership.
+  if (tier === null || tier === "") {
+    return { planType: "free", status: "none" };
+  }
+  const planType = normalizePlanType(tier);
   if (!planType) return null;
   const isFree = planType === "free" || planType === "none";
   return {

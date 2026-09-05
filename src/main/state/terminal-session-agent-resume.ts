@@ -30,6 +30,8 @@ export type AgentResumeWriteResult =
   | "invalid";
 
 export interface AgentResumeWriteOptions {
+  /** SessionEnd may fill a missing key, but cannot rotate a live conversation. */
+  preserveExistingSession?: boolean | undefined;
   /** PromptSubmit: allow rotation and clear resumePending. */
   unlockRotation?: boolean | undefined;
 }
@@ -246,6 +248,16 @@ export async function updateTerminalPanelAgentResume(
     // No panel row: reject (do not stash for unknown panels / ghost hooks).
     if (!(windowState && current)) {
       result = "rejected";
+      return state;
+    }
+    const existingResume =
+      agent?.resume ?? current.pendingResume ?? pendingByPanel.get(key);
+    if (
+      options.preserveExistingSession &&
+      existingResume?.sessionId &&
+      existingResume.sessionId !== resume.sessionId
+    ) {
+      result = "pinned";
       return state;
     }
     if (!agent) {

@@ -921,15 +921,15 @@
   "terminalStatusItems": {
     "pier.worktree.status": {
       "description": "Shows the git branch in terminal panels. Click to open status actions.",
-      "title": "git Branch"
+      "title": "GIT Branch"
     },
     "pier.git.status.changes": {
       "description": "Shows changed line counts; click opens the review panel.",
-      "title": "git Changes"
+      "title": "GIT Changes"
     },
     "pier.git.status.sync": {
       "description": "Shows ahead/behind counts with one-click sync.",
-      "title": "git Sync"
+      "title": "GIT Sync"
     }
   },
   "panels": {

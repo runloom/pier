@@ -412,17 +412,17 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         {
           id: "pier.worktree.status",
           permissions: ["worktree:read", "workspace:open"],
-          title: "git Branch",
+          title: "GIT Branch",
         },
         {
           id: "pier.git.status.changes",
           permissions: ["git:read", "panel:open"],
-          title: "git Changes",
+          title: "GIT Changes",
         },
         {
           id: "pier.git.status.sync",
           permissions: ["git:read", "git:write"],
-          title: "git Sync",
+          title: "GIT Sync",
         },
       ],
       version: "1.0.0",

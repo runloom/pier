@@ -307,7 +307,9 @@ export function OtherAccount({
           <AccountAvatar label={label} size="sm" />
         </ItemMedia>
         <ItemContent className="w-60 min-w-0 flex-none max-[48rem]:w-auto max-[48rem]:flex-1">
-          <ItemTitle title={label}>{label}</ItemTitle>
+          <ItemTitle className="max-w-full" title={label}>
+            <span className="truncate">{label}</span>
+          </ItemTitle>
           <AccountBadges account={account} language={language} t={t} />
         </ItemContent>
         <QuotaGroup

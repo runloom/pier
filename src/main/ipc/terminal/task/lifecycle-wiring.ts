@@ -1,9 +1,7 @@
 import { matchAgentCommand } from "@shared/agent-command-detection.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
-import { isWindowDetaching } from "../../../services/agents/window-detaching-guard.ts";
 import { isSuspendedJobExitCode } from "../../../services/foreground-activity/entry.ts";
 import {
-  patchTerminalPanelAgentStatus,
   patchTerminalPanelTab,
   patchTerminalPanelTaskStatus,
   updateTerminalPanelTitle,
@@ -13,8 +11,8 @@ import {
   findInternalWindowId,
 } from "../../../windows/identity.ts";
 import { foregroundActivityService } from "../../foreground-activity.ts";
+import { persistAgentProcessExit } from "../agent-process-exit.ts";
 import { recordNativeTerminalRoute } from "../debug.ts";
-import { broadcastAgentEndStateForPanel } from "../end-state-broadcast.ts";
 import { forwardToWindow } from "../forwarding.ts";
 import type { NativeAddon } from "../native-addon.ts";
 import { fromNativePanelKey } from "../panel-id.ts";
@@ -132,12 +130,15 @@ export function registerTerminalTaskLifecycleForwarding(
       ) {
         return;
       }
-      // 前台命令退出 = 该面板运行中的 agent CLI 已退出（若有会话）——清理并还原
-      // tab/状态栏呈现。覆盖崩溃/kill 等无 SessionEnd hook 的路径。
-      // 透传原始 exitCode：悬挂家族(145-148, Ctrl+Z)不视为 agent 退出。
-      // Task surfaces keep their own exit path; agent/shell share this gate.
-      const agentSurface = !lifecycle.isTaskSurface(rawPanelId, windowId);
-      if (agentSurface) {
+      // A launched agent owns the whole PTY. OSC command boundaries may come
+      // from its login rc or nested shells; only PTY exit ends that agent.
+      if (lifecycle.isAgentSurface(rawPanelId, windowId)) {
+        return;
+      }
+      // Ordinary shells still use OSC to detect manually launched agents.
+      // Keep the original code so Ctrl+Z (145–148) does not end a suspended job.
+      const shellSurface = !lifecycle.isTaskSurface(rawPanelId, windowId);
+      if (shellSurface) {
         foregroundActivityService.commandFinished(
           rawPanelId,
           exitCode,
@@ -145,32 +146,12 @@ export function registerTerminalTaskLifecycleForwarding(
         );
       }
       if (
-        agentSurface &&
+        shellSurface &&
         targetWindow &&
-        !targetWindow.isDestroyed() &&
         exitCode >= 0 &&
-        !isSuspendedJobExitCode(exitCode) &&
-        !isWindowDetaching(windowRecordIdFor(targetWindow)) &&
-        !isWindowDetaching(String(id))
+        !isSuspendedJobExitCode(exitCode)
       ) {
-        const sessionScope = windowRecordIdFor(targetWindow);
-        patchTerminalPanelAgentStatus(sessionScope, rawPanelId, {
-          exitCode,
-          finishedAt: Date.now(),
-          status: "exited",
-        })
-          .then((ok) => {
-            if (ok) {
-              broadcastAgentEndStateForPanel(
-                targetWindow,
-                sessionScope,
-                rawPanelId
-              );
-            }
-          })
-          .catch((err) => {
-            console.error("[pier-agent-session:command-finished] failed:", err);
-          });
+        persistAgentProcessExit(targetWindow, rawPanelId, exitCode);
       }
       if (lifecycleId) {
         // Interactive task: command_finished can fire for rc / clear / the
@@ -228,6 +209,7 @@ export function registerTerminalTaskLifecycleForwarding(
       }
       const windowId = findInternalWindowId(targetWindow) ?? undefined;
       if (
+        lifecycle.isAgentSurface(rawPanelId, windowId) ||
         lifecycle.isTaskSurface(rawPanelId, windowId) ||
         !lifecycle.isCurrentLifecycle({
           lifecycleId,
@@ -283,6 +265,14 @@ export function registerTerminalTaskLifecycleForwarding(
         },
         "pier-child-exited"
       );
+      // Retained surfaces may stay open after PTY exit. Clear process evidence
+      // here even when the CLI never emitted SessionEnd or shell integration.
+      if (!lifecycle.isTaskSurface(rawPanelId, windowId)) {
+        foregroundActivityService.ptyExited(rawPanelId, String(id));
+        if (targetWindow) {
+          persistAgentProcessExit(targetWindow, rawPanelId, exitCode);
+        }
+      }
       if (!lifecycleId) {
         return;
       }
@@ -327,28 +317,9 @@ export function registerTerminalTaskLifecycleForwarding(
       if (
         !lifecycle.isTaskSurface(rawPanelId, windowId) &&
         targetWindow &&
-        !targetWindow.isDestroyed() &&
-        processAlive === false &&
-        !isWindowDetaching(windowRecordIdFor(targetWindow)) &&
-        !isWindowDetaching(String(id))
+        processAlive === false
       ) {
-        const sessionScope = windowRecordIdFor(targetWindow);
-        patchTerminalPanelAgentStatus(sessionScope, rawPanelId, {
-          finishedAt: Date.now(),
-          status: "exited",
-        })
-          .then((ok) => {
-            if (ok) {
-              broadcastAgentEndStateForPanel(
-                targetWindow,
-                sessionScope,
-                rawPanelId
-              );
-            }
-          })
-          .catch((err) => {
-            console.error("[pier-agent-session:process-closed] failed:", err);
-          });
+        persistAgentProcessExit(targetWindow, rawPanelId);
       }
       // 普通 shell：转发 SURFACE_CLOSE，由 renderer 关 panel。
       // 任务结果 panel：保留终态，不转发。

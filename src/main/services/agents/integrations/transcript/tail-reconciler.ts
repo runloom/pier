@@ -2,6 +2,11 @@ import { type Stats, unwatchFile, watchFile } from "node:fs";
 import { open, realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
+import {
+  continuesPendingPrompt,
+  matchesEndedSession,
+  type PendingTranscriptObservation,
+} from "./observation-scope.ts";
 import type {
   TranscriptTailReconciler,
   TranscriptTailReconcilerConfig,
@@ -64,7 +69,7 @@ export function createTranscriptTailReconciler(
 ): TranscriptTailReconciler {
   const entries = new Map<string, TranscriptEntry>();
   const entryCreations = new Map<string, Promise<TranscriptEntry | null>>();
-  const pendingScopeTokens = new Map<string, symbol>();
+  const pendingScopeTokens = new Map<string, PendingTranscriptObservation>();
   const transcriptRoot = resolve(config.transcriptRoot);
   let disposed = false;
 
@@ -105,6 +110,16 @@ export function createTranscriptTailReconciler(
         chunk = chunk.subarray(0, result.bytesRead);
       } finally {
         await fd.close();
+      }
+      // Watchers can drain while PromptSubmit awaits stat. Keep the offset
+      // unchanged until its watermark is registered (or its scope is released).
+      if (
+        [...pendingScopeTokens.values()].some(
+          (pending) => pending.prompt && pending.path === path
+        )
+      ) {
+        entry.pending = false;
+        return;
       }
       const lastNewline = chunk.lastIndexOf(0x0a);
       if (lastNewline === -1) {
@@ -166,6 +181,13 @@ export function createTranscriptTailReconciler(
   }
 
   function disposeEntry(path: string, entry: TranscriptEntry): void {
+    // A newer conversation may already be binding this file while the old
+    // owner ends. Its pending observation still needs this watcher.
+    if (
+      [...pendingScopeTokens.values()].some((pending) => pending.path === path)
+    ) {
+      return;
+    }
     if (entries.get(path) === entry) {
       entry.disposed = true;
       entry.classifyLine = null;
@@ -178,30 +200,30 @@ export function createTranscriptTailReconciler(
   const scopeKey = (event: AgentHookEventPayload): string =>
     `${event.windowId}\0${event.panelId}`;
 
-  function releaseScope(panelId: string, windowId?: string): void {
-    const releasedKeys = new Set<string>();
-    for (const key of pendingScopeTokens.keys()) {
-      const [scopeWindowId, scopePanelId] = key.split("\0");
-      if (
-        scopePanelId === panelId &&
-        (windowId === undefined || scopeWindowId === windowId)
-      ) {
+  function releaseScope(
+    panelId: string,
+    windowId?: string,
+    endedSession?: AgentHookEventPayload
+  ): void {
+    const matches = (context: AgentHookEventPayload): boolean =>
+      context.panelId === panelId &&
+      (windowId === undefined || context.windowId === windowId) &&
+      (!endedSession || matchesEndedSession(context, endedSession));
+    for (const [key, pending] of pendingScopeTokens) {
+      if (matches(pending.event)) {
         pendingScopeTokens.delete(key);
-        releasedKeys.add(key);
       }
     }
     for (const [path, entry] of entries) {
+      const releasedKeys = new Set<string>();
       for (const [key, context] of entry.owners) {
-        if (
-          context.panelId === panelId &&
-          (windowId === undefined || context.windowId === windowId)
-        ) {
+        if (matches(context)) {
           entry.owners.delete(key);
           releasedKeys.add(key);
         }
       }
       for (const [turnId, context] of entry.contextsByTurnId) {
-        if (releasedKeys.has(scopeKey(context))) {
+        if (matches(context)) {
           entry.contextsByTurnId.delete(turnId);
         }
       }
@@ -210,6 +232,7 @@ export function createTranscriptTailReconciler(
       }
       dropPromptWatermarks(entry.promptWatermarkByScope, releasedKeys);
       if (entry.owners.size === 0) disposeEntry(path, entry);
+      else scheduleDrain(path, entry);
     }
   }
 
@@ -285,22 +308,29 @@ export function createTranscriptTailReconciler(
         return;
       }
       if (event.event === "SessionEnd") {
-        releaseScope(event.panelId, event.windowId);
+        releaseScope(event.panelId, event.windowId, event);
         return;
       }
       const path = event.transcriptPath?.trim();
       if (!path) {
         return;
       }
-      const key = scopeKey(event);
-      const token = Symbol(key);
+      let key = scopeKey(event);
+      const pending = pendingScopeTokens.get(key);
+      if (continuesPendingPrompt(pending, event)) {
+        pending.event = event;
+        return;
+      }
+      const token = { event, path: "", prompt: event.event === "PromptSubmit" };
       pendingScopeTokens.set(key, token);
       const canonicalPath = await canonicalTranscriptPath(path);
+      key = scopeKey(token.event);
       if (!canonicalPath || pendingScopeTokens.get(key) !== token) {
         if (pendingScopeTokens.get(key) === token)
           pendingScopeTokens.delete(key);
         return;
       }
+      token.path = canonicalPath;
       let entry: TranscriptEntry | null | undefined =
         entries.get(canonicalPath);
       if (!entry) {
@@ -313,7 +343,17 @@ export function createTranscriptTailReconciler(
         }
         entry = await creation;
       }
-      if (!entry || pendingScopeTokens.get(key) !== token) {
+      const promptFile =
+        entry && event.event === "PromptSubmit"
+          ? await stat(canonicalPath).catch(() => null)
+          : null;
+      key = scopeKey(token.event);
+      if (
+        !entry ||
+        disposed ||
+        entry.disposed ||
+        pendingScopeTokens.get(key) !== token
+      ) {
         if (pendingScopeTokens.get(key) === token)
           pendingScopeTokens.delete(key);
         if (entry?.owners.size === 0) {
@@ -336,20 +376,17 @@ export function createTranscriptTailReconciler(
         dropPromptWatermarks(otherEntry.promptWatermarkByScope, [key]);
         if (otherEntry.owners.size === 0) disposeEntry(otherPath, otherEntry);
       }
-      if (event.event === "PromptSubmit") {
-        const current = await stat(canonicalPath).catch(() => null);
-        if (current?.isFile()) {
-          recordPromptWatermark(
-            entry.promptWatermarkByScope,
-            key,
-            current.size
-          );
-        }
+      if (promptFile?.isFile()) {
+        recordPromptWatermark(
+          entry.promptWatermarkByScope,
+          key,
+          promptFile.size
+        );
       }
-      entry.owners.set(key, event);
-      const turnId = event.turnId?.trim();
+      entry.owners.set(key, token.event);
+      const turnId = token.event.turnId?.trim();
       if (turnId) {
-        entry.contextsByTurnId.set(turnId, event);
+        entry.contextsByTurnId.set(turnId, token.event);
         if (entry.contextsByTurnId.size > MAX_TURN_CONTEXTS) {
           entry.contextsByTurnId.delete(
             entry.contextsByTurnId.keys().next().value ?? ""
@@ -366,7 +403,7 @@ export function createTranscriptTailReconciler(
         for (const pendingRecord of pendingForTurn) {
           emitTranscriptEvent(
             entry,
-            event,
+            token.event,
             pendingRecord,
             config.onTerminalEvent
           );
@@ -425,6 +462,7 @@ export function createTranscriptTailReconciler(
       const pending = pendingScopeTokens.get(sourceKey);
       if (pending) {
         pendingScopeTokens.delete(sourceKey);
+        pending.event = { ...pending.event, windowId: targetWindowId };
         pendingScopeTokens.set(targetKey, pending);
       }
       for (const entry of entries.values()) {

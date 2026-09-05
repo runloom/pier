@@ -258,6 +258,9 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
       return completed;
     },
     isCurrentLifecycle,
+    isAgentSurface(panelId: string, windowId?: string | undefined): boolean {
+      return currentSurfaces.get(panelKey(panelId, windowId)) === "agent";
+    },
     isTaskSurface(panelId: string, windowId?: string | undefined): boolean {
       return currentSurfaces.get(panelKey(panelId, windowId)) === "task";
     },

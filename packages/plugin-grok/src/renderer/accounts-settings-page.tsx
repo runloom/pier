@@ -381,8 +381,13 @@ export function AccountsSettingsPage({
                 <AccountAvatar label={accountDisplayLabel(active)} />
               </ItemMedia>
               <ItemContent className="min-w-0">
-                <ItemTitle title={accountDisplayLabel(active)}>
-                  {accountDisplayLabel(active)}
+                <ItemTitle
+                  className="max-w-full"
+                  title={accountDisplayLabel(active)}
+                >
+                  <span className="truncate">
+                    {accountDisplayLabel(active)}
+                  </span>
                 </ItemTitle>
                 <AccountBadges account={active} language={language} t={t} />
               </ItemContent>

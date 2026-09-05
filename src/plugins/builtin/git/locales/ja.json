@@ -916,15 +916,15 @@
   "terminalStatusItems": {
     "pier.worktree.status": {
       "description": "ターミナルパネルに git ブランチを表示します。クリックで状態操作を開きます。",
-      "title": "git ブランチ"
+      "title": "GIT ブランチ"
     },
     "pier.git.status.changes": {
       "description": "変更行数を表示します。クリックでレビューパネルを開きます。",
-      "title": "git 変更"
+      "title": "GIT 変更"
     },
     "pier.git.status.sync": {
       "description": "先行/遅れの数とワンクリック同期を表示します。",
-      "title": "git 同期"
+      "title": "GIT 同期"
     }
   },
   "panels": {

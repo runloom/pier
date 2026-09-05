@@ -8,15 +8,45 @@ import {
   DIALOG_COMMIT_FORM_CLASS,
   DIALOG_FOOTER_ACTIONS_CLASS,
 } from "@pier/ui/dialog-form-layout.ts";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
-import { type FormEvent, type JSX, useLayoutEffect, useState } from "react";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@pier/ui/input-group.tsx";
+import { ExternalLink } from "lucide-react";
+import {
+  type FormEvent,
+  type JSX,
+  useId,
+  useLayoutEffect,
+  useState,
+} from "react";
+import {
+  JIRA_API_TOKENS_URL,
+  LINEAR_PERSONAL_API_KEYS_URL,
+} from "../shared/constants.ts";
 import { formatUnknownError, type Translate } from "./translate.ts";
 
 const DIALOG_ID = "pier.tasks.connect";
 const FORM_ID = "pier-tasks-connect-form";
 
 type ConnectProvider = "jira" | "linear";
+
+function isAuthError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /not authorized|HTTP 401|HTTP 403/i.test(error.message)
+  );
+}
 
 function ConnectForm({
   close,
@@ -37,8 +67,10 @@ function ConnectForm({
   const [jiraBaseUrl, setJiraBaseUrl] = useState(initialJiraBaseUrl);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const tokenId = "pier-tasks-connect-token";
-  const urlId = "pier-tasks-connect-jira-url";
+  const tokenId = useId();
+  const urlId = useId();
+  const createKeyUrl =
+    provider === "linear" ? LINEAR_PERSONAL_API_KEYS_URL : JIRA_API_TOKENS_URL;
   const canSubmit =
     token.trim().length > 0 &&
     (provider === "linear" || jiraBaseUrl.trim().length > 0);
@@ -64,6 +96,24 @@ function ConnectForm({
     };
   }, [canSubmit, close, saving, setFooter, t]);
 
+  const openCreateKey = (): void => {
+    context.app
+      .openExternal(createKeyUrl)
+      .then((opened) => {
+        if (!opened) {
+          setError(
+            t(
+              "pier.tasks.connection.openCreateKeyFailed",
+              "Couldn't open the browser. Create the key on the site, then paste it here."
+            )
+          );
+        }
+      })
+      .catch((caught: unknown) => {
+        setError(formatUnknownError(caught));
+      });
+  };
+
   const handleSubmit = (event: FormEvent): void => {
     event.preventDefault();
     if (!canSubmit || saving) {
@@ -87,6 +137,24 @@ function ConnectForm({
         onDone();
       })
       .catch((caught: unknown) => {
+        if (provider === "linear" && isAuthError(caught)) {
+          setError(
+            t(
+              "pier.tasks.connection.linearTokenInvalid",
+              "This Linear key didn't work. Create a new key in Linear and paste it again."
+            )
+          );
+          return;
+        }
+        if (provider === "jira" && isAuthError(caught)) {
+          setError(
+            t(
+              "pier.tasks.connection.jiraTokenInvalid",
+              "This Jira token didn't work. Check the site URL and create a new token, then try again."
+            )
+          );
+          return;
+        }
         setError(formatUnknownError(caught));
       })
       .finally(() => {
@@ -97,10 +165,10 @@ function ConnectForm({
   return (
     <form
       className={DIALOG_COMMIT_FORM_CLASS}
+      data-slot="dialog-commit-form"
       id={FORM_ID}
       onSubmit={handleSubmit}
     >
-      {error ? <FieldError>{error}</FieldError> : null}
       <FieldGroup className={DIALOG_COMMIT_FIELD_GROUP_CLASS}>
         {provider === "jira" ? (
           <Field>
@@ -115,17 +183,60 @@ function ConnectForm({
             />
           </Field>
         ) : null}
-        <Field>
+        <Field data-invalid={error ? true : undefined}>
           <FieldLabel htmlFor={tokenId}>
-            {t("pier.tasks.connection.providerToken", "Access token")}
+            {provider === "linear"
+              ? t("pier.tasks.connection.linearAccessKey", "Access key")
+              : t("pier.tasks.connection.providerToken", "Access token")}
           </FieldLabel>
-          <Input
-            id={tokenId}
-            onChange={(event) => setToken(event.target.value)}
-            placeholder={provider === "linear" ? "lin_api_…" : "token"}
-            type="password"
-            value={token}
-          />
+          <InputGroup>
+            <InputGroupInput
+              aria-invalid={error ? true : undefined}
+              autoFocus
+              id={tokenId}
+              onChange={(event) => setToken(event.target.value)}
+              placeholder={
+                provider === "linear"
+                  ? t(
+                      "pier.tasks.connection.linearAccessKeyPlaceholder",
+                      "Paste access key"
+                    )
+                  : t(
+                      "pier.tasks.connection.providerTokenPlaceholder",
+                      "Paste access token"
+                    )
+              }
+              type="password"
+              value={token}
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                disabled={saving}
+                onClick={openCreateKey}
+                type="button"
+              >
+                {provider === "linear"
+                  ? t("pier.tasks.connection.openLinear", "Open Linear")
+                  : t("pier.tasks.connection.openJira", "Open Atlassian")}
+                <ExternalLink data-icon="inline-end" />
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+          {error ? (
+            <FieldError>{error}</FieldError>
+          ) : (
+            <FieldDescription>
+              {provider === "linear"
+                ? t(
+                    "pier.tasks.connection.linearTokenDescription",
+                    "Linear shows the key once."
+                  )
+                : t(
+                    "pier.tasks.connection.jiraTokenDescription",
+                    "Atlassian shows the token once — paste it with the site URL."
+                  )}
+            </FieldDescription>
+          )}
         </Field>
       </FieldGroup>
     </form>
@@ -157,19 +268,17 @@ export function openConnectDialog(options: {
       provider === "jira"
         ? t(
             "pier.tasks.panel.jiraNeedAuthBody",
-            "Paste the Jira site URL and API token here. Projects are picked automatically when they load."
+            "Create an API token at Atlassian, then paste the site URL and token here. Projects are picked automatically when they load."
           )
         : t(
             "pier.tasks.panel.linearNeedAuthBody",
-            "Paste a Linear API token here. Teams are picked automatically when the token works."
+            "Open Linear to create an access key, then paste it back here. Teams are picked automatically when it works."
           ),
     id: DIALOG_ID,
+    size: "sm",
     title:
       provider === "jira"
-        ? t("pier.tasks.panel.jiraNeedAuthTitle", "Connect Jira to load issues")
-        : t(
-            "pier.tasks.panel.linearNeedAuthTitle",
-            "Connect Linear to load issues"
-          ),
+        ? t("pier.tasks.connection.connectJiraTitle", "Connect Jira")
+        : t("pier.tasks.connection.connectLinearTitle", "Connect Linear"),
   });
 }

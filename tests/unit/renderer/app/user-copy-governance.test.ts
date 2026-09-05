@@ -242,7 +242,7 @@ describe("user-facing copy governance", () => {
     expect(agentContext).toContain("git 产品名用全大写 GIT");
   });
 
-  it("uses all-caps GIT for plugin name, command palette group, and command prefixes", () => {
+  it("uses all-caps GIT for plugin name, command palette group, command prefixes, and terminal status items", () => {
     const offenders: string[] = [];
     for (const locale of ["zh-CN", "en", "ja", "ko"] as const) {
       const palettePath = join(
@@ -272,6 +272,7 @@ describe("user-facing copy governance", () => {
       ) as {
         commands?: Record<string, { title?: string }>;
         name?: string;
+        terminalStatusItems?: Record<string, { title?: string }>;
       };
       if (pluginLocale.name !== "GIT") {
         offenders.push(`${projectRelative(pluginLocalePath)}: name`);
@@ -284,6 +285,20 @@ describe("user-facing copy governance", () => {
           !title.startsWith("GIT: ")
         ) {
           offenders.push(`${projectRelative(pluginLocalePath)}: ${id}`);
+        }
+      }
+      for (const [id, item] of Object.entries(
+        pluginLocale.terminalStatusItems ?? {}
+      )) {
+        const title = item.title;
+        if (
+          typeof title === "string" &&
+          /^git/i.test(title) &&
+          !title.startsWith("GIT")
+        ) {
+          offenders.push(
+            `${projectRelative(pluginLocalePath)}: terminalStatusItems ${id}`
+          );
         }
       }
     }
@@ -302,6 +317,11 @@ describe("user-facing copy governance", () => {
     }
     if (/title:\s*"git:/.test(manifest)) {
       offenders.push(`${projectRelative(manifestPath)}: title prefix`);
+    }
+    if (/title:\s*"(git|Git)\s/.test(manifest)) {
+      offenders.push(
+        `${projectRelative(manifestPath)}: terminal status item title prefix`
+      );
     }
 
     expect(offenders).toEqual([]);

@@ -21,6 +21,7 @@ const log = createLogger("agent-resume-persist");
 export function recordAgentResumeSession(args: {
   agentId: AgentKind;
   panelId: string;
+  preserveExistingSession?: boolean | undefined;
   sessionId: string | undefined;
   unlockRotation?: boolean | undefined;
   windowId: string;
@@ -61,7 +62,12 @@ export function recordAgentResumeSession(args: {
       sessionId,
       source: "hook",
     },
-    args.unlockRotation ? { unlockRotation: true } : {}
+    {
+      ...(args.unlockRotation ? { unlockRotation: true } : {}),
+      ...(args.preserveExistingSession
+        ? { preserveExistingSession: true }
+        : {}),
+    }
   )
     .then((result) => {
       if (
