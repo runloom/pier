@@ -17,6 +17,7 @@ function credential(
     jiraAuthorized: false,
     jiraBaseUrl: null,
     linearAuthorized: false,
+    linearProbed: false,
     login: null,
     probed: false,
     ...patch,

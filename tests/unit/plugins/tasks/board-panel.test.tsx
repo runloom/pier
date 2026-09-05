@@ -11,6 +11,7 @@ const status: SourceStatus = {
     jiraAuthorized: false,
     jiraBaseUrl: null,
     linearAuthorized: false,
+    linearProbed: false,
     login: "ada",
     probed: true,
   },

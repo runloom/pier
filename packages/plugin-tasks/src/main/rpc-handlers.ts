@@ -315,6 +315,28 @@ export function registerTasksRpcHandlers(input: {
     }
   };
 
+  const isTrackerAuthError = (error: unknown): boolean =>
+    error instanceof Error &&
+    /not authorized|HTTP 401|HTTP 403/i.test(error.message);
+
+  const saveProviderToken = async (
+    provider: "github" | "jira" | "linear",
+    token: string
+  ): Promise<void> => {
+    await credentials.setProviderToken(provider, token);
+    if (provider !== "linear" && provider !== "jira") {
+      return;
+    }
+    try {
+      await autoFillCatalogs(provider);
+    } catch (error: unknown) {
+      if (isTrackerAuthError(error)) {
+        await credentials.deleteProvider(provider);
+        throw error;
+      }
+    }
+  };
+
   rpc.handle("source.status", async (payload) => {
     const parsed = bindingPayloadSchema.parse(payload);
     const [snapshot, credential] = await Promise.all([
@@ -409,6 +431,15 @@ export function registerTasksRpcHandlers(input: {
     emit("connection.changed", {});
     return credentials.status();
   });
+  rpc.handle("connection.authorizeLinear", async () => {
+    const probed = await credentials.probeLinearToken();
+    if (!probed) {
+      throw new Error("not authorized");
+    }
+    await saveProviderToken("linear", probed);
+    emit("connection.changed", {});
+    return credentials.status();
+  });
   rpc.handle("connection.revoke", async () => {
     await credentials.delete();
     emit("connection.changed", {});
@@ -416,10 +447,7 @@ export function registerTasksRpcHandlers(input: {
   });
   rpc.handle("connection.setProviderToken", async (payload) => {
     const parsed = providerTokenPayloadSchema.parse(payload);
-    await credentials.setProviderToken(parsed.provider, parsed.token);
-    if (parsed.provider === "linear" || parsed.provider === "jira") {
-      await autoFillCatalogs(parsed.provider).catch(() => undefined);
-    }
+    await saveProviderToken(parsed.provider, parsed.token);
     emit("connection.changed", {});
     return credentials.status();
   });
