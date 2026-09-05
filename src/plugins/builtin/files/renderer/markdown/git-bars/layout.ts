@@ -1,12 +1,12 @@
 import type { GitGutterKind } from "../../editor/git-markers.ts";
 
 /**
- * Dedicated left column for preview git bars (same 6px as the source
+ * Dedicated left column for preview git bars (same 16px as the source
  * `.cm-git-gutter`). Always reserved for disk previews so the column does not
  * jump when a patch arrives. Comment icons stay in the inner
  * `MARKDOWN_PREVIEW_SCROLL_PAD_LEFT_PX` next to the prose.
  */
-export const MARKDOWN_GIT_BAR_SLOT_PX = 6;
+export const MARKDOWN_GIT_BAR_SLOT_PX = 16;
 
 /** Visual stroke; hover thickens to 5px like the source gutter. */
 export const MARKDOWN_GIT_BAR_WIDTH_PX = 3;

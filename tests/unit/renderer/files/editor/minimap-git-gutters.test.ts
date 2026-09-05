@@ -192,7 +192,7 @@ describe("git gutter + minimap field wiring", () => {
     expect(view.state).toBe(afterFirst);
   });
 
-  it("rebuilds left gutter ranges after doc edit to keep line-number anchors", () => {
+  it("maps left gutter ranges through edits until the current diff arrives", () => {
     const view = mountView("a\nb\nc\n");
     const markerPayload = { count: 1, kind: "added" as const };
     setGitGutterMarkers(view, new Map([[2, markerPayload]]));
@@ -200,11 +200,11 @@ describe("git gutter + minimap field wiring", () => {
     const fromBefore = firstGutterFrom(before);
     expect(fromBefore).toBe(view.state.doc.line(2).from);
 
-    // 磁盘行号语义：插入文首后仍锚在「第 2 行」起点；field 在 docChanged 时重建 RangeSet。
+    // 当前文档语义：插入文首后原有色条跟随正文，直到新比较结果到达。
     view.dispatch({ changes: { from: 0, insert: "NEW\n" } });
     const afterEdit = view.state.field(gitGutterField).gutterMarkers;
     expect(RangeSet.eq([before], [afterEdit])).toBe(false);
-    expect(firstGutterFrom(afterEdit)).toBe(view.state.doc.line(2).from);
+    expect(firstGutterFrom(afterEdit)).toBe(view.state.doc.line(3).from);
 
     // 重放同语义 markers 仍落在同一行号锚点。
     setGitGutterMarkers(view, new Map([[2, markerPayload]]));

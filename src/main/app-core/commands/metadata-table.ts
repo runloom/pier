@@ -288,6 +288,7 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "git.deleteBranch": { capabilities: ["git:write"] },
   "git.discardChanges": { capabilities: ["git:write"] },
   "git.getDiffPatch": { capabilities: ["git:read"] },
+  "git.getFileBaseline": { capabilities: ["git:read"] },
   "git.getStatus": { capabilities: ["git:read"] },
   // S2 同步开面板：桌面 + 配对移动端；打开面板与 panel.open/terminal.open
   // 同用 workspace:open（panel:open 是插件 manifest 权限，不是客户端能力）。

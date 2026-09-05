@@ -8,6 +8,8 @@ export interface MarkdownSourceRange {
 }
 
 interface MarkdownNodeBase {
+  /** Optional presentation annotation; the Markdown parser never emits it. */
+  change?: "added" | "deleted";
   range: MarkdownSourceRange;
 }
 
@@ -21,12 +23,16 @@ export type MarkdownInline =
   | (MarkdownNodeBase & { children: MarkdownInline[]; kind: "delete" })
   | (MarkdownNodeBase & {
       children: MarkdownInline[];
+      definitionRange?: MarkdownSourceRange;
       kind: "link";
+      /** Comparison-only attributes; never emitted by the parser. */
+      previous?: { title: string | null; url: string };
       title: string | null;
       url: string;
     })
   | (MarkdownNodeBase & {
       alt: string;
+      definitionRange?: MarkdownSourceRange;
       kind: "image";
       title: string | null;
       url: string;

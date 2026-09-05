@@ -81,7 +81,6 @@ export function MarkdownPreview({
   contentAnchorRequestId,
   copyAnchor,
   copyCode,
-  diskRevision,
   onToggleWordWrap,
   onToggleTask,
   errorLabel = "Unable to render Markdown preview.",
@@ -94,7 +93,6 @@ export function MarkdownPreview({
   onJumpToSource,
   openExternal,
   openInternal,
-  panelContext,
   panelId,
   relativeCommentPath,
   registerSelectionSelectAllProvider,
@@ -240,6 +238,7 @@ export function MarkdownPreview({
         if (outcome.status === "parsed") {
           setState({
             document: outcome.document,
+            sourceValue: value,
             pagination: outcome.pagination,
             status: "ready",
           });
@@ -460,12 +459,10 @@ export function MarkdownPreview({
             </MarkdownPreviewArticleLayout>
           ) : null}
           <MarkdownPreviewGitBars
+            contents={state.status === "ready" ? state.sourceValue : ""}
             context={commentsContext}
-            diskRevision={diskRevision}
-            panelContext={panelContext}
-            ready={state.status === "ready"}
+            ready={state.status === "ready" && state.sourceValue === value}
             scrollRoot={scrollRoot}
-            source={source}
           />
         </div>
         {outlineToc ? (

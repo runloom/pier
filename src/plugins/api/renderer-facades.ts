@@ -71,6 +71,10 @@ import type {
   FileWriteTextResult,
 } from "@shared/contracts/file.ts";
 import type {
+  GitFileBaselineInput,
+  GitFileBaselineResult,
+} from "@shared/contracts/git/file-baseline.ts";
+import type {
   GitReviewCancelRequest,
   GitReviewConflictResolveRequest,
   GitReviewExcerptBatchRequest,
@@ -293,6 +297,7 @@ export interface RendererPluginGitFacade {
       to?: string;
     }
   ): Promise<GitDiffPatch>;
+  getFileBaseline(input: GitFileBaselineInput): Promise<GitFileBaselineResult>;
   getReviewExcerptBatch(
     request: GitReviewExcerptBatchRequest
   ): Promise<GitReviewExcerptBatchResult>;

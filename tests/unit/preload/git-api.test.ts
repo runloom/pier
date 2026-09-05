@@ -135,6 +135,23 @@ describe("gitApi Review command boundary", () => {
     ]);
   });
 
+  it("forwards only root/path for HEAD baseline and preserves unavailable results", async () => {
+    const result = { status: "unavailable", reason: "binary" };
+    invokeMock.mockResolvedValueOnce({
+      data: result,
+      ok: true,
+      requestId: "baseline",
+    });
+    expect(
+      await gitApi.getFileBaseline({ root: "/repo", path: "file.txt" })
+    ).toEqual(result);
+    expect(invokeMock).toHaveBeenCalledWith(PIER.COMMAND_EXECUTE, {
+      type: "git.getFileBaseline",
+      root: "/repo",
+      path: "file.txt",
+    });
+  });
+
   it.each([
     ["返回 false", () => Promise.resolve(false)],
     ["拒绝", () => Promise.reject(new Error("watch unavailable"))],

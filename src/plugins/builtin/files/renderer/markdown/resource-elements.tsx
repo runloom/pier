@@ -1,5 +1,6 @@
 import { MediaFullscreenButton } from "@pier/ui/image-preview/media-fullscreen-button.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { ImageOff } from "lucide-react";
 import {
@@ -130,8 +131,16 @@ export function resolveRelativeMarkdownResource(
   return fragment ? { fragment, path } : { path };
 }
 
+export interface MarkdownLinkChangeLabels {
+  after: string;
+  before: string;
+  title: string;
+  url: string;
+}
+
 export function MarkdownResourceLink({
   children,
+  changeLabels,
   inline,
   onOpenAnchor,
   onOpenExternal,
@@ -139,6 +148,7 @@ export function MarkdownResourceLink({
   source,
 }: {
   children: ReactNode;
+  changeLabels?: MarkdownLinkChangeLabels | undefined;
   inline: Extract<MarkdownInline, { kind: "link" }>;
   onOpenAnchor(anchor: string): void;
   onOpenExternal(url: string): void;
@@ -176,17 +186,51 @@ export function MarkdownResourceLink({
     event.preventDefault();
     if (actionable) activate();
   };
-  return (
+  const changedFields =
+    inline.previous && changeLabels
+      ? (["url", "title"] as const).filter(
+          (field) => inline.previous?.[field] !== inline[field]
+        )
+      : [];
+  const link = (
     <a
       aria-disabled={actionable ? undefined : "true"}
-      className="md-link"
+      className={
+        changedFields.length
+          ? "md-link outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          : "md-link"
+      }
+      data-md-link-changed={changedFields.length ? "" : undefined}
       href={href}
       onAuxClick={onAuxClick}
       onClick={onClick}
-      title={inline.title ?? undefined}
+      title={changedFields.length ? undefined : (inline.title ?? undefined)}
     >
       {children}
     </a>
+  );
+  if (!(changedFields.length && inline.previous && changeLabels)) return link;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild openOnFocus>
+        {link}
+      </TooltipTrigger>
+      <TooltipContent>
+        <dl className="wrap-anywhere grid min-w-0 gap-2">
+          {changedFields.map((field) => (
+            <div className="grid gap-1" key={field}>
+              <dt className="font-medium">{changeLabels[field]}</dt>
+              <dd className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1">
+                <span>{changeLabels.before}</span>
+                <del>{inline.previous?.[field] || "—"}</del>
+                <span>{changeLabels.after}</span>
+                <ins>{inline[field] || "—"}</ins>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

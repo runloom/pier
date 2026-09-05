@@ -562,11 +562,15 @@
  * `<markdown-selector>\s*{`.
  * Parity lock: tests/unit/renderer/app/color-token-governance.test.ts.
  */
+[data-slot="markdown-change-preview"][data-reading-appearance="light"],
 [data-slot="content-preview"][data-color-mode="light"],
 [data-slot="markdown-preview-root"][data-reading-appearance="light"] {
   color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  /* Recompute diff fills against fixed paper instead of inheriting app fills. */
+  --diff-addition-bg: color-mix(in oklab, var(--background) 80%, var(--diff-addition-fg));
+  --diff-deletion-bg: color-mix(in oklab, var(--background) 80%, var(--diff-deletion-fg));
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -652,11 +656,14 @@
   --status-done-border: color-mix(in oklab, var(--done) 24%, transparent);
 }
 
+[data-slot="markdown-change-preview"][data-reading-appearance="dark"],
 [data-slot="content-preview"][data-color-mode="dark"],
 [data-slot="markdown-preview-root"][data-reading-appearance="dark"] {
   color-scheme: dark;
   --background: oklch(0.13 0 0);
   --foreground: oklch(0.985 0 0);
+  --diff-addition-bg: color-mix(in oklab, var(--background) 80%, var(--diff-addition-fg));
+  --diff-deletion-bg: color-mix(in oklab, var(--background) 80%, var(--diff-deletion-fg));
   --card: oklch(0.18 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);

@@ -7,6 +7,10 @@ export {
   gitChangeSummarySchema,
   gitChangeSummaryUnavailableReasonSchema,
 } from "./git/change-summary.ts";
+export type {
+  GitFileBaselineInput,
+  GitFileBaselineResult,
+} from "./git/file-baseline.ts";
 
 /**
  * 单个变更文件的状态。

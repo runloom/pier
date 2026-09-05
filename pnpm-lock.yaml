@@ -146,6 +146,9 @@ importers:
       decode-named-character-reference:
         specifier: 1.3.0
         version: 1.3.0
+      diff:
+        specifier: 9.0.0
+        version: 9.0.0
       dockview-core:
         specifier: 7.0.2
         version: 7.0.2(patch_hash=4f7ee324bbb2d21bf132ea8a61d8554f71ecfef53139cb23fe8b1a8b70098d90)

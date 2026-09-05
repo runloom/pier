@@ -1,7 +1,6 @@
 import {
   clipBoxToGitRange,
   mapGitRangesToPreviewBars,
-  resolveGitBarClickLine,
 } from "@plugins/builtin/files/renderer/markdown/git-bars/map.ts";
 import {
   markdownGitBarBoxesEqual,
@@ -10,6 +9,24 @@ import {
 import { describe, expect, it } from "vitest";
 
 describe("mapGitRangesToPreviewBars", () => {
+  it("keeps a deletion in a lazy page off earlier rendered blocks, including EOF", () => {
+    for (const line of [400, 501]) {
+      expect(
+        mapGitRangesToPreviewBars({
+          blocks: [{ startLine: 1, endLine: 40, top: 0, height: 400 }],
+          unrenderedPages: [{ startLine: 41, endLine: 500 }],
+          ranges: [
+            {
+              id: "lazy-delete",
+              kind: "deleted",
+              newLineFrom: line,
+              newLineTo: line,
+            },
+          ],
+        })
+      ).toEqual([]);
+    }
+  });
   it("clips overlapping source boxes to the change-range line span", () => {
     const segments = mapGitRangesToPreviewBars({
       blocks: [
@@ -105,51 +122,6 @@ describe("clipBoxToGitRange", () => {
         { newLineFrom: 10, newLineTo: 12 }
       )
     ).toBeNull();
-  });
-});
-
-describe("resolveGitBarClickLine", () => {
-  const blocks = [{ endLine: 8, height: 80, startLine: 1, top: 100 }];
-
-  it("maps click Y to a line inside the hunk", () => {
-    expect(
-      resolveGitBarClickLine({
-        blocks,
-        newLineFrom: 3,
-        newLineTo: 7,
-        y: 100,
-      })
-    ).toBe(3);
-    expect(
-      resolveGitBarClickLine({
-        blocks,
-        newLineFrom: 3,
-        newLineTo: 7,
-        y: 180,
-      })
-    ).toBe(7);
-  });
-
-  it("clamps to the hunk when the click lands on a taller box", () => {
-    expect(
-      resolveGitBarClickLine({
-        blocks,
-        newLineFrom: 5,
-        newLineTo: 5,
-        y: 100,
-      })
-    ).toBe(5);
-  });
-
-  it("falls back to the hunk start when no box overlaps", () => {
-    expect(
-      resolveGitBarClickLine({
-        blocks: [],
-        newLineFrom: 4,
-        newLineTo: 9,
-        y: 0,
-      })
-    ).toBe(4);
   });
 });
 

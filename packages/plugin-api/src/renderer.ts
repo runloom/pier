@@ -1,4 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
+import type { GitFileBaselineInput, GitFileBaselineResult } from "./git.ts";
+
+export type { GitFileBaselineInput, GitFileBaselineResult } from "./git.ts";
 
 export type JsonValue =
   | boolean
@@ -321,6 +324,12 @@ export interface ExternalRendererPluginContext {
       }
     ): void;
     close(id: string, result?: unknown): void;
+  };
+  /** Reads immutable HEAD text for a Files local diff. Requires git:read. */
+  git: {
+    getFileBaseline(
+      input: GitFileBaselineInput
+    ): Promise<GitFileBaselineResult>;
   };
   i18n: {
     language(): string;

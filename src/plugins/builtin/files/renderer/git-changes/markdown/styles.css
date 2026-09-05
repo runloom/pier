@@ -1,0 +1,81 @@
+[data-slot="markdown-change-preview"] {
+  padding: 1rem;
+}
+[data-slot="markdown-change-preview"] .md-diff-block {
+  display: grid;
+  grid-template-columns: 1em minmax(0, 1fr);
+  gap: 0.5em;
+  padding: 0.4em 0.5em;
+  margin-block: var(--md-space-2);
+  border-radius: 0.25rem;
+}
+[data-slot="markdown-change-preview"] .md-diff-block:first-child {
+  margin-block-start: 0;
+}
+[data-slot="markdown-change-preview"] .md-diff-block > div > :first-child {
+  margin-block-start: 0;
+}
+[data-slot="markdown-change-preview"] .md-diff-block > div > :last-child {
+  margin-block-end: 0;
+}
+[data-slot="markdown-change-preview"] [data-diff-kind="deleted"] {
+  background-color: var(--diff-deletion-bg);
+}
+[data-slot="markdown-change-preview"] [data-diff-kind="added"] {
+  background-color: var(--diff-addition-bg);
+}
+[data-slot="markdown-change-preview"] .md-diff-marker {
+  font-family: var(--pier-mono-font-family, monospace);
+  color: var(--muted-foreground);
+  user-select: none;
+}
+[data-slot="markdown-change-preview"]
+  [data-diff-kind="deleted"]
+  > .md-diff-marker {
+  color: var(--diff-deletion-fg);
+}
+[data-slot="markdown-change-preview"]
+  [data-diff-kind="added"]
+  > .md-diff-marker {
+  color: var(--diff-addition-fg);
+}
+[data-slot="markdown-change-preview"] [data-md-diff="deleted"] {
+  color: inherit;
+  text-decoration: line-through;
+  background-color: var(--diff-deletion-bg);
+}
+[data-slot="markdown-change-preview"] [data-md-diff="added"] {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  background-color: var(--diff-addition-bg);
+}
+[data-slot="markdown-change-preview"] .md-diff-attributes {
+  display: grid;
+  gap: 0.75rem;
+  padding-block-start: 0.75rem;
+  margin-block-start: 1rem;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+  border-top: 1px solid var(--border);
+}
+[data-slot="markdown-change-preview"] .md-link[data-md-link-changed] {
+  text-decoration-line: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-style: dotted;
+  text-underline-offset: 0.2em;
+}
+[data-slot="markdown-change-preview"] .md-diff-attributes dt {
+  margin-block-end: 0.25rem;
+  color: var(--muted-foreground);
+}
+[data-slot="markdown-change-preview"] .md-diff-attributes dd {
+  display: grid;
+  gap: 0.25rem;
+  white-space: pre-wrap;
+}
+[data-slot="markdown-change-preview"] .md-diff-note {
+  margin-block-start: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}

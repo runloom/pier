@@ -34,6 +34,7 @@ import {
 } from "./ir-inlines.tsx";
 import {
   groupSearchMatches,
+  hasMarkdownImage,
   headingClassName,
   isCalloutDirective,
   searchMatchesFor,
@@ -175,7 +176,7 @@ function renderBlocks(
 ): ReactNode[] {
   return wrapBlocksWithComments(
     blocks,
-    (block) => renderBlock(block, context),
+    (block) => renderMarkdownBlock(block, context),
     wrapComments ? context.comments : undefined
   );
 }
@@ -214,6 +215,7 @@ function MarkdownTaskCheckbox({
       }
       checked={optimisticChecked ?? checked}
       className="mt-1.5"
+      disabled={context.readOnly}
       {...(onToggleTask
         ? {
             onCheckedChange: (next: boolean | "indeterminate") => {
@@ -230,7 +232,7 @@ function MarkdownTaskCheckbox({
   );
 }
 
-function renderBlock(
+export function renderMarkdownBlock(
   block: MarkdownBlock,
   context: MarkdownRenderContext
 ): ReactNode {
@@ -243,7 +245,7 @@ function renderBlock(
           id: block.id,
         }),
         renderInlines(block.children, context),
-        context.source
+        context.source && !context.readOnly
           ? createElement(
               "button",
               {
@@ -264,9 +266,7 @@ function renderBlock(
       );
     }
     case "paragraph": {
-      const tag = block.children.some((inline) => inline.kind === "image")
-        ? "div"
-        : "p";
+      const tag = hasMarkdownImage(block.children) ? "div" : "p";
       return createElement(
         tag,
         sourceBlockProps(block.range, context, {
@@ -276,7 +276,7 @@ function renderBlock(
       );
     }
     case "code":
-      if (block.lang?.toLowerCase() === "pier-applet") {
+      if (block.lang?.toLowerCase() === "pier-applet" && !context.readOnly) {
         return (
           <div
             {...sourceBlockProps(block.range, context, {

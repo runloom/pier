@@ -24,6 +24,7 @@ import type {
   MarkdownDiskSource,
   MarkdownFileResources,
   MarkdownInternalTarget,
+  MarkdownLinkChangeLabels,
 } from "./resource-elements.tsx";
 import {
   MarkdownResourceImage,
@@ -74,6 +75,7 @@ export interface MarkdownRenderContext {
   footnoteDefinitions: Map<string, MarkdownBlock[]>;
   headings: readonly MarkdownHeadingSummary[];
   labels: MarkdownRendererLabels;
+  linkChangeLabels?: MarkdownLinkChangeLabels;
   liveModules: RendererPluginContext["liveModules"] | undefined;
   onJumpToSource?: ((offset: number) => void) | undefined;
   onOpenAnchor(anchor: string): void;
@@ -83,6 +85,8 @@ export interface MarkdownRenderContext {
   onToggleTask?: ((input: TaskToggleInput) => void) | undefined;
   /** Host word-wrap toggle; writes back via plugin configuration (host-owned). */
   onToggleWordWrap?: (() => void) | undefined;
+  /** Snapshot comparisons cannot edit tasks, resize saved tables or run applets. */
+  readOnly?: boolean;
   searchMatchesByNode: ReadonlyMap<string, readonly MarkdownSearchMatch[]>;
   source: MarkdownDiskSource | undefined;
   wordWrap: boolean;
@@ -117,7 +121,19 @@ export function renderInlines(
       }),
       headingIds: [],
     },
-    (inline) => renderInline(inline, context)
+    (inline) => {
+      const content = renderInline(
+        inline,
+        context.readOnly && inline.change === "deleted"
+          ? { ...context, onOpenInternal: undefined }
+          : context
+      );
+      if (inline.change === "deleted")
+        return <del data-md-diff="deleted">{content}</del>;
+      if (inline.change === "added")
+        return <ins data-md-diff="added">{content}</ins>;
+      return content;
+    }
   );
 }
 
@@ -157,6 +173,7 @@ function renderInline(
     case "link":
       return (
         <MarkdownResourceLink
+          changeLabels={context.linkChangeLabels}
           inline={inline}
           onOpenAnchor={context.onOpenAnchor}
           onOpenExternal={context.onOpenExternal}

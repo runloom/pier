@@ -32,6 +32,15 @@
     },
     "pier.files.revealActiveFileInTree": {
       "title": "Reveal Active File in File Tree"
+    },
+    "pier.files.changes.current": {
+      "title": "View changes"
+    },
+    "pier.files.changes.previous": {
+      "title": "Previous change"
+    },
+    "pier.files.changes.next": {
+      "title": "Next change"
     }
   },
   "messages": {
@@ -86,9 +95,9 @@
     "filePanel.markdown.appletMountFailedBody": "Retry. If it still fails, check that the plugin is installed.",
     "filePanel.markdown.toc.title": "Outline",
     "filePanel.markdown.gitBars.track": "Uncommitted changes",
-    "filePanel.markdown.gitBars.added": "Review added change at line {{line}}",
-    "filePanel.markdown.gitBars.modified": "Review edited change at line {{line}}",
-    "filePanel.markdown.gitBars.deleted": "Review deleted change at line {{line}}",
+    "filePanel.markdown.gitBars.added": "View added change at line {{line}}",
+    "filePanel.markdown.gitBars.modified": "View edited change at line {{line}}",
+    "filePanel.markdown.gitBars.deleted": "View deleted change at line {{line}}",
     "filePanel.markdown.measure.comfortable": "Comfortable reading",
     "filePanel.markdown.measure.wide": "Wide reading",
     "filePanel.markdown.appearance.auto": "Match app appearance",
@@ -536,7 +545,43 @@
     "filePanel.markdown.comment.title": "Comment",
     "filePanel.markdown.comment.updateFailed": "Couldn’t update comment",
     "filePanel.markdown.comment.view": "View comment",
-    "filePanel.markdown.comment.viewCount": "View {{count}} comments"
+    "filePanel.markdown.comment.viewCount": "View {{count}} comments",
+    "filePanel.changes.display": "Change display",
+    "filePanel.changes.rendered": "Preview",
+    "filePanel.changes.source": "Source",
+    "filePanel.changes.removed": "Deleted",
+    "filePanel.changes.added": "Added",
+    "filePanel.changes.modified": "Modified",
+    "filePanel.changes.linkAddress": "Link address changed",
+    "filePanel.changes.linkTitle": "Link title changed",
+    "filePanel.changes.before": "Before",
+    "filePanel.changes.after": "After",
+    "filePanel.changes.imageDetails": "Image changes",
+    "filePanel.changes.historicalImages": "Historical images aren't loaded. Check their addresses and descriptions in Source.",
+    "filePanel.changes.htmlDetails": "Some HTML changes may not be visible here. Check Source for all changes.",
+    "filePanel.changes.previewUnavailable": "Preview unavailable. Showing source changes.",
+    "filePanel.changes.sourceRequired": "This change needs the Source view to show all details.",
+    "filePanel.changes.retryPreview": "Retry preview",
+    "filePanel.changes.linkUnavailable": "Couldn't open this link. Open the file from the file tree.",
+    "filePanel.changes.show": "View changes",
+    "filePanel.changes.preview": "Change preview",
+    "filePanel.changes.previous": "Previous change",
+    "filePanel.changes.next": "Next change",
+    "filePanel.changes.close": "Close preview",
+    "filePanel.changes.baseline": "HEAD → current content",
+    "filePanel.changes.unsaved": "HEAD → current content · includes unsaved edits",
+    "filePanel.changes.unsavedLabel": "Unsaved",
+    "filePanel.changes.savedOnly": "Full review includes saved changes only.",
+    "filePanel.changes.fullReview": "Open full review",
+    "filePanel.changes.savedReview": "View saved changes",
+    "filePanel.changes.saveFirst": "Save the file first",
+    "filePanel.changes.loading": "Comparing changes…",
+    "filePanel.changes.empty": "No changes compared with HEAD.",
+    "filePanel.changes.onDemand": "This file is large. Compare it when needed.",
+    "filePanel.changes.failed": "Couldn't compare changes. Try again.",
+    "filePanel.changes.retry": "Compare again",
+    "filePanel.changes.reviewUnavailable": "No saved changes to review.",
+    "filePanel.changes.reviewFailed": "Couldn't open changes"
   },
   "terminalStatusItems": {
     "pier.files.project": {

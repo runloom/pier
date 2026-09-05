@@ -2,14 +2,11 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { type MouseEvent as ReactMouseEvent, useCallback, useRef } from "react";
 import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
-import type {
-  FilesDocument,
-  FilesDocumentPanelSource,
-} from "../document/types.ts";
+import type { FilesDocument } from "../document/types.ts";
 import type { FilesTranslate } from "../i18n.ts";
 import type { MarkdownInternalTarget } from "../markdown/ir-renderer.tsx";
 import { FILES_MARKDOWN_PREVIEW_SURFACE } from "../markdown/preview-preferences.ts";
-import { createFileFilePanelInstanceId } from "./id.ts";
+import { openMarkdownInternal } from "./markdown/navigation.ts";
 
 export function useFilePanelMarkdownChrome({
   context,
@@ -157,25 +154,11 @@ export function useFilePanelMarkdownChrome({
   const handleOpenMarkdownInternal = useCallback(
     (target: MarkdownInternalTarget) => {
       if (!(context && document?.source.kind === "disk")) return;
-      const nextSource: FilesDocumentPanelSource = {
-        kind: "disk",
-        path: target.path,
+      openMarkdownInternal({
+        context,
         root: document.source.root,
-      };
-      context.panels.openInstance({
-        componentId: FILES_FILE_PANEL_ID,
-        ...(panelContext ? { context: panelContext } : {}),
-        dropUnpinnedInstances: true,
-        instanceId: createFileFilePanelInstanceId(nextSource),
-        params: {
-          ...(target.fragment ? { markdownAnchor: target.fragment } : {}),
-          ...(target.fragment
-            ? { markdownAnchorRequestId: crypto.randomUUID() }
-            : {}),
-          pinned: false,
-          source: nextSource,
-        },
-        title: target.path.split("/").at(-1) ?? target.path,
+        target,
+        panelContext,
       });
     },
     [context, document, panelContext]

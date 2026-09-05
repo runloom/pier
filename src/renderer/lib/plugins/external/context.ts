@@ -127,6 +127,16 @@ export function createExternalRendererPluginContext(
   );
 
   const context: ExternalRendererPluginContext = {
+    git: {
+      getFileBaseline: (input) => {
+        if (!entry.effectivePermissions.includes("git:read")) {
+          throw new Error(
+            `plugin capability not granted: ${pluginId}:git:read`
+          );
+        }
+        return window.pier.git.getFileBaseline(input);
+      },
+    },
     app: {
       closeSettings: () => {
         useSettingsDialogStore.getState().close();

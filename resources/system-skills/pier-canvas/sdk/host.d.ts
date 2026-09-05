@@ -31,6 +31,7 @@ export type CanvasHostCommandType =
   | "file.readText"
   | "file.stat"
   | "git.getDiffPatch"
+  | "git.getFileBaseline"
   | "git.getStatus"
   | "git.listBranches"
   | "git.listIgnored"

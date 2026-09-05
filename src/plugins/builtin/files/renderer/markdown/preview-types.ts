@@ -78,6 +78,7 @@ export type MarkdownPreviewState =
   | { status: "loading" }
   | {
       document: MarkdownIrDocument;
+      sourceValue: string;
       pagination: MarkdownPagination;
       status: "ready";
     }
