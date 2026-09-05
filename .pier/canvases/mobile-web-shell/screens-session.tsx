@@ -1,74 +1,231 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   cx,
   DEFAULT_TERMINAL_FONT,
   IconButton,
-  KeyCap,
   NavBar,
   PhoneShell,
-  sessionStatusBadge,
-  sessionSubtitle,
-  TERMINAL_FONT_STEPS,
   TerminalSurface,
+  TOUCH_PRESS,
 } from "./chrome.tsx";
 import { Icon } from "./icons.tsx";
-import type { DemoSession } from "./model.ts";
+import type { DemoKeyResult, DemoResponseKey, DemoSession } from "./model.ts";
+import { SessionGlyph } from "./session-glyph.tsx";
+import { ReadingSheet, SessionSwitcher } from "./sheets.tsx";
+import { TerminalKeys } from "./terminal-keys.tsx";
 
-/** 按键按下 → 显示「已发送」→ 回写；给人看见反馈再让键行退出发出态。 */
-const SEND_FEEDBACK_MS = 900;
+export type SessionSheet = "sessions" | "reading";
 
-/**
- * S1 会话：当前屏幕铺满玻璃。顶栏只留返回、会话名、git、文件。
- * 标题下拉切同机其它会话（覆盖层，不推入）。未等待不挂键；
- * 需要你处理时把 1/2/3/Enter/Esc 叠在屏幕下缘。
- */
+const TOOL_BUTTON =
+  "flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-full px-3.5 text-[13px] font-medium leading-5";
+
+/** 读屏为主体，工具仅占一行。按键是受限输入能力，不是终端选项模型。 */
 export function SessionScreen(props: {
   backLabel: string;
   dirty?: boolean | undefined;
+  initialSheet?: SessionSheet | undefined;
+  initialKeysOpen?: boolean | undefined;
+  disconnected?: boolean | undefined;
   onBack?: (() => void) | undefined;
   onOpenChanges?: (() => void) | undefined;
   onOpenFiles?: (() => void) | undefined;
-  onRespond?: ((key: string) => void) | undefined;
+  onRespond?:
+    | ((key: DemoResponseKey, interactionId: string) => DemoKeyResult)
+    | undefined;
   onSwitchSession?: ((sessionId: string) => void) | undefined;
   session: DemoSession;
   sessions?: readonly DemoSession[] | undefined;
 }): ReactNode {
   const [fontIndex, setFontIndex] = useState(DEFAULT_TERMINAL_FONT);
-  const [switcher, setSwitcher] = useState(false);
+  const [sheet, setSheet] = useState<SessionSheet | null>(
+    props.initialSheet ?? null
+  );
+  const [autoFocusSheet, setAutoFocusSheet] = useState(
+    props.initialSheet === undefined
+  );
+  const [keysFor, setKeysFor] = useState<string | null>(
+    props.initialKeysOpen === true ? props.session.id : null
+  );
+  const [staleFor, setStaleFor] = useState<string | null>(null);
+  const terminalRef = useRef<HTMLPreElement>(null);
+  const restoreKeyFocus = useRef(false);
+  const keyToggleRef = useCallback((node: HTMLButtonElement | null) => {
+    if (node !== null && restoreKeyFocus.current) {
+      node.focus();
+      restoreKeyFocus.current = false;
+    }
+  }, []);
   const session = props.session;
   const waiting = session.kind === "agent" && session.status === "waiting";
+  const interactionId = session.pendingInteractionId;
+  const inputKey = `${session.id}:${interactionId}`;
+  const stale = staleFor === inputKey;
+  const canSend =
+    waiting &&
+    interactionId !== undefined &&
+    !stale &&
+    props.disconnected !== true &&
+    props.onRespond !== undefined;
+  const keysOpen = keysFor === session.id && canSend;
   const peers = props.sessions ?? [session];
   const canSwitch = peers.length > 1 && props.onSwitchSession !== undefined;
-  const subtitle =
-    session.kind === "agent" ? (session.agent ?? "智能体") : "终端";
-
+  const closeSheet = () => {
+    setAutoFocusSheet(true);
+    setSheet(null);
+  };
+  const revealPrompt = useCallback(() => {
+    if (terminalRef.current !== null)
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+  }, []);
+  useEffect(() => {
+    if (keysOpen) revealPrompt();
+  }, [fontIndex, keysOpen, revealPrompt]);
   return (
     <PhoneShell
-      footer={waiting ? <KeyDock onRespond={props.onRespond} /> : undefined}
+      footer={
+        <div className="border-t border-border/50 px-3 pt-3 pb-3">
+          {keysOpen ? (
+            <TerminalKeys
+              key={inputKey}
+              onClose={() => {
+                restoreKeyFocus.current = true;
+                setKeysFor(null);
+              }}
+              onLayoutChange={revealPrompt}
+              onSend={(key) => {
+                const result = props.onRespond?.(key, interactionId) ?? "stale";
+                if (result === "stale") setStaleFor(inputKey);
+                return result;
+              }}
+            />
+          ) : waiting && props.disconnected !== true ? (
+            <div className="flex min-h-[72px] items-center gap-3 rounded-[20px] border border-border/80 bg-surface-raised py-2 pr-2 pl-4 shadow-xs">
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-2 font-semibold text-[13px] leading-5">
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 shrink-0 rounded-full bg-warning"
+                  />
+                  需要你处理
+                </p>
+                <p
+                  className="mt-0.5 text-[12px] text-muted-foreground leading-[18px]"
+                  role={canSend ? undefined : "status"}
+                >
+                  {canSend
+                    ? "按终端提示回应"
+                    : stale
+                      ? "这次回应已失效，请重新查看终端。"
+                      : "此处暂不能回应，请在电脑上处理。"}
+                </p>
+              </div>
+              {canSend ? (
+                <button
+                  aria-expanded={false}
+                  className={cx(
+                    "flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-action-accent px-4 font-medium text-[13px] text-action-accent-foreground",
+                    TOUCH_PRESS,
+                    "enabled:active:bg-action-accent! enabled:active:opacity-80"
+                  )}
+                  onClick={() => setKeysFor(session.id)}
+                  ref={keyToggleRef}
+                  type="button"
+                >
+                  <Icon className="size-[18px]" name="keyboard" />
+                  按键
+                </button>
+              ) : (
+                <Icon
+                  className="mr-3 size-[18px] shrink-0 text-muted-foreground"
+                  name="lock"
+                />
+              )}
+            </div>
+          ) : null}
+          <div
+            className={cx(
+              "grid grid-cols-[1fr_auto_1fr] items-center gap-2",
+              waiting && props.disconnected !== true && "mt-2"
+            )}
+            role="group"
+            aria-label="终端阅读工具"
+          >
+            <button
+              aria-haspopup="dialog"
+              className={cx(
+                TOOL_BUTTON,
+                TOUCH_PRESS,
+                "justify-self-start text-muted-foreground"
+              )}
+              onClick={() => setSheet("reading")}
+              type="button"
+            >
+              <span className="text-[18px] font-normal tracking-[-0.04em]">
+                Aa
+              </span>
+              字号
+            </button>
+            <span className="text-[11px] text-muted-foreground">
+              {canSend ? null : "只读"}
+            </span>
+            {canSwitch ? (
+              <button
+                aria-haspopup="dialog"
+                className={cx(
+                  TOOL_BUTTON,
+                  TOUCH_PRESS,
+                  "justify-self-end bg-surface-raised"
+                )}
+                onClick={() => setSheet("sessions")}
+                type="button"
+              >
+                <Icon className="size-[18px] shrink-0" name="panels" />
+                会话
+                <span className="font-normal text-muted-foreground tabular-nums">
+                  {peers.length}
+                </span>
+              </button>
+            ) : (
+              <span />
+            )}
+          </div>
+        </div>
+      }
       nav={
         <NavBar
           back={{ label: props.backLabel, onClick: props.onBack }}
           backIconOnly
-          ghost
           layout="split"
-          onTitleClick={
-            canSwitch
-              ? () => {
-                  setSwitcher((open) => !open);
-                }
-              : undefined
+          onTitleClick={canSwitch ? () => setSheet("sessions") : undefined}
+          subtitle={
+            <span className="flex min-w-0 items-center gap-1.5">
+              <SessionGlyph session={session} size={12} />
+              <span className="truncate">
+                {session.agent ?? "终端"} ·{" "}
+                {props.disconnected === true
+                  ? "连接已断开"
+                  : waiting
+                    ? "需要你处理"
+                    : session.status === "processing"
+                      ? "运行中"
+                      : "就绪"}
+              </span>
+            </span>
           }
-          subtitle={<span>{subtitle}</span>}
           title={session.title}
-          titleOpen={switcher}
+          titleOpen={sheet === "sessions"}
           trailing={
-            <>
+            <div className="flex rounded-full bg-surface-raised">
               {session.hasGit ? (
                 <IconButton
                   icon="branch"
-                  label={
-                    props.dirty === true ? "变更，有未提交的改动" : "变更"
-                  }
+                  label={props.dirty === true ? "变更，有未提交的改动" : "变更"}
                   onClick={props.onOpenChanges}
                 />
               ) : null}
@@ -77,176 +234,51 @@ export function SessionScreen(props: {
                 label="文件"
                 onClick={props.onOpenFiles}
               />
-            </>
+            </div>
           }
         />
       }
       overlay={
-        switcher ? (
+        sheet === "sessions" ? (
           <SessionSwitcher
+            autoFocus={autoFocusSheet}
             currentId={session.id}
-            onClose={() => {
-              setSwitcher(false);
-            }}
-            onPick={(sessionId) => {
-              setSwitcher(false);
-              if (sessionId !== session.id) {
-                props.onSwitchSession?.(sessionId);
+            onClose={closeSheet}
+            onPick={(id) => {
+              closeSheet();
+              if (id !== session.id) {
+                setKeysFor(null);
+                props.onSwitchSession?.(id);
               }
             }}
             sessions={peers}
+          />
+        ) : sheet === "reading" ? (
+          <ReadingSheet
+            fontIndex={fontIndex}
+            onChange={setFontIndex}
+            onClose={closeSheet}
           />
         ) : undefined
       }
       tone="terminal"
     >
-      <TerminalSurface
-        className="px-4 pt-[52px] pb-36"
-        cursor={session.status === "ready"}
-        fontIndex={fontIndex}
-        lines={session.screen}
-        onDoubleClick={() => {
-          setFontIndex((value) => (value + 1) % TERMINAL_FONT_STEPS.length);
-        }}
-      />
-    </PhoneShell>
-  );
-}
-
-function SessionSwitcher(props: {
-  currentId: string;
-  onClose: () => void;
-  onPick: (sessionId: string) => void;
-  sessions: readonly DemoSession[];
-}): ReactNode {
-  return (
-    <div className="absolute inset-0 z-20 flex flex-col pt-[52px]">
-      <div
-        className="mx-3 max-h-[58%] overflow-y-auto rounded-2xl border border-border bg-card/95 px-2 py-2 [scrollbar-width:none]"
-        role="listbox"
-      >
-        <p className="px-3 pt-1 pb-2 text-[12px] text-muted-foreground leading-4">
-          这台电脑上的会话
-        </p>
-        {props.sessions.map((session) => {
-          const current = session.id === props.currentId;
-          return (
-            <button
-              aria-selected={current}
-              className={cx(
-                "flex min-h-14 w-full items-center gap-3 rounded-xl px-3 text-left transition-colors duration-75 active:bg-interactive-active",
-                current && "bg-secondary"
-              )}
-              key={session.id}
-              onClick={() => {
-                props.onPick(session.id);
-              }}
-              role="option"
-              type="button"
-            >
-              <Icon
-                className="size-5 shrink-0 text-muted-foreground"
-                name={session.kind === "agent" ? "sparkle" : "terminal"}
-              />
-              <span className="min-w-0 flex-1 py-2">
-                <span className="block truncate text-[15px] leading-5">
-                  {session.title}
-                </span>
-                <span className="mt-0.5 block truncate text-[12px] text-muted-foreground leading-4">
-                  {sessionSubtitle(session)}
-                </span>
-              </span>
-              {sessionStatusBadge(session)}
-            </button>
-          );
-        })}
-      </div>
-      <button
-        aria-label="关闭会话列表"
-        className="min-h-0 flex-1 bg-overlay-scrim"
-        onClick={props.onClose}
-        type="button"
-      />
-    </div>
-  );
-}
-
-function KeyDock(props: {
-  onRespond?: ((key: string) => void) | undefined;
-}): ReactNode {
-  const [sent, setSent] = useState<string | null>(null);
-  const respondRef = useRef(props.onRespond);
-  respondRef.current = props.onRespond;
-
-  useEffect(() => {
-    if (sent === null) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      const respond = respondRef.current;
-      if (respond === undefined) {
-        setSent(null);
-        return;
-      }
-      respond(sent);
-    }, SEND_FEEDBACK_MS);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [sent]);
-
-  const send = (key: string) => {
-    if (sent !== null) {
-      return;
-    }
-    setSent(key);
-  };
-  const locked = sent !== null;
-
-  return (
-    <section aria-label="需要你处理" className="px-4 pb-8">
-      {sent === null ? null : (
-        <p
-          className="flex min-h-5 items-center justify-center gap-1 pb-2 text-[12px] text-success leading-4"
+      {props.disconnected === true ? (
+        <div
+          className="border-b border-status-warning-border bg-status-warning-bg px-4 py-3 text-[13px] text-status-warning-fg leading-5"
           role="status"
         >
-          <Icon className="size-3.5" name="check" strokeWidth={2.25} />
-          已发送 {sent}
-        </p>
-      )}
-      <div className="flex justify-center gap-1.5">
-        {(["1", "2", "3"] as const).map((key) => (
-          <KeyCap
-            disabled={locked}
-            key={key}
-            onClick={() => {
-              send(key);
-            }}
-          >
-            {key}
-          </KeyCap>
-        ))}
-        <KeyCap
-          disabled={locked}
-          label="Enter"
-          onClick={() => {
-            send("Enter");
-          }}
-          tone="accent"
-          wide
-        >
-          Enter
-        </KeyCap>
-        <KeyCap
-          disabled={locked}
-          label="Escape"
-          onClick={() => {
-            send("Esc");
-          }}
-        >
-          Esc
-        </KeyCap>
-      </div>
-    </section>
+          <p className="font-medium">连接已断开</p>
+          <p className="mt-0.5">正在等待恢复，以下是断开前的内容。</p>
+        </div>
+      ) : null}
+      <TerminalSurface
+        className="px-4 pt-4 pb-6"
+        fontIndex={fontIndex}
+        key={session.id}
+        lines={session.screen}
+        ref={terminalRef}
+      />
+    </PhoneShell>
   );
 }

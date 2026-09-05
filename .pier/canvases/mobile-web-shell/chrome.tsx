@@ -1,5 +1,6 @@
 import { Badge, Row as CanvasRow, Text } from "pier/canvas";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
+import { screenText } from "./model.ts";
 import { Icon, type IconName } from "./icons.tsx";
 import type {
   DemoSession,
@@ -9,14 +10,15 @@ import type {
   SessionStatus,
 } from "./model.ts";
 
-export function cx(
-  ...parts: Array<string | false | null | undefined>
-): string {
+export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter((part): part is string => Boolean(part)).join(" ");
 }
 
+export const TOUCH_PRESS =
+  "touch-manipulation select-none transition-[background-color,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] enabled:active:bg-interactive-active motion-safe:[&:enabled:active:not(:focus-visible)]:scale-[0.98] focus-visible:transition-none motion-reduce:transition-none";
+
 /**
- * 手机壳的触控积木。字号只用四档：标题 17 / 正文 15 / 说明 13 / 注 12；
+ * 手机壳的触控积木。导航 17 / 正文 15 / 辅助 12–13；集合标题另用 20。
  * 主路径命中 44px；按下一律自绘 `bg-interactive-active`（主按钮 `opacity-80`）。
  * Artboard phone 已是外框，这里不画 9:41 / Home 条。
  */
@@ -25,33 +27,29 @@ export function PhoneShell(props: {
   footer?: ReactNode;
   nav: ReactNode;
   overlay?: ReactNode;
-  /** terminal：当前屏幕铺满，顶栏和键行叠在上面。page：普通列表面。 */
+  /** terminal：连续阅读面。导航与底栏占位，长内容不会藏在操作区下面。 */
   tone?: "page" | "terminal" | undefined;
 }): ReactNode {
-  if (props.tone === "terminal") {
-    return (
-      <div className="relative h-full min-h-0 overflow-hidden bg-surface-inset text-foreground antialiased">
-        <div className="absolute inset-0 flex flex-col">{props.children}</div>
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-surface-inset via-surface-inset/55 to-transparent">
-          <div className="pointer-events-auto">{props.nav}</div>
+  return (
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden text-foreground antialiased [&_button]:outline-none [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ring/40 [&_button:focus-visible]:ring-inset">
+      <div
+        className={cx(
+          "flex min-h-0 flex-1 flex-col",
+          props.tone === "terminal" ? "bg-background" : "bg-surface-canvas"
+        )}
+        inert={props.overlay !== undefined}
+      >
+        <div className="shrink-0 border-b border-border/40 bg-surface-canvas">
+          {props.nav}
+        </div>
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {props.children}
         </div>
         {props.footer === undefined ? null : (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-surface-inset via-surface-inset/80 to-transparent pt-12">
-            <div className="pointer-events-auto">{props.footer}</div>
-          </div>
+          <div className="shrink-0 bg-surface-canvas">{props.footer}</div>
         )}
-        {props.overlay}
       </div>
-    );
-  }
-  return (
-    <div className="relative flex h-full min-h-0 flex-col bg-background text-foreground antialiased">
-      {props.nav}
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        {props.children}
-        {props.overlay}
-      </div>
-      {props.footer}
+      {props.overlay}
     </div>
   );
 }
@@ -70,30 +68,37 @@ export function NavBar(props: {
   trailing?: ReactNode;
 }): ReactNode {
   const hasCenter = props.title !== undefined || props.subtitle !== undefined;
-  if (
-    props.back === undefined &&
-    !hasCenter &&
-    props.trailing === undefined
-  ) {
+  if (props.back === undefined && !hasCenter && props.trailing === undefined) {
     return null;
   }
   const layout = props.layout ?? "overlay";
-  const back = props.back === undefined ? null : (
-    <button
-      aria-label={`返回${props.back.label}`}
-      className={cx(
-        "flex min-h-11 items-center rounded-xl transition-colors duration-75 active:bg-interactive-active",
-        props.backIconOnly === true ? "w-11 justify-center" : "max-w-full gap-0.5 pr-2.5 pl-1"
-      )}
-      onClick={props.back.onClick}
-      type="button"
-    >
-      <Icon className={cx("size-6 shrink-0", props.backIconOnly !== true && "-ml-0.5")} name="chevron-left" />
-      {props.backIconOnly === true ? null : (
-        <span className="truncate text-[15px] leading-5">{props.back.label}</span>
-      )}
-    </button>
-  );
+  const back =
+    props.back === undefined ? null : (
+      <button
+        aria-label={`返回${props.back.label}`}
+        className={cx(
+          "flex min-h-11 items-center rounded-xl transition-colors duration-75 active:bg-interactive-active",
+          props.backIconOnly === true
+            ? "w-11 justify-center"
+            : "max-w-full gap-0.5 pr-2.5 pl-1"
+        )}
+        onClick={props.back.onClick}
+        type="button"
+      >
+        <Icon
+          className={cx(
+            "size-6 shrink-0",
+            props.backIconOnly !== true && "-ml-0.5"
+          )}
+          name="chevron-left"
+        />
+        {props.backIconOnly === true ? null : (
+          <span className="truncate text-[15px] leading-5">
+            {props.back.label}
+          </span>
+        )}
+      </button>
+    );
 
   const titleBlock = (
     <>
@@ -111,7 +116,7 @@ export function NavBar(props: {
         </span>
       )}
       {props.subtitle === undefined ? null : (
-        <div className="flex max-w-full items-center gap-1.5 text-muted-foreground text-xs leading-4">
+        <div className="flex min-w-0 max-w-full items-center gap-1.5 truncate text-muted-foreground text-xs leading-4 [&>span]:truncate">
           {props.subtitle}
         </div>
       )}
@@ -124,7 +129,7 @@ export function NavBar(props: {
     ) : (
       <button
         aria-expanded={props.titleOpen === true}
-        aria-haspopup="listbox"
+        aria-haspopup="dialog"
         aria-label={`${props.title ?? "会话"}，切换会话`}
         className="flex min-h-11 min-w-0 flex-col justify-center rounded-xl px-1.5 text-left transition-colors duration-75 active:bg-interactive-active"
         onClick={props.onTitleClick}
@@ -137,14 +142,18 @@ export function NavBar(props: {
   return (
     <header
       className={cx(
-        "relative flex h-[52px] shrink-0 items-center px-1.5",
-        props.ghost !== true && props.divider === true && "border-border/70 border-b"
+        "relative flex h-[60px] shrink-0 items-center px-1.5",
+        props.ghost !== true &&
+          props.divider === true &&
+          "border-border/70 border-b"
       )}
     >
       {layout === "split" ? (
         <>
           <div className="z-10 flex shrink-0 items-center">{back}</div>
-          <div className="min-w-0 flex-1 px-1">{hasCenter ? titleNode : null}</div>
+          <div className="min-w-0 flex-1 px-1">
+            {hasCenter ? titleNode : null}
+          </div>
           <div className="z-10 flex shrink-0 items-center gap-0.5">
             {props.trailing}
           </div>
@@ -358,14 +367,18 @@ export function IconButton(props: {
     <button
       aria-label={props.label}
       className={cx(
-        "relative flex size-11 items-center justify-center rounded-xl transition-colors duration-75 active:bg-interactive-active",
+        "relative flex size-11 items-center justify-center rounded-xl",
+        TOUCH_PRESS,
         props.className
       )}
       onClick={props.onClick}
       type="button"
     >
       <Icon
-        className={cx("size-[22px]", props.spinning === true && "animate-spin")}
+        className={cx(
+          "size-5",
+          props.spinning === true && "animate-spin motion-reduce:animate-none"
+        )}
         name={props.icon}
       />
       {props.dot === true ? (
@@ -375,7 +388,7 @@ export function IconButton(props: {
   );
 }
 
-/** 终端底栏键帽：常驻 Esc / Enter / Tab；等待时高亮审批键。 */
+/** 规则卡里的按键样式示例；可发送键集由实际协议决定。 */
 export function KeyCap(props: {
   children: ReactNode;
   disabled?: boolean | undefined;
@@ -453,7 +466,7 @@ export function SectionLabel(props: {
 
 export function StatusDot(props: {
   pulse?: boolean | undefined;
-  tone: "online" | "offline" | "busy" | "unknown";
+  tone: "online" | "offline" | "busy" | "working" | "unknown";
 }): ReactNode {
   return (
     <span
@@ -462,6 +475,7 @@ export function StatusDot(props: {
         "inline-block size-2 shrink-0 rounded-full",
         props.tone === "online" && "bg-success",
         props.tone === "busy" && "bg-warning",
+        props.tone === "working" && "bg-info",
         props.tone === "offline" && "bg-muted-foreground",
         props.tone === "unknown" && "bg-muted-foreground/60",
         props.pulse === true && "animate-pulse"
@@ -499,7 +513,9 @@ export function sessionStatusBadge(session: DemoSession): ReactNode {
       : session.status === "processing"
         ? "info"
         : "neutral";
-  return <Badge variant={variant}>{SESSION_STATUS_LABEL[session.status]}</Badge>;
+  return (
+    <Badge variant={variant}>{SESSION_STATUS_LABEL[session.status]}</Badge>
+  );
 }
 
 export function sessionSubtitle(session: DemoSession): string {
@@ -559,135 +575,47 @@ export function EmptyState(props: {
 }
 
 export const TERMINAL_FONT_STEPS = [
-  "text-[11px] leading-4",
   "text-[12px] leading-[18px]",
-  "text-[13.5px] leading-5",
+  "text-[13px] leading-5",
+  "text-[14px] leading-[22px]",
 ] as const;
 
 export const DEFAULT_TERMINAL_FONT = 1;
 
-const LINE_TONE: Record<NonNullable<ScreenLine["tone"]>, string> = {
-  accent: "text-info",
-  dim: "text-muted-foreground",
-  ok: "text-success",
-  prompt: "text-success",
-  warn: "text-status-warning-fg",
-};
-
-/** 工作台 / 收件箱：把会话收成当前屏幕的一段切片，不是设置卡。 */
-export function SessionSlice(props: {
-  maxLines: number;
-  onOpen: () => void;
-  session: DemoSession;
-  when?: string | undefined;
-}): ReactNode {
-  const waiting = props.session.status === "waiting";
-  const lines = props.session.screen.slice(-props.maxLines);
-  return (
-    <button
-      className={cx(
-        "w-full text-left transition-colors duration-75 active:bg-interactive-active",
-        waiting ? "border-status-warning-fg border-l-4" : "border-transparent border-l-4"
-      )}
-      onClick={props.onOpen}
-      type="button"
-    >
-      <span className="flex items-baseline justify-between gap-3 px-4 pt-2.5 pb-1">
-        <span className="truncate font-semibold text-[15px] leading-5">
-          {props.session.title}
-        </span>
-        <span className="shrink-0 text-[12px] text-muted-foreground leading-4">
-          {props.when ?? sessionSubtitle(props.session)}
-        </span>
-      </span>
-      <pre className="m-0 overflow-hidden whitespace-pre px-4 pb-3 font-mono text-[12px] leading-[18px] text-foreground/85">
-        {lines.map((line, index) => (
-          <span
-            className={line.tone === undefined ? undefined : LINE_TONE[line.tone]}
-            key={`${index}-${line.text}`}
-          >
-            {line.text}
-            {"\n"}
-          </span>
-        ))}
-      </pre>
-    </button>
-  );
-}
-
-export function InstrumentChip(props: {
-  hint?: ReactNode;
-  icon?: IconName | undefined;
-  label: string;
-  onClick?: (() => void) | undefined;
-}): ReactNode {
-  return (
-    <button
-      className="flex h-11 shrink-0 items-center gap-2 rounded-lg px-2.5 text-[13px] leading-5 transition-colors duration-75 active:bg-interactive-active"
-      onClick={props.onClick}
-      type="button"
-    >
-      {props.icon === undefined ? null : (
-        <Icon className="size-4 text-muted-foreground" name={props.icon} />
-      )}
-      <span className="truncate">{props.label}</span>
-      {props.hint === undefined ? null : (
-        <span className="font-mono text-[12px] tabular-nums">{props.hint}</span>
-      )}
-    </button>
-  );
-}
-
 export function QuietEmpty(props: { body: string; title: string }): ReactNode {
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-5 pt-6">
-      <p className="font-mono text-[13px] text-muted-foreground leading-[18px]">
-        {props.title}
-      </p>
-      <p className="mt-1 max-w-[280px] text-[12px] text-muted-foreground/80 leading-[18px]">
+    <div className="flex min-h-0 flex-1 flex-col items-start px-6 pt-16">
+      <Icon className="mb-5 size-8 text-muted-foreground" name="terminal" />
+      <p className="font-medium text-[17px] leading-6">{props.title}</p>
+      <p className="mt-2 max-w-[280px] text-[14px] text-muted-foreground leading-[22px]">
         {props.body}
       </p>
-      <span className="mt-6 inline-block h-[1.05em] w-[0.6em] animate-pulse bg-foreground/35" />
     </div>
   );
 }
 
-/** T1 读屏：只有当前屏幕的纯文本，等宽、顶对齐（像真终端视口）。 */
+/** T1 当前屏幕只含纯文本；不添加推测的语法色、光标或审批语义。 */
 export function TerminalSurface(props: {
   className?: string | undefined;
-  cursor?: boolean | undefined;
   fontIndex: number;
   lines: readonly ScreenLine[];
-  onDoubleClick?: (() => void) | undefined;
+  ref?: Ref<HTMLPreElement> | undefined;
 }): ReactNode {
   const font =
     TERMINAL_FONT_STEPS[props.fontIndex] ??
     TERMINAL_FONT_STEPS[DEFAULT_TERMINAL_FONT];
-  const lastText = props.lines[props.lines.length - 1]?.text ?? "";
-  const showCursor = props.cursor === true && !lastText.includes("▌");
   return (
     <pre
       className={cx(
-        "m-0 flex min-h-0 flex-1 flex-col justify-start overflow-hidden bg-transparent font-mono text-foreground/90",
+        "m-0 min-h-0 flex-1 overflow-y-auto overscroll-contain whitespace-pre-wrap bg-transparent font-mono text-foreground/90 [overflow-wrap:anywhere] [scrollbar-width:thin]",
         font,
         props.className
       )}
-      onDoubleClick={props.onDoubleClick}
+      data-font-index={props.fontIndex}
+      data-slot="mobile-terminal-content"
+      ref={props.ref}
     >
-      <span className="block whitespace-pre-wrap break-words">
-        {props.lines.map((line, index) => (
-          <span
-            className={line.tone === undefined ? undefined : LINE_TONE[line.tone]}
-            key={`${index}-${line.text}`}
-          >
-            {line.text}
-            {showCursor && index === props.lines.length - 1 ? (
-              <span className="ml-px inline-block h-[1.05em] w-[0.6em] translate-y-[0.18em] animate-pulse bg-foreground/70 align-baseline" />
-            ) : null}
-            {"\n"}
-          </span>
-        ))}
-      </span>
+      {screenText(props.lines)}
     </pre>
   );
 }
