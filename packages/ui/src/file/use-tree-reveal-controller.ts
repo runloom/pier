@@ -56,6 +56,9 @@ export function useFileTreeRevealController(options: {
    * reveal scroll until path / request generation changes.
    */
   subscribeUserClaim?: ((listener: () => void) => () => void) | undefined;
+  withProgrammaticScroll?:
+    | ((write: () => void, scrollElement: HTMLElement) => void)
+    | undefined;
 }): {
   requestReveal: (path: string, options?: PierFileTreeRevealOptions) => boolean;
   suppressActiveRevealRef: React.MutableRefObject<boolean>;
@@ -76,6 +79,7 @@ export function useFileTreeRevealController(options: {
     renderSignature,
     revealPath,
     subscribeUserClaim,
+    withProgrammaticScroll,
   } = options;
 
   const programmaticScrollHeldRef = React.useRef(false);
@@ -113,6 +117,7 @@ export function useFileTreeRevealController(options: {
    * window). Cleared only when revealPath / request targets a new path.
    */
   const userAbortedScrollRef = React.useRef(false);
+  const scrollWriteGenerationRef = React.useRef(0);
 
   const {
     armPostSuccessScrollHold,
@@ -145,6 +150,7 @@ export function useFileTreeRevealController(options: {
   );
 
   const demotePendingScroll = React.useCallback(() => {
+    scrollWriteGenerationRef.current += 1;
     userAbortedScrollRef.current = true;
     const pending = pendingRevealRef.current;
     if (pending && pending.options.scroll !== "none") {
@@ -195,7 +201,24 @@ export function useFileTreeRevealController(options: {
           getItem: (candidate) => model.getItem(candidate),
           getSelectedPaths: () => model.getSelectedPaths(),
           scrollToPath: (candidate, scrollOptions) => {
-            model.scrollToPath(candidate, scrollOptions);
+            const generation = scrollWriteGenerationRef.current;
+            model.scrollToPath(candidate, {
+              ...scrollOptions,
+              // The tree queues scrollToPath; attribute its later DOM write.
+              performScroll: (element, write) => {
+                if (
+                  generation !== scrollWriteGenerationRef.current ||
+                  !element.isConnected
+                ) {
+                  return;
+                }
+                if (withProgrammaticScroll) {
+                  withProgrammaticScroll(write, element);
+                } else {
+                  write();
+                }
+              },
+            });
           },
           selectOnlyPath: (candidate) => {
             model.selectOnlyPath(candidate);
@@ -214,6 +237,7 @@ export function useFileTreeRevealController(options: {
       programmaticSelectionRef,
       readRefs,
       seedRevealExpansionIntent,
+      withProgrammaticScroll,
     ]
   );
 
@@ -250,6 +274,7 @@ export function useFileTreeRevealController(options: {
 
   const requestReveal = React.useCallback(
     (path: string, revealOptions?: PierFileTreeRevealOptions): boolean => {
+      scrollWriteGenerationRef.current += 1;
       const intent = resolveRevealIntentForPath(path, revealOptions?.intent);
       const pathExcluded =
         intent === "active-file" && isAutoRevealExcluded?.(path) === true;
@@ -443,6 +468,7 @@ export function useFileTreeRevealController(options: {
 
   React.useEffect(
     () => () => {
+      scrollWriteGenerationRef.current += 1;
       clearReleaseTimers();
       releaseProgrammaticScroll();
     },

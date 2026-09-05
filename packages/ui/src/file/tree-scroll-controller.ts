@@ -83,6 +83,10 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
     options?: { readonly settleFrames?: number }
   ) => void;
   scrollOwner: FileTreeScrollOwner;
+  withProgrammaticScroll: (
+    write: () => void,
+    scrollElement?: HTMLElement | null
+  ) => void;
 } {
   const ownerRef = React.useRef<FileTreeScrollOwner | null>(null);
   if (ownerRef.current === null) {
@@ -98,13 +102,19 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
     () => captureFileTreeScrollSnapshot(getHost()),
     [getHost]
   );
+  const withProgrammaticScroll = React.useCallback(
+    (write: () => void, scrollElement = fileTreeScrollElement(getHost())) => {
+      scrollOwner.withProgrammaticScroll(write, scrollElement);
+    },
+    [getHost, scrollOwner]
+  );
   const restoreSnapshot = React.useCallback(
     (snapshot: PierFileTreeScrollSnapshot) => {
-      scrollOwner.withProgrammaticScroll(() => {
+      withProgrammaticScroll(() => {
         restoreFileTreeScrollSnapshot(getHost(), snapshot);
       });
     },
-    [getHost, scrollOwner]
+    [getHost, withProgrammaticScroll]
   );
   const beginProgrammaticScroll = React.useCallback(() => {
     scrollOwner.beginReveal();
@@ -150,7 +160,7 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
 
     let snapshotHandle: ScheduledHandle | null = null;
     const publishSnapshot = () => {
-      if (snapshotHandle != null) {
+      if (!onScrollSnapshotChange || snapshotHandle != null) {
         return;
       }
       snapshotHandle = scheduleFrame(() => {
@@ -168,7 +178,7 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
     };
 
     const onScroll = () => {
-      if (!scrollOwner.isProgrammaticScrollEvent()) {
+      if (!scrollOwner.isProgrammaticScrollEvent(scrollElement)) {
         claimFromUserGesture();
       }
       publishSnapshot();
@@ -271,5 +281,6 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
     endProgrammaticScroll,
     requestLayoutCompensate,
     scrollOwner,
+    withProgrammaticScroll,
   };
 }

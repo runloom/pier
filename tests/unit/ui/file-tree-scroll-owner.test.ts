@@ -45,6 +45,63 @@ describe("createFileTreeScrollOwner", () => {
     });
   }
 
+  it("recognizes a native scroll event after the write callback has returned", () => {
+    const { host, scroller } = mountScroller();
+    const owner = createOwner();
+    owner.withProgrammaticScroll(() => {
+      scroller.scrollTop = 100;
+    }, scroller);
+
+    expect(owner.isProgrammaticScrollEvent(scroller)).toBe(true);
+    expect(owner.isProgrammaticScrollEvent(scroller)).toBe(false);
+    host.remove();
+  });
+
+  it("matches the final position when the browser coalesces host writes", () => {
+    const { host, scroller } = mountScroller();
+    const owner = createOwner();
+    for (const top of [100, 200]) {
+      owner.withProgrammaticScroll(() => {
+        scroller.scrollTop = top;
+      }, scroller);
+    }
+    expect(owner.isProgrammaticScrollEvent(scroller)).toBe(true);
+    expect(owner.isProgrammaticScrollEvent(scroller)).toBe(false);
+    host.remove();
+  });
+
+  it("does not attribute a different scrollbar position to a prior host write", () => {
+    const { host, scroller } = mountScroller();
+    const owner = createOwner();
+    owner.withProgrammaticScroll(() => {
+      scroller.scrollTop = 100;
+    }, scroller);
+    scroller.scrollTop = 140;
+    expect(owner.isProgrammaticScrollEvent(scroller)).toBe(false);
+    host.remove();
+  });
+
+  it("lets a user gesture invalidate a queued programmatic scroll event", () => {
+    const { host, scroller } = mountScroller();
+    const owner = createOwner();
+    owner.withProgrammaticScroll(() => {
+      scroller.scrollTop = 100;
+    }, scroller);
+    owner.claimUserScroll();
+    expect(owner.isProgrammaticScrollEvent(scroller)).toBe(false);
+    host.remove();
+  });
+
+  it("does not reserve a scroll event for an unchanged position", () => {
+    const { host, scroller } = mountScroller();
+    const owner = createOwner();
+    owner.withProgrammaticScroll(() => {
+      scroller.scrollTop = 0;
+    }, scroller);
+    expect(owner.isProgrammaticScrollEvent(scroller)).toBe(false);
+    host.remove();
+  });
+
   it("claimUserScroll aborts in-flight compensate writes", () => {
     const { host, scroller } = mountScroller();
     scroller.scrollTop = 0;
@@ -190,6 +247,28 @@ describe("createFileTreeScrollOwner", () => {
 
     endPin();
     expect(scroller.scrollTop).toBe(50);
+    host.remove();
+  });
+
+  it("restores the menu anchor on close after the initial settle frames", () => {
+    const { host, scroller } = mountScroller();
+    scroller.scrollTop = 240;
+    const frames: FrameRequestCallback[] = [];
+    const owner = createOwner(frames);
+    const close = owner.beginMenuPin(scroller);
+    vi.runAllTicks();
+    while (frames.length > 0) {
+      frames.shift()?.(performance.now());
+    }
+
+    scroller.scrollTop = 120;
+    close();
+
+    expect(scroller.scrollTop).toBe(240);
+    expect(owner.isMenuPinActive()).toBe(false);
+    scroller.scrollTop = 80;
+    close();
+    expect(scroller.scrollTop).toBe(80);
     host.remove();
   });
 });

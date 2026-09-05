@@ -180,6 +180,7 @@ export function FilePanelLayout({
           }
         }}
         orientation="horizontal"
+        resizeTargetMinimumSize={{ coarse: 0, fine: 0 }}
       >
         <ResizablePanel
           aria-hidden={!sidebarVisible}
@@ -214,9 +215,10 @@ export function FilePanelLayout({
         >
           {sidebar}
         </ResizablePanel>
+        {/* Keep the entire resize target outside the tree's native scrollbar. */}
         <ResizableHandle
           className={cn(
-            "data-[resize-handle-state=drag]:bg-primary data-[resize-handle-state=hover]:bg-primary/60",
+            "pointer-coarse:w-5 w-2.5 bg-transparent after:left-0 after:w-px after:translate-x-0 after:bg-border data-[separator=active]:after:bg-primary data-[separator=hover]:after:bg-primary/60",
             !sidebarVisible && "hidden"
           )}
           disabled={!sidebarVisible}

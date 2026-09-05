@@ -1,8 +1,16 @@
 diff --git a/dist/model/FileTreeController.js b/dist/model/FileTreeController.js
-index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..49ebd437d385a58e240c6840b9a744d1102a54bd 100644
+index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..aaf3ae8243aefce61461368d68afd542528a0802 100644
 --- a/dist/model/FileTreeController.js
 +++ b/dist/model/FileTreeController.js
-@@ -504,13 +504,15 @@ var FileTreeController = class FileTreeController {
+@@ -200,6 +200,7 @@ var FileTreeController = class FileTreeController {
+ 		this.#scrollRequest = {
+ 			id: this.#scrollRequestId += 1,
+ 			offset: normalizeScrollOffset(options?.offset),
++			performScroll: options?.performScroll,
+ 			visibleIndex: targetIndex
+ 		};
+ 		this.#emit();
+@@ -504,13 +505,15 @@ var FileTreeController = class FileTreeController {
  			return false;
  		}
  		try {
@@ -25,12 +33,15 @@ index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..49ebd437d385a58e240c6840b9a744d1
  			}
  		} catch (error) {
  			this.#emit();
-@@ -520,3 +522,4 @@ var FileTreeController = class FileTreeController {
+@@ -518,6 +521,7 @@ var FileTreeController = class FileTreeController {
+ 			return false;
+ 		}
  		this.#dragAndDropConfig?.onDropComplete?.(dropPlan.result);
 +		this.#emit();
  		return true;
  	}
-@@ -943,7 +946,7 @@ var FileTreeController = class FileTreeController {
+ 	subscribe(listener) {
+@@ -943,7 +947,7 @@ var FileTreeController = class FileTreeController {
  		}
  		const currentVisiblePaths = this.#projectionPaths;
  		this.#searchMatchingPaths = currentVisiblePaths.filter((path) => this.#searchMatchPathSet.has(path));
@@ -39,7 +50,7 @@ index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..49ebd437d385a58e240c6840b9a744d1
  			this.#searchVisibleIndices = null;
  			this.#searchVisiblePaths = null;
  			this.#searchVisibleIndexByPath = null;
-@@ -1042,7 +1045,7 @@ var FileTreeController = class FileTreeController {
+@@ -1042,7 +1046,7 @@ var FileTreeController = class FileTreeController {
  			focusCandidate ??= path;
  		}
  		this.#searchMatchPathSet = matchingPathSet;
@@ -48,8 +59,28 @@ index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..49ebd437d385a58e240c6840b9a744d1
  		this.#searchVisiblePathSet = searchVisiblePathSet;
  		const expandedPaths = this.#searchMode === "expand-matches" ? new Set(this.#searchPreviousExpandedPaths ?? []) : /* @__PURE__ */ new Set();
  		for (const matchingPath of matchingPaths) {
+diff --git a/dist/model/internalTypes.d.ts b/dist/model/internalTypes.d.ts
+index 5b0fdd5a3b483439ae256795f3dad5a32182ab78..b5377378cd295bacf11150ee0a4bbecda21a3cd2 100644
+--- a/dist/model/internalTypes.d.ts
++++ b/dist/model/internalTypes.d.ts
+@@ -1,6 +1,6 @@
+ import { FileTreeIcons } from "../iconConfig.js";
+ import { GitStatus } from "../publicTypes.js";
+-import { FileTreeCompositionOptions, FileTreePublicId, FileTreeRenderOptions, FileTreeRowDecorationRenderer, FileTreeScrollOffset, FileTreeSearchBlurBehavior, FileTreeVisibleRow } from "./publicTypes.js";
++import { FileTreeCompositionOptions, FileTreePublicId, FileTreeRenderOptions, FileTreeRowDecorationRenderer, FileTreeScrollOffset, FileTreeScrollToPathOptions, FileTreeSearchBlurBehavior, FileTreeVisibleRow } from "./publicTypes.js";
+ import { FileTreeController } from "./FileTreeController.js";
+ 
+ //#region src/model/internalTypes.d.ts
+@@ -29,6 +29,7 @@ interface FileTreeStickyWindowLayout {
+ interface FileTreeScrollRequest {
+   id: number;
+   offset: FileTreeScrollOffset;
++  performScroll?: FileTreeScrollToPathOptions['performScroll'];
+   visibleIndex: number;
+ }
+ interface FileTreeSlotHost {
 diff --git a/dist/model/publicTypes.d.ts b/dist/model/publicTypes.d.ts
-index 0d75f14780eb033fdbc8fde76e6f4c080e1d096a..c57180801ee12479c521f7b9c3482a1327c64837 100644
+index 0d75f14780eb033fdbc8fde76e6f4c080e1d096a..d822c8a8fffb5485ab3ead0611f43b06e586f06d 100644
 --- a/dist/model/publicTypes.d.ts
 +++ b/dist/model/publicTypes.d.ts
 @@ -42,6 +42,12 @@ interface FileTreeGitStatusPatch {
@@ -65,7 +96,16 @@ index 0d75f14780eb033fdbc8fde76e6f4c080e1d096a..c57180801ee12479c521f7b9c3482a13
    initialExpansion?: FileTreeInitialExpansion;
    initialExpandedPaths?: readonly FileTreePublicId[];
    presorted?: boolean;
-@@ -146,6 +152,17 @@ interface FileTreeDropResult extends FileTreeDropContext {
+@@ -116,6 +122,8 @@ type FileTreeScrollOffset = 'top' | 'center' | 'nearest';
+ interface FileTreeScrollToPathOptions {
+   focus?: boolean;
+   offset?: FileTreeScrollOffset;
++  /** Runs at the deferred DOM write. Call write synchronously, or skip to cancel. */
++  performScroll?: (element: HTMLElement, write: () => void) => void;
+ }
+ type FileTreeSearchMode = 'expand-matches' | 'collapse-non-matches' | 'hide-non-matches';
+ type FileTreeSearchBlurBehavior = 'close' | 'retain';
+@@ -146,6 +154,17 @@ interface FileTreeDropResult extends FileTreeDropContext {
  interface FileTreeDragAndDropConfig {
    canDrag?: (paths: readonly FileTreePublicId[]) => boolean;
    canDrop?: (event: FileTreeDropContext) => boolean;
@@ -186,7 +226,7 @@ index a3acb5917de61ee8283f12fe5a73282437cfcfab..3b9a14bed67c25109e2303259e9911a6
  		this.#controller.add(path);
  	}
 diff --git a/dist/render/FileTreeView.js b/dist/render/FileTreeView.js
-index 3d02080ad553347e7fe95e261c993b607b4134c2..0b13cdc326b4fa60f1abaafbdb3c268143236a9d 100644
+index 3d02080ad553347e7fe95e261c993b607b4134c2..f88e06c6c6f868353ce3425d9cb611b181bfb8c3 100644
 --- a/dist/render/FileTreeView.js
 +++ b/dist/render/FileTreeView.js
 @@ -3,7 +3,7 @@ import { createFileTreeIconResolver } from "./iconResolver.js";
@@ -453,7 +493,20 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..0b13cdc326b4fa60f1abaafbdb3c2681
  			if (event.key === "Escape") {
  				restoreTreeFocusAfterSearchCloseRef.current = false;
  				restoreTreeFocusViewportOffsetRef.current = null;
-@@ -1599,6 +1742,8 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+@@ -1493,7 +1636,11 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+ 			if (scrollRequestRow != null) {
+ 				const scrollRequestTopInset = stickyFolders ? Math.max(0, Math.min(scrollRequestRow.ancestorPaths.length * itemHeight, Math.max(0, resolvedViewportHeight - itemHeight))) : stickyOverlayHeight;
+ 				shouldSuppressDomFocusForScrollRequest = true;
+-				shouldUpdateViewportForScrollRequest = scrollFocusedRowToOffset(scrollElement, scrollRequestIndex, itemHeight, resolvedViewportHeight, totalScrollableHeight, scrollRequest.offset, scrollRequestTopInset);
++				const write = () => {
++					shouldUpdateViewportForScrollRequest = scrollFocusedRowToOffset(scrollElement, scrollRequestIndex, itemHeight, resolvedViewportHeight, totalScrollableHeight, scrollRequest.offset, scrollRequestTopInset);
++				};
++				if (scrollRequest.performScroll != null) scrollRequest.performScroll(scrollElement, write);
++				else write();
+ 			}
+ 			controller.clearScrollRequest(scrollRequest.id);
+ 		}
+@@ -1599,6 +1746,8 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  		window.addEventListener("dragend", handleWindowDragEnd);
  		return () => {
  			window.removeEventListener("dragend", handleWindowDragEnd);
@@ -462,7 +515,7 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..0b13cdc326b4fa60f1abaafbdb3c2681
  			clearTouchDragResources();
  			controller.cancelDrag();
  		};
-@@ -1692,15 +1837,20 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+@@ -1692,15 +1841,20 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  			setActiveItemPath((previousPath) => previousPath === actionTargetPath ? previousPath : actionTargetPath);
  			setLastContextMenuInteraction("focus");
  		}
@@ -486,7 +539,7 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..0b13cdc326b4fa60f1abaafbdb3c2681
  	]);
  	const openMenuFromTrigger = () => {
  		if (isScrollingRef.current) return;
-@@ -1733,11 +1883,13 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+@@ -1733,11 +1887,13 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  		dragAndDropEnabled,
  		draggedPathSet,
  		dragTarget,
@@ -500,7 +553,7 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..0b13cdc326b4fa60f1abaafbdb3c2681
  		ignoredGitDirectories,
  		ignoredInheritanceCache,
  		instanceId,
-@@ -1751,6 +1903,7 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+@@ -1751,6 +1907,7 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  		renderDecorationForRow,
  		resolveIcon,
  		shouldSuppressContextMenu,

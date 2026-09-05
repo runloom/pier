@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@pierre/diffs@1.2.12': cd7c8aa6dd1cb29dfbea88449d7a4d133e35b55eb774b2ac720f676b51420ade
-  '@pierre/trees@1.0.0-beta.5': 7ac39c10bcacc46591551044a9a007eb3f7c12299a8849b9a266ba78906eebc4
+  '@pierre/trees@1.0.0-beta.5': f9bb3c39ef7d30b3ecd06abfc443a3445a32e986b0e7a5f84afa9453a9ab1f3d
   '@replit/codemirror-minimap@0.5.2': 31b884b79f427644be2ff88ca70dcb5f1ab266284948040919df23763adaf5f4
   dockview-core@7.0.2: 4f7ee324bbb2d21bf132ea8a61d8554f71ecfef53139cb23fe8b1a8b70098d90
 
@@ -632,7 +632,7 @@ importers:
         version: 1.2.12(patch_hash=cd7c8aa6dd1cb29dfbea88449d7a4d133e35b55eb774b2ac720f676b51420ade)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@pierre/trees':
         specifier: 1.0.0-beta.5
-        version: 1.0.0-beta.5(patch_hash=7ac39c10bcacc46591551044a9a007eb3f7c12299a8849b9a266ba78906eebc4)(@pierre/theme@1.1.0)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(shiki@4.3.1)
+        version: 1.0.0-beta.5(patch_hash=f9bb3c39ef7d30b3ecd06abfc443a3445a32e986b0e7a5f84afa9453a9ab1f3d)(@pierre/theme@1.1.0)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(shiki@4.3.1)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -8141,7 +8141,7 @@ snapshots:
       react-dom: 19.2.7(react@19.2.7)
       shiki: 4.3.1
 
-  '@pierre/trees@1.0.0-beta.5(patch_hash=7ac39c10bcacc46591551044a9a007eb3f7c12299a8849b9a266ba78906eebc4)(@pierre/theme@1.1.0)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(shiki@4.3.1)':
+  '@pierre/trees@1.0.0-beta.5(patch_hash=f9bb3c39ef7d30b3ecd06abfc443a3445a32e986b0e7a5f84afa9453a9ab1f3d)(@pierre/theme@1.1.0)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(shiki@4.3.1)':
     dependencies:
       '@pierre/theming': 0.0.2(@pierre/theme@1.1.0)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(shiki@4.3.1)
       preact: 11.0.0-beta.0

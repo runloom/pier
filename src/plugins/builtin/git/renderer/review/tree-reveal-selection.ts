@@ -4,8 +4,8 @@ import type { PierFileTreeApi } from "@pier/ui/file/tree.tsx";
  * Explicit tree orient: select the row and scroll it into the optimal viewport.
  * Does not open files; selection/open stays with the caller.
  *
- * Not continuous active-file tracking. Defer past the click frame so
- * expansion/selection settle first.
+ * Defer past the click handler. The tree controller owns pending retries;
+ * replaying this explicit intent in another frame would override a newer scroll.
  */
 export function revealGitReviewTreeSelection(
   api: PierFileTreeApi | null | undefined,
@@ -27,7 +27,7 @@ export function revealGitReviewTreeSelection(
   if (!(api && path.length > 0)) {
     return;
   }
-  const run = () => {
+  queueMicrotask(() => {
     api.revealPath(path, {
       expandTarget: options?.expandTarget === true,
       intent: "explicit",
@@ -35,9 +35,5 @@ export function revealGitReviewTreeSelection(
         ? {}
         : { preserveFocus: options.preserveFocus }),
     });
-  };
-  queueMicrotask(run);
-  if (typeof requestAnimationFrame === "function") {
-    requestAnimationFrame(run);
-  }
+  });
 }

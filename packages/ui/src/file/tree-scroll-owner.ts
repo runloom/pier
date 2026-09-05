@@ -1,4 +1,5 @@
 import {
+  fileTreeScrollElement,
   getAnimationFrameScheduler,
   restoreFileTreeScrollSnapshot,
 } from "./tree-scroll.ts";
@@ -30,7 +31,7 @@ export interface FileTreeScrollOwner {
   endReveal: () => void;
   /** True while a menu pin session is active. */
   isMenuPinActive: () => boolean;
-  isProgrammaticScrollEvent: () => boolean;
+  isProgrammaticScrollEvent: (scrollElement?: HTMLElement | null) => boolean;
   /** True while reveal depth > 0 (path-sync must skip compensate). */
   isRevealActive: () => boolean;
   /** True while within the user claim window. */
@@ -58,7 +59,10 @@ export interface FileTreeScrollOwner {
    * Reveal uses this to permanently demote in-flight scroll.
    */
   subscribeUserClaim: (listener: () => void) => () => void;
-  withProgrammaticScroll: (write: () => void) => void;
+  withProgrammaticScroll: (
+    write: () => void,
+    scrollElement?: HTMLElement | null
+  ) => void;
 }
 
 export function createFileTreeScrollOwner(options?: {
@@ -71,6 +75,10 @@ export function createFileTreeScrollOwner(options?: {
   let generation = 0;
   let revealDepth = 0;
   let programmaticDepth = 0;
+  let pendingScrollPositions = new WeakMap<
+    HTMLElement,
+    { left: number; top: number }
+  >();
   let userClaimUntilMs = 0;
   let menuPinActive = false;
   let endMenuPinSession: (() => void) | null = null;
@@ -86,16 +94,47 @@ export function createFileTreeScrollOwner(options?: {
 
   const isMenuPinActive = () => menuPinActive;
 
-  const withProgrammaticScroll = (write: () => void) => {
+  const withProgrammaticScroll = (
+    write: () => void,
+    scrollElement?: HTMLElement | null
+  ) => {
+    const previousTop = scrollElement?.scrollTop;
+    const previousLeft = scrollElement?.scrollLeft;
     programmaticDepth += 1;
     try {
       write();
     } finally {
       programmaticDepth -= 1;
+      // Native scroll events arrive asynchronously and may coalesce writes.
+      // Match the actual resulting position instead of masking a time window.
+      if (
+        scrollElement &&
+        (scrollElement.scrollTop !== previousTop ||
+          scrollElement.scrollLeft !== previousLeft)
+      ) {
+        pendingScrollPositions.set(scrollElement, {
+          left: scrollElement.scrollLeft,
+          top: scrollElement.scrollTop,
+        });
+      }
     }
   };
 
-  const isProgrammaticScrollEvent = () => programmaticDepth > 0;
+  const isProgrammaticScrollEvent = (scrollElement?: HTMLElement | null) => {
+    if (programmaticDepth > 0) {
+      return true;
+    }
+    if (!scrollElement) {
+      return false;
+    }
+    const position = pendingScrollPositions.get(scrollElement);
+    pendingScrollPositions.delete(scrollElement);
+    return (
+      position !== undefined &&
+      position.top === scrollElement.scrollTop &&
+      position.left === scrollElement.scrollLeft
+    );
+  };
 
   const endRevealFully = () => {
     revealDepth = 0;
@@ -112,6 +151,7 @@ export function createFileTreeScrollOwner(options?: {
 
   const claimUserScroll = () => {
     abortHostScrollWrites();
+    pendingScrollPositions = new WeakMap();
     userClaimUntilMs = now() + FILE_TREE_USER_SCROLL_CLAIM_MS;
     // Design §5.3: user claim immediately ends reveal hold.
     endRevealFully();
@@ -152,7 +192,7 @@ export function createFileTreeScrollOwner(options?: {
       }
       withProgrammaticScroll(() => {
         restoreFileTreeScrollSnapshot(host, snapshot);
-      });
+      }, fileTreeScrollElement(host));
       remainingWrites -= 1;
       if (remainingWrites <= 0) {
         return;
@@ -182,7 +222,7 @@ export function createFileTreeScrollOwner(options?: {
         if (Math.abs(scrollElement.scrollTop - pinnedTop) > 0.5) {
           scrollElement.scrollTop = pinnedTop;
         }
-      });
+      }, scrollElement);
     };
 
     queueMicrotask(restore);
@@ -203,14 +243,14 @@ export function createFileTreeScrollOwner(options?: {
       if (disposed) {
         return;
       }
+      // Final pin only if still same generation (user claim bumps generation).
+      if (generation === pinGeneration) {
+        restore();
+      }
       disposed = true;
       if (endMenuPinSession === dispose) {
         endMenuPinSession = null;
         menuPinActive = false;
-      }
-      // Final pin only if still same generation (user claim bumps generation).
-      if (generation === pinGeneration) {
-        restore();
       }
     };
     endMenuPinSession = dispose;
