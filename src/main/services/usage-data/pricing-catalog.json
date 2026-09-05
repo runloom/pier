@@ -1670,7 +1670,20 @@
     "gpt-6-astra": {
       "cachedInputMicrousd": 1,
       "inputMicrousd": 10,
-      "outputMicrousd": 50
+      "outputMicrousd": 50,
+      "aliases": [
+        "openai/gpt-6-astra",
+        "openai/gpt-6-astra:batch"
+      ]
+    },
+    "gpt-6-astra-pro": {
+      "cachedInputMicrousd": 1,
+      "inputMicrousd": 10,
+      "outputMicrousd": 50,
+      "aliases": [
+        "openai/gpt-6-astra-pro",
+        "openai/gpt-6-astra-pro:batch"
+      ]
     },
     "gpt-audio": {
       "cachedInputMicrousd": 0.25,
