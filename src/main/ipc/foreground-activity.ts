@@ -49,7 +49,6 @@ import {
   listAppWindowIds,
 } from "../windows/identity.ts";
 import { recordAgentResumeSession } from "./agent-resume-persist.ts";
-import { markAgentSessionExited } from "./agent-session-exit-persist.ts";
 import { handleObservedAgentHookEvent } from "./foreground-activity/hook-pipeline.ts";
 import { materializeForegroundActivityPublications } from "./foreground-activity-publication.ts";
 import { forwardToWindow } from "./terminal/forwarding.ts";
@@ -401,7 +400,6 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
               aggregator: foregroundActivityAggregator,
               event: routed,
             }),
-          markPanelExited: markAgentSessionExited,
           notifyListeners: notifyAgentHookEventListeners,
           observeTranscript: (routed) =>
             agentTerminalReconciler?.observe(routed) ?? Promise.resolve(),
@@ -413,11 +411,12 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
         log.warn("agent hook event pipeline failed", { err });
       });
     },
-    onCommandFinished: (event) => {
-      const routed = withResolvedOwner(event);
-      agentTerminalReconciler?.releasePanel(routed.panelId, routed.windowId);
-      foregroundActivityAggregator.ingestCommandFinishedHook(routed);
-    },
+    // Legacy JSONL command hooks are compatibility no-ops. Only the native
+    // lifecycle callbacks may release an active terminal's observers.
+    onCommandFinished: (event) =>
+      foregroundActivityAggregator.ingestCommandFinishedHook(
+        withResolvedOwner(event)
+      ),
     onCommandStart: (event) =>
       foregroundActivityAggregator.ingestCommandStartHook(
         withResolvedOwner(event)

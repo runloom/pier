@@ -4065,7 +4065,7 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("SessionEnd clears matching launch activity so ended agents do not block quit", () => {
+  it("SessionEnd retains matching launch activity until the terminal process exits", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.agentLaunched("1", "p1", "claude");
     advance(250);
@@ -4073,6 +4073,12 @@ describe("ForegroundActivityAggregator", () => {
     const a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.source).toBe("hook");
     agg.ingestAgentEvent(hookEvent("SessionEnd"));
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      agentId: "claude",
+      kind: "agent",
+      source: "launch",
+    });
+    agg.ptyExited("p1", "1");
     expect(agg.snapshot().activities).toHaveLength(0);
     agg.dispose();
   });

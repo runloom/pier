@@ -131,7 +131,6 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
     spies: {
       applySessionTitle: ReturnType<typeof vi.fn>;
       ingestAgentEvent: ReturnType<typeof vi.fn>;
-      markPanelExited: ReturnType<typeof vi.fn>;
       notifyListeners: ReturnType<typeof vi.fn>;
       observeTranscript: ReturnType<typeof vi.fn>;
       recordResume: ReturnType<typeof vi.fn>;
@@ -140,7 +139,6 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
     const spies = {
       applySessionTitle: vi.fn(async () => undefined),
       ingestAgentEvent: vi.fn(() => true),
-      markPanelExited: vi.fn(),
       notifyListeners: vi.fn(),
       observeTranscript: vi.fn(async () => undefined),
       recordResume: vi.fn(),
@@ -151,7 +149,6 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
         panelCommandOwnedAgent: () => null,
       },
       applySessionTitle: spies.applySessionTitle,
-      markPanelExited: spies.markPanelExited,
       notifyListeners: spies.notifyListeners,
       observeTranscript: spies.observeTranscript,
       recordResume: spies.recordResume,
@@ -173,7 +170,6 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
     expect(spies.recordResume).not.toHaveBeenCalled();
     expect(spies.observeTranscript).not.toHaveBeenCalled();
     expect(spies.ingestAgentEvent).not.toHaveBeenCalled();
-    expect(spies.markPanelExited).not.toHaveBeenCalled();
     expect(spies.applySessionTitle).not.toHaveBeenCalled();
   });
 
@@ -211,7 +207,6 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
     expect(spies.recordResume).toHaveBeenCalledWith(
       expect.objectContaining({ agentId: "cursor", sessionId: "s2" })
     );
-    expect(spies.markPanelExited).not.toHaveBeenCalled();
     expect(spies.applySessionTitle).not.toHaveBeenCalled();
   });
 
@@ -225,6 +220,64 @@ describe("hook pipeline assembly (gate before all effect branches)", () => {
 
     expect(spies.notifyListeners).toHaveBeenCalledOnce();
     expect(spies.ingestAgentEvent).toHaveBeenCalledOnce();
+  });
+
+  it("SessionEnd preserves the live command and still records the resume key", async () => {
+    vi.useFakeTimers();
+    const aggregator = createForegroundActivityAggregator();
+    const { sinks, spies } = sinksWithSpies({ aggregator });
+    const event = v3Event({ agent: "codex", sessionId: "old", tty: "ttys004" });
+    try {
+      aggregator.agentLaunched(event.windowId, event.panelId, "codex");
+      vi.advanceTimersByTime(250);
+      await handleObservedAgentHookEvent(sinks, {
+        ...event,
+        event: "SessionStart",
+      });
+      await handleObservedAgentHookEvent(sinks, {
+        ...event,
+        event: "SessionEnd",
+      });
+
+      expect(aggregator.snapshot().activities[0]).toMatchObject({
+        agentId: "codex",
+        kind: "agent",
+        source: "launch",
+      });
+      expect(spies.recordResume).toHaveBeenLastCalledWith({
+        agentId: "codex",
+        panelId: event.panelId,
+        preserveExistingSession: true,
+        sessionId: "old",
+        windowId: event.windowId,
+      });
+    } finally {
+      aggregator.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it("a rejected SessionEnd cannot change the current resume key or transcript watcher", async () => {
+    const { sinks, spies } = sinksWithSpies({
+      aggregator: {
+        ingestAgentEvent: vi.fn(() => false),
+        panelCommandOwnedAgent: () => "codex",
+      },
+    });
+
+    await handleObservedAgentHookEvent(
+      sinks,
+      v3Event({
+        agent: "codex",
+        event: "SessionEnd",
+        sessionId: "old",
+        tty: "ttys004",
+      })
+    );
+
+    expect(spies.recordResume).not.toHaveBeenCalled();
+    expect(spies.observeTranscript).not.toHaveBeenCalled();
+    expect(spies.applySessionTitle).not.toHaveBeenCalled();
   });
 
   it("PromptSubmit awaits transcript observe before aggregator ingest", async () => {

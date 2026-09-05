@@ -77,6 +77,87 @@ describe("resume pin latch", () => {
     expect(session?.agent?.restore?.resumePending).toBe(true);
   });
 
+  it.each([
+    "running",
+    "pending",
+  ])("SessionEnd cannot overwrite a newer %s resume key", async (phase) => {
+    const {
+      ensureTerminalPanelSession,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    if (phase === "running") {
+      await updateTerminalPanelAgent(
+        "record-main",
+        "terminal-1",
+        pinnedResumeAgent({
+          restore: { spawnGeneration: 2 },
+        })
+      );
+    } else {
+      await ensureTerminalPanelSession("record-main", "terminal-1");
+    }
+    await updateTerminalPanelAgentResume(
+      "record-main",
+      "terminal-1",
+      {
+        agentId: "claude",
+        capturedAt: 10,
+        sessionId: "sess-current",
+        source: "hook",
+      },
+      { unlockRotation: true }
+    );
+
+    await expect(
+      updateTerminalPanelAgentResume(
+        "record-main",
+        "terminal-1",
+        {
+          agentId: "claude",
+          capturedAt: 20,
+          sessionId: "sess-old",
+          source: "hook",
+        },
+        { preserveExistingSession: true }
+      )
+    ).resolves.toBe("pinned");
+
+    if (phase === "pending") {
+      const { resume: _resume, ...agent } = pinnedResumeAgent({
+        restore: { spawnGeneration: 2 },
+      });
+      await updateTerminalPanelAgent("record-main", "terminal-1", agent);
+    }
+    expect(
+      (await readTerminalPanelSession("record-main", "terminal-1"))?.agent
+        ?.resume?.sessionId
+    ).toBe("sess-current");
+  });
+
+  it("SessionEnd may supply a missing resume key", async () => {
+    const { updateTerminalPanelAgent, updateTerminalPanelAgentResume } =
+      await loadTerminalSessionState();
+    const { resume: _resume, ...agent } = pinnedResumeAgent({
+      restore: { spawnGeneration: 2 },
+    });
+    await updateTerminalPanelAgent("record-main", "terminal-1", agent);
+    await expect(
+      updateTerminalPanelAgentResume(
+        "record-main",
+        "terminal-1",
+        {
+          agentId: "claude",
+          capturedAt: 10,
+          sessionId: "sess-final",
+          source: "hook",
+        },
+        { preserveExistingSession: true }
+      )
+    ).resolves.toBe("applied");
+  });
+
   it("clears resumePending on matching session id", async () => {
     const {
       readTerminalPanelSession,

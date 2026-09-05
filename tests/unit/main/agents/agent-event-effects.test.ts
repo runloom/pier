@@ -19,9 +19,8 @@ function event(
 }
 
 describe("accepted agent event effects", () => {
-  it("主会话可更新恢复信息、transcript owner 和面板退出状态", () => {
+  it("主会话结束只更新恢复信息和 transcript owner，不结束终端进程", () => {
     expect(effectsForAcceptedAgentEvent(event())).toEqual({
-      markPanelExited: true,
       observeTranscript: true,
       persistResume: true,
     });
@@ -48,7 +47,6 @@ describe("accepted agent event effects", () => {
         })
       )
     ).toEqual({
-      markPanelExited: false,
       observeTranscript: false,
       persistResume: false,
     });

@@ -24,11 +24,6 @@ export interface AgentHookEventSinks {
     "ingestAgentEvent" | "panelCommandOwnedAgent"
   >;
   applySessionTitle: (routed: AgentHookEventPayload) => Promise<unknown>;
-  markPanelExited: (args: {
-    panelId: string;
-    spawnGeneration?: number;
-    windowId: string;
-  }) => void;
   notifyListeners: (routed: AgentHookEventPayload) => void;
   observeTranscript:
     | ((routed: AgentHookEventPayload) => Promise<void>)
@@ -36,6 +31,7 @@ export interface AgentHookEventSinks {
   recordResume: (args: {
     agentId: AgentKind;
     panelId: string;
+    preserveExistingSession?: boolean | undefined;
     sessionId: string | undefined;
     unlockRotation?: boolean | undefined;
     windowId: string;
@@ -71,6 +67,15 @@ export async function handleObservedAgentHookEvent(
     event: routed,
     runtime: sinks.resolveRuntime(routed.agent),
   });
+  // SessionEnd is destructive for observers. Let the session-scope owner reject
+  // stale/foreign ends before any resume or transcript side effect.
+  const sessionEndAccepted =
+    routed.event === "SessionEnd"
+      ? sinks.aggregator.ingestAgentEvent(routed, options)
+      : undefined;
+  if (sessionEndAccepted === false) {
+    return;
+  }
   // Resume index must not depend on FA turn bookkeeping accept: dropped
   // tool/progress events still carry the only host-side restore key.
   const effects = effectsForAcceptedAgentEvent(routed);
@@ -80,6 +85,9 @@ export async function handleObservedAgentHookEvent(
       panelId: routed.panelId,
       sessionId: routed.sessionId,
       windowId: routed.windowId,
+      ...(routed.event === "SessionEnd"
+        ? { preserveExistingSession: true }
+        : {}),
       ...(routed.event === "PromptSubmit" ? { unlockRotation: true } : {}),
     });
   }
@@ -97,18 +105,10 @@ export async function handleObservedAgentHookEvent(
       log.warn("agent terminal reconciliation failed", { err });
     });
   }
-  const accepted = sinks.aggregator.ingestAgentEvent(routed, options);
+  const accepted =
+    sessionEndAccepted ?? sinks.aggregator.ingestAgentEvent(routed, options);
   if (!accepted) {
     return;
-  }
-  if (effects.markPanelExited) {
-    sinks.markPanelExited({
-      panelId: routed.panelId,
-      windowId: routed.windowId,
-      ...("spawnGeneration" in routed && routed.spawnGeneration
-        ? { spawnGeneration: routed.spawnGeneration }
-        : {}),
-    });
   }
   if (!isSubagentHookEvent(routed)) {
     sinks.applySessionTitle(routed).catch((err: unknown) => {

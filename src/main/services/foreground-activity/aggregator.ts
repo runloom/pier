@@ -43,7 +43,6 @@ import { bindEventToClaimedTurn } from "./claimed-turns.ts";
 import { applyDisplayQuestionOverlay } from "./display-question.ts";
 import {
   CLOSE_COOLDOWN_MS,
-  clearCommandTimers,
   clearHookTimers,
   clearSlotTimers,
   EMIT_DEBOUNCE_MS,
@@ -132,13 +131,8 @@ export function createForegroundActivityAggregator(
       logEndHookSession(key, hook.agentId);
       clearHookTimers(hook);
       slot.hook = null;
-      if (
-        slot.command?.kind === "agent-launch" &&
-        slot.command.agentId === hook.agentId
-      ) {
-        clearCommandTimers(slot.command);
-        slot.command = null;
-      }
+      // A CLI can end one conversation and keep accepting input. Only a
+      // command/PTY exit may clear its independently observed launch layer.
       dropSlotIfEmpty(key);
     }
     hookScopes.clearCooldownsForPanel(key);
