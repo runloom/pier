@@ -2,6 +2,7 @@
 
 日期：2026-08-31  
 修订：2026-09-04 — 布局并入 `2_split`；终端会话并入 `1_new`。  
+修订：2026-09-06 — 终端回到底部进入已有 `1_navigation`。
 状态：现行权威（顺序）  
 范围：所有已登记右键表面的分组与顺序。  
 不包含：命令语义、主点击、命令面板 MRU、原生菜单滚动钉住。
@@ -93,7 +94,7 @@
 - `files/breadcrumb`：复制路径 → 复制相对路径
 - `files/editor`：剪切 → 复制 → 粘贴 → 全选 | 转到行 → 符号信息 → 选出现 / 加光标 | 自动换行 | 复制路径和所选行 → 访达
 - Markdown / Canvas 预览：复制 → 全选 | 舒适 / 宽屏（当前档隐藏） | 外观（当前档隐藏；Canvas 仅自己声明的项） | 访达
-- `terminal/content`：复制 → 粘贴 → 全选 → 运行选中内容 | 查找 | 新建终端或重跑 / 停止 → 重命名 → 增强输入 | 拆分 → 聚焦 → 均分 | 清屏 | 关闭终端
+- `terminal/content`：复制 → 粘贴 → 全选 → 运行选中内容 | 查找 | 回到底部 | 新建终端或重跑 / 停止 → 重命名 → 增强输入 | 拆分 → 聚焦 → 均分 | 清屏 | 关闭终端
 - `terminal/restored`：复制 → 全选 | 重跑 / 停止 | 聚焦 → 均分 | 关闭终端
 - `dockview-tab` 文件：固定标签（预览）→ 复制路径 → 复制相对路径 | 新建 / 拆分 / 窗口 | （审查标签）打开目录 | 关闭…。复制路径 / 复制相对路径在标签上，不在编辑器 / diff 正文。终端标签仍是复制地址（目录）；智能体会话的重命名与新建同组
 - `panel/content`：复制 → 全选 | 聚焦 → 均分（多组时）
@@ -108,6 +109,7 @@
 | `pier.git.review.openDirectory` | `5_open` / 1 |
 | `pier.git.review.openInEditor` | `1_open` / 0 |
 | `pier.terminal.search` | `1_find` / 0 |
+| `pier.terminal.scrollToBottom` | `1_navigation` / 0 |
 | `pier.terminal.clearScreen` | `8_clear` / 0 |
 | `pier.panel.newTerminal` | `1_new` / 1 |
 | `pier.run.rerunTask` / `pier.run.stopTask` | `1_new` / 2 / 3 |
@@ -128,6 +130,7 @@
 2. **系统级编辑键。** 剪切 / 复制 / 粘贴 / 全选在编辑器、终端和通用正文菜单只显示提示。禁止把 ⌘X / ⌘C / ⌘V / ⌘A / ⌘K 写进终端面板默认快捷键表（会抢走终端原生处理）。
 3. **搜索结果。** 「复制路径 / 复制相对路径」与 Files、审查使用同一组默认和弦（⌥⌘C / ⇧⌥⌘C），作用域是搜索面板。
 4. **复制路径和所选行。** 编辑器 / diff 正文菜单展示 ⌥⌘L；转到行仍是 Ctrl+G。文件面板聚焦时 ⌘⇧L 是选中全部出现，智能体列表让路。
+5. **回到底部。** macOS 菜单与命令面板只显示 `Mod+ArrowDown` 提示。菜单调用原生 `scroll_to_bottom`；Cmd+↓ 由 Ghostty 原生键位配置执行，Cmd+End 同样可用，增强输入框保留文本编辑语义。
 
 ---
 

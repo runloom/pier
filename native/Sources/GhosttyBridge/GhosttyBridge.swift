@@ -1001,6 +1001,9 @@ final class GhosttyBridgeImpl {
         builder.withWindowPaddingY(terminalPaddingY)
         builder.withCustom("scrollbar", "system")
         builder.withCustom("keybind", "super+backspace=text:\\x15")
+        // TUI transcripts need not emit OSC 133 prompts. Cmd+Down must reach
+        // live output without them; Cmd+Shift+Down retains native prompt jumping.
+        builder.withCustom("keybind", "super+arrow_down=scroll_to_bottom")
         // Pier 负责光标形状偏好; Ghostty shell integration 默认会在 prompt 强制 bar。
         // 厚度调整走 Ghostty 全局字形度量: bar / 空心块光标会加粗, underline 同时影响
         // 下划线光标和 SGR-4 下划线文本; 为 HiDPI 可读性接受这个一致加粗。

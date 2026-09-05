@@ -400,17 +400,23 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     expect(sessionState.clearTerminalPanelAgent).not.toHaveBeenCalled();
   });
 
-  it("maps terminal operation IPC to allowlisted Ghostty binding actions", async () => {
+  it.each([
+    ["copy", "copy_to_clipboard"],
+    ["paste", "paste_from_clipboard"],
+    ["selectAll", "select_all"],
+    ["clearScreen", "clear_screen"],
+    ["scrollToBottom", "scroll_to_bottom"],
+  ])("maps %s IPC to the allowlisted Ghostty action", async (operation, binding) => {
     const { fakeAddon, invokeHandlers, win } = await setupHarness();
 
     const result = await invokeHandlers.get(
       "pier:terminal:perform-operation"
-    )?.({ sender: win.webContents }, "terminal-1", "clearScreen");
+    )?.({ sender: win.webContents }, "terminal-1", operation);
 
     expect(result).toEqual({ ok: true });
     expect(fakeAddon.performTerminalBindingAction).toHaveBeenCalledWith(
       "7::terminal-1",
-      "clear_screen"
+      binding
     );
   });
 
