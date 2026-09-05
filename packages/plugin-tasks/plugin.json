@@ -53,7 +53,7 @@
   "renderer": "dist/renderer.js",
   "settingsPages": [],
   "terminalStatusItems": [],
-  "version": "1.0.0",
+  "version": "1.0.1",
   "applets": [
     {
       "id": "pier.tasks.tracker-board",
