@@ -1,3 +1,7 @@
+import type {
+  GitFileBaselineInput,
+  GitFileBaselineResult,
+} from "@shared/contracts/git/file-baseline.ts";
 import { gitWatchLeaseSchema } from "@shared/contracts/git/watch.ts";
 import type {
   GitBranchRef,
@@ -85,11 +89,14 @@ export interface PierGitAPI extends PierGitReviewAPI {
   discardChanges: (cwd: string, paths: string[]) => Promise<boolean>;
   dropStash: (cwd: string, index?: number) => Promise<GitStashDropResult>;
   fetch: (cwd: string) => Promise<GitRemoteOperationResult>;
-  // 读(git:read)
   getDiffPatch: (
     cwd: string,
     options?: GitDiffOptionsValue
   ) => Promise<GitDiffPatch>;
+  // 读(git:read)
+  getFileBaseline: (
+    input: GitFileBaselineInput
+  ) => Promise<GitFileBaselineResult>;
   getStatus: (cwd: string) => Promise<GitStatus>;
   listBranches: (
     cwd: string,
@@ -131,6 +138,12 @@ export interface PierGitAPI extends PierGitReviewAPI {
 }
 
 export const gitApi: PierGitAPI = {
+  getFileBaseline: ({ root, path }) =>
+    invokePierCommand<GitFileBaselineResult>({
+      type: "git.getFileBaseline",
+      root,
+      path,
+    }),
   ...gitReviewApi,
   getStatus: (cwd) =>
     invokePierCommand<GitStatus>({ cwd, type: "git.getStatus" }),

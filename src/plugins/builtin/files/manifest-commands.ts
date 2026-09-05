@@ -51,6 +51,24 @@ import {
 export const FILES_PLUGIN_COMMANDS: PluginManifest["commands"] = [
   {
     category: "file",
+    id: "pier.files.changes.current",
+    permissions: ["git:read"],
+    title: "View changes",
+  },
+  {
+    category: "file",
+    id: "pier.files.changes.previous",
+    permissions: ["git:read"],
+    title: "Previous change",
+  },
+  {
+    category: "file",
+    id: "pier.files.changes.next",
+    permissions: ["git:read"],
+    title: "Next change",
+  },
+  {
+    category: "file",
     id: FILES_NEW_FILE_COMMAND_ID,
     permissions: ["file:read", "file:write", "panel:open"],
     title: "New File...",

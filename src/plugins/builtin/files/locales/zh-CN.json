@@ -32,6 +32,15 @@
     },
     "pier.files.revealActiveFileInTree": {
       "title": "在目录树中显示当前文件"
+    },
+    "pier.files.changes.current": {
+      "title": "查看修改"
+    },
+    "pier.files.changes.previous": {
+      "title": "上一处修改"
+    },
+    "pier.files.changes.next": {
+      "title": "下一处修改"
     }
   },
   "messages": {
@@ -536,7 +545,43 @@
     "filePanel.markdown.comment.title": "评论",
     "filePanel.markdown.comment.updateFailed": "无法更新评论",
     "filePanel.markdown.comment.view": "查看评论",
-    "filePanel.markdown.comment.viewCount": "查看 {{count}} 条评论"
+    "filePanel.markdown.comment.viewCount": "查看 {{count}} 条评论",
+    "filePanel.changes.display": "修改显示方式",
+    "filePanel.changes.rendered": "预览",
+    "filePanel.changes.source": "源码",
+    "filePanel.changes.removed": "已删除",
+    "filePanel.changes.added": "已添加",
+    "filePanel.changes.modified": "已修改",
+    "filePanel.changes.linkAddress": "链接地址已修改",
+    "filePanel.changes.linkTitle": "链接标题已修改",
+    "filePanel.changes.before": "修改前",
+    "filePanel.changes.after": "修改后",
+    "filePanel.changes.imageDetails": "图片修改",
+    "filePanel.changes.historicalImages": "此处未加载历史图片，请切换到源码核对地址和说明。",
+    "filePanel.changes.htmlDetails": "部分 HTML 修改可能无法直接显示，请切换到源码核对完整修改。",
+    "filePanel.changes.previewUnavailable": "无法显示预览，已显示源码差异。",
+    "filePanel.changes.sourceRequired": "请通过源码查看这处修改的完整细节。",
+    "filePanel.changes.retryPreview": "重试预览",
+    "filePanel.changes.linkUnavailable": "无法打开此链接，请从文件树打开对应文件。",
+    "filePanel.changes.show": "查看修改",
+    "filePanel.changes.preview": "修改预览",
+    "filePanel.changes.previous": "上一处修改",
+    "filePanel.changes.next": "下一处修改",
+    "filePanel.changes.close": "关闭预览",
+    "filePanel.changes.baseline": "HEAD → 当前内容",
+    "filePanel.changes.unsaved": "HEAD → 当前内容 · 包含未保存修改",
+    "filePanel.changes.unsavedLabel": "未保存",
+    "filePanel.changes.savedOnly": "完整审查仅包含已保存的修改。",
+    "filePanel.changes.fullReview": "打开完整审查",
+    "filePanel.changes.savedReview": "查看已保存的变更",
+    "filePanel.changes.saveFirst": "请先保存文件",
+    "filePanel.changes.loading": "正在比较修改…",
+    "filePanel.changes.empty": "与 HEAD 相比没有修改。",
+    "filePanel.changes.onDemand": "文件较大，可按需比较。",
+    "filePanel.changes.failed": "无法比较修改，请重试。",
+    "filePanel.changes.retry": "重新比较",
+    "filePanel.changes.reviewUnavailable": "没有可审查的已保存修改。",
+    "filePanel.changes.reviewFailed": "无法打开变更"
   },
   "terminalStatusItems": {
     "pier.files.project": {

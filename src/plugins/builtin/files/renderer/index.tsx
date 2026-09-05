@@ -33,6 +33,7 @@ import {
   createFilesEditorPrefsActions,
 } from "./editor/actions.ts";
 import { FileEditorController } from "./editor/controller.ts";
+import { createFileChangesActions } from "./git-changes/actions.ts";
 import { registerFilesLspNavigationDeps } from "./lsp/navigation.ts";
 import { markdownCodeHighlighter } from "./markdown/code-highlighter.ts";
 import { migrateLegacyMarkdownReadingFontToDocumentFont } from "./markdown/migrate-doc-font.ts";
@@ -319,6 +320,9 @@ export const filesRendererPlugin: RendererPluginModule = {
         )
       ),
       context.actions.register(createFilesQuickOpenAction(context)),
+      ...createFileChangesActions(context).map((action) =>
+        context.actions.register(action)
+      ),
       context.actions.register(createFilesOpenDirectoryAction(context)),
       context.actions.register(createSearchContentsAction(context)),
       context.actions.register(createSearchInFolderAction(context)),

@@ -146,6 +146,7 @@ function phrasingToIr(
           kind: "link",
           range,
           title: definition.title ?? null,
+          definitionRange: sourceRange(definition.position),
           url: definition.url,
         },
       ];
@@ -161,6 +162,7 @@ function phrasingToIr(
           kind: "image",
           range,
           title: definition.title ?? null,
+          definitionRange: sourceRange(definition.position),
           url: definition.url,
         },
       ];

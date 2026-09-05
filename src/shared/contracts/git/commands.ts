@@ -14,11 +14,12 @@ import {
   gitStashPopOptionsSchema,
   listBranchesOptionsSchema,
 } from "../git.ts";
-
+import { gitFileBaselineInputSchema } from "./file-baseline.ts";
 import { gitReviewCommandSchemas } from "./review.ts";
 
 // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
 export const gitCommandSchemas = [
+  gitFileBaselineInputSchema.extend({ type: z.literal("git.getFileBaseline") }),
   z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),
   /**
    * 在桌面工作区打开（或聚焦）该仓库的审查面板（show-or-focus，与桌面

@@ -10,6 +10,7 @@ import type {
 import { useFilesDocument } from "../document/use-document.ts";
 import { FileEditorAdapter } from "../editor/adapter.tsx";
 import type { FileEditorController } from "../editor/controller.ts";
+import { FileChangesSurface } from "../git-changes/surface.tsx";
 import type { FilesTranslate } from "../i18n.ts";
 import {
   defaultMarkdownCrossModeAnchor,
@@ -390,74 +391,87 @@ export function ResolvedFilePanel({
         />
       ) : null}
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <FileEditorAdapter
-          canvasDiskSource={
-            document.source.kind === "disk" && isCanvasDiskDoc(document)
-              ? { path: document.source.path, root: document.source.root }
-              : undefined
-          }
+        <FileChangesSurface
           context={context}
-          controller={controller}
           documentId={document.id}
           editorSessionId={editorSessionId}
-          htmlDiskSource={
-            document.source.kind === "disk" && document.language === "html"
-              ? { path: document.source.path, root: document.source.root }
-              : undefined
-          }
-          labels={createFileEditorAdapterLabels(t)}
-          language={isCanvasDiskDoc(document) ? "canvas" : document.language}
-          markdownAppearance={context?.appearance}
-          markdownCaptureAnchorRef={previewCaptureRef}
-          markdownCharts={context?.charts}
-          markdownCommentLabels={createMarkdownCommentLabels(t)}
-          markdownContentAnchor={previewContentAnchor}
-          markdownContentAnchorRequestId={previewContentAnchorRequestId}
-          markdownCopyAnchor={context ? handleCopyMarkdownAnchor : undefined}
-          markdownCopyCode={context ? handleCopyMarkdownCode : undefined}
-          markdownErrorLabel={createMarkdownErrorLabel(t)}
-          markdownFileResources={context}
-          markdownInitialAnchor={markdownAnchor}
-          markdownInitialAnchorRequestId={markdownAnchorRequestId}
-          markdownLabels={createMarkdownRendererLabels(t)}
-          markdownLiveModules={context?.liveModules}
-          markdownSource={
-            document.source.kind === "disk" ? document.source : undefined
-          }
-          markdownTocLabels={createMarkdownTocLabels(t)}
-          markdownZoomLabels={createMarkdownZoomLabels(t)}
           mode={mode}
-          onEditorContextMenu={handleEditorContextMenu}
-          onJumpToSource={
-            onModeChange
-              ? (offset) => {
-                  // Bypass viewport capture: ⌥+double-click / context-menu
-                  // jump targets this block's start.
-                  onModeChange("source");
-                  controller.revealOffset(editorSessionId, offset, document.id);
-                }
-              : undefined
-          }
-          onMarkdownPreviewContextMenu={handleMarkdownPreviewContextMenu}
-          onOpenMarkdownInternal={handleOpenMarkdownInternal}
-          openExternal={handleOpenExternal}
           panelContext={panelContext}
-          panelId={panelId}
-          readOnly={document.readOnly || document.loadState === "loading"}
-          registerSelectionSelectAllProvider={
-            context?.contextMenu?.registerSelectionSelectAllProvider
-          }
-          searchLabels={createFileSearchLabels(t)}
-          searchRequest={searchRequest}
           t={t}
-          value={document.currentContents}
-          {...(mode === "diff"
-            ? {
-                originalValue:
-                  document.conflictDiskContents ?? document.savedContents,
-              }
-            : {})}
-        />
+        >
+          <FileEditorAdapter
+            canvasDiskSource={
+              document.source.kind === "disk" && isCanvasDiskDoc(document)
+                ? { path: document.source.path, root: document.source.root }
+                : undefined
+            }
+            context={context}
+            controller={controller}
+            documentId={document.id}
+            editorSessionId={editorSessionId}
+            htmlDiskSource={
+              document.source.kind === "disk" && document.language === "html"
+                ? { path: document.source.path, root: document.source.root }
+                : undefined
+            }
+            labels={createFileEditorAdapterLabels(t)}
+            language={isCanvasDiskDoc(document) ? "canvas" : document.language}
+            markdownAppearance={context?.appearance}
+            markdownCaptureAnchorRef={previewCaptureRef}
+            markdownCharts={context?.charts}
+            markdownCommentLabels={createMarkdownCommentLabels(t)}
+            markdownContentAnchor={previewContentAnchor}
+            markdownContentAnchorRequestId={previewContentAnchorRequestId}
+            markdownCopyAnchor={context ? handleCopyMarkdownAnchor : undefined}
+            markdownCopyCode={context ? handleCopyMarkdownCode : undefined}
+            markdownErrorLabel={createMarkdownErrorLabel(t)}
+            markdownFileResources={context}
+            markdownInitialAnchor={markdownAnchor}
+            markdownInitialAnchorRequestId={markdownAnchorRequestId}
+            markdownLabels={createMarkdownRendererLabels(t)}
+            markdownLiveModules={context?.liveModules}
+            markdownSource={
+              document.source.kind === "disk" ? document.source : undefined
+            }
+            markdownTocLabels={createMarkdownTocLabels(t)}
+            markdownZoomLabels={createMarkdownZoomLabels(t)}
+            mode={mode}
+            onEditorContextMenu={handleEditorContextMenu}
+            onJumpToSource={
+              onModeChange
+                ? (offset) => {
+                    // Bypass viewport capture: ⌥+double-click / context-menu
+                    // jump targets this block's start.
+                    onModeChange("source");
+                    controller.revealOffset(
+                      editorSessionId,
+                      offset,
+                      document.id
+                    );
+                  }
+                : undefined
+            }
+            onMarkdownPreviewContextMenu={handleMarkdownPreviewContextMenu}
+            onOpenMarkdownInternal={handleOpenMarkdownInternal}
+            openExternal={handleOpenExternal}
+            panelContext={panelContext}
+            panelId={panelId}
+            readOnly={document.readOnly || document.loadState === "loading"}
+            registerSelectionSelectAllProvider={
+              context?.contextMenu?.registerSelectionSelectAllProvider
+            }
+            searchLabels={createFileSearchLabels(t)}
+            searchRequest={searchRequest}
+            t={t}
+            value={document.currentContents}
+            {...(mode === "diff"
+              ? {
+                  originalValue:
+                    document.conflictDiskContents ?? document.savedContents,
+                }
+              : {})}
+          />
+        </FileChangesSurface>
       </main>
     </div>
   );

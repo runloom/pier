@@ -1,4 +1,8 @@
-import type { MarkdownSourceRange, MarkdownTableCell } from "./ir.ts";
+import type {
+  MarkdownInline,
+  MarkdownSourceRange,
+  MarkdownTableCell,
+} from "./ir.ts";
 import { type MarkdownSearchMatch, markdownSearchNodeKey } from "./search.ts";
 
 export function sourceBlockProps(
@@ -46,6 +50,15 @@ export function headingClassName(depth: number): string {
   if (depth === 4) return "md-h4";
   if (depth === 5) return "md-h5";
   return "md-h6";
+}
+
+/** Images render figures/skeletons, also when nested in emphasis or links. */
+export function hasMarkdownImage(inlines: readonly MarkdownInline[]): boolean {
+  return inlines.some(
+    (inline) =>
+      inline.kind === "image" ||
+      ("children" in inline && hasMarkdownImage(inline.children))
+  );
 }
 
 export function tableAlignment(

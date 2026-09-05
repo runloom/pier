@@ -60,6 +60,9 @@ describe("Git diff renderer governance", () => {
 
     expect(importers).toEqual([
       "src/renderer/lib/theme/register-custom-themes.ts",
+      "packages/ui/src/diff-view/excerpt/index.tsx",
+      "packages/ui/src/diff-view/excerpt/use-height.ts",
+      "packages/ui/src/diff-view/file-diff/from-contents.ts",
       "packages/ui/src/diff-view/file-diff/from-patch.ts",
       "packages/ui/src/diff-view/file-diff/placeholders.ts",
       "packages/ui/src/diff-view/handle-deps.ts",

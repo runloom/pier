@@ -194,6 +194,13 @@ function createHarness(
       onDidChange: vi.fn(() => vi.fn()),
     },
     dialogs,
+    git: {
+      getFileBaseline: vi.fn(async () => ({
+        status: "unavailable",
+        reason: "not-repository",
+      })),
+      watch: vi.fn(() => () => undefined),
+    },
     files: {
       confirmDurability,
       drafts: {

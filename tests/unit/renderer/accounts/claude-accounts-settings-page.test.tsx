@@ -83,6 +83,11 @@ function contextWithSnapshot(snapshot: ClaudeAccountsSnapshot): {
   };
   return {
     context: {
+      git: {
+        getFileBaseline: vi.fn(async () => {
+          throw new Error("unused git baseline");
+        }),
+      },
       app: {
         closeSettings: vi.fn(),
         openExternal: vi.fn(async () => true),

@@ -14,6 +14,7 @@ import type {
 } from "../document/types.ts";
 import { useFilesDocument } from "../document/use-document.ts";
 import type { FileEditorController } from "../editor/controller.ts";
+import { FileChangesToolbarButton } from "../git-changes/toolbar-button.tsx";
 import type { FilesTranslate } from "../i18n.ts";
 import { FilesMutationSuspendedError } from "../mutation/gate.ts";
 import { CanvasCommentsButton } from "../preview/canvas-comments-button.tsx";
@@ -119,6 +120,15 @@ export function ResolvedFilePanelActions({
         onProtectionError={handleProtectionError}
         t={t}
       />
+      {mode === "source" ||
+      (mode === "preview" && document.language === "markdown") ? (
+        <FileChangesToolbarButton
+          context={context}
+          documentId={document.id}
+          editorSessionId={editorSessionId}
+          t={t}
+        />
+      ) : null}
       <LanguageBadge
         context={context}
         controller={controller}
