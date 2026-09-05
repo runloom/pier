@@ -546,7 +546,7 @@ section 根节点下的裸子节点。
 
 - **视口归 libghostty**：宿主 `NSScrollView` 只镜像 chrome；live 拖条 / 滚轮才 `scroll_to_row`。
 - **裸 ↑↓ / Page 只进 PTY**：shell 历史、Cursor / Codex 选单。`FocusNotifyingScrollView` 不得 first responder、不得把 AppKit 文档导航变成 clip 移动；键落到壳上转给 `terminalView.keyDown`。
-- **键表不另写滚动**：禁止 `arrow_*=scroll_*` / `scroll_page_lines`。macOS `Cmd+↑↓` 仍是 Ghostty `jump_to_prompt`；`Cmd+Page*` / `Cmd+Home/End` 才是显式滚视口。
+- **键表由 Ghostty 执行**：禁止裸 `arrow_*=scroll_*` / `scroll_page_lines`。macOS 仅增加 `super+arrow_down=scroll_to_bottom`，让 `Cmd+↓` 在无 shell 提示符标记的 TUI 中也能回到底部；`Cmd+End` 仍可用。`Cmd+↑` / `Cmd+Shift+↑↓` 保留 Ghostty `jump_to_prompt`。不得注册宿主全局滚动键；增强输入框 `Cmd+↓` 保留文本编辑语义。
 - **keystroke follow 收窄（方案 C）**：保持 Ghostty 默认「打字回 live」。禁止 appearance 写 `no-keystroke`。裸 ↑↓ / Page 不 `scrollViewport(.bottom)`，只走 Pier patch `0109-keystroke-follow-skip-nav-keys`。
 - 检查点：`tests/unit/native/terminal-viewport-key-ownership-governance.test.ts`、`tests/unit/native/terminal-key-routing.test.ts`、`native/Tests/GhosttyBridgeTests/TerminalViewportKeyOwnershipTests.swift`、`native/Tests/GhosttyBridgeTests/TerminalScrollToBottomKeystrokeTests.swift`。
 

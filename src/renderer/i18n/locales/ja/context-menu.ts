@@ -1,5 +1,6 @@
 export const contextMenu = {
   action: {
+    scrollToBottom: "最下部に移動",
     clearScreen: "画面を消去",
     closeAll: "すべてのパネルを閉じる",
     closeOthers: "ほかのパネルを閉じる",

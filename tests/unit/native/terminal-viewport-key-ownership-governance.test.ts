@@ -129,14 +129,20 @@ describe("terminal viewport key ownership gold standard", () => {
     expect(body).not.toContain("super.doCommand");
   });
 
-  it("does not add Pier arrow/page scroll keybinds", () => {
+  it("only allows Cmd+Down as an explicit native arrow scroll binding", () => {
     const source = read(BRIDGE);
     const start = source.indexOf(
       "nonisolated static func configureDefaultTerminalAppearance("
     );
     expect(start).toBeGreaterThan(-1);
     const body = source.slice(start, start + 1800);
-    expect(body).not.toMatch(/arrow_(up|down|left|right)\s*=\s*scroll_/);
+    const viewportBindings = Array.from(
+      body.matchAll(
+        /withCustom\("keybind", "([^"]*=(?:scroll_|jump_to_prompt)[^"]*)"\)/g
+      ),
+      (match) => match[1]
+    );
+    expect(viewportBindings).toEqual(["super+arrow_down=scroll_to_bottom"]);
     expect(body).not.toContain("scroll_page_lines");
     expect(body).toContain(
       'builder.withCustom("keybind", "super+backspace=text:\\\\x15")'
