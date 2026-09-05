@@ -52,6 +52,11 @@ describe("applyPermissionMode（返回 args + env）", () => {
     expect(args.claude).toBe(YOLO_FLAGS.claude);
     expect(args.gemini).toBe("--yolo");
     expect(args["qwen-code"]).toBe("--approval-mode yolo");
+    expect(args.droid).toBe("--auto high");
+    expect(args.opencode).toBe("--auto");
+    expect(args.kilo).toBe("--auto");
+    expect(args["mimo-code"]).toBe("--yolo");
+    expect(args.omp).toBe("--auto-approve");
     expect(args.continue).toBe('--allow "*"');
     expect(args.grok).toBe("--permission-mode bypassPermissions");
   });
@@ -71,11 +76,25 @@ describe("applyPermissionMode（返回 args + env）", () => {
       applyPermissionMode("yolo", { claude: "--mine" }, {}).args.claude
     ).toBe("--mine --dangerously-skip-permissions");
     expect(
+      applyPermissionMode("yolo", { droid: "--mine" }, {}).args.droid
+    ).toBe("--mine --auto high");
+    expect(
+      applyPermissionMode("yolo", { opencode: "--port 8080" }, {}).args.opencode
+    ).toBe("--port 8080 --auto");
+    expect(
       applyPermissionMode(
         "manual",
         { claude: "--mine --dangerously-skip-permissions" },
         {}
       ).args.claude
     ).toBe("--mine");
+    expect(
+      applyPermissionMode("manual", { droid: "--mine --auto high" }, {}).args
+        .droid
+    ).toBe("--mine");
+    expect(
+      applyPermissionMode("manual", { opencode: "--port 8080 --auto" }, {}).args
+        .opencode
+    ).toBe("--port 8080");
   });
 });

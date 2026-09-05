@@ -116,6 +116,7 @@ export interface CredentialStatus {
   jiraAuthorized: boolean;
   jiraBaseUrl: string | null;
   linearAuthorized: boolean;
+  linearProbed: boolean;
   login: string | null;
   probed: boolean;
 }

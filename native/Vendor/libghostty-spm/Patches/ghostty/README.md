@@ -18,6 +18,7 @@ Lakr233 上游 patches 之后再 apply 这一批。编号从 `0100` 起，跟 La
 | `0107-output-tap.patch` | 加 `ghostty_surface_set_output_tap`：per-surface 原始 PTY 输出 tap（`Termio.processOutputLocked` 解析前触发，IO 线程持 renderer 锁）。C API 留在 fork；Pier 宿主不再接线落盘。 |
 | `0108-live-scrollback-limit.patch` | 加 `ghostty_surface_set_scrollback_limit`：运行时改主屏 `PageList.setMaxSize`，立刻丢掉超限页。Pier 用来让滚动历史偏好对存量 surface 即时生效。 |
 | `0109-keystroke-follow-skip-nav-keys.patch` | 收窄 Ghostty 默认 `scroll-to-bottom = keystroke`：裸方向键 / Page（含小键盘）编码进 PTY 但不 `scrollViewport(.bottom)`。打字 / Enter / Backspace 以及 Ctrl/Alt/Super 和弦仍回 live。 |
+| `0110-color-scheme-report-state.patch` | Mode 2031 通知和 CSI 996 查询使用 surface 当前明暗状态。无条件主题配置时，Ghostty 会跳过配置重放，不能从配置缓存推断当前外观；初始化与配置更新都显式传入实际状态。宿主还需同步处理 soft reload，确保状态先于通知进入 IO 队列。需 `pnpm build:libghostty` 与 `pnpm build:native`。 |
 
 ## 规则
 

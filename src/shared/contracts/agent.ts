@@ -123,7 +123,17 @@ export const YOLO_FLAGS: Partial<Record<AgentKind, string>> = {
   codebuddy: "--dangerously-skip-permissions",
   // Qoder CLI：`qodercli --yolo`（docs.qoder.com/zh/cli 核定）。
   qodercli: "--yolo",
-  // 其余 agent 无 yolo flag：goose 走 YOLO_ENV，opencode/kilo 见 UNSUPPORTED_ARGS。
+  // Droid：`droid --auto high`（docs.factory.ai/autonomy-and-safety/auto-run 与 `droid --help` 核定）。
+  droid: "--auto high",
+  // OpenCode：`opencode --auto`（`opencode --help` 核定）。
+  opencode: "--auto",
+  // Kilo Code：`kilo --auto`（`kilo --help` 核定）。
+  kilo: "--auto",
+  // MiMo Code：`mimo --yolo`（`mimo --help` 核定）。
+  "mimo-code": "--yolo",
+  // OMP：`omp --auto-approve`（`omp --help` 核定）。
+  omp: "--auto-approve",
+  // 其余 agent 无全局一键 yolo flag：goose 走 YOLO_ENV，pi/aug/codebuff/openclaw 见各 CLI 特性说明。
 };
 
 /** env-based yolo（goose 用环境变量而非 flag）。 */
@@ -131,7 +141,7 @@ export const YOLO_ENV: Partial<Record<AgentKind, Record<string, string>>> = {
   goose: { GOOSE_MODE: "auto" },
 };
 
-/** 交互 TUI 模式不支持跳权限 flag、需在写入时剥除的 agent。 */
+/** 交互 TUI 模式不支持历史误配 flag（如误填 Claude 的 `--dangerously-skip-permissions`）、需在写入时剥除的 agent。 */
 export const UNSUPPORTED_ARGS: Partial<Record<AgentKind, readonly string[]>> = {
   opencode: ["--dangerously-skip-permissions"],
   kilo: ["--dangerously-skip-permissions"],

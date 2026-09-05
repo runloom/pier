@@ -104,6 +104,56 @@ describe("resolveAgentLaunch", () => {
     ).toEqual({
       command: "codex --dangerously-bypass-approvals-and-sandbox",
     });
+    expect(
+      resolveAgentLaunch({
+        agentId: "droid",
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentPermissionMode: "yolo",
+      })
+    ).toEqual({
+      command: "droid --auto high",
+    });
+    expect(
+      resolveAgentLaunch({
+        agentId: "opencode",
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentPermissionMode: "yolo",
+      })
+    ).toEqual({
+      command: "opencode --auto",
+    });
+    expect(
+      resolveAgentLaunch({
+        agentId: "kilo",
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentPermissionMode: "yolo",
+      })
+    ).toEqual({
+      command: "kilo --auto",
+    });
+    expect(
+      resolveAgentLaunch({
+        agentId: "mimo-code",
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentPermissionMode: "yolo",
+      })
+    ).toEqual({
+      command: "mimo --yolo",
+    });
+    expect(
+      resolveAgentLaunch({
+        agentId: "omp",
+        agentDefaultArgs: {},
+        agentDefaultEnv: {},
+        agentPermissionMode: "yolo",
+      })
+    ).toEqual({
+      command: "omp --auto-approve",
+    });
   });
 });
 

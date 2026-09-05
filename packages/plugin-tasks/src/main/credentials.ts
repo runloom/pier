@@ -20,6 +20,7 @@ export interface GithubCredentials {
   ): Promise<string | null>;
   getToken(): Promise<string | null>;
   probeGhToken(): Promise<string | null>;
+  probeLinearToken(): Promise<string | null>;
   setJiraBaseUrl(value: string): Promise<void>;
   setProviderToken(
     provider: "github" | "jira" | "linear",
@@ -54,6 +55,13 @@ async function fetchLogin(
     return body.login;
   }
   return null;
+}
+
+function readLinearEnv(
+  processEnv: Readonly<Record<string, string | undefined>>
+): string | null {
+  const token = processEnv.LINEAR_API_KEY?.trim();
+  return token && token.length > 0 ? token : null;
 }
 
 function secretKey(provider: "github" | "jira" | "linear"): string {
@@ -97,6 +105,7 @@ export function createGithubCredentials(input: {
     getProviderToken: (provider) => input.secrets.get(secretKey(provider)),
     getToken: () => input.secrets.get(GITHUB_TOKEN_SECRET),
     probeGhToken: probe,
+    probeLinearToken: async () => readLinearEnv(input.processEnv),
     setJiraBaseUrl: (value) => input.secrets.set(JIRA_BASE_URL_SECRET, value),
     setProviderToken: (provider, token) =>
       input.secrets.set(secretKey(provider), token),
@@ -108,6 +117,7 @@ export function createGithubCredentials(input: {
         input.secrets.get(JIRA_TOKEN_SECRET),
         input.secrets.get(JIRA_BASE_URL_SECRET),
       ]);
+      const linearProbed = readLinearEnv(input.processEnv) !== null;
       if (stored) {
         const login = await fetchLogin(stored, fetchImpl);
         return {
@@ -115,6 +125,7 @@ export function createGithubCredentials(input: {
           jiraAuthorized: Boolean(jira),
           jiraBaseUrl,
           linearAuthorized: Boolean(linear),
+          linearProbed,
           login,
           probed: false,
         };
@@ -125,6 +136,7 @@ export function createGithubCredentials(input: {
         jiraAuthorized: Boolean(jira),
         jiraBaseUrl,
         linearAuthorized: Boolean(linear),
+        linearProbed,
         login: null,
         probed: probed !== null,
       };
