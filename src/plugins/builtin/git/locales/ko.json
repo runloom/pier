@@ -870,15 +870,15 @@
   "terminalStatusItems": {
     "pier.worktree.status": {
       "description": "터미널 패널에 git 분기를 표시합니다. 클릭하면 상태 동작을 엽니다.",
-      "title": "git 분기"
+      "title": "GIT 분기"
     },
     "pier.git.status.changes": {
       "description": "변경된 줄 수를 표시합니다. 클릭하면 검토 패널을 엽니다.",
-      "title": "git 변경"
+      "title": "GIT 변경"
     },
     "pier.git.status.sync": {
       "description": "앞섬/뒤처짐 수와 한 번 클릭 동기화를 표시합니다.",
-      "title": "git 동기화"
+      "title": "GIT 동기화"
     }
   },
   "panels": {
