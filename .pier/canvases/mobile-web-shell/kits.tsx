@@ -39,7 +39,7 @@ function Rule(props: { children: ReactNode }): ReactNode {
 export function PressKitScreen(): ReactNode {
   return (
     <KitShell
-      lead="系统点击高亮已关掉，主路径必须自绘按下底。命中 44px。未等待不挂键；等待时键帽叠在屏幕下缘。"
+      lead="系统点击高亮已关掉，主路径必须自绘按下底。命中 44px。有效未决交互才开放按键；按需展开并占位。"
       title="触控"
     >
       <SectionLabel>列表行 · 整行命中 56px</SectionLabel>
@@ -110,10 +110,7 @@ export function PressKitScreen(): ReactNode {
   );
 }
 
-function MotionStep(props: {
-  from: string;
-  to: string;
-}): ReactNode {
+function MotionStep(props: { from: string; to: string }): ReactNode {
   return (
     <div className="flex items-center gap-2">
       <div className="flex h-11 flex-1 items-center rounded-xl border border-border bg-muted px-3 text-[12px] text-muted-foreground">
@@ -145,11 +142,12 @@ export function MotionKitScreen(): ReactNode {
       </Rule>
       <SectionLabel>返回 · 同曲线反向</SectionLabel>
       <Rule>
-        顶栏「返回」和系统后退走同一条动画。底页从 −25% 回到 0，出场页滑到右侧后卸载。
+        顶栏「返回」和系统后退走同一条动画。底页从 −25% 回到
+        0，出场页滑到右侧后卸载。
       </Rule>
       <SectionLabel>同页切换 · 不推入</SectionLabel>
       <Rule>
-        文件页目录往下走、变更页点开单文件、会话标题下拉切同机会话、审批键显隐：只换内容，不做页面过渡。
+        文件页目录往下走、变更页点开单文件、底部面板切同机会话、按键面板显隐：只换内容，不做页面过渡。
       </Rule>
       <SectionLabel>prefers-reduced-motion</SectionLabel>
       <Rule>取消位移，改为 120ms 淡入淡出。</Rule>
@@ -206,12 +204,12 @@ export function StateKitScreen(): ReactNode {
       <div className="divide-y divide-border/60">
         <StateRow
           label="需要你处理"
-          note="工作台切片；键行高亮"
+          note="预览下方标状态；按键按需展开"
           sample={<Badge variant="warning">需要你处理</Badge>}
         />
         <StateRow
           label="运行中"
-          note="驾驶舱卡 + 光标"
+          note="连续读屏；底部阅读工具"
           sample={<Badge variant="info">运行中</Badge>}
         />
         <StateRow
@@ -222,7 +220,9 @@ export function StateKitScreen(): ReactNode {
         <StateRow
           label="普通终端"
           note="无徽标、键行不可发"
-          sample={<Icon className="size-5 text-muted-foreground" name="terminal" />}
+          sample={
+            <Icon className="size-5 text-muted-foreground" name="terminal" />
+          }
         />
       </div>
       <SectionLabel>变更 · 状态字母</SectionLabel>
@@ -235,7 +235,7 @@ export function StateKitScreen(): ReactNode {
       <SectionLabel>通知</SectionLabel>
       <div className="flex items-center gap-3 px-1 text-[12px] text-muted-foreground">
         <span className="size-2 rounded-full bg-action-danger" />
-        一场会话一行（屏幕切片） · 未读红点贴标题 · 需要你处理钉顶 · 无前置状态图标
+        事件标题与详情 · 保留发生时间 · 未读红点 · 无前置状态图标
       </div>
     </KitShell>
   );

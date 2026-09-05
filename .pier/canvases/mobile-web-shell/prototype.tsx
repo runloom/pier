@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useReducer, useRef, useState } from "react";
 import {
+  demoKeyDelivery,
   type DemoNotification,
   type DemoState,
   INITIAL_DEMO,
@@ -25,8 +26,6 @@ type Frame =
   | { kind: "changes"; worktree: string }
   | { kind: "files"; sessionId: string };
 
-/** 审批键回写后，智能体继续跑，稍后回合完成并进收件箱。 */
-const TURN_MS = 3500;
 const PUSH_ENABLE_MS = 1200;
 
 function frameTitle(frame: Frame, demo: DemoState): string {
@@ -58,8 +57,7 @@ function frameTitle(frame: Frame, demo: DemoState): string {
 /**
  * P0 可点原型：一条栈，没有底栏。主机 → 这台电脑 → 会话 → 变更 / 文件；
  * 主机 → 添加主机；工作台铃铛 → 通知 → 该会话。
- * 闭环：配对加入主机；进入先连接再在线；审批键回写后回合完成、收件箱来信、
- * 铃铛亮点；通知点开落到会话并标已读；会话标题下拉切同机其它终端；离线机点按后可移除。
+ * 闭环：配对加入主机；进入先连接再在线；按键投递只确认已发送；通知点开落到会话并标已读；底部面板切同机其它终端；离线机点按后可移除。
  */
 export function PrototypePhone(): ReactNode {
   const [demo, dispatch] = useReducer(reduceDemo, INITIAL_DEMO);
@@ -111,13 +109,6 @@ export function PrototypePhone(): ReactNode {
     if (item.sessionId !== null) {
       push({ kind: "session", sessionId: item.sessionId });
     }
-  };
-
-  const respond = (sessionId: string, key: string) => {
-    dispatch({ key, sessionId, type: "session.respond" });
-    later(TURN_MS, () => {
-      dispatch({ sessionId, type: "session.turnFinished" });
-    });
   };
 
   const enablePush = () => {
@@ -205,9 +196,9 @@ export function PrototypePhone(): ReactNode {
             onOpenFiles={() => {
               push({ kind: "files", sessionId: session.id });
             }}
-            onRespond={(key) => {
-              respond(session.id, key);
-            }}
+            onRespond={(_key, interactionId) =>
+              demoKeyDelivery(session, interactionId)
+            }
             onSwitchSession={(sessionId) => {
               setStack((current) => {
                 const top = current[current.length - 1];
