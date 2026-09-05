@@ -2543,6 +2543,8 @@ describe("createGitService", () => {
   });
 
   it("pull 和 push 继承解析后的 shell 环境并补 BatchMode", async () => {
+    // sshBatchEnv 尊重宿主 GIT_SSH_COMMAND；固定为空以消除环境依赖。
+    vi.stubEnv("GIT_SSH_COMMAND", "");
     const shellEnv = {
       PATH: "/shell/bin:/usr/bin",
       SSH_AUTH_SOCK: "/tmp/pier-agent.sock",
@@ -2576,6 +2578,7 @@ describe("createGitService", () => {
     await expect(service.push("/repo")).resolves.toEqual({ kind: "ok" });
 
     expect(remoteCommandEnvs).toEqual([batchEnv, batchEnv]);
+    vi.unstubAllEnvs();
   });
 
   it("sync 先 rebase 拉取再推送", async () => {

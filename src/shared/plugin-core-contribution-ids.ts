@@ -77,6 +77,7 @@ export const CORE_RESERVED_ACTION_IDS = [
   "pier.terminal.renameAgentSession",
   "pier.terminal.revealLink",
   "pier.terminal.runSelection",
+  "pier.terminal.scrollToBottom",
   "pier.terminal.search",
   "pier.terminal.selectAll",
   "pier.view.resetZoom",

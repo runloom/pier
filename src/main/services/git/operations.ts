@@ -113,10 +113,11 @@ export async function resolveDefaultRemote(
 }
 
 /** Remote ops may run multi-minute local hooks (pre-push); not the 60s local write cap. */
-const remoteNetOpts = {
-  env: sshBatchEnv(),
-  timeoutMs: REMOTE_WRITE_TIMEOUT_MS,
-} as const;
+const remoteNetOpts = () =>
+  ({
+    env: sshBatchEnv(),
+    timeoutMs: REMOTE_WRITE_TIMEOUT_MS,
+  }) as const;
 
 export async function pushBranch(
   execGit: GitOperationExec,
@@ -127,7 +128,7 @@ export async function pushBranch(
     return target;
   }
   try {
-    await execGit(["push"], target.root, remoteNetOpts);
+    await execGit(["push"], target.root, remoteNetOpts());
     return { kind: "ok" };
   } catch (err) {
     return remoteUnavailable(err);
@@ -155,7 +156,7 @@ export async function publishBranch(
   }
   try {
     // remote 已拒绝以 `-` 开头；HEAD = 当前检出。
-    await execGit(["push", "-u", remote, "HEAD"], target.root, remoteNetOpts);
+    await execGit(["push", "-u", remote, "HEAD"], target.root, remoteNetOpts());
     return { kind: "ok" };
   } catch (err) {
     return remoteUnavailable(err);
@@ -172,7 +173,7 @@ export async function fetchRemotes(
     return target;
   }
   try {
-    await execGit(["fetch", "--prune"], target.root, remoteNetOpts);
+    await execGit(["fetch", "--prune"], target.root, remoteNetOpts());
     return { kind: "ok" };
   } catch (err) {
     return remoteUnavailable(err);
@@ -191,7 +192,7 @@ export async function pullFastForward(
     return unavailable(NO_UPSTREAM_MESSAGE);
   }
   try {
-    await execGit(["pull", "--ff-only"], target.root, remoteNetOpts);
+    await execGit(["pull", "--ff-only"], target.root, remoteNetOpts());
     return { kind: "ok" };
   } catch (err) {
     return remoteUnavailable(err);
@@ -212,8 +213,8 @@ export async function syncBranch(
   try {
     // Clean diverged sync rebases local-only commits onto upstream before push.
     // This avoids implicit merge commits while still making Sync actionable.
-    await execGit(["pull", "--rebase"], target.root, remoteNetOpts);
-    await execGit(["push"], target.root, remoteNetOpts);
+    await execGit(["pull", "--rebase"], target.root, remoteNetOpts());
+    await execGit(["push"], target.root, remoteNetOpts());
     return { kind: "ok" };
   } catch (err) {
     return remoteUnavailable(err);
