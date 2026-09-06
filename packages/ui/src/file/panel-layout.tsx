@@ -1,5 +1,5 @@
 import { FolderTree, Search } from "lucide-react";
-import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { usePanelRef } from "react-resizable-panels";
 import { Button } from "../button.tsx";
 import {
@@ -27,6 +27,10 @@ export {
 } from "./panel-sidebar-width.ts";
 
 const MAC_PLATFORM_RE = /Mac|iPhone|iPad/i;
+
+function isFilePanelSidebarVisible(sidebar: ReactNode): boolean {
+  return sidebar != null && sidebar !== false;
+}
 
 /**
  * Default display label for Mod+KeyB (tree sidebar toggle).
@@ -66,7 +70,18 @@ export function FilePanelLayout({
   const sidebarPanelRef = usePanelRef();
   const groupElementRef = useRef<HTMLDivElement | null>(null);
   const applyingPreferenceRef = useRef(false);
-  const sidebarVisible = sidebar != null;
+  const sidebarVisible = isFilePanelSidebarVisible(sidebar);
+  // 只按首次挂载钉 defaultSize：无树 0px，避免 deferred layout 用 256px 幽灵槽。
+  // 之后显隐只走 collapse/expand，不要改 defaultSize（会重注册 Panel、丢掉 expandToSize）。
+  const [sidebarDefaultSize] = useState(() =>
+    sidebarVisible
+      ? `${readSidebarWidth(
+          sidebarWidthStorageKey,
+          defaultSidebarWidth,
+          minSidebarWidth
+        )}px`
+      : "0px"
+  );
   useLayoutEffect(() => {
     const panel = sidebarPanelRef.current;
     if (!panel) {
@@ -112,9 +127,18 @@ export function FilePanelLayout({
         const width = groupElement.clientWidth;
         const becameLaidOut = lastHostWidth <= 0 && width > 0;
         lastHostWidth = width;
-        if (!(becameLaidOut && sidebarVisible)) {
+        if (!becameLaidOut) {
           return;
         }
+        const current = sidebarPanelRef.current;
+        if (!current) {
+          return;
+        }
+        if (!sidebarVisible) {
+          current.collapse();
+          return;
+        }
+        current.expand();
         applyPreferenceWidth(
           readSidebarWidth(
             sidebarWidthStorageKey,
@@ -187,13 +211,7 @@ export function FilePanelLayout({
           className="min-h-0"
           collapsedSize="0px"
           collapsible
-          defaultSize={String(
-            readSidebarWidth(
-              sidebarWidthStorageKey,
-              defaultSidebarWidth,
-              minSidebarWidth
-            )
-          ).concat("px")}
+          defaultSize={sidebarDefaultSize}
           groupResizeBehavior="preserve-pixel-size"
           id={sidebarPanelId}
           maxSize="50%"
