@@ -81,7 +81,8 @@ describe("createLiveModuleGraphTracker", () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-graph-data-"));
     const canvas = join(dir, "notes.canvas.tsx");
     await writeFile(canvas, "export default function K() { return null; }\n");
-    const tracker = createLiveModuleGraphTracker();
+    const fake = createFakeDirWatch();
+    const tracker = createLiveModuleGraphTracker({ watch: fake.watch });
     const events: Array<{ moduleId: string; rootId: string }> = [];
     stops.push(
       tracker.watch((batch) => {
@@ -89,10 +90,11 @@ describe("createLiveModuleGraphTracker", () => {
       })
     );
     tracker.setModuleGraph("root", "notes.canvas.tsx", [canvas]);
-    await wait(LIVE_MODULE_WATCH_DEBOUNCE_MS + 150);
-    events.length = 0;
     await writeFile(join(dir, "board.json"), '{"cards":[]}\n');
-    await wait(LIVE_MODULE_WATCH_DEBOUNCE_MS + 200);
+    // Deliver only the data write: macOS can otherwise report the earlier
+    // canvas creation after the fixed settling delay under coverage load.
+    fake.emit("board.json");
+    await wait(LIVE_MODULE_WATCH_DEBOUNCE_MS + 50);
     expect(events).toEqual([]);
   });
 
