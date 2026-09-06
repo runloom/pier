@@ -91,6 +91,29 @@ jobs:
       - name: Verify package.json version matches tag
         run: node ./scripts/verify-app-release-version.mjs "${{ steps.version.outputs.version }}"
 
+      # electron-builder 26.15.3 passes the p12 password to set-key-partition-list
+      # instead of its generated keychain password (rejected by macOS 26.6).
+      # Import once with separate passwords; the action also cleans up the keychain.
+      - name: Materialize Developer ID certificate
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+        run: |
+          set -euo pipefail
+          umask 077
+          CERT_PATH="${RUNNER_TEMP}/pier-signing.p12"
+          case "$CSC_LINK" in
+            https://*) curl --fail --silent --show-error --location "$CSC_LINK" --output "$CERT_PATH" ;;
+            *) printf '%s' "$CSC_LINK" | base64 --decode > "$CERT_PATH" ;;
+          esac
+          test -s "$CERT_PATH"
+
+      - name: Import Developer ID certificate
+        uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7
+        with:
+          keychain: signing_temp
+          p12-filepath: ${{ runner.temp }}/pier-signing.p12
+          p12-password: ${{ secrets.CSC_KEY_PASSWORD }}
+
       # GhosttyKit is not in git; build:dist requires the xcframework (same as Quality Gate native).
       - id: ghostty-kit-cache
         uses: actions/cache@v4
@@ -127,8 +150,7 @@ jobs:
       - name: Build, sign, notarize, and publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_KEYCHAIN: signing_temp.keychain
           CSC_NAME: ${{ secrets.CSC_NAME }}
           # APPLE_API_KEY path is set by the previous step via GITHUB_ENV when present.
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -137,8 +159,6 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_KEYCHAIN_PROFILE: ${{ secrets.APPLE_KEYCHAIN_PROFILE }}
-          # build-dist.sh blocks CSC_LINK publish unless explicitly allowed.
-          PIER_DIST_ALLOW_CSC_LINK_PUBLISH: "1"
           CHANNEL: ${{ steps.version.outputs.channel }}
         run: |
           set -euo pipefail
@@ -192,6 +212,10 @@ jobs:
           # This candidate tag must itself be prerelease.
           node ./scripts/verify-github-latest-isolation.mjs \
             --candidate-tag "${{ steps.version.outputs.tag }}"
+
+      - name: Remove temporary signing credentials
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/pier-signing.p12" "${RUNNER_TEMP}/AuthKey.p8"
 
   publish-blog:
     needs: release
