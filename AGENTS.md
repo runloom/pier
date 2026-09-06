@@ -529,6 +529,20 @@ section 根节点下的裸子节点。
 - 检查点：`tests/unit/main/terminal/scrollback-governance.test.ts`、
  `native/Tests/GhosttyBridgeTests/TerminalScrollbackLimitTests.swift`
 
+### 终端 PTY 写入 UTF-8 边界 `0111-utf8-safe-pty-write-chunk`
+
+写进 PTY 的每一块必须落在 UTF-8 字符边界上。ghostty `Exec.queueWrite` 按 64 字节硬切，
+增强输入 / `initialInput` / runtime-control 走 `pasteTerminalText` → `ghostty_surface_text`
+整段注入时，第 64n 字节常落在汉字中间，逐块解码的 TUI（cursor-agent）会显示 `���`。
+
+- **写端对齐在 ghostty 里做**：`utf8ChunkEnd` 让下一块首字节是续字节时把整个字符让给下一次
+  write；快路径与 `\r`→`\r\n` 慢路径同用；畸形输入回退字节边界、绝不产生空块。缓冲仍 64 字节。
+- **禁止在 renderer / main 侧绕**：`pasteTerminalText` 只调一次 `sendText` 送整段正文，
+  不得逐字 `sendText`、不得按字节数预切、不得插 sleep 等接收端。
+- 读端流式解码是 TUI 自己的责任（Ink `setEncoding('utf8')`、crossterm `parse_utf8_char`）；
+  内核在读端慢、队列满时仍可能任意切读，本 patch 只消掉确定性的高频触发点。
+- 检查点：`tests/unit/native/terminal-pty-write-utf8-boundary-governance.test.ts`
+
 ### 终端文件链接在 Pier 中打开
 
 权威规格：[`docs/superpowers/specs/2026-09-04-terminal-file-open-in-pier-gold-standard.md`](docs/superpowers/specs/2026-09-04-terminal-file-open-in-pier-gold-standard.md)。
