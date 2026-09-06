@@ -66,6 +66,7 @@ export function bindEventToClaimedTurn(
   }
   if (
     semantics.resetEvidence === "explicit-prompt" ||
+    semantics.category === "maintenance" ||
     semantics.category === "session-start" ||
     semantics.category === "session-end"
   ) {

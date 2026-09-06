@@ -307,7 +307,7 @@ describe("devinIntegration", () => {
       "processing",
       "tool",
       "processing",
-      undefined,
+      "processing",
     ]);
   }, 15_000);
 

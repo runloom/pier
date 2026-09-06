@@ -271,73 +271,23 @@ describe("前台活动回合状态机", () => {
     aggregator.dispose();
   });
 
-  it("外来 turnId 工具事件抢占活跃回合后，被抛弃回合的可信终态仍封账", () => {
-    // 2026-08-29 生产事故回放：Cursor Task preToolUse 带主 conversation +
-    // 子智能体 generation（外来 turnId）且永无 postToolUse；随后真回合的
-    // stop 不得被 settled-turn 吸收，否则面板钉死「执行工具中」。
+  it("旧版外来工具身份不能替换主回合，主终态仍可收口", () => {
+    // Cursor Task 现已由适配器转成 SubagentStart；遗留错误 hook 也不得抢占主身份。
     const aggregator = createForegroundActivityAggregator();
     ingest(aggregator, event("PromptSubmit", { turnId: "turn-real" }));
-    ingest(
-      aggregator,
-      event("ToolStart", { toolUseId: "task-1", turnId: "turn-leak" })
-    );
-    expect(statusOf(aggregator)).toBe("tool");
-
-    expect(
-      ingest(aggregator, event("TurnCompleted", { turnId: "turn-real" }))
-    ).toBe(true);
-    expect(statusOf(aggregator)).toBe("ready");
-    aggregator.dispose();
-  });
-
-  it("可信终态携带被认领的外来 turnId 时也可直接封账", () => {
-    // 同族对照（2026-08-29 02:22 实测）：stop 报的 generation 恰好是
-    // 抢占后的当前回合，按现有 adopt-终态路径直接收口。
-    const aggregator = createForegroundActivityAggregator();
-    ingest(aggregator, event("PromptSubmit", { turnId: "turn-real" }));
-    ingest(
-      aggregator,
-      event("ToolStart", { toolUseId: "task-1", turnId: "turn-leak" })
-    );
-    expect(
-      ingest(aggregator, event("TurnCompleted", { turnId: "turn-leak" }))
-    ).toBe(true);
-    expect(statusOf(aggregator)).toBe("ready");
-    aggregator.dispose();
-  });
-
-  it("被抛弃回合的迟到进展与工具不可复活（防 ping-pong）", () => {
-    const aggregator = createForegroundActivityAggregator();
-    ingest(aggregator, event("PromptSubmit", { turnId: "turn-real" }));
-    ingest(
-      aggregator,
-      event("ToolStart", { toolUseId: "task-1", turnId: "turn-leak" })
-    );
-
-    expect(
-      ingest(aggregator, event("processing", { turnId: "turn-real" }))
-    ).toBe(false);
     expect(
       ingest(
         aggregator,
-        event("ToolStart", { toolUseId: "late-1", turnId: "turn-real" })
+        event("ToolStart", { toolUseId: "task-1", turnId: "turn-leak" })
       )
     ).toBe(false);
-    expect(statusOf(aggregator)).toBe("tool");
-    aggregator.dispose();
-  });
-
-  it("泄漏回合上的 correlatable 心跳不得升成权威而挡住真回合终态", () => {
-    const aggregator = createForegroundActivityAggregator();
-    ingest(aggregator, event("PromptSubmit", { turnId: "turn-real" }));
-    ingest(
-      aggregator,
-      event("ToolStart", { toolUseId: "task-1", turnId: "turn-leak" })
-    );
+    expect(statusOf(aggregator)).toBe("processing");
     expect(
       ingest(aggregator, event("processing", { turnId: "turn-leak" }))
-    ).toBe(true);
-    expect(statusOf(aggregator)).toBe("tool");
+    ).toBe(false);
+    expect(
+      ingest(aggregator, event("TurnCompleted", { turnId: "turn-leak" }))
+    ).toBe(false);
     expect(
       ingest(aggregator, event("TurnCompleted", { turnId: "turn-real" }))
     ).toBe(true);
@@ -345,19 +295,43 @@ describe("前台活动回合状态机", () => {
     aggregator.dispose();
   });
 
-  it("更旧的 abandoned 终态不得封后来的工作认领回合", () => {
+  it("无 PromptSubmit 换代后，被抛弃回合的迟到进展与终态均不可复活", () => {
+    const aggregator = createForegroundActivityAggregator();
+    ingest(
+      aggregator,
+      event("ToolStart", { toolUseId: "a", turnId: "turn-a" })
+    );
+    ingest(
+      aggregator,
+      event("ToolStart", { toolUseId: "b", turnId: "turn-b" })
+    );
+    for (const eventName of ["processing", "ToolStart", "TurnCompleted"]) {
+      expect(ingest(aggregator, event(eventName, { turnId: "turn-a" }))).toBe(
+        false
+      );
+      expect(statusOf(aggregator)).toBe("tool");
+    }
+    expect(
+      ingest(aggregator, event("TurnCompleted", { turnId: "turn-b" }))
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBe("ready");
+    aggregator.dispose();
+  });
+
+  it("新 PromptSubmit 后外来工具不能给旧终态重新获得结算权", () => {
     const aggregator = createForegroundActivityAggregator();
     ingest(aggregator, event("PromptSubmit", { turnId: "turn-a" }));
     ingest(aggregator, event("PromptSubmit", { turnId: "turn-b" }));
-    ingest(
-      aggregator,
-      event("ToolStart", { toolUseId: "leak-1", turnId: "turn-c" })
-    );
-    expect(statusOf(aggregator)).toBe("tool");
+    expect(
+      ingest(
+        aggregator,
+        event("ToolStart", { toolUseId: "leak-1", turnId: "turn-c" })
+      )
+    ).toBe(false);
     expect(
       ingest(aggregator, event("TurnCompleted", { turnId: "turn-a" }))
     ).toBe(false);
-    expect(statusOf(aggregator)).toBe("tool");
+    expect(statusOf(aggregator)).toBe("processing");
     expect(
       ingest(aggregator, event("TurnCompleted", { turnId: "turn-b" }))
     ).toBe(true);
@@ -593,12 +567,17 @@ describe("前台活动回合状态机", () => {
   });
 
   it.each([
-    { finish: "ToolComplete", start: "ToolStart" },
-    { finish: "InteractionResolved", start: "InteractionRequested" },
-    { finish: "SubagentStop", start: "SubagentStart" },
-  ] as const)("advisory Stop 后迟到 $finish 不取消候选", ({
+    { finish: "ToolComplete", start: "ToolStart", want: "tool" },
+    {
+      finish: "InteractionResolved",
+      start: "InteractionRequested",
+      want: "waiting",
+    },
+    { finish: "SubagentStop", start: "SubagentStart", want: "processing" },
+  ] as const)("advisory Stop 保留当前工作，$finish 只结算自己的工作", ({
     finish,
     start,
+    want,
   }) => {
     const aggregator = createForegroundActivityAggregator();
     ingest(aggregator, event("PromptSubmit"));
@@ -606,10 +585,10 @@ describe("前台活动回合状态机", () => {
     expect(
       ingest(aggregator, event("Stop"), { stopAuthority: "advisory" })
     ).toBe(true);
-    expect(statusOf(aggregator)).toBeUndefined();
+    expect(statusOf(aggregator)).toBe(want);
 
     expect(ingest(aggregator, event(finish))).toBe(true);
-    expect(statusOf(aggregator)).toBeUndefined();
+    expect(statusOf(aggregator)).toBe("processing");
     aggregator.dispose();
   });
 
@@ -627,7 +606,7 @@ describe("前台活动回合状态机", () => {
     expect(
       ingest(aggregator, event("Stop"), { stopAuthority: "advisory" })
     ).toBe(true);
-    expect(statusOf(aggregator)).toBeUndefined();
+    expect(statusOf(aggregator)).toBe("processing");
 
     expect(ingest(aggregator, event(eventName))).toBe(true);
     expect(statusOf(aggregator)).toBe(want);
@@ -651,7 +630,7 @@ describe("前台活动回合状态机", () => {
       stopAuthority: "advisory" as const,
       steps: [
         { event: "PromptSubmit", turnId: "p1", want: "processing" },
-        { event: "Stop", turnId: "p1", want: undefined },
+        { event: "Stop", turnId: "p1", want: "processing" },
         { event: "TurnCompleted", turnId: "p1", want: "ready" },
       ],
     },
@@ -715,7 +694,7 @@ describe("前台活动回合状态机", () => {
           turnId: "t1",
           want: "processing",
         },
-        { event: "Stop", turnId: "t1", want: undefined },
+        { event: "Stop", turnId: "t1", want: "processing" },
         { event: "TurnCompleted", turnId: "t1", want: "ready" },
       ],
     },
@@ -726,7 +705,7 @@ describe("前台活动回合状态机", () => {
         { event: "PromptSubmit", want: "processing" },
         { event: "ToolStart", toolUseId: "r1", want: "tool" },
         { event: "ToolComplete", toolUseId: "r1", want: "processing" },
-        { event: "Stop", want: undefined },
+        { event: "Stop", want: "processing" },
         { event: "TurnCompleted", want: "ready" },
       ],
     },

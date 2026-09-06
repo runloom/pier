@@ -8,10 +8,6 @@ import {
   withPierCursorHooks,
 } from "@main/services/agents/integrations/cursor.ts";
 import {
-  kimiIntegration,
-  withPierKimiHooks,
-} from "@main/services/agents/integrations/kimi.ts";
-import {
   buildVibeHookBlock,
   mistralVibeIntegration,
 } from "@main/services/agents/integrations/mistral-vibe.ts";
@@ -184,25 +180,6 @@ for (let index = 0; index < cursorActions.length; index++) {
   cursorActions[index] = { ...action, checkpoints, payload };
 }
 
-const kimiActions = commonTraceActions({
-  error: true,
-  lifecycleEnd: true,
-  promptNativeEvent: "UserPromptSubmit",
-  subagent: true,
-  subagentStartExpectedEventFields: { agentType: "Explore" },
-  subagentStartPayload: { agent_name: "Explore" },
-  subagentStopExpectedEventFields: { agentType: "Explore" },
-  subagentStopPayload: { agent_name: "Explore" },
-  toolCompleteNativeEvent: "PostToolUse",
-  toolStartNativeEvent: "PreToolUse",
-});
-kimiActions.splice(-2, 0, {
-  ...traceAction("PreCompact", "processing", "processing", {
-    expectedStatus: "processing",
-  }),
-  scenarios: ["compaction"],
-});
-
 const clineActions: AgentStatusTraceAction[] = [
   traceAction("TaskStart", "SessionStart", "lifecycle", {
     expectedEventFields: {
@@ -332,7 +309,7 @@ const vibeActions: AgentStatusTraceAction[] = [
     ],
     expectedNativeEvents: ["post_agent"],
     nativeEvent: "post_agent",
-    nonCoveringAssertion: { expectedStatusAbsent: true },
+    nonCoveringAssertion: { expectedStatus: "processing" },
     payload: {
       hook_event_name: "post_agent",
       session_id: "vibe-session-1",
@@ -375,17 +352,6 @@ export const SPECIAL_COMMAND_STATUS_TRACES = [
     createProducer: () =>
       createInstalledCommandProducer("cursor", cursorCommands()),
     stopAuthority: cursorIntegration.runtime.stopAuthority,
-  },
-  {
-    actions: kimiActions,
-    agentId: "kimi",
-    covers: ["lifecycle", "processing", "tool", "error", "subagent"],
-    createProducer: () =>
-      createInstalledCommandProducer(
-        "kimi",
-        tomlCommands(withPierKimiHooks(""), "event")
-      ),
-    stopAuthority: kimiIntegration.runtime.stopAuthority,
   },
   {
     actions: clineActions,

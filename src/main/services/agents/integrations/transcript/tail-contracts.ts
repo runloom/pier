@@ -15,7 +15,7 @@ interface TranscriptRecordBase {
 /** 一条 transcript 行分类出的可信终态或显式交互事实。 */
 export type TranscriptTerminalRecord =
   | (TranscriptRecordBase & {
-      pierEvent: "TurnCompleted" | "TurnInterrupted";
+      pierEvent: "TurnCompleted" | "TurnInterrupted" | "error";
     })
   | (TranscriptRecordBase & {
       interactionId?: string;
@@ -34,6 +34,16 @@ export type TranscriptTerminalRecord =
         | "unknown";
       pierEvent: "InteractionResolved";
     });
+
+export function isTranscriptTerminal(
+  record: TranscriptTerminalRecord
+): boolean {
+  return (
+    record.pierEvent === "TurnCompleted" ||
+    record.pierEvent === "TurnInterrupted" ||
+    record.pierEvent === "error"
+  );
+}
 
 export interface TranscriptTailReconciler {
   dispose(): void;

@@ -32,18 +32,20 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       nativeFact("ready", "Notification", "TurnCompleted"),
       nativeFact("completed", "Notification", "TurnCompleted"),
       // Stop 漏报时：assistant stop_reason 终态 → ready
-      fact(
-        "ready",
-        "reconciled",
-        "claude.transcript.assistant_stop",
-        "TurnCompleted"
-      ),
-      fact(
-        "completed",
-        "reconciled",
-        "claude.transcript.assistant_stop",
-        "TurnCompleted"
-      ),
+      ...["end_turn", "stop_sequence", "max_tokens"].flatMap((reason) => [
+        fact(
+          "ready",
+          "reconciled",
+          `claude.transcript.assistant_stop.${reason}`,
+          "TurnCompleted"
+        ),
+        fact(
+          "completed",
+          "reconciled",
+          `claude.transcript.assistant_stop.${reason}`,
+          "TurnCompleted"
+        ),
+      ]),
       fact(
         "ready",
         "reconciled",
@@ -53,8 +55,9 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       nativeFact("processing", "UserPromptSubmit", "PromptSubmit"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
       nativeFact("processing", "PostToolUseFailure", "ToolComplete"),
-      nativeFact("processing", "PreCompact", "processing"),
-      nativeFact("processing", "PostCompact", "processing"),
+      // 手动压缩拥有独立 prompt_id；维护事实不接管用户回合。
+      nativeFact("control", "PreCompact", "MaintenanceStarted"),
+      nativeFact("ready", "PostCompact", "MaintenanceCompleted"),
       nativeFact("tool", "PreToolUse", "ToolStart"),
       // 同 Pre/Post 原生事件按 tool_name 分发；工具名单见 interactive-blocking-tools.ts
       nativeFact("waiting", "PreToolUse", "InteractionRequested"),
@@ -202,7 +205,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
     transport: ["hosted-plugin"],
     evidence: {
       lifecycle: "native",
-      ready: "unsupported",
+      ready: "native",
       processing: "native",
       tool: "native",
       waiting: "native",
@@ -214,8 +217,8 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
     eventMappings: facts(
       nativeFact("lifecycle", "session.created", "SessionStart"),
       nativeFact("lifecycle", "session.deleted", "SessionEnd"),
-      nativeFact("control", "session.idle", "Stop"),
-      nativeFact("control", "session.status=idle", "Stop"),
+      nativeFact("ready", "session.idle", "ActivityIdle"),
+      nativeFact("ready", "session.status=idle", "ActivityIdle"),
       nativeFact("processing", "chat.message", "PromptSubmit"),
       nativeFact(
         "processing",
@@ -241,7 +244,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
     ),
     upstream: sourceCommit(
       "https://opencode.ai/docs/plugins/",
-      "e8b09927889ba4b5b7fc74bbab5b864d205406ca"
+      "16747470f976aca3d362ad730bcd3fe82ecc2c9a"
     ),
   },
   copilot: {
@@ -345,18 +348,17 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
   kimi: {
     integration: "active",
     transport: ["hook-command", "transcript-reconciler"],
-    transcriptTurnIdentity: "absent",
+    transcriptTurnIdentity: "native-field",
     evidence: {
       lifecycle: "native",
       ready: "reconciled",
       processing: "native",
       tool: "native",
       waiting: "native",
-      error: "native",
+      error: "reconciled",
       completed: "reconciled",
-      // TurnEnd payload 为空、无法区分取消（取消也报 TurnCompleted）；
-      // Interrupt 带子智能体 turn_id 泄漏面，未安装。
-      interrupted: "unsupported",
+      // v2 main turn.ended.reason 区分取消；旧版 TurnEnd 只知道结束。
+      interrupted: "reconciled",
       subagent: "native",
     },
     eventMappings: facts(
@@ -364,22 +366,45 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       nativeFact("lifecycle", "SessionEnd", "SessionEnd"),
       nativeFact("control", "Stop", "Stop"),
       fact("ready", "reconciled", "kimi.wire.TurnEnd", "TurnCompleted"),
+      fact(
+        "ready",
+        "reconciled",
+        "kimi.wire.turn.ended.completed",
+        "TurnCompleted"
+      ),
       nativeFact("processing", "UserPromptSubmit", "PromptSubmit"),
       nativeFact("tool", "PreToolUse", "ToolStart"),
       nativeFact("waiting", "PermissionRequest", "InteractionRequested"),
       nativeFact("waiting", "PermissionResult", "InteractionResolved"),
+      nativeFact("waiting", "PreToolUse", "InteractionRequested"),
+      nativeFact("processing", "PostToolUse", "InteractionResolved"),
+      nativeFact("processing", "PostToolUseFailure", "InteractionResolved"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
       nativeFact("processing", "PostToolUseFailure", "ToolComplete"),
       nativeFact("processing", "PreCompact", "processing"),
       nativeFact("processing", "PostCompact", "processing"),
-      nativeFact("error", "StopFailure", "error"),
+      nativeFact("control", "StopFailure", "Stop"),
+      nativeFact("control", "Interrupt", "Stop"),
+      fact("error", "reconciled", "kimi.wire.turn.ended.failed", "error"),
       fact("completed", "reconciled", "kimi.wire.TurnEnd", "TurnCompleted"),
+      fact(
+        "completed",
+        "reconciled",
+        "kimi.wire.turn.ended.completed",
+        "TurnCompleted"
+      ),
+      fact(
+        "interrupted",
+        "reconciled",
+        "kimi.wire.turn.ended.cancelled",
+        "TurnInterrupted"
+      ),
       nativeFact("subagent", "SubagentStart", "SubagentStart"),
       nativeFact("subagent", "SubagentStop", "SubagentStop")
     ),
     upstream: sourceCommit(
-      "https://github.com/MoonshotAI/kimi-cli/blob/4a550effdfcb29a25a5d325bf935296cc50cd417/src/kimi_cli/hooks/config.py",
-      "4a550effdfcb29a25a5d325bf935296cc50cd417"
+      "https://github.com/MoonshotAI/kimi-code/blob/baf17a8fcc289f20fa6c8d85dd8f93eeb3ff0cbc/packages/agent-core-v2/src/features/externalHooks/agent/agentExternalHooksService.ts",
+      "baf17a8fcc289f20fa6c8d85dd8f93eeb3ff0cbc"
     ),
   },
   pi: {

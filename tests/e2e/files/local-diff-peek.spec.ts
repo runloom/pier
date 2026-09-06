@@ -301,7 +301,7 @@ test("previews HEAD/current changes locally in source and Markdown without movin
     await expect(editor).toBeFocused();
     await page.keyboard.press("ControlOrMeta+End");
     await page.keyboard.type("\nUnsaved content");
-    await page.locator("[data-file-changes-trigger]").click();
+    await page.keyboard.press("Alt+F5");
     await expect(peek).toContainText(/Unsaved|未保存/u);
     await expect(peek).toHaveAccessibleDescription(
       /includes unsaved edits|包含未保存修改/u

@@ -216,7 +216,7 @@ describe("commandCodeIntegration", () => {
       const activity = aggregator.snapshot().activities[0];
       statuses.push(activity?.kind === "agent" ? activity.status : undefined);
     }
-    expect(statuses).toEqual([undefined, "tool", "processing", undefined]);
+    expect(statuses).toEqual([undefined, "tool", "processing", "processing"]);
   }, 15_000);
 
   it("幂等：重复安装不产生重复条目", async () => {

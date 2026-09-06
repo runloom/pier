@@ -70,11 +70,12 @@ export function processTranscriptLine(input: {
     if (!record) {
       return;
     }
+    const watermark = ownerWatermark(entry);
     if (
       shouldDropStaleEmptyTurnTerminal({
         lineEnd,
         record,
-        watermark: ownerWatermark(entry),
+        watermark,
       })
     ) {
       return;
@@ -82,7 +83,10 @@ export function processTranscriptLine(input: {
     let context: AgentHookEventPayload | undefined;
     if (record.turnId) {
       context = entry.contextsByTurnId.get(record.turnId);
-    } else if (allowOwnerFallback && entry.owners.size === 1) {
+    } else if (
+      entry.owners.size === 1 &&
+      (allowOwnerFallback || (watermark !== undefined && lineEnd > watermark))
+    ) {
       context = entry.owners.values().next().value;
     }
     if (!context) {

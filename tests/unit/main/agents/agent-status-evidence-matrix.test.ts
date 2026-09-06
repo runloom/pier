@@ -82,7 +82,7 @@ const KNOWN_UPSTREAM_LOCATORS = {
   },
   kimi: {
     kind: "source-commit",
-    commit: "4a550effdfcb29a25a5d325bf935296cc50cd417",
+    commit: "baf17a8fcc289f20fa6c8d85dd8f93eeb3ff0cbc",
   },
   "mimo-code": {
     kind: "source-commit",
@@ -98,7 +98,7 @@ const KNOWN_UPSTREAM_LOCATORS = {
   },
   opencode: {
     kind: "source-commit",
-    commit: "e8b09927889ba4b5b7fc74bbab5b864d205406ca",
+    commit: "16747470f976aca3d362ad730bcd3fe82ecc2c9a",
   },
   openclaude: {
     kind: "source-commit",
@@ -244,7 +244,7 @@ describe("agent status evidence matrix", () => {
     expect(claude.eventMappings).toContainEqual(
       expect.objectContaining({
         level: "reconciled",
-        nativeEvent: "claude.transcript.assistant_stop",
+        nativeEvent: "claude.transcript.assistant_stop.end_turn",
         pierEvent: "TurnCompleted",
       })
     );

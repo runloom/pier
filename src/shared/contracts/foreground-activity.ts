@@ -21,7 +21,7 @@ export type ActivityKind = z.infer<typeof activityKindSchema>;
 
 /**
  * Agent 会话运行时状态（loomdesk 五态借鉴）：
- * - `ready`      — 进程存活但无活跃工作（回合结束, 等待输入）
+ * - `ready`      — 进程存活但当前无活跃工作；回合结果由 turnResult 单独表达
  * - `processing` — 主循环推进中
  * - `tool`       — 调用工具
  * - `waiting`    — 等用户输入（v3 `InteractionRequested`）
@@ -31,8 +31,8 @@ export type ActivityKind = z.infer<typeof activityKindSchema>;
  * 证明「面板里有个 agent 二进制在跑」, 不能证明它处于任何会话状态——
  * 例如 `omp update` 这类非会话子命令。因此 AgentActivity.status 是
  * optional：缺席 = 没有足够证据断言具体运行态。它既可能来自 launch 先验，
- * 也可能是 hook 已观察到候选终态、但尚无可信完成证据；renderer 此时只出
- * 品牌图标，不展示“未知/待确认”等内部术语。
+ * 也可能是 hook 状态证据已过期；候选终态不能清空已有状态。证据不足时
+ * renderer 只出品牌图标，不展示“未知/待确认”等内部术语。
  */
 export const activityStatusSchema = z.enum([
   "ready",
@@ -42,6 +42,13 @@ export const activityStatusSchema = z.enum([
   "error",
 ]);
 export type ActivityStatus = z.infer<typeof activityStatusSchema>;
+
+export const agentTurnResultSchema = z.enum([
+  "completed",
+  "interrupted",
+  "failed",
+]);
+export type AgentTurnResult = z.infer<typeof agentTurnResultSchema>;
 
 const baseActivityFields = {
   panelId: z.string().min(1),
@@ -69,6 +76,8 @@ const agentActivitySchema = z
     ...baseActivityFields,
     agentId: agentKindSchema,
     status: activityStatusSchema.optional(),
+    /** 当前回合的可信结果；原生空闲、观察失效均不能推断此字段。 */
+    turnResult: agentTurnResultSchema.optional(),
     /** `hook` = JSONL agentEvent 消息，`launch` = launcher/OSC133 先验点亮。 */
     source: z.enum(["hook", "launch"]),
     subagentCount: z.number().int().nonnegative(),
@@ -165,6 +174,7 @@ export function activityStatusForHookEvent(
     case "error":
       return "error";
     case "Stop":
+    case "ActivityIdle":
     case "TurnCompleted":
     case "TurnInterrupted":
       return "ready";

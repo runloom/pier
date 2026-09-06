@@ -10,7 +10,7 @@ import {
 } from "@shared/contracts/agent/attention.ts";
 import { makeAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import type {
-  ActivityStatus,
+  AgentActivity,
   ForegroundActivity,
   ForegroundActivityBroadcast,
 } from "@shared/contracts/foreground-activity.ts";
@@ -60,7 +60,7 @@ export interface CreateAgentAttentionServiceArgs {
   settings?(): AgentAttentionSettings;
 }
 
-type AgentStatusMap = Map<string, ActivityStatus | undefined>;
+type AgentStatusMap = Map<string, AgentActivity>;
 
 function inboxSeverityFor(
   kind: AgentNotificationEventKind
@@ -79,7 +79,7 @@ function agentStatusMap(
     if (activity.kind !== "agent") {
       continue;
     }
-    map.set(makeAgentRef(activity.windowId, activity.panelId), activity.status);
+    map.set(makeAgentRef(activity.windowId, activity.panelId), activity);
   }
   return map;
 }
@@ -98,7 +98,7 @@ export function createAgentAttentionService({
       const prefs = settings();
       const prevMap = previous
         ? agentStatusMap(previous.activities)
-        : new Map<string, ActivityStatus | undefined>();
+        : new Map<string, AgentActivity>();
       const locale = await resolveLocale();
 
       for (const activity of next.activities) {
@@ -106,10 +106,16 @@ export function createAgentAttentionService({
           continue;
         }
         const agentRef = makeAgentRef(activity.windowId, activity.panelId);
-        const prevStatus = prevMap.get(agentRef);
+        const previousActivity = prevMap.get(agentRef);
         const kind = classifyAgentNotificationEvent({
-          previous: prevStatus,
+          previous: previousActivity?.status,
           next: activity.status,
+          ...(previousActivity?.turnResult
+            ? { previousTurnResult: previousActivity.turnResult }
+            : {}),
+          ...(activity.turnResult
+            ? { nextTurnResult: activity.turnResult }
+            : {}),
           settings: prefs,
         });
         if (kind == null) {

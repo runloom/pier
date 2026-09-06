@@ -1,134 +1,346 @@
-import { useEffect, useRef } from "react";
+/**
+ * Per-file markdown preview reading-position memory.
+ * Durable coordinate is source offset (cross-mode anchor), not pixel scrollTop.
+ */
+import { useEffect, useRef, useState } from "react";
+import {
+  captureMarkdownPreviewAnchor,
+  clampUnit,
+  type MarkdownCrossModeAnchor,
+} from "./cross-mode-anchor.ts";
 import type { MarkdownDiskSource } from "./ir-renderer.tsx";
-import type { MarkdownPreviewState } from "./preview-types.ts";
 
-const STORAGE_PREFIX = "pier.files.markdown.scroll:";
+export const MARKDOWN_SCROLL_MEMORY_STORAGE_PREFIX =
+  "pier.files.markdown.scroll:";
+export const MARKDOWN_SCROLL_MEMORY_VERSION = 2;
+export const MARKDOWN_SCROLL_MEMORY_CAPTURE_DEBOUNCE_MS = 250;
+export const MARKDOWN_SCROLL_MEMORY_RESTORE_LOCK_MS = 600;
 
-function djb2(text: string): string {
-  let hash = 5381;
-  for (let index = 0; index < text.length; index += 1) {
-    // biome-ignore lint/suspicious/noBitwiseOperators: djb2 hash requires bitwise shift and overflow clamp.
-    hash = ((hash << 5) + hash + text.charCodeAt(index)) | 0;
-  }
-  return String(hash);
+export interface MarkdownScrollMemoryV2 {
+  readonly blockProgress?: number;
+  readonly offset: number;
+  readonly v: 2;
 }
 
-export function rememberScrollPosition(input: {
-  sourcePath: string;
-  source: string;
-  top: number;
-}): void {
-  if (!(input.top > 0)) return; // hidden-panel scrollTop=0 must not poison memory (view-scroll-capture 先例)
-  try {
-    globalThis.localStorage?.setItem(
-      `${STORAGE_PREFIX}${input.sourcePath}`,
-      JSON.stringify({ h: djb2(input.source), top: Math.round(input.top) })
-    );
-  } catch {
-    /* degrade silently */
-  }
+interface PendingScrollMemory {
+  readonly blockProgress?: number;
+  readonly offset: number;
+  readonly sourcePath: string;
 }
 
-export function recallScrollPosition(input: {
-  sourcePath: string;
-  source: string;
-}): number | null {
+function preferenceStorage(): Storage | null {
   try {
-    const raw = globalThis.localStorage?.getItem(
-      `${STORAGE_PREFIX}${input.sourcePath}`
-    );
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { h: string; top: number };
-    return parsed.h === djb2(input.source) && parsed.top > 0
-      ? parsed.top
-      : null;
+    return globalThis.localStorage ?? null;
   } catch {
     return null;
   }
 }
 
-// Per-file reading-position memory hook: refs hold latest source/path/anchor
-// so the scroll capture listener and restore effect read fresh values without
-// re-subscribing on every render. Net-new in the reading-position capability;
-// lives here to keep preview.tsx under the 500-line hard gate.
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * Hidden tab / display:none must not capture. Matches editor view-scroll-capture:
+ * hide often zeroes scrollTop; walking offsetParent is unreliable in jsdom.
+ */
+export function isMarkdownPreviewScrollSurfaceVisible(
+  element: HTMLElement
+): boolean {
+  if (!element.isConnected) {
+    return false;
+  }
+  const win = element.ownerDocument.defaultView;
+  if (!win) {
+    return true;
+  }
+  let node: HTMLElement | null = element;
+  while (node) {
+    const style = win.getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden") {
+      return false;
+    }
+    node = node.parentElement;
+  }
+  return true;
+}
+
+export function shouldCaptureMarkdownPreviewScroll(root: HTMLElement): boolean {
+  return isMarkdownPreviewScrollSurfaceVisible(root) && root.scrollTop > 0;
+}
+
+export function parseMarkdownScrollMemory(
+  raw: unknown
+): MarkdownScrollMemoryV2 | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as {
+    blockProgress?: unknown;
+    offset?: unknown;
+    v?: unknown;
+  };
+  if (record.v !== MARKDOWN_SCROLL_MEMORY_VERSION) {
+    return null;
+  }
+  if (!(isFiniteNumber(record.offset) && record.offset > 0)) {
+    return null;
+  }
+  const offset = Math.round(record.offset);
+  if (!(offset > 0)) {
+    return null;
+  }
+  if (record.blockProgress === undefined) {
+    return { offset, v: 2 };
+  }
+  if (!isFiniteNumber(record.blockProgress)) {
+    return { offset, v: 2 };
+  }
+  return {
+    blockProgress: clampUnit(record.blockProgress),
+    offset,
+    v: 2,
+  };
+}
+
+export function rememberScrollPosition(input: {
+  blockProgress?: number;
+  offset: number;
+  sourcePath: string;
+}): void {
+  if (!(input.offset > 0) || input.sourcePath.length === 0) {
+    return;
+  }
+  const payload: MarkdownScrollMemoryV2 = {
+    offset: Math.round(input.offset),
+    v: 2,
+    ...(input.blockProgress === undefined
+      ? {}
+      : { blockProgress: clampUnit(input.blockProgress) }),
+  };
+  if (!(payload.offset > 0)) {
+    return;
+  }
+  try {
+    preferenceStorage()?.setItem(
+      `${MARKDOWN_SCROLL_MEMORY_STORAGE_PREFIX}${input.sourcePath}`,
+      JSON.stringify(payload)
+    );
+  } catch {
+    /* quota / private mode: degrade silently */
+  }
+}
+
+export function recallScrollPosition(
+  sourcePath: string
+): MarkdownCrossModeAnchor | null {
+  if (sourcePath.length === 0) {
+    return null;
+  }
+  try {
+    const raw = preferenceStorage()?.getItem(
+      `${MARKDOWN_SCROLL_MEMORY_STORAGE_PREFIX}${sourcePath}`
+    );
+    if (!raw) {
+      return null;
+    }
+    const parsed = parseMarkdownScrollMemory(JSON.parse(raw) as unknown);
+    if (!parsed) {
+      return null;
+    }
+    return {
+      align: "start",
+      offset: parsed.offset,
+      ...(parsed.blockProgress === undefined
+        ? {}
+        : { blockProgress: parsed.blockProgress }),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function yieldToHigherIntent(
+  initialAnchor: string | undefined,
+  contentAnchorRequestId: string | number | undefined
+): boolean {
+  return initialAnchor != null || contentAnchorRequestId != null;
+}
+
+function snapshotScrollMemory(
+  root: HTMLElement,
+  sourcePath: string
+): PendingScrollMemory | null {
+  if (!shouldCaptureMarkdownPreviewScroll(root) || sourcePath.length === 0) {
+    return null;
+  }
+  const captured = captureMarkdownPreviewAnchor(root);
+  if (!(captured.offset > 0)) {
+    return null;
+  }
+  return {
+    offset: captured.offset,
+    sourcePath,
+    ...(captured.blockProgress === undefined
+      ? {}
+      : { blockProgress: captured.blockProgress }),
+  };
+}
+
+function persistPending(pending: PendingScrollMemory | null): void {
+  if (!pending) {
+    return;
+  }
+  rememberScrollPosition(pending);
+}
+
+// Per-file reading-position memory hook: capture at scroll-event time (not
+// debounce-fire time) so hide/zeroing cannot poison the last real position.
+// Restore is a content-anchor for pagination-view; re-reveal after hide gets a
+// new request id because dockview leaves the preview mounted.
 export function useScrollMemory(
   scrollRoot: HTMLElement | null,
   source: MarkdownDiskSource | undefined,
-  value: string,
   initialAnchor: string | undefined,
   contentAnchorRequestId: string | number | undefined,
-  status: MarkdownPreviewState["status"]
-): void {
-  const scrollSourcePathRef = useRef<string | undefined>(source?.path);
-  scrollSourcePathRef.current = source?.path;
-  const scrollSourceValueRef = useRef(value);
-  scrollSourceValueRef.current = value;
-  const scrollInitialAnchorRef = useRef(initialAnchor);
-  scrollInitialAnchorRef.current = initialAnchor;
-  const scrollContentAnchorRequestIdRef = useRef(contentAnchorRequestId);
-  scrollContentAnchorRequestIdRef.current = contentAnchorRequestId;
-  const scrollRestoredPathRef = useRef<string | null>(null);
+  contentReady: boolean
+): {
+  memoryAnchor: MarkdownCrossModeAnchor | undefined;
+  memoryRequestId: number | undefined;
+} {
+  const path = source?.path;
+  const requestIdRef = useRef(0);
+  const restoreLockUntilRef = useRef(0);
+  const handledKeyRef = useRef<string | null>(null);
+  const visibleEpochRef = useRef(0);
+  const visibleRef = useRef(true);
+  const pendingRef = useRef<PendingScrollMemory | null>(null);
+  const issuedRef = useRef<{
+    anchor: MarkdownCrossModeAnchor;
+    path: string;
+    requestId: number;
+  } | null>(null);
+  const [isVisible, setIsVisible] = useState(true);
   const scrollCaptureTimerRef = useRef<
     ReturnType<typeof setTimeout> | undefined
   >(undefined);
+  const flushPendingNowRef = useRef(() => {
+    /* assigned below */
+  });
+  flushPendingNowRef.current = () => {
+    clearTimeout(scrollCaptureTimerRef.current);
+    scrollCaptureTimerRef.current = undefined;
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    persistPending(pending);
+  };
 
-  // Capture scroll position with a 250ms trailing debounce so quick scroll
-  // bursts write once. top<=0 is ignored by rememberScrollPosition
-  // (hidden-panel scrollTop=0 must not poison memory).
+  const restoreKey =
+    path === undefined ? null : `${path}:${visibleEpochRef.current}`;
+  if (
+    contentReady &&
+    path &&
+    isVisible &&
+    restoreKey !== null &&
+    handledKeyRef.current !== restoreKey
+  ) {
+    handledKeyRef.current = restoreKey;
+    restoreLockUntilRef.current =
+      Date.now() + MARKDOWN_SCROLL_MEMORY_RESTORE_LOCK_MS;
+    if (yieldToHigherIntent(initialAnchor, contentAnchorRequestId)) {
+      issuedRef.current = null;
+    } else {
+      const recalled = recallScrollPosition(path);
+      if (recalled) {
+        requestIdRef.current += 1;
+        issuedRef.current = {
+          anchor: recalled,
+          path,
+          requestId: requestIdRef.current,
+        };
+      } else {
+        issuedRef.current = null;
+      }
+    }
+  }
+
+  const suppressMemory = yieldToHigherIntent(
+    initialAnchor,
+    contentAnchorRequestId
+  );
+  const issued = issuedRef.current;
+  const memoryAnchor =
+    !isVisible || suppressMemory || issued?.path !== path
+      ? undefined
+      : issued?.anchor;
+  const memoryRequestId =
+    !isVisible || suppressMemory || issued?.path !== path
+      ? undefined
+      : issued?.requestId;
+
   useEffect(() => {
-    if (!scrollRoot) return;
+    if (!(scrollRoot && path)) {
+      return;
+    }
     const handleScroll = () => {
+      if (!shouldCaptureMarkdownPreviewScroll(scrollRoot)) {
+        return;
+      }
+      if (Date.now() < restoreLockUntilRef.current) {
+        return;
+      }
+      const snapshot = snapshotScrollMemory(scrollRoot, path);
+      if (!snapshot) {
+        return;
+      }
+      pendingRef.current = snapshot;
       clearTimeout(scrollCaptureTimerRef.current);
       scrollCaptureTimerRef.current = setTimeout(() => {
         scrollCaptureTimerRef.current = undefined;
-        const path = scrollSourcePathRef.current;
-        if (!path) return;
-        rememberScrollPosition({
-          sourcePath: path,
-          source: scrollSourceValueRef.current,
-          top: scrollRoot.scrollTop,
-        });
-      }, 250);
+        const pending = pendingRef.current;
+        pendingRef.current = null;
+        persistPending(pending);
+      }, MARKDOWN_SCROLL_MEMORY_CAPTURE_DEBOUNCE_MS);
     };
     scrollRoot.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
-      clearTimeout(scrollCaptureTimerRef.current);
-      scrollCaptureTimerRef.current = undefined;
       scrollRoot.removeEventListener("scroll", handleScroll);
+      flushPendingNowRef.current();
+    };
+  }, [path, scrollRoot]);
+
+  useEffect(() => {
+    if (!scrollRoot || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+    let disposed = false;
+    const observer = new IntersectionObserver(() => {
+      if (disposed) {
+        return;
+      }
+      // IO is only a wakeup. jsdom often reports isIntersecting=false for
+      // on-screen nodes; hide is real only when computed style says so.
+      const styleVisible = isMarkdownPreviewScrollSurfaceVisible(scrollRoot);
+      if (styleVisible) {
+        if (!visibleRef.current) {
+          visibleRef.current = true;
+          setIsVisible(true);
+        }
+        return;
+      }
+      flushPendingNowRef.current();
+      if (visibleRef.current) {
+        visibleRef.current = false;
+        visibleEpochRef.current += 1;
+        setIsVisible(false);
+      }
+    });
+    observer.observe(scrollRoot);
+    return () => {
+      disposed = true;
+      observer.disconnect();
     };
   }, [scrollRoot]);
 
-  // Restore the last remembered position for this file once the document is
-  // ready. Wait two animation frames so paginated layout settles before
-  // applying scrollTop. Yield to cross-mode anchors: when initialAnchor or
-  // contentAnchorRequestId is set, skip restore (and mark the path handled so
-  // a later anchor clear does not jump to a stale remembered position).
-  useEffect(() => {
-    if (status !== "ready") return;
-    const path = scrollSourcePathRef.current;
-    if (!(path && scrollRoot)) return;
-    if (scrollRestoredPathRef.current === path) return;
-    if (
-      scrollInitialAnchorRef.current != null ||
-      scrollContentAnchorRequestIdRef.current != null
-    ) {
-      scrollRestoredPathRef.current = path;
-      return;
-    }
-    const recalled = recallScrollPosition({
-      sourcePath: path,
-      source: scrollSourceValueRef.current,
-    });
-    let frame2 = 0;
-    const frame1 = requestAnimationFrame(() => {
-      frame2 = requestAnimationFrame(() => {
-        scrollRestoredPathRef.current = path;
-        if (scrollRoot) scrollRoot.scrollTop = recalled ?? 0;
-      });
-    });
-    return () => {
-      cancelAnimationFrame(frame1);
-      cancelAnimationFrame(frame2);
-    };
-  }, [status, scrollRoot]);
+  return { memoryAnchor, memoryRequestId };
 }

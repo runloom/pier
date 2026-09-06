@@ -52,11 +52,45 @@ const claudeActions = commonTraceActions({
 });
 claudeActions.push(
   {
-    ...traceAction("PreCompact", "processing", "processing", {
-      expectedStatus: "processing",
-    }),
+    nativeEvent: "PreCompact",
+    payload: {
+      trigger: "auto",
+      session_id: "session-1",
+      prompt_id: "compact-1",
+    },
+    checkpoints: [],
+    expectedNativeEvents: ["PreCompact"],
+    eventAssertions: [
+      {
+        expectedEvent: "MaintenanceStarted",
+        expectedNativeEvent: "PreCompact",
+      },
+    ],
+    nonCoveringAssertion: { expectedStatus: "processing" },
     scenarios: ["compaction"],
   },
+  transcriptAction(
+    "claude.transcript.assistant_stop.end_turn",
+    jsonl({
+      type: "assistant",
+      message: { role: "assistant", stop_reason: "end_turn", content: [] },
+    }),
+    terminalCheckpoints(
+      "claude.transcript.assistant_stop.end_turn",
+      "TurnCompleted",
+      "completed"
+    )
+  ),
+  traceAction(
+    "UserPromptSubmit",
+    "PromptSubmit",
+    "processing",
+    { expectedStatus: "processing" },
+    {
+      prompt_id: "turn-2",
+      prompt: "Continue inspection",
+    }
+  ),
   transcriptAction(
     "claude.transcript.user_interrupt",
     jsonl({
@@ -80,7 +114,7 @@ claudeActions.push(
       "error",
       "error",
       { expectedStatus: "error" },
-      { error: "provider request failed" }
+      { error: "provider request failed", prompt_id: "turn-2" }
     ),
     scenarios: ["error"],
   },
@@ -406,6 +440,7 @@ export const RECONCILER_STATUS_TRACES = [
       "tool",
       "waiting",
       "error",
+      "completed",
       "interrupted",
       "subagent",
     ],

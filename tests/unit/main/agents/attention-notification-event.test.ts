@@ -6,7 +6,10 @@ import {
   type AgentAttentionSettings,
   DEFAULT_AGENT_ATTENTION_SETTINGS,
 } from "@shared/contracts/agent/attention.ts";
-import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
+import type {
+  ActivityStatus,
+  AgentTurnResult,
+} from "@shared/contracts/foreground-activity.ts";
 import { describe, expect, it } from "vitest";
 
 function settings(
@@ -23,6 +26,8 @@ describe("classifyAgentNotificationEvent", () => {
     name: string;
     previous: ActivityStatus | undefined;
     next: ActivityStatus | undefined;
+    previousTurnResult?: AgentTurnResult;
+    nextTurnResult?: AgentTurnResult;
     overrides?: Partial<AgentAttentionSettings>;
     expected: "waiting" | "ready" | "error" | null;
   }> = [
@@ -42,6 +47,7 @@ describe("classifyAgentNotificationEvent", () => {
     },
     {
       name: "processing→ready | unfocused → ready",
+      nextTurnResult: "completed",
       previous: "processing",
       next: "ready",
       overrides: { turnNotifyMode: "unfocused" },
@@ -49,6 +55,7 @@ describe("classifyAgentNotificationEvent", () => {
     },
     {
       name: "processing→ready | always → ready",
+      nextTurnResult: "completed",
       previous: "processing",
       next: "ready",
       overrides: { turnNotifyMode: "always" },
@@ -56,6 +63,7 @@ describe("classifyAgentNotificationEvent", () => {
     },
     {
       name: "processing→ready | off → null",
+      nextTurnResult: "completed",
       previous: "processing",
       next: "ready",
       overrides: { turnNotifyMode: "off" },
@@ -63,6 +71,8 @@ describe("classifyAgentNotificationEvent", () => {
     },
     {
       name: "ready→ready | * → null",
+      previousTurnResult: "completed",
+      nextTurnResult: "completed",
       previous: "ready",
       next: "ready",
       overrides: { turnNotifyMode: "always" },
@@ -72,6 +82,7 @@ describe("classifyAgentNotificationEvent", () => {
       // 面板首次投影（SessionStart 揭示 / 启动重连）即 ready：没跑过回合，
       // 不得误报「回合已完成」。
       name: "∅→ready | 首次投影不算回合完成 → null",
+      nextTurnResult: "completed",
       previous: undefined,
       next: "ready",
       overrides: { turnNotifyMode: "always" },
@@ -107,6 +118,7 @@ describe("classifyAgentNotificationEvent", () => {
     },
     {
       name: "waiting→ready | turn ≠ off → ready",
+      nextTurnResult: "completed",
       previous: "waiting",
       next: "ready",
       overrides: { turnNotifyMode: "unfocused" },
@@ -114,9 +126,23 @@ describe("classifyAgentNotificationEvent", () => {
     },
     {
       name: "error→ready | turn ≠ off → ready",
+      nextTurnResult: "completed",
       previous: "error",
       next: "ready",
       overrides: { turnNotifyMode: "always" },
+      expected: "ready",
+    },
+    {
+      name: "原生空闲没有回合结果，不发完成通知",
+      previous: "processing",
+      next: "ready",
+      expected: null,
+    },
+    {
+      name: "空闲后补到可信回合结果，仍发一次完成通知",
+      previous: "ready",
+      next: "ready",
+      nextTurnResult: "completed",
       expected: "ready",
     },
   ];
@@ -127,6 +153,10 @@ describe("classifyAgentNotificationEvent", () => {
         classifyAgentNotificationEvent({
           previous: c.previous,
           next: c.next,
+          ...(c.previousTurnResult
+            ? { previousTurnResult: c.previousTurnResult }
+            : {}),
+          ...(c.nextTurnResult ? { nextTurnResult: c.nextTurnResult } : {}),
           settings: settings(c.overrides),
         })
       ).toBe(c.expected);

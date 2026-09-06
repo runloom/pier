@@ -136,43 +136,8 @@ describe("智能体状态官方轨迹跨层验收", () => {
     const matrixCoverage = expectedActiveCoverage();
 
     expect(actualAgents.size).toBe(27);
-    // waiting 维度：claude / grok / openclaude 的 plan 与 pi 的 ask 均走原生阻塞交互
-    // host-Esc 抬升的 ready/interrupted 不计入 matrixCoverage（见 expectedActiveCoverage）
-    // aug ready/interrupted 降级为 host-Esc reconciled 后退出 fixture 覆盖
-    // （158 − aug:ready − aug:interrupted）。
-    // +1：droid interrupted（Notification.idle_prompt→TurnInterrupted，
-    // 2026-08-29 取消路径修复）；−1：kilo ready（idle 降级 advisory 候选，
-    // 对齐同源 opencode）。
-    // +2：droid ready/completed（Stop→TurnCompleted，2026-09-05 修复：
-    // 官方 Stop 只在主 agent 完成回复时发射，取消不发 Stop）——此前这两维
-    // 分别是 host-Esc 兜底（不入集合）与 unsupported，矩阵与 fixture 同步入集。
-    expect(actualCoverage.size).toBe(158);
-    // Fixture covers must not invent dimensions outside the matrix claim.
-    for (const key of actualCoverage) {
-      expect(
-        matrixCoverage.has(key),
-        `fixture cover outside matrix: ${key}`
-      ).toBe(true);
-    }
-    // Matrix may still list provider-native dimensions without a status-trace
-    // fixture yet (e.g. claude completed). Those are tracked by
-    // unit/integration agent tests; do not fail the whole publish gate on
-    // incomplete fixture expansion. Cap the gap so it cannot grow unbounded.
-    const missingInFixtures = [...matrixCoverage].filter(
-      (key) => !actualCoverage.has(key)
-    );
-    expect(missingInFixtures.length).toBeLessThanOrEqual(10);
-    expect(missingInFixtures.sort()).toEqual(
-      [
-        "claude:completed",
-        "copilot:interrupted",
-        "kimi:completed",
-        "kimi:ready",
-        "kimi:waiting",
-        "qodercli:interrupted",
-        "qodercli:ready",
-      ].sort()
-    );
+    // 每个已声明、可由提供方输入验证的维度都必须有完整轨迹，不设缺口白名单。
+    expect(actualCoverage).toEqual(matrixCoverage);
   });
 
   it("fixture 的覆盖声明必须绑定矩阵原生边，并完整观察成对协议", () => {

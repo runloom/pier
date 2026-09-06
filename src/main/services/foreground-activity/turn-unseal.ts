@@ -20,6 +20,27 @@ export function hookEventTimeMs(
   return ts > NS_TS_THRESHOLD ? Math.floor(ts / 1_000_000) : ts;
 }
 
+export function isStaleTurnEvent(
+  scope: HookScope,
+  event: AgentHookEventPayload,
+  at: number
+): boolean {
+  if (
+    scope.turnBoundaryAt === undefined ||
+    hookEventTimeMs(event, at) >= scope.turnBoundaryAt
+  )
+    return false;
+  // Prompt 对账等待可被同回合工具超越。迟到的同 ID Prompt 仅确认主身份，
+  // 不重置工作、不回退时间下界；其它旧消息仍拒绝。
+  const id = normalizeAgentTurnId(event.turnId);
+  return !(
+    event.event === "PromptSubmit" &&
+    id &&
+    id === scope.currentTurnId &&
+    !scope.turnEnded
+  );
+}
+
 /**
  * transcript 软封可被同回合新鲜 hook ToolStart 解开；无回合身份的 hook
  * error 也可被空 turnId 的 hook ToolStart 解开（Kimi StopFailure 后继续
@@ -60,12 +81,22 @@ export function canUnsealTranscriptTurn(input: {
 
 export function unsealTranscriptTurn(
   scope: HookScope,
-  eventTurnId?: string
+  event: AgentHookEventPayload,
+  at: number
 ): void {
+  const eventTurnId = normalizeAgentTurnId(event.turnId);
   const settledId = eventTurnId ?? scope.currentTurnId;
   if (settledId) {
     scope.recentSettledTurnIds.delete(settledId);
   }
+  if (!eventTurnId) {
+    // 匿名新工作只能证明恢复执行，不能把旧回合号当作这次工作的身份。
+    // 由适配器在后续原生记录中确认回合（例如 Kimi 不发 PromptSubmit）。
+    scope.currentTurnId = undefined;
+    scope.currentTurnAuthoritative = false;
+  }
+  scope.turnBoundaryAt = hookEventTimeMs(event, at);
+  scope.turnResetAt = at;
   scope.completionObserved = false;
   scope.completionObservedAt = undefined;
   scope.terminalEvidence = undefined;

@@ -76,7 +76,8 @@ function claudeSubagentCommand(
  * - PostToolUseFailure = 单个工具失败, 回合仍在继续；普通工具 ToolComplete，
  *   交互工具 InteractionResolved failed（不闪全局 error）。
  * - PermissionDenied 是自动权限模式分类器，不能伪装成人工拒绝结果。
- * - PreCompact：长压缩期间无其他 hook, 不装则被 30min TTL 误衰减。
+ * - Pre/PostCompact 保留 trigger 与维护 prompt ID；手动成功提供空闲事实，
+ *   自动压缩与只有 Pre 的中止均不能伪造忙碌或回合完成。
  * - SessionEnd timeout：工厂默认 5s。Claude 默认预算 ~1.5s，settings 可抬高至
  *   60s；5s 在合法范围内，不会像 Codex 那样被 clamp 警告。
  */
@@ -103,7 +104,15 @@ const CLAUDE_SPEC: NestedJsonIntegrationSpec = {
   ],
   events: [
     {
-      buildCommand: claudeStandardCommand("SessionStart", "SessionStart"),
+      buildCommand: (agentId) =>
+        pierHookCommandV3WithStdin({
+          actorHintFromAgentId: true,
+          agentId,
+          event: "SessionStart",
+          nativeEvent: "SessionStart",
+          nativeStateFields: ["source"],
+          turnIdFields: ["prompt_id"],
+        }),
       nativeEvent: "SessionStart",
       pierEvent: "SessionStart",
     },
@@ -120,14 +129,30 @@ const CLAUDE_SPEC: NestedJsonIntegrationSpec = {
       turnIdFields: ["prompt_id"],
     }),
     {
-      buildCommand: claudeStandardCommand("processing", "PreCompact"),
+      buildCommand: (agentId) =>
+        pierHookCommandV3WithStdin({
+          agentId,
+          event: "MaintenanceStarted",
+          nativeEvent: "PreCompact",
+          actorHintFromAgentId: true,
+          nativeStateFields: ["trigger"],
+          turnIdFields: ["prompt_id"],
+        }),
       nativeEvent: "PreCompact",
-      pierEvent: "processing",
+      pierEvent: "MaintenanceStarted",
     },
     {
-      buildCommand: claudeStandardCommand("processing", "PostCompact"),
+      buildCommand: (agentId) =>
+        pierHookCommandV3WithStdin({
+          agentId,
+          event: "MaintenanceCompleted",
+          nativeEvent: "PostCompact",
+          actorHintFromAgentId: true,
+          nativeStateFields: ["trigger"],
+          turnIdFields: ["prompt_id"],
+        }),
       nativeEvent: "PostCompact",
-      pierEvent: "processing",
+      pierEvent: "MaintenanceCompleted",
     },
     {
       buildCommand: claudeStandardCommand("Stop", "Stop"),

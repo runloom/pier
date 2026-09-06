@@ -84,15 +84,14 @@ function augAction(
 }
 
 function augTerminalAction(cause: string): AgentStatusTraceAction {
-  // interrupted/max_iterations 降级为 advisory Stop（completionObserved，
-  // 状态缺席）；后续工作可取消候选回到忙态，不再封账。
+  // interrupted/max_iterations 降级为 advisory Stop：保持已有状态，后续工作继续推进，不封账。
   return {
     checkpoints: [
       {
         dimension: "lifecycle",
         expectedEvent: "Stop",
         expectedNativeEvent: "Stop",
-        expectedStatusAbsent: true,
+        expectedStatus: "processing",
       },
     ],
     expectedNativeEvents: ["Stop"],
@@ -219,7 +218,7 @@ const antigravityBaseActions: AgentStatusTraceAction[] = [
     ],
     expectedNativeEvents: ["Stop.fullyIdle"],
     nativeEvent: "Stop.fullyIdle",
-    nonCoveringAssertion: { expectedStatusAbsent: true },
+    nonCoveringAssertion: { expectedStatus: "processing" },
     payload: {
       conversationId: "antigravity-session-1",
       fullyIdle: true,

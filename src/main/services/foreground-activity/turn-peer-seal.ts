@@ -24,17 +24,9 @@ function sealTurnId(input: {
 }
 
 /**
- * 主回合可信终态时封掉同面板的对侧账本。两类对侧：
- *
- * 1. 同 turnId 分裂——工具事件先于 PromptSubmit 落到错误 session。
- *    主路径应走 claimed-turns，这里是防御扇出；只关联全局唯一 turnId，
- *    空 turnId 回退 origin.currentTurnId。
- * 2. 从未见过 PromptSubmit 的衍生 scope——实测（2026-08-26 events.jsonl）
- *    Cursor 子智能体是独立 conversation：只发 preToolUse/postToolUse，
- *    conversation_id === generation_id（退化 id），永远没有 stop/收口。
- *    该 scope 停在 processing 会压过主会话 ready 直到 TTL。主会话（见过
- *    显式提问的 origin）收口时一并封账；见过提问的并行会话（opencode/amp
- *    多线程）不受影响。
+ * 主回合可信终态只结算同一全局唯一 turnId 的对侧账本（工具 hook 先到另一
+ * session 的兼容情况）。空终态回退 origin.currentTurnId。
+ * 没见过 PromptSubmit 不是子会话证据，不能据此结算另一会话的工作。
  */
 export function sealMatchingTurnPeers(input: {
   at: number;
@@ -48,7 +40,6 @@ export function sealMatchingTurnPeers(input: {
     return;
   }
   const turnId = sealTurnId(input);
-  const originPrompted = input.originScope.sawExplicitPrompt;
   for (const peer of input.hook.scopes.values()) {
     if (peer === input.originScope) {
       continue;
@@ -56,8 +47,7 @@ export function sealMatchingTurnPeers(input: {
     const sameTurn =
       turnId !== undefined &&
       normalizeAgentTurnId(peer.currentTurnId) === turnId;
-    const promptlessDerivative = originPrompted && !peer.sawExplicitPrompt;
-    if (!(sameTurn || promptlessDerivative)) {
+    if (!sameTurn) {
       continue;
     }
     const result = applyTurnBookkeeping(

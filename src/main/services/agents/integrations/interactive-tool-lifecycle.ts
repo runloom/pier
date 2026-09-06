@@ -6,6 +6,10 @@ import {
 import type { InteractiveBlockingToolCase } from "./interactive-blocking-tools.ts";
 import type { NestedHookEventSpec } from "./shared.ts";
 
+type InteractiveToolLifecycleEvent = NestedHookEventSpec & {
+  pierEvent: "ToolStart" | "ToolComplete";
+};
+
 export interface InteractiveBlockingToolLifecycleOptions
   extends StdinExtractionOptions {
   /**
@@ -27,7 +31,7 @@ export interface InteractiveBlockingToolLifecycleOptions
  */
 export function interactiveBlockingToolLifecycleEvents(
   options: InteractiveBlockingToolLifecycleOptions
-): readonly NestedHookEventSpec[] {
+): readonly InteractiveToolLifecycleEvent[] {
   const {
     includePermissionDenied = false,
     postToolFailureNativeStateFields = ["error"],
@@ -35,7 +39,7 @@ export function interactiveBlockingToolLifecycleEvents(
     ...extraction
   } = options;
 
-  const events: NestedHookEventSpec[] = [
+  const events: InteractiveToolLifecycleEvent[] = [
     {
       buildCommand: (agentId) =>
         pierHookCommandV3WithStdinInteractiveToolStart({

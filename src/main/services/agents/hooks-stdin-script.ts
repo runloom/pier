@@ -132,7 +132,15 @@ function firstOwnScalarAtPath(payload, paths) {
 function metadataFrom(payload) {
   const metadata = {};
   for (const key of METADATA_KEYS) {
-    const value = ownString(payload, key);
+    // Preserve numeric turn identities (including zero) in private metadata.
+    // They must not become top-level main-turn claims before reconciliation.
+    const value = ownString(payload, key) ?? (
+      (key === "turn_id" || key === "turnId") &&
+      Object.hasOwn(payload, key) &&
+      Number.isSafeInteger(payload[key]) && payload[key] >= 0
+        ? payload[key]
+        : undefined
+    );
     if (value !== undefined) metadata[key] = value;
   }
   // instruction：autohand pre-prompt 的提示字段名（官方 docs/hooks.md）。

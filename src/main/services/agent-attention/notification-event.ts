@@ -1,5 +1,8 @@
 import type { AgentAttentionSettings } from "@shared/contracts/agent/attention.ts";
-import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
+import type {
+  ActivityStatus,
+  AgentTurnResult,
+} from "@shared/contracts/foreground-activity.ts";
 import { shouldSilenceAgentInterrupt } from "@shared/notification-delivery.ts";
 
 export type AgentNotificationEventKind = "waiting" | "ready" | "error";
@@ -22,6 +25,8 @@ function inAttentionTriggerSet(
 export function classifyAgentNotificationEvent(args: {
   previous: ActivityStatus | undefined;
   next: ActivityStatus | undefined;
+  previousTurnResult?: AgentTurnResult;
+  nextTurnResult?: AgentTurnResult;
   settings: Pick<
     AgentAttentionSettings,
     "enabled" | "enableErrorAttention" | "turnNotifyMode"
@@ -35,8 +40,9 @@ export function classifyAgentNotificationEvent(args: {
   // 不得当成回合完成通知。
   if (
     next === "ready" &&
+    args.nextTurnResult !== undefined &&
     previous !== undefined &&
-    previous !== "ready" &&
+    (previous !== "ready" || args.previousTurnResult === undefined) &&
     settings.turnNotifyMode !== "off"
   ) {
     return "ready";

@@ -329,7 +329,14 @@ describe("agent attention service (classify → NCS ingest only)", () => {
         ts: 1,
       },
       {
-        activities: [agent({ panelId: "p1", windowId: "1", status: "ready" })],
+        activities: [
+          agent({
+            panelId: "p1",
+            windowId: "1",
+            status: "ready",
+            turnResult: "completed",
+          }),
+        ],
         ts: 2,
       }
     );
@@ -359,7 +366,14 @@ describe("agent attention service (classify → NCS ingest only)", () => {
         ts: 1,
       },
       {
-        activities: [agent({ panelId: "p1", windowId: "1", status: "ready" })],
+        activities: [
+          agent({
+            panelId: "p1",
+            windowId: "1",
+            status: "ready",
+            turnResult: "completed",
+          }),
+        ],
         ts: 2,
       }
     );
@@ -376,7 +390,14 @@ describe("agent attention service (classify → NCS ingest only)", () => {
         ts: 1,
       },
       {
-        activities: [agent({ panelId: "p1", windowId: "1", status: "ready" })],
+        activities: [
+          agent({
+            panelId: "p1",
+            windowId: "1",
+            status: "ready",
+            turnResult: "completed",
+          }),
+        ],
         ts: 2,
       }
     );

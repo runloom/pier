@@ -324,20 +324,20 @@ const opencodeActions: AgentStatusTraceAction[] = [
     }),
     ["main-subagent-interleave"]
   ),
-  {
-    checkpoints: [],
-    eventAssertions: [
-      {
-        expectedEvent: "Stop",
-        expectedEventFields: { sessionId: "main" },
-        expectedNativeEvent: "session.idle",
-      },
-    ],
-    expectedNativeEvents: ["session.idle"],
-    nativeEvent: "session.idle",
-    nonCoveringAssertion: { expectedStatusAbsent: true },
-    payload: event("session.idle", { info: { id: "main" } }),
-  },
+  opencodeAction(
+    "session.idle",
+    "ActivityIdle",
+    "ready",
+    { expectedEventFields: { sessionId: "main" }, expectedStatus: "ready" },
+    event("session.idle", { sessionID: "main" })
+  ),
+  opencodeAction(
+    "session.status=idle",
+    "ActivityIdle",
+    "ready",
+    { expectedEventFields: { sessionId: "main" }, expectedStatus: "ready" },
+    event("session.status", { sessionID: "main", status: { type: "idle" } })
+  ),
   opencodeAction(
     "session.error",
     "error",
@@ -362,7 +362,15 @@ export const HOSTED_PLUGIN_STATUS_TRACES = [
   {
     actions: opencodeActions,
     agentId: "opencode",
-    covers: ["lifecycle", "processing", "tool", "waiting", "error", "subagent"],
+    covers: [
+      "lifecycle",
+      "ready",
+      "processing",
+      "tool",
+      "waiting",
+      "error",
+      "subagent",
+    ],
     createProducer: createOpenCodePluginProducer,
     stopAuthority: opencodeIntegration.runtime.stopAuthority,
   },

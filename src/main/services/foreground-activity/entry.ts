@@ -4,6 +4,7 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   ActivityStatus,
   AgentSessionTitleSource,
+  AgentTurnResult,
 } from "@shared/contracts/foreground-activity.ts";
 import type { AgentTerminalEvidence } from "./agent-turn-event-semantics.ts";
 import type {
@@ -121,16 +122,11 @@ export interface HookScope {
   anonymousSubagentCount: number;
   anonymousToolCount: number;
   completionObserved: boolean;
-  /**
-   * advisory Stop 观察到完成的时刻；与 turnEndedAt 一起供投影判定
-   * 「已结算 session 是否应压过尚未开新回合的 panel 兜底噪声」。
-   */
+  /** advisory Stop 候选观察时间；不具有结算或刷新状态置信度的效力。 */
   completionObservedAt: number | undefined;
   /**
    * 当前回合是否由 **显式提问**（PromptSubmit）建立。
-   * correlatable 心跳 / 工具认领不得点亮——否则泄漏 turnId 上的 processing
-   * 会把垃圾回合升成权威，真回合 stop 被 abandoned-turn 拒收。
-   * 权威活跃回合不得被旧回合的迟到 stop 拉回 ready（Esc 后重新提问）。
+   * 活跃时不能被外来工具或心跳替换。无显式提问的会话仍可由工具认领新回合。
    */
   currentTurnAuthoritative: boolean;
   currentTurnId: string | undefined;
@@ -141,27 +137,17 @@ export interface HookScope {
   displayQuestionId: string | undefined;
   /** 当前 scope 的主会话身份事实；hook.identity 只是选中 scope 的镜像。 */
   identity: HookIdentityFacts;
+  /** 原生主循环空闲与最近主进展；不具有结算回合的权限。 */
+  idleObservedAt?: number | undefined;
   interactionHistoryIncomplete: boolean;
   key: string;
-  /**
-   * 最近一次被抢占、尚未被可信终态结算的回合。abandoned 集合只用来拒迟到
-   * 进展；封账白名单是这一格，避免更旧 abandoned 终态误封当前工作回合。
-   */
-  lastDisplacedTurnId: string | undefined;
-  /**
-   * 被 resetTurn 抢占/换代**抛弃**的回合（区别于被可信终态结算的
-   * recentSettledTurnIds）：迟到进展不得复活它（防 ping-pong），但其
-   * 迟到的**可信终态**仍可封账——provider 的 stop 可能带被抢占前的
-   * generation（Cursor Task 泄漏子智能体 generation 后的真回合 stop）。
-   */
+  mainProgressAt?: number;
+  pendingMaintenance?: { id: string; startedAt: number } | undefined;
+  /** 被换代抛弃的回合；其迟到进展和终态都不得影响当前回合。 */
   recentAbandonedTurnIds: Set<string>;
   recentSettledTurnIds: Set<string>;
-  /**
-   * 是否见过显式提问（PromptSubmit）。子智能体独立 conversation 只发工具
-   * 事件、从不收口——主回合可信终态时按此标记封掉衍生 scope。
-   */
-  sawExplicitPrompt: boolean;
   settledInteractionIds: Set<string>;
+  settledMaintenanceIds?: Set<string>;
   settledSubagentIds: Set<string>;
   settledToolIds: Set<string>;
   stale: boolean;
@@ -173,6 +159,8 @@ export interface HookScope {
   /** 封账来源：transcript 为软封，hook / host 为硬封。 */
   terminalEvidenceSource: AgentEventEvidenceSource | undefined;
   toolHistoryIncomplete: boolean;
+  /** 当前回合/恢复执行的原生时间下界；与投影使用的摄入时间分开。 */
+  turnBoundaryAt: number | undefined;
   turnEnded: boolean;
   /** 可信终态落定时刻（TurnCompleted / 权威 Stop 等）。 */
   turnEndedAt: number | undefined;
@@ -204,6 +192,8 @@ export interface HookLayer {
   subagentCount: number;
   subagentWorkIdsByAlias: Map<string, Set<string>>;
   ttlTimer: NodeJS.Timeout | null;
+  /** 与所选 scope 同一次投影，不能从 ready 反推。 */
+  turnResult?: AgentTurnResult | undefined;
   updatedAt: number;
   visibilityTimer: NodeJS.Timeout | null;
   windowId: string;
@@ -335,10 +325,8 @@ export function newHookScope(
     identity,
     interactionHistoryIncomplete: false,
     key,
-    lastDisplacedTurnId: undefined,
     recentAbandonedTurnIds: new Set(),
     recentSettledTurnIds: new Set(),
-    sawExplicitPrompt: false,
     settledInteractionIds: new Set(),
     settledSubagentIds: new Set(),
     settledToolIds: new Set(),
@@ -350,6 +338,7 @@ export function newHookScope(
     terminalEvidenceSource: undefined,
     turnEnded: false,
     turnEndedAt: undefined,
+    turnBoundaryAt: undefined,
     turnResetAt: undefined,
     toolHistoryIncomplete: false,
     updatedAt: at,

@@ -116,6 +116,7 @@ const agentEventPayloadV3BaseFields = {
   toolName: z.string().max(256).optional(),
   toolUseId: hookWorkId.optional(),
   transcriptPath: z.string().max(8192).optional(),
+  /** Maintenance* 中为维护动作 ID，只配对维护事件，不参与用户回合认领。 */
   turnId: z.string().max(128).optional(),
   promptSnippet: z.string().max(512).optional(),
 };
@@ -142,6 +143,9 @@ const standardAgentEventV3Schema = z
       "SubagentStop",
       "processing",
       "running",
+      "ActivityIdle",
+      "MaintenanceStarted",
+      "MaintenanceCompleted",
       "Stop",
       "TurnCompleted",
       "TurnInterrupted",

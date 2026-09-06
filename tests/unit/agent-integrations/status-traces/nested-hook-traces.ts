@@ -309,7 +309,7 @@ geminiActions.splice(-1, 0, {
   ],
   expectedNativeEvents: ["AfterAgent"],
   nativeEvent: "AfterAgent",
-  nonCoveringAssertion: { expectedStatusAbsent: true },
+  nonCoveringAssertion: { expectedStatus: "processing" },
   payload: BASE_PAYLOAD,
 });
 

@@ -1,11 +1,10 @@
-import type { TranscriptTerminalRecord } from "./tail-contracts.ts";
+import {
+  isTranscriptTerminal,
+  type TranscriptTerminalRecord,
+} from "./tail-contracts.ts";
 
 export function isEmptyTurnTerminal(record: TranscriptTerminalRecord): boolean {
-  return (
-    (record.pierEvent === "TurnCompleted" ||
-      record.pierEvent === "TurnInterrupted") &&
-    record.turnId.trim().length === 0
-  );
+  return isTranscriptTerminal(record) && record.turnId.trim().length === 0;
 }
 
 /**
@@ -29,15 +28,19 @@ export function shouldDropStaleEmptyTurnTerminal(input: {
 export function recordPromptWatermark(
   watermarks: Map<string, number>,
   scopeKey: string,
-  size: number
+  size: number,
+  fileIdentities?: Map<string, string | undefined>,
+  fileIdentity?: string
 ): void {
   watermarks.set(scopeKey, size);
+  fileIdentities?.set(scopeKey, fileIdentity);
 }
 
 export function movePromptWatermark(
   watermarks: Map<string, number>,
   sourceKey: string,
-  targetKey: string
+  targetKey: string,
+  fileIdentities?: Map<string, string | undefined>
 ): void {
   const watermark = watermarks.get(sourceKey);
   if (watermark === undefined) {
@@ -45,13 +48,41 @@ export function movePromptWatermark(
   }
   watermarks.delete(sourceKey);
   watermarks.set(targetKey, watermark);
+  if (fileIdentities?.has(sourceKey)) {
+    const identity = fileIdentities.get(sourceKey);
+    fileIdentities.delete(sourceKey);
+    fileIdentities.set(targetKey, identity);
+  }
 }
 
 export function dropPromptWatermarks(
   watermarks: Map<string, number>,
-  keys: Iterable<string>
+  keys: Iterable<string>,
+  fileIdentities?: Map<string, string | undefined>
 ): void {
   for (const key of keys) {
     watermarks.delete(key);
+    fileIdentities?.delete(key);
+  }
+}
+
+/** A Prompt can stat the new file before the drain notices its replacement. */
+export function retainPromptWatermarksForFile(
+  watermarks: Map<string, number>,
+  fileIdentities: Map<string, string | undefined>,
+  currentIdentity: string
+): void {
+  for (const key of watermarks.keys()) {
+    const identity = fileIdentities.get(key);
+    if (
+      fileIdentities.has(key) &&
+      (identity === undefined || identity === currentIdentity)
+    ) {
+      // A confirmed missing-file boundary is valid only for its first generation.
+      fileIdentities.set(key, currentIdentity);
+    } else {
+      watermarks.delete(key);
+      fileIdentities.delete(key);
+    }
   }
 }

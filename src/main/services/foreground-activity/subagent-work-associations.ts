@@ -26,7 +26,10 @@ export function subagentIdentityAliases(
 ): string[] {
   const aliases: string[] = [];
   const sessionId = event.sessionId?.trim();
-  if (sessionId) {
+  const parentSessionId =
+    "parentSessionId" in event ? event.parentSessionId?.trim() : undefined;
+  // 提供方可能只上报父会话号；它不能当子实例身份，否则并发助手被合成一个。
+  if (sessionId && sessionId !== parentSessionId) {
     aliases.push(`session:${sessionId}`);
   }
   const agentInstanceId = event.agentInstanceId?.trim();

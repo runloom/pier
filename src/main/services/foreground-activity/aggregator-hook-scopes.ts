@@ -42,7 +42,7 @@ function updateSubagentAssociationsAfterBookkeeping(
   identity: HookScopeIdentity,
   transition: TurnTransition
 ): void {
-  if (transition !== "none") {
+  if (transition === "reset" || transition === "terminal-trusted") {
     retireSubagentWorksForScope(hook, scope.key);
   }
   if (SUBAGENT_HOOK_EVENTS.has(event.event)) {
@@ -357,10 +357,7 @@ export function createHookScopeCoordinator({
       }
     }
     if (SUBAGENT_HOOK_EVENTS.has(event.event)) {
-      // 子智能体生命周期只拥有计数与时间事实。即使父 scope 已无可信状态
-      // （advisory Stop 或 TTL stale），也不得借映射值恢复主会话状态，
-      // 更不得通过 setHookScopeStatus 清除 stale。
-      scope.updatedAt = at;
+      // 子智能体只拥有计数，不能刷新主状态的可信期限或恢复 stale。
       refreshHookProjectionWithLog(key, hook, at, event.agent);
       return;
     }
@@ -375,7 +372,15 @@ export function createHookScopeCoordinator({
       });
     }
     const previousStatus = hook.status;
-    setHookScopeStatusWithLog(key, hook, scope, status, at, event.agent);
+    if (
+      result.transition === "terminal-candidate" ||
+      result.transition === "observation"
+    ) {
+      // 候选只推进观察时间与诊断，已有状态、置信期限和排序依据保持不变。
+      refreshHookProjectionWithLog(key, hook, at, event.agent);
+    } else {
+      setHookScopeStatusWithLog(key, hook, scope, status, at, event.agent);
+    }
     logAgentLifecycleEvidence({
       agent: event.agent,
       event: event.event,
