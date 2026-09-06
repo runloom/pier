@@ -14,7 +14,10 @@ import {
   FILES_TREE_DEFAULT_AUTO_REVEAL_EXCLUDE_PATTERNS,
   type FilesTreeAutoRevealMode,
 } from "../../settings.ts";
-import { bindFilesTreeExpansionPersistence } from "./expansion-persist.ts";
+import {
+  bindFilesTreeExpansionPersistence,
+  hydrateFilesTreeExpansion,
+} from "./expansion-persist.ts";
 import { ensureFilesTreeAncestorsLoaded } from "./reveal.ts";
 import {
   type FilesTreeList,
@@ -76,6 +79,7 @@ export function useFilesTreeSidebarPrefs(options: {
     () => getTreeExpansionAuthority(filesTreeExpansionScopeId(root)),
     [root]
   );
+  hydrateFilesTreeExpansion(root, expansionAuthority);
   useEffect(
     () => bindFilesTreeExpansionPersistence(root, expansionAuthority),
     [expansionAuthority, root]

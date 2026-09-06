@@ -136,8 +136,14 @@ function beginRootLoad(
   force: boolean
 ): Promise<void> {
   const session = sessionForRoot(root);
-  return beginFilesTreeRootLoad(session, root, list, fallbackError, force, () =>
-    emit(session)
+  return beginFilesTreeRootLoad(
+    session,
+    root,
+    list,
+    fallbackError,
+    force,
+    () => emit(session),
+    (path) => loadFilesTreeDirectory(root, path, list)
   );
 }
 
