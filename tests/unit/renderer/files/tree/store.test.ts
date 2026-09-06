@@ -20,7 +20,7 @@ import {
 import { reloadFilesTreeVisibility } from "@plugins/builtin/files/renderer/tree/visibility-reload.ts";
 import { applyFilesTreeWatchEvent } from "@plugins/builtin/files/renderer/tree/watch-events.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
 
 const ROOT = "/repo";
 
@@ -36,7 +36,7 @@ function directory(path: string): FileEntry {
 
 function listFromResponses(
   responsesByPath: Readonly<Record<string, readonly FileEntry[]>>
-): FilesListApi {
+): Mock<FilesListApi> {
   return vi.fn<FilesListApi>((requestOrRoot, options) => {
     const path =
       typeof requestOrRoot === "string"
