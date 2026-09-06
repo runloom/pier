@@ -11,7 +11,10 @@ import {
   gitReviewTreeExpansionScopeId,
   PierFileTree,
 } from "@pier/ui/file/tree.tsx";
-import { bindTreeExpansionPersistence } from "@pier/ui/file/tree-expansion-persist.ts";
+import {
+  bindTreeExpansionPersistence,
+  hydrateTreeExpansion,
+} from "@pier/ui/file/tree-expansion-persist.ts";
 import { FILE_TREE_SEARCH_SHELL_CLASS } from "@pier/ui/file/tree-style.ts";
 import type { FileTreeSearch } from "@pier/ui/file/use-tree-search.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
@@ -75,6 +78,10 @@ function GitReviewTreeSidebarComponent({
         gitReviewTreeExpansionScopeId(contextId, gitRootPath)
       ),
     [contextId, gitRootPath]
+  );
+  hydrateTreeExpansion(
+    REVIEW_TREE_EXPANSION_STORAGE_PREFIX.concat(expansionAuthority.scopeId),
+    expansionAuthority
   );
   useEffect(
     () =>

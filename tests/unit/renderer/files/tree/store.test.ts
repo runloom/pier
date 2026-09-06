@@ -3,6 +3,7 @@ import {
   clearFileTreeSidebarCache,
   registerPendingCreate,
 } from "@plugins/builtin/files/renderer/tree/registry.ts";
+import { FILES_TREE_RESTORE_EXPAND_TIMEOUT_MS } from "@plugins/builtin/files/renderer/tree/root-loader.ts";
 import {
   addFilesTreeEntry,
   clearFilesTreeStore,
@@ -80,8 +81,10 @@ async function loadRoot(entries: readonly FileEntry[]): Promise<void> {
 
 describe("files-tree-store", () => {
   afterEach(() => {
+    vi.useRealTimers();
     clearFilesTreeStore();
     clearFileTreeSidebarCache();
+    localStorage.removeItem("pier.files.tree.expansion.v1:/repo");
     vi.restoreAllMocks();
   });
 
@@ -174,6 +177,143 @@ describe("files-tree-store", () => {
     expect(snapshot.rootLoading).toBe(false);
     expect(snapshot.entriesByPath.get("README.md")).toEqual(file("README.md"));
     expect(snapshot.entriesByPath.has("unexpected.ts")).toBe(false);
+  });
+
+  it("holds rootLoaded until persisted expanded directories are listed", async () => {
+    localStorage.setItem(
+      "pier.files.tree.expansion.v1:/repo",
+      JSON.stringify({
+        collapsed: [],
+        expanded: ["src"],
+        updatedAt: 1,
+        v: 1,
+      })
+    );
+    const srcLoad = createDeferred<FileEntry[]>();
+    const list = vi.fn<FilesListApi>((requestOrRoot, options) => {
+      const path =
+        typeof requestOrRoot === "string"
+          ? (options?.path ?? "")
+          : requestOrRoot.path;
+      if (path === "") {
+        return Promise.resolve([directory("src"), file("README.md")]);
+      }
+      if (path === "src") {
+        return srcLoad.promise;
+      }
+      return Promise.resolve([]);
+    });
+
+    const pending = loadFilesTreeRoot(ROOT, list, "Failed to load files");
+    await settleStorePromises();
+
+    expect(getFilesTreeSnapshot(ROOT).rootLoaded).toBe(false);
+    expect(getFilesTreeSnapshot(ROOT).rootLoading).toBe(true);
+    expect(getFilesTreeSnapshot(ROOT).directoryStatesByPath.get("src")).toBe(
+      "loading"
+    );
+    expect(getFilesTreeSnapshot(ROOT).entriesByPath.has("src")).toBe(true);
+    expect(getFilesTreeSnapshot(ROOT).entriesByPath.has("src/a.ts")).toBe(
+      false
+    );
+
+    srcLoad.resolve([file("src/a.ts")]);
+    await pending;
+
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.rootLoaded).toBe(true);
+    expect(snapshot.rootLoading).toBe(false);
+    expect(snapshot.entriesByPath.get("src/a.ts")).toEqual(file("src/a.ts"));
+  });
+
+  it("unveils the tree when restore listing hangs past the timeout", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem(
+      "pier.files.tree.expansion.v1:/repo",
+      JSON.stringify({
+        collapsed: [],
+        expanded: ["src"],
+        updatedAt: 1,
+        v: 1,
+      })
+    );
+    const srcLoad = createDeferred<FileEntry[]>();
+    const list = vi.fn<FilesListApi>((requestOrRoot, options) => {
+      const path =
+        typeof requestOrRoot === "string"
+          ? (options?.path ?? "")
+          : requestOrRoot.path;
+      if (path === "") {
+        return Promise.resolve([directory("src"), file("README.md")]);
+      }
+      if (path === "src") {
+        return srcLoad.promise;
+      }
+      return Promise.resolve([]);
+    });
+
+    const pending = loadFilesTreeRoot(ROOT, list, "Failed to load files");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getFilesTreeSnapshot(ROOT).rootLoaded).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(FILES_TREE_RESTORE_EXPAND_TIMEOUT_MS);
+    expect(getFilesTreeSnapshot(ROOT).rootLoaded).toBe(true);
+    expect(getFilesTreeSnapshot(ROOT).rootLoading).toBe(false);
+
+    srcLoad.resolve([file("src/a.ts")]);
+    vi.useRealTimers();
+    await settleStorePromises();
+    expect(getFilesTreeSnapshot(ROOT).entriesByPath.get("src/a.ts")).toEqual(
+      file("src/a.ts")
+    );
+    await pending;
+  });
+
+  it("does not prefetch expanded paths missing from the root listing", async () => {
+    localStorage.setItem(
+      "pier.files.tree.expansion.v1:/repo",
+      JSON.stringify({
+        collapsed: [],
+        expanded: ["gone/nested"],
+        updatedAt: 1,
+        v: 1,
+      })
+    );
+    const list = listFromResponses({
+      "": [directory("src"), file("README.md")],
+    });
+    await loadFilesTreeRoot(ROOT, list, "Failed to load files");
+    expect(getFilesTreeSnapshot(ROOT).rootLoaded).toBe(true);
+    expect(
+      list.mock.calls.map((call) => {
+        const requestOrRoot = call[0];
+        const options = call[1];
+        return typeof requestOrRoot === "string"
+          ? (options?.path ?? "")
+          : requestOrRoot.path;
+      })
+    ).toEqual([""]);
+  });
+
+  it("does not prefetch directories that are persisted collapsed", async () => {
+    localStorage.setItem(
+      "pier.files.tree.expansion.v1:/repo",
+      JSON.stringify({
+        collapsed: ["src"],
+        expanded: ["src", "src/lib"],
+        updatedAt: 1,
+        v: 1,
+      })
+    );
+    const list = listFromResponses({
+      "": [directory("src"), file("README.md")],
+      src: [file("src/a.ts")],
+    });
+    await loadFilesTreeRoot(ROOT, list, "Failed to load files");
+    expect(getFilesTreeSnapshot(ROOT).rootLoaded).toBe(true);
+    expect(getFilesTreeSnapshot(ROOT).entriesByPath.has("src/a.ts")).toBe(
+      false
+    );
   });
 
   it("marks a failed directory load as an error while preserving existing entries", async () => {
