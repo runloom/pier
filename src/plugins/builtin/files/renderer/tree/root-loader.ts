@@ -1,4 +1,6 @@
+import { EXPAND_ALL_DEFAULT_MAX_CONCURRENT_LISTS } from "@pier/ui/file/tree-expansion-apply.ts";
 import { isFolderAccessBlockedError } from "../editor/errors.ts";
+import { collectFilesTreeRestoreDirectoryPaths } from "./expansion-persist.ts";
 import {
   type FilesTreeDirectoryLoadDetails,
   type FilesTreeSnapshot,
@@ -13,6 +15,12 @@ import {
 } from "./store-ops.ts";
 import type { FilesTreeList } from "./visibility.ts";
 
+/**
+ * 预取总预算：超时后仍揭开骨架，在途 listing 可继续填树。
+ * 避免任一 list hang 把冷启动钉死在 skeleton。
+ */
+export const FILES_TREE_RESTORE_EXPAND_TIMEOUT_MS = 800;
+
 interface RootLoadSession {
   directoryLoadGenerations: Map<string, number>;
   directoryLoadPromises: Map<string, Promise<FilesTreeDirectoryLoadDetails>>;
@@ -22,13 +30,86 @@ interface RootLoadSession {
   visibilityPredicate: ((path: string) => boolean) | null;
 }
 
+type LoadDirectory = (path: string) => Promise<unknown>;
+
+function awaitRestoreOrTimeout(restore: Promise<void>): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, FILES_TREE_RESTORE_EXPAND_TIMEOUT_MS);
+    restore.then(
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      () => {
+        clearTimeout(timer);
+        resolve();
+      }
+    );
+  });
+}
+
+/**
+ * 冷启动：在揭开骨架前把落盘展开目录的 listing 预取进 snapshot。
+ * 走 loadDirectory（登记 in-flight / loading），与 watch 同生命周期。
+ * 无目标时同步返回 undefined，不额外插 microtask（store 单测依赖）。
+ */
+function restorePersistedExpandedListings(
+  session: RootLoadSession,
+  root: string,
+  list: FilesTreeList,
+  loadGeneration: number,
+  loadDirectory: LoadDirectory
+): Promise<void> | undefined {
+  const isVisible = (path: string): boolean =>
+    session.visibilityPredicate?.(path) ??
+    list.isPathVisible?.(root, path) ??
+    true;
+  const paths = collectFilesTreeRestoreDirectoryPaths(root, {
+    hasRootLevelDirectory: (name) =>
+      session.snapshot.entriesByPath.get(name)?.kind === "directory",
+    isVisible,
+  });
+  if (paths.length === 0) {
+    return;
+  }
+
+  return (async () => {
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < paths.length) {
+        if (session.rootLoadGeneration !== loadGeneration) {
+          return;
+        }
+        const path = paths[cursor];
+        cursor += 1;
+        if (path === undefined) {
+          continue;
+        }
+        await loadDirectory(path).catch(() => undefined);
+      }
+    };
+    await Promise.all(
+      Array.from(
+        {
+          length: Math.min(
+            EXPAND_ALL_DEFAULT_MAX_CONCURRENT_LISTS,
+            paths.length
+          ),
+        },
+        () => worker()
+      )
+    );
+  })();
+}
+
 export function beginFilesTreeRootLoad(
   session: RootLoadSession,
   root: string,
   list: FilesTreeList,
   fallbackError: string,
   force: boolean,
-  emit: () => void
+  emit: () => void,
+  loadDirectory: LoadDirectory
 ): Promise<void> {
   const loadGeneration = session.rootLoadGeneration;
   if (list.isPathVisible) {
@@ -59,7 +140,7 @@ export function beginFilesTreeRootLoad(
 
   let discarded = false;
   const rootLoadPromise = list(root, { path: "" })
-    .then((entries) => {
+    .then(async (entries) => {
       if (session.rootLoadGeneration !== loadGeneration) {
         discarded = true;
         session.snapshot = { ...session.snapshot, rootLoading: false };
@@ -83,15 +164,49 @@ export function beginFilesTreeRootLoad(
         nextEntriesByPath,
         ""
       );
+      const nextDirectoryStates = useMerge
+        ? pruneDirectoryStatesForMissingEntries(
+            session.snapshot.directoryStatesByPath,
+            nextEntriesByPath,
+            ""
+          )
+        : new Map();
       session.snapshot = {
-        directoryStatesByPath: useMerge
-          ? pruneDirectoryStatesForMissingEntries(
-              session.snapshot.directoryStatesByPath,
-              nextEntriesByPath,
-              ""
-            )
-          : new Map(),
+        directoryStatesByPath: nextDirectoryStates,
         entriesByPath: nextEntriesByPath,
+        rootError: null,
+        rootErrorFolderAccessBlocked: false,
+        rootLoaded: true,
+        rootLoading: false,
+      };
+      const restore = force
+        ? undefined
+        : restorePersistedExpandedListings(
+            session,
+            root,
+            list,
+            loadGeneration,
+            loadDirectory
+          );
+      if (restore === undefined) {
+        emit();
+        return;
+      }
+      session.snapshot = {
+        ...session.snapshot,
+        rootLoaded: false,
+        rootLoading: true,
+      };
+      emit();
+      await awaitRestoreOrTimeout(restore);
+      if (session.rootLoadGeneration !== loadGeneration) {
+        discarded = true;
+        session.snapshot = { ...session.snapshot, rootLoading: false };
+        emit();
+        return;
+      }
+      session.snapshot = {
+        ...session.snapshot,
         rootError: null,
         rootErrorFolderAccessBlocked: false,
         rootLoaded: true,
@@ -136,7 +251,8 @@ export function beginFilesTreeRootLoad(
             list,
             fallbackError,
             false,
-            emit
+            emit,
+            loadDirectory
           ).catch(() => undefined);
         }
       }

@@ -1,0 +1,171 @@
+Keep pty write chunks on UTF-8 scalar boundaries.
+
+`Exec.queueWrite` splits every outbound write into 64-byte buffers by raw
+byte count. A paste (`ghostty_surface_text` → `completeClipboardPaste`)
+whose body is longer than 64 bytes can therefore be cut in the middle of a
+multi-byte scalar: 21 CJK characters are 63 bytes, so the 22nd character
+lands as `E5` at the end of write #1 and `91 A2` at the start of write #2.
+The child usually sees those as two separate read()s, and any TUI that
+decodes each chunk on its own (cursor-agent, `chunk.toString()` style
+readers) renders U+FFFD × 3 in the middle of the sentence. Apple Terminal,
+WezTerm, Alacritty and kitty write the paste body contiguously; iTerm2 and
+VS Code chunk by character, never by byte.
+
+Resolve the chunk end with `utf8ChunkEnd`: when the first byte of the next
+chunk is a continuation byte inside a valid scalar, hand the lead byte
+(and any continuation bytes already copied) to the next write. Both the
+fast path and the linefeed (`\r` → `\r\n`) path use it; the bytes given back
+are never `\r` so they map 1:1 onto the buffer tail. Malformed input or a
+chunk that would become empty falls back to the byte boundary so the
+writer can never stall. Buffer size stays 64.
+
+diff --git a/src/termio/Exec.zig b/src/termio/Exec.zig
+index af4df3f..161d296 100644
+--- a/src/termio/Exec.zig
++++ b/src/termio/Exec.zig
+@@ -420,8 +420,10 @@ pub fn queueWrite(
+         const buf = try exec.write_buf_pool.getGrow(alloc);
+         const slice = slice: {
+             // The maximum end index is either the end of our data or
+-            // the end of our buffer, whichever is smaller.
+-            const max = @min(data.len, i + buf.len);
++            // the end of our buffer, whichever is smaller. Pull it back
++            // so a multi-byte UTF-8 scalar never straddles two writes.
++            const chunk_start = i;
++            const max = utf8ChunkEnd(data, i, @min(data.len, i + buf.len));
+ 
+             // Fast
+             if (!linefeed) {
+@@ -449,6 +451,12 @@ pub fn queueWrite(
+                 buf_i += 2;
+             }
+ 
++            // The bytes we give back here are all lead or continuation
++            // bytes (never '\r'), so they map 1:1 onto the buffer tail.
++            const aligned = utf8ChunkEnd(data, chunk_start, i);
++            buf_i -= i - aligned;
++            i = aligned;
++
+             break :slice buf[0..buf_i];
+         };
+ 
+@@ -466,6 +474,119 @@ pub fn queueWrite(
+     }
+ }
+ 
++/// Pier patch (0111): resolve the exclusive end of a pty write chunk so it
++/// lands on a UTF-8 scalar boundary. `end` is the tentative end for the
++/// chunk starting at `start`. When `data[end]` is a continuation byte of a
++/// valid scalar that began inside this chunk, we hand its lead byte (and
++/// any continuation bytes already in the chunk) to the next write instead.
++///
++/// The pty is a byte stream and readers *should* decode incrementally,
++/// but plenty of TUIs decode each read() on its own and turn a split
++/// scalar into U+FFFD. Aligning here removes the deterministic trigger
++/// without changing what the child ultimately receives.
++///
++/// Malformed input or a chunk that would become empty falls back to the
++/// byte boundary so the writer never stalls.
++fn utf8ChunkEnd(data: []const u8, start: usize, end: usize) usize {
++    assert(start < end);
++    assert(end <= data.len);
++
++    // Nothing follows this chunk, so there is nothing to split.
++    if (end == data.len) return end;
++
++    var cut = end;
++    var back: usize = 0;
++    while (isUtf8Continuation(data[cut])) {
++        // A scalar carries at most 3 continuation bytes; anything longer
++        // is not UTF-8. Never shrink the chunk to zero bytes either.
++        if (back == 3 or cut <= start + 1) return end;
++        cut -= 1;
++        back += 1;
++    }
++    if (cut == end) return end;
++
++    // Only rewind a valid scalar that actually straddles the boundary.
++    // In particular, ASCII (including an expanded CR) must stay in place.
++    const len = std.unicode.utf8ByteSequenceLength(data[cut]) catch return end;
++    if (len <= end - cut or len > data.len - cut) return end;
++    if (!std.unicode.utf8ValidateSlice(data[cut..][0..len])) return end;
++    return cut;
++}
++
++inline fn isUtf8Continuation(byte: u8) bool {
++    return (byte & 0xC0) == 0x80;
++}
++
++test "utf8ChunkEnd keeps ASCII and end-of-data boundaries" {
++    const testing = std.testing;
++    const data = "hello world";
++    try testing.expectEqual(@as(usize, 5), utf8ChunkEnd(data, 0, 5));
++    try testing.expectEqual(data.len, utf8ChunkEnd(data, 0, data.len));
++    try testing.expectEqual(@as(usize, 8), utf8ChunkEnd(data, 5, 8));
++}
++
++test "utf8ChunkEnd never splits a multi-byte scalar" {
++    const testing = std.testing;
++
++    // 63 ASCII bytes then U+5462 (E5 91 A2): a 64-byte chunk would keep
++    // only the lead byte; 65 would keep lead + one continuation byte.
++    const cjk = "a" ** 63 ++ "呢" ++ "?";
++    try testing.expectEqual(@as(usize, 63), utf8ChunkEnd(cjk, 0, 64));
++    try testing.expectEqual(@as(usize, 63), utf8ChunkEnd(cjk, 0, 65));
++    try testing.expectEqual(@as(usize, 66), utf8ChunkEnd(cjk, 0, 66));
++
++    // Two-byte scalar (U+00E9: C3 A9).
++    const latin = "a" ** 63 ++ "é" ++ "!";
++    try testing.expectEqual(@as(usize, 63), utf8ChunkEnd(latin, 0, 64));
++
++    // Four-byte scalar (U+1F600: F0 9F 98 80) split after three bytes.
++    const emoji = "a" ** 61 ++ "😀" ++ "!";
++    try testing.expectEqual(@as(usize, 61), utf8ChunkEnd(emoji, 0, 64));
++
++    // Same rule applies to later chunks (non-zero start).
++    const later = "a" ** 127 ++ "呢" ++ "?";
++    try testing.expectEqual(@as(usize, 127), utf8ChunkEnd(later, 64, 128));
++}
++
++test "utf8ChunkEnd falls back to the byte boundary on malformed input" {
++    const testing = std.testing;
++
++    // Rewinding onto an expanded CR would leave an extra CR in the output.
++    const cr = "a" ** 62 ++ "\r\x80";
++    try testing.expectEqual(@as(usize, 63), utf8ChunkEnd(cr, 0, 63));
++
++    // An ASCII byte or completed scalar cannot lead a stray continuation.
++    const ascii = "a" ** 64 ++ "\x80";
++    try testing.expectEqual(@as(usize, 64), utf8ChunkEnd(ascii, 0, 64));
++    const extra = "a" ** 62 ++ "\xc3\xa9\x80";
++    try testing.expectEqual(@as(usize, 64), utf8ChunkEnd(extra, 0, 64));
++
++    // Reject invalid leads, overlong encodings, surrogates, out-of-range
++    // codepoints, truncated scalars and invalid continuation bytes.
++    const malformed = [_][]const u8{
++        "a" ** 63 ++ "\xff\x80",
++        "a" ** 63 ++ "\xc0\x80",
++        "a" ** 63 ++ "\xe0\x80\x80",
++        "a" ** 63 ++ "\xed\xa0\x80",
++        "a" ** 63 ++ "\xf0\x80\x80\x80",
++        "a" ** 63 ++ "\xf4\x90\x80\x80",
++        "a" ** 63 ++ "\xe5\x91",
++        "a" ** 63 ++ "\xe5\x91?",
++    };
++    for (malformed) |data| {
++        try testing.expectEqual(@as(usize, 64), utf8ChunkEnd(data, 0, 64));
++    }
++
++    // Five continuation bytes in a row can't be one scalar.
++    const runaway = "a" ** 60 ++ "\x80\x80\x80\x80\x80" ++ "b";
++    try testing.expectEqual(@as(usize, 64), utf8ChunkEnd(runaway, 0, 64));
++
++    // A chunk must keep at least one byte even if it can't align.
++    const tiny = "呢";
++    try testing.expectEqual(@as(usize, 1), utf8ChunkEnd(tiny, 0, 1));
++    try testing.expectEqual(@as(usize, 2), utf8ChunkEnd(tiny, 0, 2));
++}
++
+ fn ttyWrite(
+     td_: ?*ThreadData,
+     _: *xev.Loop,

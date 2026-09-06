@@ -4,6 +4,7 @@ import {
   resetFilePanelSidebarWidthListenersForTests,
 } from "@pier/ui/file/panel-sidebar-width.ts";
 import { act, cleanup, render } from "@testing-library/react";
+import type { ReactElement, ReactNode } from "react";
 import type {
   GroupProps,
   LayoutChangedMeta,
@@ -14,6 +15,7 @@ import type {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const resizablePanelRuntime = vi.hoisted(() => ({
+  defaultSizeById: new Map<string, PanelProps["defaultSize"]>(),
   groupElements: [] as HTMLDivElement[],
   handles: [] as PanelImperativeHandle[],
   hostWidths: [800, 800],
@@ -26,12 +28,18 @@ vi.mock("react-resizable-panels", async () => {
   const React = await import("react");
 
   function createHandle(): PanelImperativeHandle {
+    let collapsed = false;
     let inPixels = 256;
     return {
-      collapse: vi.fn(),
-      expand: vi.fn(),
+      collapse: vi.fn(() => {
+        collapsed = true;
+        inPixels = 0;
+      }),
+      expand: vi.fn(() => {
+        collapsed = false;
+      }),
       getSize: vi.fn(() => ({ asPercentage: 0, inPixels })),
-      isCollapsed: vi.fn(() => false),
+      isCollapsed: vi.fn(() => collapsed),
       resize: vi.fn((size: number | string) => {
         if (typeof size === "string" && size.endsWith("px")) {
           const parsed = Number.parseInt(size, 10);
@@ -76,6 +84,7 @@ vi.mock("react-resizable-panels", async () => {
     },
     Panel({ children, className, id, onResize, ...props }: PanelProps) {
       const panelId = String(id);
+      resizablePanelRuntime.defaultSizeById.set(panelId, props.defaultSize);
       if (onResize) {
         resizablePanelRuntime.onResizeById.set(panelId, onResize);
       }
@@ -83,6 +92,11 @@ vi.mock("react-resizable-panels", async () => {
         <div
           aria-hidden={props["aria-hidden"]}
           className={className}
+          data-default-size={
+            props.defaultSize === undefined
+              ? undefined
+              : String(props.defaultSize)
+          }
           data-panel=""
           data-testid={panelId}
         >
@@ -120,6 +134,7 @@ const PROGRAMMATIC_LAYOUT_META: LayoutChangedMeta = {
 
 afterEach(() => {
   cleanup();
+  resizablePanelRuntime.defaultSizeById.clear();
   resizablePanelRuntime.groupElements.length = 0;
   resizablePanelRuntime.handles.length = 0;
   resizablePanelRuntime.hostWidths = [800, 800];
@@ -200,6 +215,34 @@ function persistFilesUserWidth(widthPx: number): void {
   });
 }
 
+function gitReviewLayout(sidebar: ReactNode): ReactElement {
+  return (
+    <FilePanelLayout
+      contentPanelId="git-review-diff"
+      header={<div>git-header</div>}
+      onSidebarAutoCollapse={vi.fn()}
+      sidebar={sidebar}
+      sidebarPanelId="git-review-tree"
+    >
+      <main>diff</main>
+    </FilePanelLayout>
+  );
+}
+
+function renderGitReviewLayout(sidebar: ReactNode): ReturnType<typeof render> {
+  return render(gitReviewLayout(sidebar));
+}
+
+async function flushSidebarPreferenceFrame(): Promise<void> {
+  await act(async () => {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        resolve();
+      });
+    });
+  });
+}
+
 describe("FilePanelLayout shared tree width", () => {
   it("persists a user drag and resizes a laid-out sibling tree", () => {
     renderSharedTrees();
@@ -261,5 +304,93 @@ describe("FilePanelLayout shared tree width", () => {
     });
 
     expect(gitHandle?.resize).toHaveBeenCalledWith("320px");
+  });
+
+  it("starts the hidden tree slot at 0px so empty content can center", () => {
+    renderGitReviewLayout(null);
+
+    expect(resizablePanelRuntime.defaultSizeById.get("git-review-tree")).toBe(
+      "0px"
+    );
+    expect(resizablePanelRuntime.handles[0]?.collapse).toHaveBeenCalled();
+    expect(resizablePanelRuntime.handles[0]?.expand).not.toHaveBeenCalled();
+  });
+
+  it("keeps the stored width as defaultSize when the tree starts visible", () => {
+    localStorage.setItem(FILE_PANEL_SIDEBAR_WIDTH_STORAGE_KEY, "320");
+    renderGitReviewLayout(<aside>git-tree</aside>);
+
+    expect(resizablePanelRuntime.defaultSizeById.get("git-review-tree")).toBe(
+      "320px"
+    );
+  });
+
+  it("does not retie defaultSize when hiding a tree that started visible", () => {
+    const view = renderGitReviewLayout(<aside>git-tree</aside>);
+    expect(resizablePanelRuntime.defaultSizeById.get("git-review-tree")).toBe(
+      "256px"
+    );
+
+    view.rerender(gitReviewLayout(null));
+
+    expect(resizablePanelRuntime.defaultSizeById.get("git-review-tree")).toBe(
+      "256px"
+    );
+    expect(resizablePanelRuntime.handles[0]?.collapse).toHaveBeenCalled();
+  });
+
+  it("expands a tree that appears after an empty mount to the stored width", async () => {
+    localStorage.setItem(FILE_PANEL_SIDEBAR_WIDTH_STORAGE_KEY, "320");
+    const view = renderGitReviewLayout(null);
+    const handle = resizablePanelRuntime.handles[0];
+    expect(resizablePanelRuntime.defaultSizeById.get("git-review-tree")).toBe(
+      "0px"
+    );
+    expect(handle?.collapse).toHaveBeenCalled();
+
+    view.rerender(gitReviewLayout(<aside>git-tree</aside>));
+
+    expect(resizablePanelRuntime.defaultSizeById.get("git-review-tree")).toBe(
+      "0px"
+    );
+    expect(handle?.expand).toHaveBeenCalled();
+    await flushSidebarPreferenceFrame();
+    expect(handle?.resize).toHaveBeenCalledWith("320px");
+  });
+
+  it("collapses the hidden tree slot again when the host becomes laid out", () => {
+    resizablePanelRuntime.hostWidths = [0];
+    renderGitReviewLayout(null);
+
+    const handle = resizablePanelRuntime.handles[0];
+    expect(handle?.collapse).toHaveBeenCalledOnce();
+
+    resizablePanelRuntime.hostWidths = [800];
+    act(() => {
+      for (const notify of resizablePanelRuntime.resizeObserverCallbacks) {
+        notify();
+      }
+    });
+
+    expect(handle?.collapse).toHaveBeenCalledTimes(2);
+    expect(handle?.resize).not.toHaveBeenCalled();
+  });
+
+  it("expands a visible tree when a hidden host becomes laid out", () => {
+    localStorage.setItem(FILE_PANEL_SIDEBAR_WIDTH_STORAGE_KEY, "320");
+    resizablePanelRuntime.hostWidths = [0];
+    renderGitReviewLayout(<aside>git-tree</aside>);
+    const handle = resizablePanelRuntime.handles[0];
+    expect(handle?.resize).not.toHaveBeenCalled();
+
+    resizablePanelRuntime.hostWidths = [800];
+    act(() => {
+      for (const notify of resizablePanelRuntime.resizeObserverCallbacks) {
+        notify();
+      }
+    });
+
+    expect(handle?.expand).toHaveBeenCalled();
+    expect(handle?.resize).toHaveBeenCalledWith("320px");
   });
 });

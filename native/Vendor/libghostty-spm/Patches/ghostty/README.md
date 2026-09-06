@@ -19,6 +19,7 @@ Lakr233 上游 patches 之后再 apply 这一批。编号从 `0100` 起，跟 La
 | `0108-live-scrollback-limit.patch` | 加 `ghostty_surface_set_scrollback_limit`：运行时改主屏 `PageList.setMaxSize`，立刻丢掉超限页。Pier 用来让滚动历史偏好对存量 surface 即时生效。 |
 | `0109-keystroke-follow-skip-nav-keys.patch` | 收窄 Ghostty 默认 `scroll-to-bottom = keystroke`：裸方向键 / Page（含小键盘）编码进 PTY 但不 `scrollViewport(.bottom)`。打字 / Enter / Backspace 以及 Ctrl/Alt/Super 和弦仍回 live。 |
 | `0110-color-scheme-report-state.patch` | Mode 2031 通知和 CSI 996 查询使用 surface 当前明暗状态。无条件主题配置时，Ghostty 会跳过配置重放，不能从配置缓存推断当前外观；初始化与配置更新都显式传入实际状态。宿主还需同步处理 soft reload，确保状态先于通知进入 IO 队列。需 `pnpm build:libghostty` 与 `pnpm build:native`。 |
+| `0111-utf8-safe-pty-write-chunk.patch` | `Exec.queueWrite` 写 PTY 时按 64 字节硬切，粘贴 / `ghostty_surface_text` 的正文会被切在多字节字符中间（21 个汉字 = 63 字节，第 22 个字被拆成 `E5` + `91 A2` 两次 write）。逐块解码的 TUI（cursor-agent 等）就把它显示成 `���`。加 `utf8ChunkEnd`：下一块首字节是续字节时把整个字符让给下一次 write，快路径与 `\r`→`\r\n` 慢路径同用；畸形输入回退到字节边界，绝不产生空块。缓冲仍是 64 字节，读端流式解码仍是读端自己的责任。上游 main 截至 2026-09-06 仍未对齐，可向上游提。 |
 
 ## 规则
 

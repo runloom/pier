@@ -4,6 +4,7 @@
  * 展开态是纯用户偏好：写盘失败、存储不可用、载荷损坏都只降级为「回到默认展开
  * 策略」，绝不能让目录树本身失败。
  */
+import { pathSegmentDepth } from "./tree-expansion-apply.ts";
 import type { TreeExpansionAuthority } from "./tree-expansion-authority.ts";
 
 /** 每个作用域的落盘路径上限，避免巨仓把 localStorage 撑爆。 */
@@ -30,7 +31,7 @@ function trimPaths(paths: readonly string[], maxPaths: number): string[] {
   }
   const sorted = [...paths].sort(
     (left, right) =>
-      left.split("/").length - right.split("/").length ||
+      pathSegmentDepth(left) - pathSegmentDepth(right) ||
       left.localeCompare(right)
   );
   return sorted.slice(0, maxPaths);
@@ -66,6 +67,33 @@ export function writeTreeExpansion(
   }
 }
 
+const hydratedKeysByAuthority = new WeakMap<object, Set<string>>();
+
+/**
+ * 同步灌回落盘意图。每个 authority × storageKey 只尝试一次，避免冷启动先画全折叠，
+ * 也避免同实例绑到另一 key 时被第一次空读占死。
+ * 在首帧调用（render 期读盘），不能等 useEffect。
+ */
+export function hydrateTreeExpansion(
+  storageKey: string,
+  authority: TreeExpansionAuthority
+): boolean {
+  let keys = hydratedKeysByAuthority.get(authority);
+  if (!keys) {
+    keys = new Set();
+    hydratedKeysByAuthority.set(authority, keys);
+  }
+  if (keys.has(storageKey)) {
+    return false;
+  }
+  const existing = readTreeExpansion(storageKey);
+  keys.add(storageKey);
+  if (existing == null) {
+    return false;
+  }
+  return authority.loadJSON(existing, "restore");
+}
+
 /** 载入既有意图并订阅后续变更；返回解绑函数（解绑时冲刷未落盘的改动）。 */
 export function bindTreeExpansionPersistence(
   storageKey: string,
@@ -74,10 +102,7 @@ export function bindTreeExpansionPersistence(
 ): () => void {
   const maxPaths = options.maxPaths ?? DEFAULT_MAX_PATHS;
   const debounceMs = options.writeDebounceMs ?? DEFAULT_WRITE_DEBOUNCE_MS;
-  const existing = readTreeExpansion(storageKey);
-  if (existing != null) {
-    authority.loadJSON(existing, "restore");
-  }
+  hydrateTreeExpansion(storageKey, authority);
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   const scheduleWrite = () => {
