@@ -19,7 +19,7 @@
   - `Pier-<ver>-arm64.dmg` / `Pier-<ver>.dmg`
 - `publish-mac-release-artifacts.mjs` 会强制 `EP_GH_IGNORE_TIME=true`（覆盖 >2h 旧 release 的静默 skip），并在上传后再查 GitHub 远端资产；缺 arm64 dmg 等会硬失败
 - `electron-builder.yml`：`publish.releaseType: release`（正式默认；候选由 publish 脚本覆盖为 `prerelease`；禁止 draft，否则无 Latest）
-- 使用 `CSC_LINK` 时 workflow 设置 `PIER_DIST_ALLOW_CSC_LINK_PUBLISH=1`（`build-dist.sh` 默认禁 CSC_LINK publish）
+- CI 先用 `apple-actions/import-codesign-certs` 把 `CSC_LINK`（base64 p12 或 HTTPS 下载地址）导入临时钥匙串，构建只传 `CSC_KEYCHAIN`；任务结束清理钥匙串和临时凭据文件。不要向构建步骤再传 `CSC_LINK` / `CSC_KEY_PASSWORD`：electron-builder 26.15.3 会把 p12 密码误当作钥匙串密码，在 macOS 26.6 的 `set-key-partition-list` 阶段失败。
 - 发布后门禁：
   - 本地：`verify-mac-release-artifacts.mjs --dir dist-builder --version <ver>`
   - 上传后远端：publish wrapper 内嵌 dual-arch 校验
@@ -41,6 +41,8 @@
 | 或 `APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD` + `APPLE_TEAM_ID` | 公证 |
 | 或 `APPLE_KEYCHAIN_PROFILE` + `APPLE_TEAM_ID` | 本机 keychain profile |
 | `GITHUB_TOKEN` | workflow 自带，用于 publish |
+
+若失败发生在发布资产上传前，且仅需修复 workflow，可将修复合入 `main` 后手动运行 **Release App**（workflow 分支选 `main`，`tag` 填原 tag）。构建仍 checkout 原 tag，不移动 tag，也不改变应用源码；已有发布内容不得通过这种方式改写。
 
 官网博客（CI 仓库 Secrets，不进 `electron-builder.env`）：
 

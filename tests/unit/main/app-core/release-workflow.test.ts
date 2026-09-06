@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 
 describe("app release workflow", () => {
   it("publishes mac app updates to GitHub Latest on stable version tags", async () => {
@@ -17,7 +18,6 @@ describe("app release workflow", () => {
     expect(source).toContain("contents: write");
     expect(source).toContain("latest-mac.yml");
     expect(source).toContain("verify-mac-release-artifacts.mjs");
-    expect(source).toContain("PIER_DIST_ALLOW_CSC_LINK_PUBLISH");
     expect(source).toContain("runs-on: macos-26");
     expect(source).toContain("/Applications/Xcode_26.6.app/Contents/Developer");
     expect(source).toContain("Xcode 26.6");
@@ -31,6 +31,44 @@ describe("app release workflow", () => {
     expect(source).toMatch(
       /outputs:\s*\n\s+tag:\s*\$\{\{\s*steps\.version\.outputs\.tag\s*\}\}/
     );
+  });
+
+  it("imports the signing certificate before building without forwarding its password to electron-builder", async () => {
+    const source = await readFile(
+      join(process.cwd(), ".github/workflows/release-app.yml"),
+      "utf8"
+    );
+    const workflow = parse(source) as {
+      jobs: {
+        release: {
+          steps: {
+            uses?: string;
+            env?: Record<string, string>;
+            with?: Record<string, string>;
+            run?: string;
+          }[];
+        };
+      };
+    };
+    const steps = workflow.jobs.release.steps;
+    const buildIndex = steps.findIndex((step) =>
+      step.run?.includes("pnpm build:dist")
+    );
+    const build = steps[buildIndex];
+    expect(build?.env?.CSC_LINK).toBeUndefined();
+    expect(build?.env?.CSC_KEY_PASSWORD).toBeUndefined();
+    expect(build?.env?.CSC_KEYCHAIN).toBe("signing_temp.keychain");
+    const certificateIndex = steps.findIndex((step) =>
+      step.uses?.startsWith("apple-actions/import-codesign-certs@")
+    );
+    expect(certificateIndex).toBeGreaterThanOrEqual(0);
+    expect(certificateIndex).toBeLessThan(buildIndex);
+    expect(steps[certificateIndex]?.with).toMatchObject({
+      keychain: "signing_temp",
+      "p12-password": expect.stringMatching(
+        /^\$\{\{\s*secrets\.CSC_KEY_PASSWORD\s*\}\}$/
+      ),
+    });
   });
 
   it("routes host rc tags through candidate channel off Latest", async () => {
