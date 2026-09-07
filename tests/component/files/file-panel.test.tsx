@@ -12,6 +12,7 @@ import {
   FILES_GROUP_VIEW_CONTENT_ID,
 } from "@plugins/builtin/files/manifest.ts";
 import { createDiskDocumentRecord } from "@plugins/builtin/files/renderer/document/factory.ts";
+import { diskDocumentId } from "@plugins/builtin/files/renderer/document/paths.ts";
 import { withDocumentReadResult } from "@plugins/builtin/files/renderer/document/reducers.ts";
 import {
   clearFilesDocumentStore,
@@ -20,7 +21,6 @@ import {
   getDocument,
   markDocumentDiskConflict,
   markDocumentLoaded,
-  removeDocument,
   restoreUntitledDocumentFromPanelSource,
   setDocumentConflictContents,
   updateDocumentContents,
@@ -2609,7 +2609,7 @@ describe("Files file-panel", () => {
         | undefined;
 
       act(() => {
-        removeDocument(document.id);
+        filesRuntimeFor(context).controller.discardDocument(document.id);
       });
 
       const copyAction = createFilesEditorActions(
@@ -5128,6 +5128,229 @@ describe("Files file-panel", () => {
     expect(getDocument(document.id)?.currentContents).toContain(
       "persisted draft"
     );
+  });
+
+  it("rebuilds a dirty disk Markdown tab after the in-memory document is dropped", async () => {
+    const documentId = diskDocumentId(PROJECT_ROOT, "notes.md");
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "notes.md", root: PROJECT_ROOT },
+      },
+      createMockContext({
+        readText: vi.fn(async () => "# Saved on disk\n"),
+      })
+    );
+
+    await waitFor(() => {
+      expect(getDocument(documentId)?.loadState).toBe("loaded");
+    });
+    act(() => {
+      updateDocumentContents(documentId, "# Local draft\n");
+    });
+    expect(getDocument(documentId)?.dirty).toBe(true);
+
+    await act(async () => {
+      clearFilesDocumentStore({ persisted: false });
+    });
+
+    expect(screen.queryByText("Unable to restore file tab")).toBeNull();
+    await waitFor(() => {
+      expect(getDocument(documentId)?.loadState).toBe("loaded");
+      expect(getDocument(documentId)?.currentContents).toBe("# Local draft\n");
+      expect(getDocument(documentId)?.dirty).toBe(true);
+    });
+    expect(screen.queryByText("Unable to restore file tab")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
+    expect(
+      await screen.findByRole("heading", { name: "Local draft" })
+    ).toBeVisible();
+  });
+
+  it("rebuilds a dirty disk Markdown tab in the shared group view after the in-memory document is dropped", async () => {
+    const documentId = diskDocumentId(PROJECT_ROOT, "notes.md");
+    const context = createMockContext({
+      readText: vi.fn(async () => "# Saved on disk\n"),
+    });
+    const Panel = createFilePanel(context);
+    const group = createFakeGroup("restore-group-view");
+    const panelParams = {
+      context: panelContext,
+      source: { kind: "disk" as const, path: "notes.md", root: PROJECT_ROOT },
+    };
+    group.setActivePanel(group.makeFilesPanel("thin-file-panel", panelParams));
+    render(
+      <Panel
+        {...makeProps(panelParams, {
+          group,
+          id: "thin-file-panel",
+          isActive: true,
+        })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        group.element.querySelector(FILES_GROUP_VIEW_SELECTOR)
+      ).toBeInstanceOf(HTMLElement);
+      expect(getDocument(documentId)?.loadState).toBe("loaded");
+    });
+    act(() => {
+      updateDocumentContents(documentId, "# Local draft\n");
+    });
+    await act(async () => {
+      clearFilesDocumentStore({ persisted: false });
+    });
+
+    const groupView = group.element.querySelector(FILES_GROUP_VIEW_SELECTOR);
+    expect(groupView).toBeInstanceOf(HTMLElement);
+    expect(
+      within(groupView as HTMLElement).queryByText("Unable to restore file tab")
+    ).toBeNull();
+    await waitFor(() => {
+      expect(getDocument(documentId)?.loadState).toBe("loaded");
+      expect(getDocument(documentId)?.currentContents).toBe("# Local draft\n");
+      expect(getDocument(documentId)?.dirty).toBe(true);
+    });
+    fireEvent.click(
+      within(groupView as HTMLElement).getByRole("button", {
+        name: "Switch to preview",
+      })
+    );
+    expect(
+      await within(groupView as HTMLElement).findByRole("heading", {
+        name: "Local draft",
+      })
+    ).toBeVisible();
+    group.element.remove();
+  });
+
+  it("does not resurrect a discarded disk tab while the panel is still mounted", async () => {
+    const documentId = diskDocumentId(PROJECT_ROOT, "notes.md");
+    const context = createMockContext({
+      readText: vi.fn(async () => "# Saved on disk\n"),
+    });
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "notes.md", root: PROJECT_ROOT },
+      },
+      context
+    );
+    await waitFor(() => {
+      expect(getDocument(documentId)?.loadState).toBe("loaded");
+    });
+    act(() => {
+      filesRuntimeFor(context).controller.discardDocument(documentId);
+    });
+    expect(getDocument(documentId)).toBeNull();
+    expect(await screen.findByText("Unable to restore file tab")).toBeVisible();
+    expect(getDocument(documentId)).toBeNull();
+  });
+
+  it("rebuilds an untitled Markdown tab after the in-memory document is dropped", async () => {
+    const document = createUntitledMarkdownDocument({
+      contents: "# Restored while mounted\n\n- persisted draft",
+    });
+    renderFilePanel({
+      context: panelContext,
+      source: { id: document.id, kind: "untitled", name: document.name },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
+    expect(
+      await screen.findByRole("heading", { name: "Restored while mounted" })
+    ).toBeVisible();
+
+    await act(async () => {
+      clearFilesDocumentStore({ persisted: false });
+    });
+
+    expect(screen.queryByText("Temporary file cannot be restored")).toBeNull();
+    expect(
+      await screen.findByRole("heading", { name: "Restored while mounted" })
+    ).toBeVisible();
+    expect(getDocument(document.id)?.currentContents).toContain(
+      "persisted draft"
+    );
+  });
+
+  it("reloads a clean disk tab from disk after the in-memory document is dropped", async () => {
+    const documentId = diskDocumentId(PROJECT_ROOT, "notes.md");
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "notes.md", root: PROJECT_ROOT },
+      },
+      createMockContext({
+        readText: vi.fn(async () => "# Saved on disk\n"),
+      })
+    );
+    await waitFor(() => {
+      expect(getDocument(documentId)?.loadState).toBe("loaded");
+      expect(getDocument(documentId)?.dirty).toBe(false);
+    });
+
+    await act(async () => {
+      clearFilesDocumentStore({ persisted: false });
+    });
+
+    expect(screen.queryByText("Unable to restore file tab")).toBeNull();
+    await waitFor(() => {
+      expect(getDocument(documentId)?.loadState).toBe("loaded");
+      expect(getDocument(documentId)?.currentContents).toBe(
+        "# Saved on disk\n"
+      );
+      expect(getDocument(documentId)?.dirty).toBe(false);
+    });
+  });
+
+  it("keeps local dirty contents and marks a disk conflict when the file changed while dropped", async () => {
+    const documentId = diskDocumentId(PROJECT_ROOT, "notes.md");
+    let disk = "# Saved on disk\n";
+    let mtimeMs = 1;
+    const context = createMockContext({
+      readDocument: vi.fn(async (request) => ({
+        canonicalPath: request.path,
+        contents: disk,
+        eol: "lf" as const,
+        format: { bom: false as const, encoding: "utf8" as const },
+        kind: "text" as const,
+        mode: 0o644,
+        mtimeMs,
+        path: request.path,
+        revision: `revision-${mtimeMs}`,
+        root: request.root,
+        size: disk.length,
+        writable: true,
+      })),
+      readText: vi.fn(async () => disk),
+    });
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "notes.md", root: PROJECT_ROOT },
+      },
+      context
+    );
+    await waitFor(() => {
+      expect(getDocument(documentId)?.loadState).toBe("loaded");
+    });
+    act(() => {
+      updateDocumentContents(documentId, "# Local draft\n");
+    });
+    disk = "# Changed on disk\n";
+    mtimeMs = 2;
+    await act(async () => {
+      clearFilesDocumentStore({ persisted: false });
+    });
+
+    await waitFor(() => {
+      expect(getDocument(documentId)?.loadState).toBe("loaded");
+      expect(getDocument(documentId)?.currentContents).toBe("# Local draft\n");
+      expect(getDocument(documentId)?.dirty).toBe(true);
+      expect(getDocument(documentId)?.diskConflict).toBe(true);
+    });
+    expect(screen.getByText("File changed on disk")).toBeVisible();
   });
 
   it("shows a non-recoverable read-only state for missing temporary documents without disk reads", () => {

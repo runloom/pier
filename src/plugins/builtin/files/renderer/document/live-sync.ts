@@ -6,6 +6,28 @@ import { isSamePathOrDescendant } from "./paths.ts";
 import { getDocument, listOpenDiskDocuments } from "./store.ts";
 import type { FilesDocument } from "./types.ts";
 
+export function bindDocumentLiveSync(input: {
+  autoSaveEnabled: boolean;
+  document: FilesDocument;
+  lastContents: Map<string, string>;
+  lastDirty: Map<string, boolean>;
+  panelId: string | null | undefined;
+  saveDocument: (documentId: string, panelId?: string) => Promise<unknown>;
+  saveTimers: Map<string, ReturnType<typeof setTimeout>>;
+  suspending: boolean;
+}): void {
+  input.lastContents.set(input.document.id, input.document.currentContents);
+  input.lastDirty.set(input.document.id, input.document.dirty);
+  scheduleDocumentAutoSave({
+    autoSaveEnabled: input.autoSaveEnabled,
+    document: input.document,
+    panelId: input.panelId,
+    saveDocument: input.saveDocument,
+    saveTimers: input.saveTimers,
+    suspending: input.suspending,
+  });
+}
+
 export function scheduleDocumentAutoSave(input: {
   autoSaveEnabled: boolean;
   document: FilesDocument;
