@@ -14,6 +14,7 @@ import {
   resetTerminalComposerAttachmentsForTests,
   useTerminalComposerAttachments,
 } from "@/panel-kits/terminal/hooks/use-composer-attachments.ts";
+import { resetTerminalDraftMirrorsForTests } from "@/stores/terminal-drafts.store.ts";
 
 const pickComposerFiles = vi.fn<() => Promise<TerminalComposerPickResult>>();
 const resolveComposerPaths =
@@ -110,6 +111,7 @@ function setup(input: HookInput = {}) {
 }
 
 beforeEach(() => {
+  resetTerminalDraftMirrorsForTests();
   installTerminalApi();
   pickComposerFiles.mockReset();
   resolveComposerPaths.mockReset();

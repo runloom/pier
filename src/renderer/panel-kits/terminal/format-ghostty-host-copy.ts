@@ -140,6 +140,7 @@ export function resolveDismissMode(input: {
  */
 export function resolveGhosttyChildExitedBanner(input: {
   activityKind?: string | undefined;
+  endReason?: "exited" | "stopped" | undefined;
   exitCode: number;
   exitPresentation?: TerminalExitPresentation | undefined;
   params?: unknown;
@@ -156,10 +157,15 @@ export function resolveGhosttyChildExitedBanner(input: {
   const duration = formatDurationMs(input.runtimeMs);
   const primary =
     presentation?.messageOverride?.trim() ||
-    terminalT(primaryI18nKeyForChildExited(variant, role), {
-      code: input.exitCode,
-      duration,
-    });
+    terminalT(
+      input.endReason === "stopped"
+        ? "ghosttyHost.processStopped"
+        : primaryI18nKeyForChildExited(variant, role),
+      {
+        code: input.exitCode,
+        duration,
+      }
+    );
 
   const dismissMode = resolveDismissMode({
     exitPresentation: presentation,
@@ -184,6 +190,7 @@ export function resolveGhosttyChildExitedBanner(input: {
  */
 export function formatGhosttyChildExitedBufferText(input: {
   activityKind?: string | undefined;
+  endReason?: "exited" | "stopped" | undefined;
   exitCode: number;
   exitPresentation?: TerminalExitPresentation | undefined;
   params?: unknown;

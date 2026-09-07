@@ -358,7 +358,7 @@ export function createTaskRunCoordinator({
             node.status === "running" ||
             node.status === "stopping")
         ) {
-          node.status = "cancelled";
+          node.status = node.status === "pending" ? "cancelled" : "stopping";
           node.termination = "force";
           changed = true;
         }

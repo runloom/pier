@@ -16,6 +16,8 @@ import {
   rejectTerminalLaunch,
 } from "@/lib/workspace/terminal-launch-confirmation.ts";
 import { computeMonoFontFamilyList } from "@/stores/font.store.ts";
+import { reportTerminalDraftFailure } from "@/stores/terminal-drafts.store.ts";
+import { useTerminalEndStateStore } from "@/stores/terminal-end-state.store.ts";
 import {
   registerTerminalLayoutAnchor,
   type TerminalLayoutRegistration,
@@ -277,6 +279,11 @@ export function runTerminalNativeLifecycleEffect({
       );
       return false;
     }
+    if (result.inputWarning) reportTerminalDraftFailure(result.inputWarning);
+    if (result.generation !== undefined)
+      useTerminalEndStateStore
+        .getState()
+        .acceptProcess(panelId, result.generation);
     notifyAgentRestoreOutcome({
       context: initialContext,
       panelId,

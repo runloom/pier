@@ -7,7 +7,7 @@ import type {
 } from "@shared/contracts/tasks.ts";
 import type { TerminalEndState } from "@shared/contracts/terminal/end-state.ts";
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { useTerminalEndStateStore } from "@/stores/terminal-end-state.store.ts";
 import {
   activityTabChromeOverlay,
@@ -46,8 +46,6 @@ export function useTerminalEndStateTab(args: {
   const endState = useTerminalEndStateStore((s) => s.ends[panelId]);
   const upsertAgentEnd = useTerminalEndStateStore((s) => s.upsertAgentEnd);
   const clearEndState = useTerminalEndStateStore((s) => s.clear);
-  /** 上一帧是否 FA kind=agent；用于复活上升沿，避免退出竞态误清。 */
-  const prevLiveAgentRef = useRef(false);
 
   useEffect(() => {
     if (activity?.kind === "agent") {
@@ -59,6 +57,8 @@ export function useTerminalEndStateTab(args: {
     }
     upsertAgentEnd({
       agentId: agent.agentId,
+      generation: agent.restore?.spawnGeneration,
+      endReason: agent.endReason,
       ...(agent.exitCode === undefined ? {} : { exitCode: agent.exitCode }),
       ...(agent.finishedAt === undefined
         ? {}
@@ -75,34 +75,17 @@ export function useTerminalEndStateTab(args: {
     upsertAgentEnd,
   ]);
 
-  // panel 切换：复位上升沿哨兵 + unmount/换 id 时清本 panel EndState。
-  // 必须排在复活 clear 之前声明，保证同 commit 先 reset 再判 rising edge。
-  useEffect(() => {
-    prevLiveAgentRef.current = false;
-    return () => {
-      clearEndState(panelId);
-    };
-  }, [clearEndState, panelId]);
+  // Process receipts, not activity fluctuations, clear an ended process.
+  useEffect(() => () => clearEndState(panelId), [clearEndState, panelId]);
 
-  // 同 panel agent 复活（非 agent → agent）：清残留 EndState，避免 FA 抖动时空窗
-  // 再被 hasEndState 钉回键盘 / 结果 chrome。持续 agent 或 agent→empty 退出不 clear。
-  useEffect(() => {
-    const liveAgent = activity?.kind === "agent";
-    if (liveAgent && !prevLiveAgentRef.current) {
-      clearEndState(panelId);
-    }
-    prevLiveAgentRef.current = liveAgent;
-  }, [activity?.kind, clearEndState, panelId]);
-
-  const agentEndView = endState?.role === "agent" && activity?.kind !== "agent";
-  const baseTab =
-    endState && activity?.kind !== "agent"
-      ? endState.tab
-      : (savedSession?.tab ?? activeLaunchTab);
+  const agentEndView = endState?.role === "agent";
+  const baseTab = endState
+    ? endState.tab
+    : (savedSession?.tab ?? activeLaunchTab);
 
   const effectiveTab = useMemo(() => {
     const agentOverlay =
-      activity?.kind === "agent"
+      !endState && activity?.kind === "agent"
         ? activityTabChromeOverlay(activity, {
             cwd: args.effectiveCwd,
             projectRootPath: args.projectRootPath,
@@ -138,6 +121,7 @@ export function useTerminalEndStateTab(args: {
   }, [
     activity,
     agentEndView,
+    endState,
     args.activeLaunchTask,
     args.currentTaskOutput,
     args.effectiveCwd,

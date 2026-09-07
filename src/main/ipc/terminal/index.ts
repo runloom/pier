@@ -6,6 +6,7 @@ import type {
   TerminalFont,
 } from "@shared/contracts/terminal.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { APPKIT_KEYCODE, GHOSTTY_MODS } from "@shared/terminal-appkit-keys.ts";
 import type { IpcMain } from "electron";
 import type { ProcessEnvironmentService } from "../../services/process-environment-service.ts";
 import { createProcessEnvironmentService } from "../../services/process-environment-service.ts";
@@ -36,6 +37,7 @@ import { registerTerminalKeybindingForward } from "./keybinding-forward.ts";
 import { loadNativeAddon } from "./native-addon.ts";
 import { handleTerminalOpenUrl } from "./open-url-forwarding.ts";
 import { fromNativePanelKey, toNativePanelKey } from "./panel-id.ts";
+import { nativeTerminalProcesses } from "./process/registry.ts";
 import { isTerminalRuntimeConfig } from "./runtime-config.ts";
 import { registerTerminalSearchIpc } from "./search.ts";
 import { registerTerminalSessionTitleIpc } from "./session/title-ipc.ts";
@@ -103,7 +105,21 @@ export function registerTerminalIpc(
       if (!(addon && win && !win.isDestroyed())) {
         return { message: "terminal process is unavailable", ok: false };
       }
-      return addon.closeTerminal(toNativePanelKey(win, panelId))
+      const process = nativeTerminalProcesses.get(
+        toNativePanelKey(win, panelId)
+      );
+      if (!process || process.closed || !addon.signalTerminalProcess)
+        return {
+          ok: false,
+          message: "stop-and-retain is unavailable; update Pier",
+        };
+      process.stopping = true;
+      return process.exited ||
+        addon.signalTerminalProcess(
+          process.nativePanelId,
+          process.lifecycleId,
+          true
+        )
         ? { ok: true }
         : { message: "terminal process was not found", ok: false };
     },
@@ -112,7 +128,10 @@ export function registerTerminalIpc(
       if (!(addon && win && !win.isDestroyed())) {
         return { message: "terminal process is unavailable", ok: false };
       }
-      const ok = addon.sendText(toNativePanelKey(win, panelId), "\u0003");
+      const key = toNativePanelKey(win, panelId);
+      const ok =
+        nativeTerminalProcesses.inputGuard(key)() &&
+        addon.sendKeyPress(key, APPKIT_KEYCODE.c, GHOSTTY_MODS.ctrl, "c");
       return ok
         ? { ok: true }
         : { message: "terminal rejected the interrupt", ok: false };

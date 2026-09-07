@@ -372,6 +372,9 @@ export async function executeTerminalOpenCommand(
         launchId,
         options: {
           ...options,
+          ...(command.initialInput === undefined
+            ? {}
+            : { initialInput: command.initialInput }),
           ...(launch.agentId
             ? { exitPresentation: AGENT_TERMINAL_EXIT_PRESENTATION }
             : {}),

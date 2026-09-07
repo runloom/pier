@@ -24,7 +24,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       applyTerminalWindowState: vi.fn(() => ({ status: "applied" })),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
-      closeTerminal: vi.fn(),
+      closeTerminal: vi.fn(() => true),
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
       performTerminalBindingAction: vi.fn(() => true),
@@ -297,7 +297,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       }
     );
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({ ok: true });
   });
 
   it("does not count a restored agent session as a new user launch", async () => {
@@ -413,7 +413,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       "pier:terminal:perform-operation"
     )?.({ sender: win.webContents }, "terminal-1", operation);
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({ ok: true });
     expect(fakeAddon.performTerminalBindingAction).toHaveBeenCalledWith(
       "7::terminal-1",
       binding

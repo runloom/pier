@@ -1,3 +1,7 @@
+import { refreshTerminalDraft } from "../../ipc/terminal/drafts/broadcast.ts";
+import { nativeTerminalProcesses } from "../../ipc/terminal/process/registry.ts";
+import { terminalDraftStore } from "../../state/terminal-drafts/index.ts";
+
 /**
  * Reverse/compensation helpers for journaled terminal panel ownership moves.
  */
@@ -22,6 +26,7 @@ export type TerminalPanelTransferPhase =
 
 export type CompletedSubstep =
   | "native"
+  | "draft"
   | "session"
   | "task-output"
   | "task-lifecycle"
@@ -81,10 +86,10 @@ export function createTransferCompensation(
 ): {
   reverseCompleted: (staged: StagedTransfer) => Promise<void>;
 } {
-  const reverseSubstep = async (
+  const reverseSubstep = (
     staged: StagedTransfer,
     step: CompletedSubstep
-  ): Promise<void> => {
+  ): Promise<void> | void => {
     const sourceWin = deps.resolveWindow(staged.sourceRuntimeWindowId)?.win;
     const targetWin = deps.resolveWindow(staged.targetRuntimeWindowId)?.win;
     switch (step) {
@@ -105,7 +110,7 @@ export function createTransferCompensation(
         }
         break;
       case "foreground":
-        await deps.foreground.runSerial(() => {
+        return deps.foreground.runSerial(() => {
           clearAlias({
             panelId: staged.panelId,
             windowId: staged.sourceElectronWindowId,
@@ -116,7 +121,6 @@ export function createTransferCompensation(
             targetWindowId: staged.sourceElectronWindowId,
           });
         });
-        break;
       case "task-lifecycle":
         deps.getTaskLifecycle()?.moveOwner({
           lifecycleId: staged.lifecycleId,
@@ -145,10 +149,20 @@ export function createTransferCompensation(
         }
         break;
       }
+      case "draft":
+        return terminalDraftStore()
+          .move(staged.targetRecordId, staged.sourceRecordId, staged.panelId)
+          .then(async () => {
+            if (sourceWin)
+              await refreshTerminalDraft(sourceWin, staged.panelId);
+          });
       case "session":
         if (staged.sessionToken) {
-          await rollbackTransferPanelOwnership(staged.sessionToken);
-          staged.sessionToken = null;
+          return rollbackTransferPanelOwnership(staged.sessionToken).then(
+            () => {
+              staged.sessionToken = null;
+            }
+          );
         }
         break;
       case "native":
@@ -160,6 +174,11 @@ export function createTransferCompensation(
             toParentHandle: sourceWin.getNativeWindowHandle(),
             toBrowserWindowId: sourceWin.id,
           });
+          if (movedBack)
+            nativeTerminalProcesses.move(
+              scopedNativeKey(targetWin.id, staged.panelId),
+              scopedNativeKey(sourceWin.id, staged.panelId)
+            );
           if (movedBack && staged.sourcePresentationId !== null) {
             addon?.requestTerminalPresentation({
               nativePanelId: scopedNativeKey(sourceWin.id, staged.panelId),
@@ -175,9 +194,18 @@ export function createTransferCompensation(
 
   const reverseCompleted = async (staged: StagedTransfer): Promise<void> => {
     for (const step of [...staged.completed].reverse()) {
-      await reverseSubstep(staged, step);
+      const pending = reverseSubstep(staged, step);
+      if (pending) await pending;
     }
     staged.completed = [];
+    const process =
+      nativeTerminalProcesses.get(
+        scopedNativeKey(Number(staged.sourceElectronWindowId), staged.panelId)
+      ) ??
+      nativeTerminalProcesses.get(
+        scopedNativeKey(Number(staged.targetElectronWindowId), staged.panelId)
+      );
+    if (process) nativeTerminalProcesses.setTransferring(process, false);
   };
 
   return { reverseCompleted };

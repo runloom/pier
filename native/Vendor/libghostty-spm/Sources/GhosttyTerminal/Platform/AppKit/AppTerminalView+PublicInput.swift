@@ -117,6 +117,20 @@
             surface?.readViewportText()
         }
 
+        public func retainAfterExit() {
+            surface?.retainAfterExit()
+        }
+
+        /// Arm or disarm IO-thread retain before SHOW_CHILD_EXITED.
+        /// Does not set the Zig flag; that happens on the exit action stack.
+        public func setRetainAfterExit(_ retain: Bool) {
+            core.setRetainAfterChildExit(retain)
+        }
+
+        public func signalProcess(force: Bool) -> Bool {
+            surface?.signalProcess(force: force) ?? false
+        }
+
         /// TUI 输入聚焦探针：应用设置的 DECTCEM(?25) 光标模式位。
         /// surface 未创建返回 nil（调用方映射 unknown，禁止当作「失焦」）。
         public func cursorVisibleProbe() -> Bool? {

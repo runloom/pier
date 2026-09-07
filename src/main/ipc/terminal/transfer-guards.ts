@@ -1,3 +1,5 @@
+import { terminalDraftStore } from "../../state/terminal-drafts/index.ts";
+import { serializeTerminalOperation } from "./creation/serial.ts";
 /** Transfer-lease-aware terminal close/reconcile helpers and addon accessors. */
 
 import type { TerminalCloseOptions } from "@shared/contracts/terminal.ts";
@@ -20,6 +22,8 @@ import { recordRendererTerminalRoute } from "./debug.ts";
 import { terminalFocusCoordinator } from "./focus-coordinator.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import { toNativePanelKey } from "./panel-id.ts";
+import { nativeTerminalProcesses } from "./process/registry.ts";
+import { signalNativeTerminalProcess } from "./process/stop.ts";
 import type { RegisteredTerminalTaskLifecycle } from "./task/lifecycle-wiring.ts";
 import type { TaskOutputTerminalBindings } from "./task/output-bindings.ts";
 import { windowRecordIdFor } from "./window-scope.ts";
@@ -134,38 +138,59 @@ export function registerTerminalTransferGuardIpc(opts: {
     ) => {
       const win = windowFromWebContents(event.sender);
       if (!win) {
-        return;
+        throw new Error("terminal window is unavailable");
       }
       const windowId = findInternalWindowId(win) ?? undefined;
       const sessionScope = windowRecordIdFor(win);
       recordRendererTerminalRoute(win, "close", panelId);
-      if (options?.reason === "relaunch") {
-        // relaunch = 同 panel 换 pty, 不是面板死亡。TaskRuns 仍持有 panel
-        // 映射，RuntimeControl / tab overlay 不依赖 FA task slot。
-        taskLifecycle.ignoreNextNativeUserClose(panelId, windowId);
-      } else {
-        foregroundActivityService.panelClosed(panelId, String(win.id));
-        taskService?.markPanelClosed(panelId, windowId);
-        taskLifecycle.releasePanel(panelId, windowId);
-      }
-      if (tryAcknowledgeTransferSourceClose({ panelId, win, windowId })) {
-        return;
-      }
+      if (tryAcknowledgeTransferSourceClose({ panelId, win, windowId })) return;
       const nativePanelId = toNativePanelKey(win, panelId);
-      taskOutputBindings?.detach(nativePanelId);
-      terminalFocusCoordinator.surfaceWillClose(win, panelId);
-      // 面板关闭时清 initial-input gate 的 pending 定时器，防止 pty 已死
-      // 但 fallback timer 仍尝试注入到不存在的 panel。
-      cancelInitialTerminalInput(panelId);
-      if (options?.reason !== "relaunch") {
-        releaseTerminalCwdForwarding(sessionScope, win.id, panelId);
-      }
-      addon?.closeTerminal(nativePanelId);
-      try {
-        await removeTerminalPanelSession(sessionScope, panelId);
-      } catch (err) {
-        console.error("[pier-cwd-remove] failed:", err);
-      }
+      nativeTerminalProcesses.cancelCreation(nativePanelId);
+      return serializeTerminalOperation(nativePanelId, async () => {
+        try {
+          const process = nativeTerminalProcesses.get(nativePanelId);
+          if (!addon) throw new Error("native terminal service is unavailable");
+          // Complete physical cleanup before deleting session/activity ownership.
+          cancelInitialTerminalInput(panelId);
+          if (process) nativeTerminalProcesses.markClosing(process);
+          if (process?.created && !process.closed && !process.exited) {
+            // Signal without waiting for TERM grace; closeTerminal reaps on IO.
+            signalNativeTerminalProcess(addon, process, true);
+          }
+          if (
+            process &&
+            (!nativeTerminalProcesses.isCurrent(process) ||
+              process.nativePanelId !== nativePanelId)
+          )
+            throw new Error("terminal changed during close; retry");
+          const closed = addon.closeTerminal(nativePanelId);
+          if (!closed && addon.readViewportText?.(nativePanelId) !== null)
+            throw new Error("native terminal close failed; output retained");
+          if (process) nativeTerminalProcesses.closed(process);
+          if (options?.reason === "relaunch") {
+            // relaunch = 同 panel 换 pty, 不是面板死亡。TaskRuns 仍持有 panel
+            // 映射，RuntimeControl / tab overlay 不依赖 FA task slot。
+            taskLifecycle.ignoreNextNativeUserClose(panelId, windowId);
+          } else {
+            foregroundActivityService.panelClosed(panelId, String(win.id));
+            taskService?.markPanelClosed(panelId, windowId);
+            taskLifecycle.releasePanel(panelId, windowId);
+          }
+          taskOutputBindings?.detach(nativePanelId);
+          terminalFocusCoordinator.surfaceWillClose(win, panelId);
+          // 面板关闭时清 initial-input gate 的 pending 定时器，防止 pty 已死
+          // 但 fallback timer 仍尝试注入到不存在的 panel。
+          cancelInitialTerminalInput(panelId);
+          if (options?.reason !== "relaunch") {
+            releaseTerminalCwdForwarding(sessionScope, win.id, panelId);
+          }
+          await removeTerminalPanelSession(sessionScope, panelId);
+          if (options?.reason !== "relaunch")
+            await terminalDraftStore().remove(sessionScope, panelId);
+        } finally {
+          nativeTerminalProcesses.cancelCreation(nativePanelId);
+        }
+      });
     }
   );
 
@@ -180,8 +205,18 @@ export function registerTerminalTransferGuardIpc(opts: {
     recordRendererTerminalRoute(win, "reconcile", null, {
       count: activeIds.length,
     });
+    const managedIds = nativeTerminalProcesses
+      .list()
+      .filter(
+        (process) =>
+          process.nativePanelId.startsWith(`${win.id}::`) && !process.closed
+      )
+      .map((process) =>
+        process.nativePanelId.slice(process.nativePanelId.indexOf("::") + 2)
+      );
+    const protectedIds = [...new Set([...activeIds, ...managedIds])];
     const { isLeasedPanel, isNativeKeyLeased, retainActiveIds } =
-      planTransferAwareReconcile({ activeIds, win });
+      planTransferAwareReconcile({ activeIds: protectedIds, win });
     foregroundActivityService.retainPanels(String(win.id), retainActiveIds);
     // 仅在有明确 active 集合时 GC session。空数组常见于 layout 应用前/中，
     // 此时删 running+resume 会毁掉可恢复会话；单 panel 关闭已走 removeSession。

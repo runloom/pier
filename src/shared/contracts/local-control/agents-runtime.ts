@@ -64,6 +64,10 @@ export type AgentsStartParams = z.infer<typeof agentsStartParamsSchema>;
 export const agentsStartResultSchema = z
   .object({
     runtime: runtimeRefSchema,
+    creationStatus: z.enum(["created", "unconfirmed"]).optional(),
+    inputDisposition: z
+      .enum(["native-launch", "draft", "unconfirmed"])
+      .optional(),
     agentId: nonEmpty,
     agentRef: nonEmpty.optional(),
     panelId: nonEmpty,
@@ -87,6 +91,7 @@ export const agentsTurnParamsSchema = z
     generation: z.number().int().nonnegative(),
     /** 一轮输入；协议层可传，不进 receipt 明文日志。 */
     text: z.string().min(1).max(AGENTS_SCREEN_HARD_MAX_BYTES),
+    submit: z.boolean().optional(),
   })
   .strict();
 

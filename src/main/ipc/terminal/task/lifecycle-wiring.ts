@@ -16,7 +16,13 @@ import { recordNativeTerminalRoute } from "../debug.ts";
 import { forwardToWindow } from "../forwarding.ts";
 import type { NativeAddon } from "../native-addon.ts";
 import { fromNativePanelKey } from "../panel-id.ts";
+import { nativeTerminalProcesses } from "../process/registry.ts";
 import { windowRecordIdFor } from "../window-scope.ts";
+import {
+  isDismissingTerminal,
+  recordNativeProcessExit,
+  shouldKeepTerminalTabOnProcessExit,
+} from "./exit-forward.ts";
 import { parseTaskExitTitle } from "./exit-title.ts";
 import {
   createTerminalTaskLifecycle,
@@ -144,6 +150,14 @@ export function registerTerminalTaskLifecycleForwarding(
           exitCode,
           String(id)
         );
+        if (
+          !(
+            isSuspendedJobExitCode(exitCode) ||
+            foregroundActivityService.hasAgentPresence(rawPanelId, String(id))
+          )
+        ) {
+          addon?.setTerminalRetainAfterExit?.(panelId, lifecycleId, false);
+        }
       }
       if (
         shellSurface &&
@@ -153,7 +167,7 @@ export function registerTerminalTaskLifecycleForwarding(
       ) {
         persistAgentProcessExit(targetWindow, rawPanelId, exitCode);
       }
-      if (lifecycleId) {
+      if (lifecycle.isTaskSurface(rawPanelId, windowId)) {
         // Interactive task: command_finished can fire for rc / clear / the
         // first `;` fragment. Record the hint and wait for OSC or PTY exit.
         lifecycle.recordExitCodeHint({
@@ -232,6 +246,9 @@ export function registerTerminalTaskLifecycleForwarding(
         commandLine,
         agentId
       );
+      if (agentId) {
+        addon?.setTerminalRetainAfterExit?.(panelId, lifecycleId, true);
+      }
     }
   );
 
@@ -255,25 +272,46 @@ export function registerTerminalTaskLifecycleForwarding(
       ) {
         return;
       }
-      forwardToWindow(
-        id,
-        PIER_BROADCAST.TERMINAL_CHILD_EXITED,
-        {
-          exitCode,
-          panelId: rawPanelId,
-          runtimeMs,
-        },
-        "pier-child-exited"
+      const process = nativeTerminalProcesses.getForCallback(id, panelId);
+      recordNativeProcessExit(
+        nativeTerminalProcesses,
+        process,
+        panelId,
+        lifecycleId,
+        exitCode
       );
+      const dismissing = isDismissingTerminal(process);
+      // Explicit close destroys the view. End-copy inject races it and the
+      // toast tells the user to close a tab they already closed.
+      if (!dismissing) {
+        forwardToWindow(
+          id,
+          PIER_BROADCAST.TERMINAL_CHILD_EXITED,
+          {
+            exitCode,
+            lifecycleId,
+            generation: process?.generation,
+            endReason: process?.stopping ? "stopped" : "exited",
+            panelId: rawPanelId,
+            runtimeMs,
+          },
+          "pier-child-exited"
+        );
+      }
       // Retained surfaces may stay open after PTY exit. Clear process evidence
       // here even when the CLI never emitted SessionEnd or shell integration.
       if (!lifecycle.isTaskSurface(rawPanelId, windowId)) {
         foregroundActivityService.ptyExited(rawPanelId, String(id));
-        if (targetWindow) {
-          persistAgentProcessExit(targetWindow, rawPanelId, exitCode);
+        if (!dismissing && targetWindow) {
+          persistAgentProcessExit(
+            targetWindow,
+            rawPanelId,
+            exitCode,
+            lifecycleId
+          );
         }
       }
-      if (!lifecycleId) {
+      if (dismissing || !lifecycleId) {
         return;
       }
       const childCode = exitCode < 0 ? 1 : exitCode;
@@ -311,30 +349,58 @@ export function registerTerminalTaskLifecycleForwarding(
       ) {
         return;
       }
+      const process = nativeTerminalProcesses.getForCallback(id, panelId);
+      const dismissing = isDismissingTerminal(process);
+      // Snapshot before ptyExited: OSC-detected agents live in FA, not session.
+      const hadAgentPresence = foregroundActivityService.hasAgentPresence(
+        rawPanelId,
+        String(id)
+      );
       // pty 进程退出 ≠ 面板关闭：task 面板保留终态 activity（tab 退出
       // chrome 单源）, 其余面板照旧清理。真正的面板关闭走 pier:terminal:close。
-      foregroundActivityService.ptyExited(rawPanelId, String(id));
+      if (processAlive === false) {
+        recordNativeProcessExit(
+          nativeTerminalProcesses,
+          process,
+          panelId,
+          lifecycleId
+        );
+        foregroundActivityService.ptyExited(rawPanelId, String(id));
+      }
       if (
-        !lifecycle.isTaskSurface(rawPanelId, windowId) &&
+        !(dismissing || lifecycle.isTaskSurface(rawPanelId, windowId)) &&
         targetWindow &&
         processAlive === false
       ) {
-        persistAgentProcessExit(targetWindow, rawPanelId);
+        persistAgentProcessExit(
+          targetWindow,
+          rawPanelId,
+          undefined,
+          lifecycleId
+        );
       }
       // 普通 shell：转发 SURFACE_CLOSE，由 renderer 关 panel。
-      // 任务结果 panel：保留终态，不转发。
+      // 任务 / 智能体 / 停止：保留终态，不转发。
       // processAlive=true 是宿主主动关闭 native surface 的回声，不得再次请求关闭。
       const sessionWindowId = targetWindow
         ? windowRecordIdFor(targetWindow)
         : undefined;
+      const retainSurface = shouldKeepTerminalTabOnProcessExit({
+        hadAgentPresence,
+        isAgentSurface: lifecycle.isAgentSurface(rawPanelId, windowId),
+        isTaskSurface: lifecycle.isTaskSurface(rawPanelId, windowId),
+        process,
+        shouldRetainFromOwner:
+          options.shouldRetainSurfaceOnProcessExit?.(
+            rawPanelId,
+            windowId,
+            sessionWindowId
+          ) === true,
+      });
       if (
         processAlive === false &&
-        !suppressedSurfaceClosePanelIds.delete(panelId) &&
-        !options.shouldRetainSurfaceOnProcessExit?.(
-          rawPanelId,
-          windowId,
-          sessionWindowId
-        )
+        !retainSurface &&
+        !suppressedSurfaceClosePanelIds.delete(panelId)
       ) {
         forwardToWindow(
           id,
@@ -342,6 +408,9 @@ export function registerTerminalTaskLifecycleForwarding(
           { panelId: rawPanelId },
           "pier-terminal-surface-close"
         );
+      }
+      if (dismissing) {
+        return;
       }
       lifecycle
         .completeFromNativeProcessClose({

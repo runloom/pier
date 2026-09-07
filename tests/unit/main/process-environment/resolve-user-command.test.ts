@@ -107,7 +107,7 @@ describe("resolve-user-command helpers", () => {
     expect(looksLikeShebangScript(script)).toBe(true);
     expect(command).toEqual(expect.stringMatching(/^\/bin\/zsh -lic /));
     expect(command).toContain("omp");
-    expect(command).not.toContain("exec ");
+    expect(command).toContain(`exec ${script}`);
     rmSync(dir, { force: true, recursive: true });
   });
 

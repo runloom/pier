@@ -142,7 +142,7 @@ describe("task service stop policy", () => {
     });
   });
 
-  it("allows force stop only after the shared grace period", async () => {
+  it("allows SIGKILL after grace but stays stopping until the actual exit", async () => {
     let time = 2000;
     const { forceStop, runId, service } = await runningService(() => time);
     service.stopRun(runId);
@@ -159,15 +159,22 @@ describe("task service stop policy", () => {
       snapshot: {
         nodes: {
           "package-script:test": {
-            status: "cancelled",
+            status: "stopping",
             termination: "force",
           },
         },
-        status: "cancelled",
+        status: "stopping",
       },
-      status: "force-stopped",
+      status: "stopping",
     });
     expect(service.isStopRequested("terminal-task", "window-main")).toBe(true);
+    const ended = await service.completePanel(
+      "terminal-task",
+      137,
+      "window-main",
+      runId
+    );
+    expect(ended?.status).toBe("cancelled");
   });
 
   it("keeps a run stopping when the terminal rejects force stop", async () => {

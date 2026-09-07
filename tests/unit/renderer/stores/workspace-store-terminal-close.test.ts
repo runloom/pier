@@ -234,6 +234,9 @@ describe("workspace terminal close lifecycle", () => {
 
     expect(right.api.setActive).toHaveBeenCalledOnce();
     expect(left.api.setActive).not.toHaveBeenCalled();
+    expect(
+      firstInvocationOrder(vi.mocked(window.pier.terminal.close))
+    ).toBeLessThan(firstInvocationOrder(right.api.setActive));
     expect(firstInvocationOrder(right.api.setActive)).toBeLessThan(
       firstInvocationOrder(api.removePanel)
     );

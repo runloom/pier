@@ -2991,8 +2991,7 @@ describe("TerminalPanel lifecycle", () => {
       });
       const composerHeightPx = 96;
       const isComposerRoot = (element: HTMLElement) =>
-        element.firstElementChild?.getAttribute("data-testid") ===
-        "terminal-composer";
+        element.getAttribute("data-testid") === "terminal-composer-container";
       const previousGetBoundingClientRect =
         HTMLElement.prototype.getBoundingClientRect;
       HTMLElement.prototype.getBoundingClientRect = function () {

@@ -20,13 +20,16 @@ export function shouldRetainTaskResultPanel(
   panelId: string,
   params?: unknown,
   options?: {
+    /** FA 已清但仍闩过智能体（OSC 检测 / 退出竞态） */
+    hasAgentActivity?: boolean | undefined;
     /** session 仍挂 agent（running/exited）；与 main peek 对齐 */
     hasAgentSession?: boolean | undefined;
   }
 ): boolean {
   const activity = useForegroundActivityStore.getState().activities[panelId];
   return shouldRetainTerminalResultPanel({
-    hasAgentActivity: activity?.kind === "agent",
+    hasAgentActivity:
+      options?.hasAgentActivity === true || activity?.kind === "agent",
     hasAgentSession: options?.hasAgentSession === true,
     hasEndState: terminalEndStateForPanel(panelId) != null,
     hasTaskOwnership:

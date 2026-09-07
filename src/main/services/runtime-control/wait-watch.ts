@@ -18,10 +18,10 @@ import type {
 export function factMatches(
   until: AgentsWaitUntil,
   fact: string,
-  closed: boolean
+  _closed: boolean
 ): boolean {
   if (until === "exited") {
-    return closed || fact === "exited" || fact === "stopped";
+    return fact === "exited";
   }
   if (until === "waiting") {
     return fact === "waiting" || fact === "waiting_input";
@@ -96,7 +96,10 @@ export async function runWaitLoop(args: {
     }
     let fact: string;
     try {
-      fact = resolveFact?.(record) ?? (record.closed ? "exited" : record.fact);
+      fact =
+        record.fact === "exited"
+          ? "exited"
+          : (resolveFact?.(record) ?? record.fact);
     } catch (error) {
       return {
         ok: false,
@@ -201,7 +204,10 @@ export async function runWatchLoop(args: {
     }
     let fact: string;
     try {
-      fact = resolveFact?.(record) ?? (record.closed ? "exited" : record.fact);
+      fact =
+        record.fact === "exited"
+          ? "exited"
+          : (resolveFact?.(record) ?? record.fact);
     } catch {
       reason = "gone";
       break;
@@ -216,8 +222,8 @@ export async function runWatchLoop(args: {
       lastFact = fact;
       input.onSample?.(sample);
     }
-    if (record.closed || fact === "exited" || fact === "stopped") {
-      reason = "exited";
+    if (record.closed || fact === "exited") {
+      reason = fact === "exited" ? "exited" : "gone";
       break;
     }
     if (clock() >= deadline) {

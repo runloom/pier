@@ -430,6 +430,10 @@ describe("task-service background runs", () => {
     service.markPanelClosed("terminal-1", "main");
 
     expect(forceKill).toHaveBeenCalledTimes(1);
+    expect(service.runsSnapshot("main").runs[started.runId]?.status).toBe(
+      "stopping"
+    );
+    exit?.(137);
     await waitFor(
       () =>
         service.runsSnapshot("main").runs[started.runId]?.status === "cancelled"

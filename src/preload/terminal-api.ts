@@ -13,6 +13,11 @@ import { subscribeIpc } from "./ipc-envelope.ts";
  * ipcRenderer 绑定实现落地。renderer 端仍走 window.pier.terminal.*.
  */
 export const terminalApi: TerminalAPI = {
+  readDraft: (panelId) =>
+    ipcRenderer.invoke("pier:terminal:draft-read", panelId),
+  writeDraft: (panelId, draft) =>
+    ipcRenderer.invoke("pier:terminal:draft-write", panelId, draft),
+  onDraftChanged: (cb) => subscribeIpc("pier://terminal:draft-changed", cb),
   applyHostSnapshot: (snapshot) =>
     ipcRenderer.send("pier:terminal:apply-host-snapshot", snapshot),
   applyTheme: (colors) => ipcRenderer.send("pier:terminal:apply-theme", colors),
@@ -81,8 +86,13 @@ export const terminalApi: TerminalAPI = {
     ipcRenderer.invoke("pier:terminal:set-host-language", languageTag),
   setHostCopyCatalog: (messages) =>
     ipcRenderer.invoke("pier:terminal:set-host-copy-catalog", messages),
-  injectDisplayText: (panelId, text) =>
-    ipcRenderer.invoke("pier:terminal:inject-display-text", panelId, text),
+  injectDisplayText: (panelId, text, lifecycleId) =>
+    ipcRenderer.invoke(
+      "pier:terminal:inject-display-text",
+      panelId,
+      text,
+      lifecycleId
+    ),
   materializeComposerClipboardImage: () =>
     ipcRenderer.invoke("pier:terminal:composer-materialize-clipboard-image"),
   materializeComposerImageBytes: (data) =>

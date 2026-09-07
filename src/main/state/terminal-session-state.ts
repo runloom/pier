@@ -252,6 +252,8 @@ export async function patchTerminalPanelAgentStatus(
     exitCode?: number | undefined;
     finishedAt?: number | undefined;
     status: TerminalAgentPanelMetadata["status"];
+    spawnGeneration?: number | undefined;
+    endReason?: "exited" | "stopped" | undefined;
   }
 ): Promise<boolean> {
   if (windowId.trim().length === 0 || panelId.trim().length === 0) {
@@ -265,6 +267,11 @@ export async function patchTerminalPanelAgentStatus(
     if (!(windowState && current?.agent)) {
       return state;
     }
+    if (
+      patch.spawnGeneration !== undefined &&
+      current.agent.restore?.spawnGeneration !== patch.spawnGeneration
+    )
+      return state;
     const canPatchExited =
       current.agent.status === "exited" &&
       patch.status === "exited" &&
@@ -286,6 +293,7 @@ export async function patchTerminalPanelAgentStatus(
     const nextAgent = {
       ...current.agent,
       status: patch.status,
+      ...(patch.endReason ? { endReason: patch.endReason } : {}),
       ...(patch.exitCode === undefined ? {} : { exitCode: patch.exitCode }),
       ...(patch.finishedAt === undefined
         ? {}
@@ -303,7 +311,10 @@ export async function patchTerminalPanelAgentStatus(
       agent: parsed.data,
       ...(patch.status === "exited"
         ? {
-            tab: tabChromeAfterAgentExit(current.tab, exitCode),
+            tab: tabChromeAfterAgentExit(
+              current.tab,
+              patch.endReason === "stopped" ? undefined : exitCode
+            ),
           }
         : {}),
       updatedAt: new Date().toISOString(),

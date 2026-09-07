@@ -41,6 +41,11 @@ import type {
   TerminalDebugSnapshotArgs,
   TerminalDebugWindowOpenResult,
 } from "./debug.ts";
+import type {
+  TerminalDraft,
+  TerminalDraftChanged,
+  TerminalDraftWrite,
+} from "./draft.ts";
 import type { TerminalEndState } from "./end-state.ts";
 import type { TerminalInputRoutingDiagnosticInput } from "./input-routing-diagnostics.ts";
 import type { TerminalPanelSessionSnapshot } from "./panel-session.ts";
@@ -74,7 +79,8 @@ export interface TerminalAPI {
    */
   injectDisplayText(
     panelId: string,
-    text: string
+    text: string,
+    lifecycleId?: string
   ): Promise<{ error?: string; ok: boolean }>;
   materializeComposerClipboardImage(): Promise<TerminalComposerMaterializeResult>;
   materializeComposerImageBytes(
@@ -107,6 +113,7 @@ export interface TerminalAPI {
       req: TerminalDebugRendererSnapshotRequest
     ) => Promise<TerminalDebugRendererSnapshot> | TerminalDebugRendererSnapshot
   ) => () => void;
+  onDraftChanged(cb: (event: TerminalDraftChanged) => void): () => void;
   /**
    * Agent/task 结果查看终态变更（main 权威 → renderer EndState store）。
    */
@@ -149,6 +156,7 @@ export interface TerminalAPI {
     operation: TerminalOperation
   ): Promise<TerminalOperationResult>;
   pickComposerFiles(): Promise<TerminalComposerPickResult>;
+  readDraft(panelId: string): Promise<TerminalDraft>;
   readSelectionText(panelId: string): Promise<TerminalSelectionTextResult>;
   /**
    * 读取上次关闭前的 terminal panel 展示状态. 用于 app 重启后先恢复 tab
@@ -232,4 +240,8 @@ export interface TerminalAPI {
   writeComposerPasteText(
     data: TerminalComposerPasteTextWrite
   ): Promise<TerminalComposerPasteTextWriteResult>;
+  writeDraft(
+    panelId: string,
+    draft: TerminalDraftWrite
+  ): Promise<TerminalDraft>;
 }

@@ -1,8 +1,9 @@
 import i18next from "i18next";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { requestTaskOutputSurfaceClose } from "@/lib/actions/task-output-run-operations.ts";
 import { shouldRetainTaskResultPanel } from "@/panel-kits/terminal/should-retain-task-result-panel.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 /**
@@ -12,8 +13,25 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
  */
 export function useTerminalSurfaceClose(
   panelId: string,
-  params?: unknown
+  params?: unknown,
+  options?: { hasAgentSession?: boolean | undefined }
 ): void {
+  const activityKind = useForegroundActivityStore(
+    (s) => s.activities[panelId]?.kind
+  );
+  const latchedAgentRef = useRef(false);
+  const latchPanelIdRef = useRef(panelId);
+  useEffect(() => {
+    if (latchPanelIdRef.current !== panelId) {
+      latchPanelIdRef.current = panelId;
+      latchedAgentRef.current = activityKind === "agent";
+      return;
+    }
+    if (activityKind === "agent") {
+      latchedAgentRef.current = true;
+    }
+  }, [activityKind, panelId]);
+
   useEffect(
     () =>
       window.pier.terminal.onSurfaceCloseRequest((request) => {
@@ -21,7 +39,12 @@ export function useTerminalSurfaceClose(
           return;
         }
         requestTaskOutputSurfaceClose(panelId, () => {
-          if (shouldRetainTaskResultPanel(panelId, params)) {
+          if (
+            shouldRetainTaskResultPanel(panelId, params, {
+              hasAgentActivity: latchedAgentRef.current,
+              hasAgentSession: options?.hasAgentSession,
+            })
+          ) {
             return;
           }
           useWorkspaceStore
@@ -35,6 +58,6 @@ export function useTerminalSurfaceClose(
             });
         });
       }),
-    [panelId, params]
+    [options?.hasAgentSession, panelId, params]
   );
 }

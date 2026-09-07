@@ -231,6 +231,9 @@ export interface CreateTerminalResult {
    */
   agentRestore?: TerminalAgentRestoreOutcome | undefined;
   error?: string;
+  generation?: number | undefined;
+  inputWarning?: string | undefined;
+  lifecycleId?: string | undefined;
   ok: boolean;
   /** 受管启动被技能门阻断时的结构化信息（renderer 弹三选）。 */
   skillsLaunchBlocked?: SkillsLaunchBlockedInfo | undefined;
@@ -324,6 +327,7 @@ export type TerminalOperation =
 
 export interface TerminalOperationResult {
   error?: string | undefined;
+  errorCode?: "needs-input" | "unconfirmed" | undefined;
   ok: boolean;
   /**
    * submit 路径：文本已 paste 进 PTY，但随后的 Return 键失败。
@@ -333,6 +337,8 @@ export interface TerminalOperationResult {
 }
 
 export interface TerminalSendTextArgs {
+  /** Original unsent editor text when the transmitted payload expands chips. */
+  draftText?: string | undefined;
   panelId: string;
   /**
    * true：先 paste 文本，再注入真实 Return 键提交。

@@ -155,7 +155,7 @@ export function nativeLaunchOptions(
 
 /**
  * Last-mile agent surface command.
- * Shebang scripts cannot lead the PTY — spawn `$SHELL -lic`.
+ * Shebang scripts load `$SHELL -lic` environment, then exec the resolved agent.
  * Native binaries stay `/bin/sh -c 'exec …'`.
  */
 export interface AgentLoginShellSurface {

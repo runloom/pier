@@ -83,7 +83,7 @@ export function buildStickyExportPrelude(env: Record<string, string>): string {
 }
 
 /**
- * Shebang scripts cannot be the PTY leader; spawn `$SHELL -lic` instead.
+ * Detect scripts that require the user's login-shell environment before exec.
  */
 export function looksLikeShebangScript(path: string): boolean {
   try {
@@ -104,10 +104,13 @@ export function looksLikeShebangScript(path: string): boolean {
 
 /**
  * Build Ghostty-safe surface command after resolve.
- * Native binary → `/bin/sh -c 'exec …'`. Shebang and via-shell → `$SHELL -lic`.
+ * Native binary → `/bin/sh -c 'exec …'`. Shebang → `$SHELL -lic 'exec …'`.
+ * Resolved agents replace the wrapper, keeping their children in the owned group.
  */
 export function buildResolvedAgentSurfaceCommand(input: {
   commandLine: string;
+  /** Verified literal arguments, appended only at this final spawn boundary. */
+  literalArgs?: readonly string[];
   env: Record<string, string>;
   resolved: ResolvedUserCommand;
   shell: string;
@@ -116,22 +119,23 @@ export function buildResolvedAgentSurfaceCommand(input: {
   const shell = input.shell;
   const flags = agentShellCommandFlags(shell);
   const sticky = buildStickyExportPrelude(input.env);
+  const extra = input.literalArgs?.length
+    ? ` ${input.literalArgs.map(quoteShellArg).join(" ")}`
+    : "";
 
   if (input.resolved.kind === "absolute") {
     const abs = input.resolved.path;
     const name = extractBareCommandName(trimmed);
     if (name) {
+      const execution = `exec ${quoteShellArg(abs)}${trimmed.slice(name.length)}${extra}`;
       if (looksLikeShebangScript(abs)) {
-        const body = sticky ? `${sticky}; ${trimmed}` : trimmed;
+        const body = sticky ? `${sticky}; ${execution}` : execution;
         return `${quoteShellArg(shell)} ${flags} ${quoteShellArg(body)}`;
       }
-      const rest = name.startsWith("/")
-        ? trimmed.slice(name.length)
-        : trimmed.slice(name.length);
-      return `/bin/sh -c ${quoteShellArg(`exec ${quoteShellArg(abs)}${rest}`)}`;
+      return `/bin/sh -c ${quoteShellArg(execution)}`;
     }
   }
 
-  const body = sticky ? `${sticky}; ${trimmed}` : trimmed;
+  const body = sticky ? `${sticky}; ${trimmed}${extra}` : `${trimmed}${extra}`;
   return `${quoteShellArg(shell)} ${flags} ${quoteShellArg(body)}`;
 }

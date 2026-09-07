@@ -6,6 +6,7 @@ import {
 import { app } from "electron";
 import type { PierAppCore } from "../../app-core/index.ts";
 import { appCore } from "../../app-core/index.ts";
+import { nativeTerminalProcesses } from "../../ipc/terminal/process/registry.ts";
 import {
   authorizerFromCapabilityAuthority,
   createCapabilityAuthority,
@@ -14,11 +15,8 @@ import { controlSnapshotSourcesFromCore } from "../../services/control-snapshot/
 import { createControlSnapshotService } from "../../services/control-snapshot/service.ts";
 import { createFakeTerminalBackend } from "../../services/runtime-control/fake-backend.ts";
 import { createHostTerminalBackend } from "../../services/runtime-control/host-backend.ts";
-import {
-  onTerminalPanelClosed,
-  onTerminalPtyExited,
-} from "../../services/runtime-control/panel-close-listeners.ts";
 import { createRuntimeControlService } from "../../services/runtime-control/service.ts";
+import { findAppWindowForActivityWindowId } from "../../windows/identity.ts";
 import { createStaticAgentsDiscovery } from "./local-control/agents-discovery.ts";
 import { createDefaultLocalControlAuthorizer } from "./local-control/authorize.ts";
 import {
@@ -113,12 +111,18 @@ export async function registerCliLocalControl({
     },
     resolveFact: (record) => {
       if (record.closed) {
-        return "exited";
+        return record.fact;
       }
       try {
         const snap = core.services.agentRuntimeIndex.listMachine();
         const hit = snap.entries.find(
-          (e) => e.panelId === record.panelId && e.windowId === record.windowId
+          (e) =>
+            e.panelId === record.panelId &&
+            e.windowId ===
+              String(
+                findAppWindowForActivityWindowId(record.windowId)?.id ??
+                  record.windowId
+              )
         );
         if (hit?.status) {
           return hit.status;
@@ -129,12 +133,18 @@ export async function registerCliLocalControl({
       return record.fact;
     },
   });
-  const unsubscribePanelClose = onTerminalPanelClosed((panelId) => {
-    runtimeControl.releaseForPanel(panelId);
-  });
-  // pty 退出（含用户在子终端里 exit）：运行时已死即释放占额；后关面板幂等。
-  const unsubscribePtyExit = onTerminalPtyExited((panelId) => {
-    runtimeControl.releaseForPanel(panelId);
+  const unsubscribeProcess = nativeTerminalProcesses.subscribe((process) => {
+    const separator = process.nativePanelId.indexOf("::");
+    if (separator < 0) return;
+    runtimeControl.observeProcess({
+      panelId: process.nativePanelId.slice(separator + 2),
+      windowId: process.nativePanelId.slice(0, separator),
+      generation: process.generation,
+      lifecycleId: process.lifecycleId,
+      created: process.created,
+      exited: process.exited,
+      closed: process.closed,
+    });
   });
   core.services.controlRuntimes = {
     listRuntimeSummaries: () => runtimeControl.listRuntimeSummaries(),
@@ -188,8 +198,7 @@ export async function registerCliLocalControl({
 
     return {
       close: async () => {
-        unsubscribePanelClose();
-        unsubscribePtyExit();
+        unsubscribeProcess();
         Reflect.deleteProperty(core.services, "controlSnapshot");
         Reflect.deleteProperty(core.services, "controlPlane");
         Reflect.deleteProperty(core.services, "controlBootId");
@@ -199,6 +208,7 @@ export async function registerCliLocalControl({
       bootId: server.bootId,
     };
   } catch (error) {
+    unsubscribeProcess();
     await server.close().catch(() => undefined);
     throw error;
   }

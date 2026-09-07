@@ -1,4 +1,5 @@
 import { getTerminalAddon } from "../ipc/terminal/index.ts";
+import { nativeTerminalProcesses } from "../ipc/terminal/process/registry.ts";
 import {
   armDetaching,
   scheduleDisarmDetaching,
@@ -13,6 +14,7 @@ export function destroyAppWindowForQuit(window: AppWindow): void {
   if (window.isDestroyed()) {
     return;
   }
+  const electronWindowId = window.id;
   const context = findWindowContext(window);
   const detachingKeys =
     context == null
@@ -39,6 +41,7 @@ export function destroyAppWindowForQuit(window: AppWindow): void {
     window.webContents.close();
   }
   window.destroy();
+  nativeTerminalProcesses.closeWindow(electronWindowId);
   if (detachingKeys) {
     scheduleDisarmDetaching(detachingKeys);
   }

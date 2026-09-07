@@ -14,8 +14,6 @@ export {
 export {
   assertLaunchWrapCapability,
   listLaunchWrapHandlers,
-  readDecorateSpawnFlag,
   registerLaunchWrapHandler,
-  rememberDecorateSpawnFlag,
   resetLaunchWrapRegistryForTests,
 } from "./registry.ts";

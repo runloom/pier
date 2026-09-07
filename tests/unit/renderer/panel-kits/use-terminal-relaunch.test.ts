@@ -33,7 +33,7 @@ describe("useTerminalRelaunch", () => {
     Reflect.deleteProperty(window, "pier");
   });
 
-  it("starts relaunch by clearing ready and closing the panel", () => {
+  it("starts relaunch by clearing ready and closing after draft flush", async () => {
     const relaunchRequest: TerminalRelaunchRequest = {
       launchId: "launch-2",
       panelId: "terminal-1",
@@ -56,6 +56,9 @@ describe("useTerminalRelaunch", () => {
     );
 
     expect(setNativeTerminalReady).toHaveBeenCalledWith(false);
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(close).toHaveBeenCalledWith("terminal-1", { reason: "relaunch" });
   });
 
@@ -115,6 +118,11 @@ describe("useTerminalRelaunch", () => {
     );
 
     expect(setActiveLaunch).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(close).toHaveBeenCalledOnce();
 
     await act(async () => {
       resolveClose?.();

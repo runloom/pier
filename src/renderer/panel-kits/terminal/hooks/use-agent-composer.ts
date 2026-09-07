@@ -7,6 +7,12 @@ import {
   useState,
 } from "react";
 import {
+  hydrateTerminalDraft,
+  reportTerminalDraftFailure,
+  subscribeTerminalDrafts,
+  useTerminalDraftStore,
+} from "@/stores/terminal-drafts.store.ts";
+import {
   requestTerminalFocusIntent,
   setTerminalNativeFocusDisabled,
 } from "@/stores/terminal-input-routing-slice.ts";
@@ -53,6 +59,20 @@ export function useAgentComposer({
   hasStatusBar,
 }: UseAgentComposerParams): UseAgentComposerResult {
   const [composerOpen, setComposerOpen] = useState(false);
+  const hasDraft = useTerminalDraftStore((state) =>
+    Boolean(
+      state.drafts[panelId]?.value ||
+        state.drafts[panelId]?.composition?.attachments?.length
+    )
+  );
+  useEffect(() => {
+    const unsubscribe = subscribeTerminalDrafts();
+    hydrateTerminalDraft(panelId).catch(reportTerminalDraftFailure);
+    return unsubscribe;
+  }, [panelId]);
+  useEffect(() => {
+    if (hasDraft) setComposerOpen(true);
+  }, [hasDraft]);
   const [composerFocusRequest, setComposerFocusRequest] = useState(0);
   const [attachRequest, setAttachRequest] = useState(0);
   const composerOpenRef = useRef(false);
@@ -97,7 +117,7 @@ export function useAgentComposer({
 
   // External ensure-open (comments submit, etc.) — not toggle.
   useEffect(() => {
-    if (!canUseAgentComposer({ activityKind, restored })) {
+    if (!canUseAgentComposer({ activityKind, restored, hasDraft })) {
       return;
     }
     return registerComposerOpener(panelId, () => {
@@ -106,21 +126,22 @@ export function useAgentComposer({
       ensureTuiInputFocus(panelId).catch(() => undefined);
       activatePanel();
     });
-  }, [activatePanel, activityKind, panelId, restored]);
+  }, [activatePanel, activityKind, panelId, restored, hasDraft]);
 
   // 资格失效（非 agent / 恢复态）时强制关闭，避免 open 位悬挂。
   useEffect(() => {
-    if (!canUseAgentComposer({ activityKind, restored })) {
+    if (!canUseAgentComposer({ activityKind, restored, hasDraft })) {
       setComposerOpen(false);
       setAttachRequest(0);
     }
-  }, [activityKind, restored]);
+  }, [activityKind, restored, hasDraft]);
 
   // 恢复态面板（agent/task 静态结果卡）没有活 PTY，不挂载；挂载判定单一实现
   // （shouldMountAgentComposer），面板 inset 与组件渲染同口径。
   const composerMounted = shouldMountAgentComposer({
     activityKind,
     open: composerOpen,
+    hasDraft,
     restored,
   });
   const [composerHeightPx, setComposerHeightPx] = useState(0);

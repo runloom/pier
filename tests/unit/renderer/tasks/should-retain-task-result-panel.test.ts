@@ -82,4 +82,20 @@ describe("shouldRetainTaskResultPanel", () => {
       true
     );
   });
+
+  it("retains an agent session after foreground activity has already cleared", () => {
+    expect(
+      shouldRetainTaskResultPanel("terminal-codex", undefined, {
+        hasAgentSession: true,
+      })
+    ).toBe(true);
+  });
+
+  it("retains a latched agent after foreground activity has already cleared", () => {
+    expect(
+      shouldRetainTaskResultPanel("terminal-osc-agent", undefined, {
+        hasAgentActivity: true,
+      })
+    ).toBe(true);
+  });
 });

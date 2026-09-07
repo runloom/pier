@@ -10,6 +10,7 @@ import {
   viewportHasPaintedPrompt,
 } from "./initial-input-gate.ts";
 import type { NativeAddon } from "./native-addon.ts";
+import { nativeTerminalProcesses } from "./process/registry.ts";
 import { pasteTerminalText, sendTerminalSubmitReturn } from "./submit-text.ts";
 import type { ExitCodeHintArgs } from "./task/lifecycle.ts";
 
@@ -86,6 +87,7 @@ interface InitialInputSendArgs {
   addon: NativeAddon;
   generation: number;
   initialInput: string;
+  isCurrent: () => boolean;
   nativePanelId: string;
   onFailed?: (detail?: InitialInputInjectFailure) => void;
   panelId: string;
@@ -184,6 +186,11 @@ export function sendInitialTerminalInput(args: {
   session.generation += 1;
   clearRetryTimer(session);
   const generation = session.generation;
+  const processIsCurrent = nativeTerminalProcesses.inputGuard(
+    args.nativePanelId
+  );
+  const isCurrent = () =>
+    isCurrentGeneration(args.panelId, generation) && processIsCurrent();
   const readViewport = args.addon.readViewportText;
   schedulePromptReady(
     args.panelId,
@@ -191,7 +198,10 @@ export function sendInitialTerminalInput(args: {
       if (!isCurrentGeneration(args.panelId, generation)) {
         return;
       }
-      trySendInitialTerminalInput({ ...args, generation, initialInput }, 0);
+      trySendInitialTerminalInput(
+        { ...args, generation, initialInput, isCurrent },
+        0
+      );
     },
     undefined,
     readViewport
@@ -216,6 +226,7 @@ function trySendInitialTerminalInput(
     nativePanelId: args.nativePanelId,
     submit,
     text: body,
+    isCurrent: args.isCurrent,
   }).then((result) => {
     if (!isCurrentGeneration(args.panelId, args.generation)) {
       return;
@@ -240,22 +251,24 @@ function trySendInitialSubmit(
   if (!isCurrentGeneration(args.panelId, args.generation)) {
     return;
   }
-  sendTerminalSubmitReturn(args.addon, args.nativePanelId).then((sent) => {
-    if (!isCurrentGeneration(args.panelId, args.generation)) {
-      return;
+  sendTerminalSubmitReturn(args.addon, args.nativePanelId, args.isCurrent).then(
+    (sent) => {
+      if (!isCurrentGeneration(args.panelId, args.generation)) {
+        return;
+      }
+      if (sent) {
+        return;
+      }
+      scheduleInitialInputRetry(
+        args,
+        attempt,
+        (nextAttempt) => {
+          trySendInitialSubmit(args, nextAttempt);
+        },
+        { textDelivered: true }
+      );
     }
-    if (sent) {
-      return;
-    }
-    scheduleInitialInputRetry(
-      args,
-      attempt,
-      (nextAttempt) => {
-        trySendInitialSubmit(args, nextAttempt);
-      },
-      { textDelivered: true }
-    );
-  });
+  );
 }
 
 /** Match workspace.addPanelMenu.startAgentFailed / startAgentInjectFailed. */

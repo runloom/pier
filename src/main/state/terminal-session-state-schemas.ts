@@ -44,6 +44,7 @@ export const terminalAgentPanelMetadataSchema = z.object({
     .optional(),
   startedAt: z.number().int().nonnegative(),
   status: z.enum(["exited", "running"]),
+  endReason: z.enum(["exited", "stopped"]).optional(),
 });
 
 /**

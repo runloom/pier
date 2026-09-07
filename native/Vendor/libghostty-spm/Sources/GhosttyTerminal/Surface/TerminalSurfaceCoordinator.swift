@@ -16,7 +16,14 @@ import GhosttyKit
 @MainActor
 final class TerminalSurfaceCoordinator {
     weak var delegate: (any TerminalSurfaceViewDelegate)? {
-        didSet { bridge?.delegate = delegate }
+        didSet {
+            bridge?.delegate = delegate
+            bridge?.applyRetainAfterChildExitPolicy()
+        }
+    }
+
+    func setRetainAfterChildExit(_ retain: Bool) {
+        bridge?.setRetainAfterChildExit(retain)
     }
 
     var controller: TerminalController? {

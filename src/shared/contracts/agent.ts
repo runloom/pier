@@ -49,6 +49,17 @@ export interface AgentCatalogEntry {
   homepageUrl?: string;
   iconId?: string;
   id: AgentKind;
+  /** Native interactive CLI contract; never reuse headless oneShotArgs. */
+  initialPrompt?:
+    | { mode: "draft"; evidence: string }
+    | {
+        mode: "argv";
+        args: readonly string[];
+        help: string;
+        helpArgs?: readonly string[];
+        rejectsAtPrefix?: boolean;
+        evidence: string;
+      };
   /**
    * TUI 输入框失焦时的恢复键（经 sendKeyPress 透传）。仅在逐一验证过
    * 「硬件光标可见性 ⇔ 输入聚焦」的 agent 上声明：cursor-visible 探针

@@ -26,6 +26,7 @@ export interface TerminalAgentRestoreMetadata {
 
 export interface TerminalAgentPanelMetadata {
   agentId: AgentKind;
+  endReason?: "exited" | "stopped" | undefined;
   exitCode?: number | undefined;
   finishedAt?: number | undefined;
   launch: TerminalAgentRestoreLaunchOptions;

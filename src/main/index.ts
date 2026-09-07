@@ -78,6 +78,7 @@ import { isDevRuntime } from "./runtime-mode.ts";
 import { abortMissingSingleInstanceLock } from "./startup-diagnostics.ts";
 import { reconcileOrphanedBackgroundProcesses } from "./state/background-task-process-ledger.ts";
 import { flushPairingState } from "./state/pairing-store.ts";
+import { flushTerminalDrafts } from "./state/terminal-drafts/index.ts";
 import { migrateTerminalSessionScopesToRecordIds } from "./state/terminal-session-scope-migration.ts";
 import {
   migrateLegacyAgentSuccessTabs,
@@ -172,6 +173,7 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
       appCore.services.agentUsage.flush(),
       appCore.services.usageData.flush(),
       flushNotificationCenterHistory(),
+      flushTerminalDrafts(),
     ]);
   });
   // remote-control：先停监听与会合拨号（断开移动端连接）再 flush 配对状态落盘。

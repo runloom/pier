@@ -10,6 +10,7 @@ import {
   revealTerminalComposerPath,
   writeTerminalComposerPasteText,
 } from "./composer-attachments.ts";
+import { registerTerminalDraftIpc } from "./drafts/ipc.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import {
   performTerminalOperation,
@@ -30,6 +31,7 @@ export function registerTerminalInputIpc(opts: {
   windowFromWebContents: (webContents: WebContents) => AppWindow | null;
 }): void {
   const { addon, ipcMain, loadError, windowFromWebContents } = opts;
+  registerTerminalDraftIpc(ipcMain, windowFromWebContents);
 
   ipcMain.handle(
     "pier:terminal:perform-operation",

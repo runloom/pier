@@ -14,6 +14,23 @@ import {
   terminalEndStateForPanel,
   useTerminalEndStateStore,
 } from "@/stores/terminal-end-state.store.ts";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+
+const SILENT_INJECT_ERRORS = new Set([
+  "terminal closing",
+  "terminal process changed",
+  "window not found",
+]);
+
+function isSilentInjectFailure(error: unknown): boolean {
+  if (typeof error === "string") return SILENT_INJECT_ERRORS.has(error);
+  return error instanceof Error && SILENT_INJECT_ERRORS.has(error.message);
+}
+
+function isPanelStillOpen(panelId: string): boolean {
+  const api = useWorkspaceStore.getState().api;
+  return !api || api.panels.some((panel) => panel.id === panelId);
+}
 
 /**
  * End-state process-exit path:
@@ -69,6 +86,8 @@ export function useTerminalChildExitedInject(
       if (event.panelId !== panelId) {
         return;
       }
+      const floor = useTerminalEndStateStore.getState().generations[panelId];
+      if (floor !== undefined && (event.generation ?? 0) < floor) return;
       const live = useForegroundActivityStore.getState().activities[panelId];
       const agentId: AgentKind | undefined =
         (live?.kind === "agent" ? live.agentId : undefined) ??
@@ -90,6 +109,9 @@ export function useTerminalChildExitedInject(
         useTerminalEndStateStore.getState().upsertAgentEnd({
           agentId,
           exitCode: event.exitCode,
+          generation: event.generation,
+          lifecycleId: event.lifecycleId,
+          endReason: event.endReason,
           panelId,
           runtimeMs: event.runtimeMs,
           title: titleHintRef.current,
@@ -97,6 +119,9 @@ export function useTerminalChildExitedInject(
       } else if (role === "task" || role === "taskOutput") {
         useTerminalEndStateStore.getState().upsertTaskEnd({
           exitCode: event.exitCode,
+          generation: event.generation,
+          lifecycleId: event.lifecycleId,
+          endReason: event.endReason,
           panelId,
           role,
           runtimeMs: event.runtimeMs,
@@ -111,6 +136,7 @@ export function useTerminalChildExitedInject(
 
       const text = formatGhosttyChildExitedBufferText({
         activityKind: kind,
+        endReason: event.endReason,
         exitCode: event.exitCode,
         params,
         runtimeMs: event.runtimeMs,
@@ -118,20 +144,34 @@ export function useTerminalChildExitedInject(
       try {
         const result = await window.pier.terminal.injectDisplayText(
           panelId,
-          text
+          text,
+          event.lifecycleId
         );
         if (result.ok) {
-          useTerminalEndStateStore.getState().markBufferInjected(panelId);
+          useTerminalEndStateStore
+            .getState()
+            .markBufferInjected(panelId, event.generation);
           return;
         }
+        if (
+          useTerminalEndStateStore.getState().generations[panelId] !== floor &&
+          event.generation !==
+            useTerminalEndStateStore.getState().generations[panelId]
+        )
+          return;
         console.error(
           "[terminal] injectDisplayText failed:",
           result.error ?? "unknown"
         );
+        if (isSilentInjectFailure(result.error)) return;
       } catch (err) {
         console.error("[terminal] injectDisplayText failed:", err);
+        if (isSilentInjectFailure(err)) return;
       }
-      if (role === "agent" || role === "task" || role === "taskOutput") {
+      if (
+        (role === "agent" || role === "task" || role === "taskOutput") &&
+        isPanelStillOpen(panelId)
+      ) {
         toast.error(tRef.current("terminal.ghosttyHost.injectExitFailed"));
       }
     }

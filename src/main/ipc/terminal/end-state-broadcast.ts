@@ -21,6 +21,8 @@ export function broadcastAgentEndStateForPanel(
   }
   const end = materializeAgentEndState({
     agentId: agent.agentId,
+    generation: agent.restore?.spawnGeneration,
+    endReason: agent.endReason,
     ...(agent.exitCode === undefined ? {} : { exitCode: agent.exitCode }),
     ...(agent.finishedAt === undefined ? {} : { finishedAt: agent.finishedAt }),
     panelId,

@@ -1,5 +1,11 @@
+import type { MouseEvent } from "react";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
+import {
+  readTerminalDraftText,
+  resetTerminalDraftMirrorsForTests,
+  writeTerminalDraftText,
+} from "@/stores/terminal-drafts.store.ts";
 import type { ComposerPassthroughKeyPress } from "./composer-passthrough.ts";
 
 /** 卡片与终端内容 / 状态栏之间的呼吸间距。 */
@@ -15,7 +21,6 @@ export const TERMINAL_COMPOSER_RESERVE_HEIGHT_PX = 36;
 const SOFT_WRAP_LINE_THRESHOLD = 1.6;
 
 /** Per-panel draft retained across on-demand open/close. */
-const drafts = new Map<string, string>();
 
 /**
  * Per-panel Lexical editor snapshot (editor.toJSON()) retained alongside the
@@ -46,21 +51,21 @@ export interface ComposerReviewChipDraft {
 const reviewChipDrafts = new Map<string, ComposerReviewChipDraft>();
 
 export function resetTerminalComposerDraftsForTests(): void {
-  drafts.clear();
+  resetTerminalDraftMirrorsForTests();
   editorSnapshots.clear();
   reviewChipDrafts.clear();
 }
 
 export function readComposerDraft(panelId: string): string {
-  return drafts.get(panelId) ?? "";
+  return readTerminalDraftText(panelId);
 }
 
 export function writeComposerDraft(panelId: string, value: string): void {
-  drafts.set(panelId, value);
+  writeTerminalDraftText(panelId, value);
 }
 
 export function clearComposerDraft(panelId: string): void {
-  drafts.delete(panelId);
+  writeTerminalDraftText(panelId, "");
   editorSnapshots.delete(panelId);
   reviewChipDrafts.delete(panelId);
 }
@@ -172,4 +177,23 @@ export function focusComposerInput(
   window.getSelection()?.addRange(range);
   useTerminalStore.getState().activateOverlay(overlayId);
   return true;
+}
+
+/** Clicking free composer chrome focuses the editor without stealing text selection. */
+export function focusComposerFromChrome(
+  event: MouseEvent<HTMLDivElement>,
+  el: HTMLElement | null,
+  overlayId: string
+): void {
+  const target = event.target;
+  if (!(target instanceof Element && el)) return;
+  if (
+    target.closest(
+      "button, a, input, textarea, [role='button'], .composer-attachment-surface"
+    )
+  )
+    return;
+  if (el === target || el.contains(target)) return;
+  event.preventDefault();
+  focusComposerInput(el, overlayId);
 }

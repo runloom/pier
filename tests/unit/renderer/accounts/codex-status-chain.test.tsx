@@ -138,9 +138,11 @@ describe("Codex transcript → aggregator → store → status DOM", () => {
     if (row.order === "stop-first") {
       aggregator.ingestAgentEvent(stop, HOOK_OPTIONS);
       applySnapshot();
+      // Advisory hooks preserve the current tool until authoritative evidence
+      // settles it (the aggregator's existing turn-state-machine contract).
       expect(screen.getByTestId("agent-status-item")).toHaveAttribute(
         "data-agent-status",
-        "none"
+        "tool"
       );
       appendTerminal();
     } else {

@@ -74,6 +74,7 @@ export interface TerminalComposerViewProps {
   /** Editor-state JSON from last close; keeps chips across toggle. */
   initialSnapshotJson: string | null;
   inputFocusRisk: TuiInputFocusRisk | null;
+  notice?: string | undefined;
   onChromeMouseDown: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onDragOver: (event: DragEvent) => void;
   onDrop: (event: DragEvent) => void;
@@ -101,6 +102,7 @@ export function TerminalComposerView({
   canSend,
   compact,
   disabled,
+  notice,
   editorRef,
   hasAttachments,
   imeGate,
@@ -136,11 +138,17 @@ export function TerminalComposerView({
     // biome-ignore lint/a11y/noStaticElementInteractions: drop target for attachment files
     <div
       className="absolute inset-x-2 z-20"
+      data-testid="terminal-composer-container"
       onDragOver={onDragOver}
       onDrop={onDrop}
       ref={setRootRef}
       style={{ bottom: bottomOffsetPx + TERMINAL_COMPOSER_GAP_PX }}
     >
+      {notice ? (
+        <p className="mb-1 px-2 text-muted-foreground text-xs" role="status">
+          {notice}
+        </p>
+      ) : null}
       {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: chrome mousedown focuses editor */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: chrome mousedown focuses editor */}
       {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: labelled region for composer chrome */}

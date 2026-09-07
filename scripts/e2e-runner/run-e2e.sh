@@ -162,6 +162,7 @@ git clean -fd \
   -e out \
   -e dist-builder \
   -e .pier-e2e-last-build-sha \
+  -e .pier-e2e-last-native-tree \
   >/dev/null 2>&1 || git clean -fd >/dev/null
 
 git checkout --detach --force "${PIER_E2E_TIP_SHA}"
@@ -173,6 +174,7 @@ git clean -fd \
   -e out \
   -e dist-builder \
   -e .pier-e2e-last-build-sha \
+  -e .pier-e2e-last-native-tree \
   >/dev/null 2>&1 || true
 git reflog expire --expire=2.days.ago --all >/dev/null 2>&1 || true
 EOS
@@ -598,6 +600,16 @@ echo "[e2e-run:remote] cwd=$(pwd) head=${actual:0:12} tree=${actual_tree:0:12} e
 if [ -n "${PIER_E2E_EXPECT_SHA:-}" ] && [ "${actual}" != "${PIER_E2E_EXPECT_SHA}" ]; then
   echo "[e2e-run:remote] ERROR: HEAD ${actual} != expect ${PIER_E2E_EXPECT_SHA}" >&2
   exit 3
+fi
+
+# Native tests must execute the native sources in this snapshot too.
+native_marker=".pier-e2e-last-native-tree"
+native_tree="$(git ls-tree -r HEAD native scripts/build-libghostty.sh | grep -v 'native/Tests/' | git hash-object --stdin)"
+if [ ! -f native/build/Release/ghostty_native.node ] || [ ! -f "${native_marker}" ] || [ "$(cat "${native_marker}")" != "${native_tree}" ]; then
+  echo "[e2e-run:remote] build native for ${native_tree}"
+  pnpm build:libghostty
+  pnpm build:native
+  printf '%s\n' "${native_tree}" > "${native_marker}"
 fi
 
 build_marker=".pier-e2e-last-build-sha"

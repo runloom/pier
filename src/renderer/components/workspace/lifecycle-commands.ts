@@ -8,6 +8,7 @@ import {
   WorkspaceLayoutPersistenceError,
 } from "@/lib/workspace/layout-persistence.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { flushAllTerminalDrafts } from "@/stores/terminal-drafts.store.ts";
 
 const LIFECYCLE_COMMAND_TYPES = new Set([
   "plugin.finalizeDisable",
@@ -133,6 +134,7 @@ export async function runWorkspaceLifecycleCommand(
           envelope.command.reason,
           envelope.command.transitionId
         );
+        await flushAllTerminalDrafts();
         if (!canSkipWorkspaceLayoutFlushForInitialClose()) {
           await flushWorkspaceLayout();
         }
@@ -218,6 +220,7 @@ export async function runWorkspaceLifecycleCommand(
         transitionId: envelope.command.transitionId,
       });
     } else if (envelope.command.type === "workspace.flushLayout") {
+      await flushAllTerminalDrafts();
       await flushWorkspaceLayout();
     } else if (envelope.command.type === "workspace.reportCloseFailure") {
       // showAppAlert 的 Promise 表示“用户已关闭弹窗”，不是“弹窗已呈现”。

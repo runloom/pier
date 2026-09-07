@@ -1,6 +1,12 @@
+import { terminalDraftCompositionKey } from "@shared/contracts/terminal/draft.ts";
 import { useRef } from "react";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
+import {
+  flushTerminalDraft,
+  useTerminalDraftStore,
+  writeTerminalDraftText,
+} from "@/stores/terminal-drafts.store.ts";
 import { reportComposerSendFailure } from "../composer-helpers.ts";
 import { ensureTuiInputFocus } from "../tui-input-focus.ts";
 
@@ -49,12 +55,30 @@ export function useTerminalComposerSend(opts: {
     if (disabled || sendingRef.current || isComposing()) {
       return;
     }
-    const payload = buildPayloadOrReport(getDraft());
+    const draft = getDraft();
+    const composition = terminalDraftCompositionKey(
+      useTerminalDraftStore.getState().drafts[panelId]?.composition
+    );
+    const payload = buildPayloadOrReport(draft);
     if (payload == null) {
       return;
     }
     sendingRef.current = true;
     (async () => {
+      if (
+        useTerminalDraftStore.getState().drafts[panelId]?.durable.status ===
+        "unconfirmed"
+      ) {
+        const proceed = await showAppConfirm({
+          title: t("terminal.composer.unconfirmedTitle"),
+          body: t("terminal.composer.unconfirmedBody"),
+          confirmLabel: t("terminal.composer.sendAgain"),
+          intent: "default",
+        });
+        if (!proceed) return;
+      }
+      writeTerminalDraftText(panelId, draft);
+      await flushTerminalDraft(panelId);
       const activity =
         useForegroundActivityStore.getState().activities[panelId];
       const isAgent = activity?.kind === "agent";
@@ -77,18 +101,30 @@ export function useTerminalComposerSend(opts: {
       try {
         const result = await window.pier.terminal.sendText({
           panelId,
+          draftText: draft,
           submit: true,
           text: payload,
         });
 
-        if (result.ok || result.textDelivered) {
-          onSent();
-          if (!result.ok) {
-            reportComposerSendFailure(t, result.error ?? "");
-          }
+        if (result.ok) {
+          // User may edit the next draft while the native paste is settling.
+          const current = useTerminalDraftStore.getState().drafts[panelId];
+          const unchanged =
+            terminalDraftCompositionKey(current?.composition) === composition;
+          const cleared = !(current?.value || current?.composition);
+          if (
+            (getDraft() === draft || getDraft() === "") &&
+            (unchanged || cleared)
+          )
+            onSent();
           return;
         }
-        reportComposerSendFailure(t, result.error ?? "");
+        let message = result.error ?? "";
+        if (result.errorCode === "unconfirmed" || result.textDelivered)
+          message = t("terminal.composer.unconfirmedHint");
+        if (result.errorCode === "needs-input")
+          message = t("terminal.composer.needsInput");
+        reportComposerSendFailure(t, message);
       } finally {
         if (isAgent) {
           await new Promise((resolve) => {

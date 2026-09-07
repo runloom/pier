@@ -1,6 +1,10 @@
 import type { RefObject } from "react";
 import { useEffect, useState } from "react";
 import {
+  readTerminalDraftComposition,
+  writeTerminalDraftComposition,
+} from "@/stores/terminal-drafts.store.ts";
+import {
   readComposerEditorSnapshot,
   writeComposerEditorSnapshot,
 } from "../composer-helpers.ts";
@@ -21,14 +25,20 @@ export function useComposerEditorSnapshot(input: {
   value: string;
 }): string | null {
   const { editorRef, panelId, value } = input;
-  const [initialSnapshotJson] = useState(() =>
-    readComposerEditorSnapshot(panelId)
+  const [initialSnapshotJson] = useState(
+    () =>
+      (readTerminalDraftComposition(panelId)?.editorText === value
+        ? readTerminalDraftComposition(panelId)?.editorJson
+        : undefined) ?? readComposerEditorSnapshot(panelId)
   );
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `value` re-runs capture after each commit
   useEffect(() => {
     const json = editorRef.current?.getEditorJson();
     if (json != null) {
       writeComposerEditorSnapshot(panelId, json);
+      writeTerminalDraftComposition(panelId, {
+        editorJson: json,
+        editorText: value,
+      });
     }
   }, [editorRef, panelId, value]);
   return initialSnapshotJson;

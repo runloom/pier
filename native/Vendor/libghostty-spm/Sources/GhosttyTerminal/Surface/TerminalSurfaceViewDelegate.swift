@@ -47,6 +47,14 @@ public protocol TerminalSurfaceCloseDelegate: TerminalSurfaceViewDelegate {
 @MainActor
 public protocol TerminalSurfaceChildExitedDelegate: TerminalSurfaceViewDelegate {
     func terminalDidExitChild(exitCode: UInt32, runtimeMilliseconds: UInt64)
+    /// Keep the Ghostty surface after the child exits. Copied onto the
+    /// callback bridge at setup; the IO-thread action callback reads that
+    /// copy before returning to Zig, so retain wins `Surface.close()`.
+    var retainSurfaceAfterChildExit: Bool { get }
+}
+
+extension TerminalSurfaceChildExitedDelegate {
+    public var retainSurfaceAfterChildExit: Bool { false }
 }
 
 // MARK: - Extended action delegates

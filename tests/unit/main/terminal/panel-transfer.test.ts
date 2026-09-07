@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resolveTerminalTransferCreateAction } from "../../../../src/main/ipc/terminal/create-transfer-guard.ts";
 import type { AppWindow } from "../../../../src/main/windows/app-window.ts";
 
 function fakeWin(id: number): AppWindow {
@@ -26,6 +27,13 @@ const transferSession = vi.fn();
 const rollbackSession = vi.fn();
 const getTransferSession = vi.fn();
 const ensureSession = vi.fn();
+const moveDraft = vi.fn();
+vi.mock("../../../../src/main/state/terminal-drafts/index.ts", () => ({
+  terminalDraftStore: () => ({ move: moveDraft }),
+}));
+vi.mock("../../../../src/main/ipc/terminal/drafts/broadcast.ts", () => ({
+  refreshTerminalDraft: vi.fn(),
+}));
 
 vi.mock("../../../../src/main/state/terminal-session-transfer.ts", () => ({
   getTransferSession: (...args: unknown[]) => getTransferSession(...args),
@@ -45,6 +53,7 @@ describe("TerminalPanelTransfer", () => {
     rollbackSession.mockReset();
     getTransferSession.mockReset();
     ensureSession.mockReset();
+    moveDraft.mockReset().mockResolvedValue(undefined);
     getTransferSession.mockResolvedValue(null);
     ensureSession.mockResolvedValue(undefined);
     transferSession.mockResolvedValue({
@@ -169,6 +178,17 @@ describe("TerminalPanelTransfer", () => {
       toNativePanelId: "22::panel-1",
       toBrowserWindowId: 22,
     });
+    expect(() =>
+      resolveTerminalTransferCreateAction(transfer, "source", "panel-1")
+    ).toThrow(/moving/);
+    expect(moveDraft).toHaveBeenCalledWith(
+      "source-record",
+      "target-record",
+      "panel-1"
+    );
+    expect(moveOwner.mock.invocationCallOrder[0]).toBeLessThan(
+      transferSession.mock.invocationCallOrder[0]!
+    );
     expect(transferSession).toHaveBeenCalledWith({
       expectedLifecycleId: "run-1",
       panelId: "panel-1",
