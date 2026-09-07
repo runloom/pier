@@ -20,20 +20,51 @@ type PairPhase =
   | "paste"
   | "recognized"
   | "pairing"
-  | "done";
+  | "done"
+  | "failed-camera"
+  | "failed-code"
+  | "failed-paste";
 
 const RECOGNIZE_MS = 1600;
 const PAIR_MS = 900;
 
+/** 画板内的格式校验演示：真实校验在宿主，这里只要求内容形似配对载荷。 */
+function pastedLooksValid(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.length >= 8 && trimmed.toLowerCase().includes("pier");
+}
+
+const FAILURE_COPY: Record<
+  "failed-camera" | "failed-code" | "failed-paste",
+  { body: string; title: string }
+> = {
+  "failed-camera": {
+    body: "无法使用相机。可以在系统设置里允许浏览器使用相机，或改用粘贴配对内容。",
+    title: "相机不可用",
+  },
+  "failed-code": {
+    body: "二维码已过期或没有识别完整。请在电脑上重新打开「远程访问」生成新码，或改用粘贴配对内容。",
+    title: "没有识别到配对码",
+  },
+  "failed-paste": {
+    body: "粘贴的文本不是有效的配对内容。请回到电脑重新打开「远程访问」，复制完整内容再试。",
+    title: "配对内容不完整或已过期",
+  },
+};
+
 /**
- * H0 配对。主路径是扫码，相册与粘贴是退路；三条路都汇到同一个成功态。
- * 带 `onPaired` 时（P0）取景框会模拟识别；静态帧只切换取景框。
+ * H0 配对。主路径是扫码，粘贴是退路；两条路都汇到同一个成功态。
+ * 相机不可用与识别失败都有明示帧：重试为主按钮，粘贴为退路。
+ * 带 `onPaired` 时（P0）取景框会模拟识别；静态帧用 `initialPhase` 定格。
  */
 export function PairScreen(props: {
+  initialPhase?: PairPhase | undefined;
   onBack?: (() => void) | undefined;
   onPaired?: ((host: DemoHost) => void) | undefined;
 }): ReactNode {
-  const [phase, setPhase] = useState<PairPhase>("scanning");
+  const [phase, setPhase] = useState<PairPhase>(
+    props.initialPhase ?? "scanning"
+  );
   const [pasted, setPasted] = useState("");
   const simulate = props.onPaired !== undefined;
 
@@ -59,6 +90,10 @@ export function PairScreen(props: {
 
   const busy = phase === "recognized" || phase === "pairing";
   const scanning = phase === "scanning";
+  const failed =
+    phase === "failed-camera" ||
+    phase === "failed-code" ||
+    phase === "failed-paste";
 
   const finish = () => {
     if (props.onPaired === undefined) {
@@ -76,11 +111,10 @@ export function PairScreen(props: {
           ? undefined
           : { label: "主机", onClick: props.onBack }
       }
-      backIconOnly={props.onBack !== undefined}
       ghost
       layout="split"
       title={
-        phase === "done" || phase === "paste"
+        phase === "done" || phase === "paste" || failed
           ? props.onBack === undefined
             ? "配对"
             : "添加主机"
@@ -88,6 +122,46 @@ export function PairScreen(props: {
       }
     />
   );
+
+  if (failed) {
+    const copy = FAILURE_COPY[phase];
+    return (
+      <PhoneShell nav={nav}>
+        <Body>
+          <InlineNote tone="danger">
+            <span className="font-medium">{copy.title}</span>
+            <span className="mt-1 block">{copy.body}</span>
+          </InlineNote>
+          <div className="flex flex-col gap-3">
+            <HitButton
+              icon={phase === "failed-paste" ? "clipboard" : "scan"}
+              onClick={() => {
+                if (phase === "failed-paste") {
+                  setPasted("");
+                  setPhase("paste");
+                  return;
+                }
+                setPhase("scanning");
+              }}
+            >
+              {phase === "failed-paste" ? "重新粘贴" : "重新扫码"}
+            </HitButton>
+            {phase === "failed-paste" ? null : (
+              <HitButton
+                icon="clipboard"
+                onClick={() => {
+                  setPhase("paste");
+                }}
+                variant="outline"
+              >
+                粘贴配对内容
+              </HitButton>
+            )}
+          </div>
+        </Body>
+      </PhoneShell>
+    );
+  }
 
   if (phase === "done") {
     return (
@@ -142,7 +216,7 @@ export function PairScreen(props: {
               className="flex-[2]"
               disabled={pasted.trim().length === 0}
               onClick={() => {
-                setPhase("pairing");
+                setPhase(pastedLooksValid(pasted) ? "pairing" : "failed-paste");
               }}
             >
               配对
@@ -161,27 +235,43 @@ export function PairScreen(props: {
             在电脑上打开「远程访问」，<span>对准二维码</span>。
           </p>
           <button
-            aria-label={scanning ? "停止扫码" : "开始扫码"}
-            className="flex size-11 items-center justify-center rounded-xl bg-action-accent text-action-accent-foreground transition-opacity duration-75 active:opacity-80 disabled:opacity-50"
-            disabled={busy}
+            aria-label={
+              busy ? "取消配对" : scanning ? "停止扫码" : "开始扫码"
+            }
+            className="flex size-11 items-center justify-center rounded-xl bg-action-accent text-action-accent-foreground transition-opacity duration-75 active:opacity-80"
             onClick={() => {
+              if (busy) {
+                setPhase("idle");
+                return;
+              }
               setPhase(scanning ? "idle" : "scanning");
             }}
             type="button"
           >
-            <Icon className="size-[22px]" name={scanning ? "x" : "scan"} />
+            <Icon className="size-[22px]" name={scanning || busy ? "x" : "scan"} />
+          </button>
+          <button
+            className="flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-[13px] text-muted-foreground transition-colors duration-75 active:bg-interactive-active"
+            disabled={busy}
+            onClick={() => {
+              setPhase("paste");
+            }}
+            type="button"
+          >
+            <Icon className="size-4" name="clipboard" />
+            粘贴配对内容
           </button>
         </div>
       }
       nav={nav}
       tone="terminal"
     >
-      <Viewfinder busy={busy} scanning={scanning} />
+      <Viewfinder busy={busy} />
     </PhoneShell>
   );
 }
 
-function Viewfinder(props: { busy: boolean; scanning: boolean }): ReactNode {
+function Viewfinder(props: { busy: boolean }): ReactNode {
   const corner = "absolute size-8 border-foreground/80";
   return (
     <div className="flex h-full items-center justify-center pt-[52px] pb-36">
@@ -199,9 +289,7 @@ function Viewfinder(props: { busy: boolean; scanning: boolean }): ReactNode {
               />
               <span className="text-muted-foreground">已识别，正在配对…</span>
             </>
-          ) : props.scanning ? null : (
-            <span className="text-muted-foreground">取景框</span>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
@@ -218,13 +306,27 @@ const UNKNOWN_HINT = "远程连接暂时不可用，主机状态未知，会自�
  */
 export function HostsScreen(props: {
   hosts: readonly DemoHost[];
+  /** 静态帧直接展开某台离线 / 未知主机下方的提示。 */
+  initialHintId?: string | undefined;
   onAdd?: (() => void) | undefined;
   onEnter?: ((host: DemoHost) => void) | undefined;
+  /** 根面等待计数的加速器：1 个等待则打开该会话，多个则进工作台。 */
+  onEnterWaiting?: ((host: DemoHost) => void) | undefined;
   onRemove?: ((hostId: string) => void) | undefined;
+  /** 每台主机上「需要你处理」的会话数：不依赖推送也能在根面分诊。 */
+  waitingByHost?: Readonly<Record<string, number>> | undefined;
 }): ReactNode {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [hint, setHint] = useState<{ hostId: string; text: string } | null>(
-    null
+    () => {
+      if (props.initialHintId === undefined) return null;
+      const host = props.hosts.find((item) => item.id === props.initialHintId);
+      if (host === undefined || host.status === "online") return null;
+      return {
+        hostId: host.id,
+        text: host.status === "offline" ? OFFLINE_HINT : UNKNOWN_HINT,
+      };
+    }
   );
 
   useEffect(() => {
@@ -267,65 +369,55 @@ export function HostsScreen(props: {
       <Body>
         {props.hosts.length === 0 ? (
           <EmptyState
-            body="在电脑上出示配对二维码，用顶栏扫码连上这台电脑。"
+            body="在电脑上出示配对二维码，用顶栏扫码连上一台电脑。"
             icon="scan"
             title="还没有配对的电脑"
           />
         ) : (
-          <>
-            <div className="flex flex-col">
-              {props.hosts.map((host) => (
-                <HostRow
-                  confirm={confirmId === host.id}
-                  host={host}
-                  key={host.id}
-                  onCancelConfirm={() => {
-                    setConfirmId(null);
-                  }}
-                  onRemove={() => {
-                    setConfirmId(null);
-                    setHint(null);
-                    props.onRemove?.(host.id);
-                  }}
-                  onTap={() => {
-                    tapHost(host);
-                  }}
-                />
-              ))}
-            </div>
-            {hint === null ? null : (
-              <InlineNote
-                action={
-                  <span className="flex shrink-0 items-center gap-3">
-                    {props.onRemove === undefined ? null : (
-                      <button
-                        className="font-medium text-[13px] leading-[18px] transition-colors duration-75 active:bg-interactive-active"
-                        onClick={() => {
-                          setConfirmId(hint.hostId);
-                          setHint(null);
-                        }}
-                        type="button"
-                      >
-                        移除
-                      </button>
-                    )}
-                    <button
-                      className="font-medium text-[13px] leading-[18px] transition-colors duration-75 active:bg-interactive-active"
-                      onClick={() => {
+          <div className="flex flex-col">
+            {props.hosts.map((host) => (
+              <HostRow
+                confirm={confirmId === host.id}
+                hint={hint?.hostId === host.id ? hint.text : undefined}
+                host={host}
+                key={host.id}
+                onCancelConfirm={() => {
+                  setConfirmId(null);
+                }}
+                onDismissHint={() => {
+                  setHint(null);
+                }}
+                onRemove={() => {
+                  setConfirmId(null);
+                  setHint(null);
+                  props.onRemove?.(host.id);
+                }}
+                onRequestRemove={
+                  props.onRemove === undefined
+                    ? undefined
+                    : () => {
+                        setConfirmId(host.id);
                         setHint(null);
-                      }}
-                      type="button"
-                    >
-                      知道了
-                    </button>
-                  </span>
+                      }
                 }
-                tone={hint.text === OFFLINE_HINT ? "warn" : "info"}
-              >
-                {hint.text}
-              </InlineNote>
-            )}
-          </>
+                onTap={() => {
+                  tapHost(host);
+                }}
+                onEnterWaiting={
+                  props.onEnterWaiting === undefined
+                    ? undefined
+                    : () => {
+                        if (host.status !== "online") {
+                          tapHost(host);
+                          return;
+                        }
+                        props.onEnterWaiting?.(host);
+                      }
+                }
+                waiting={props.waitingByHost?.[host.id] ?? 0}
+              />
+            ))}
+          </div>
         )}
       </Body>
     </PhoneShell>
@@ -334,29 +426,93 @@ export function HostsScreen(props: {
 
 function HostRow(props: {
   confirm: boolean;
+  hint?: string | undefined;
   host: DemoHost;
   onCancelConfirm: () => void;
+  onDismissHint: () => void;
+  onEnterWaiting?: (() => void) | undefined;
   onRemove: () => void;
+  onRequestRemove?: (() => void) | undefined;
   onTap: () => void;
+  waiting: number;
 }): ReactNode {
   const host = props.host;
+  const waitingChip =
+    props.waiting > 0 ? (
+      props.onEnterWaiting === undefined ? (
+        <span className="max-w-[7.5rem] shrink-0 px-2 text-right text-[12px] text-status-warning-fg leading-4">
+          {props.waiting} 个需要你处理
+        </span>
+      ) : (
+        <button
+          className="flex min-h-11 max-w-[7.5rem] shrink-0 items-center px-2 text-right text-[12px] text-status-warning-fg leading-4 transition-colors duration-75 active:bg-interactive-active"
+          onClick={props.onEnterWaiting}
+          type="button"
+        >
+          {props.waiting} 个需要你处理
+        </button>
+      )
+    ) : null;
   return (
     <div>
-      <button
-        className="flex min-h-[88px] w-full items-center gap-3.5 px-1 py-3 text-left transition-colors duration-75 active:bg-interactive-active"
-        onClick={props.onTap}
-        type="button"
-      >
-        <DeviceGlyph device={host.device} status={host.status} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[17px] leading-[22px]">
-            {host.name}
+      <div className="flex min-h-[88px] items-stretch gap-0.5 px-1">
+        <button
+          className="flex min-h-[88px] min-w-0 flex-1 items-center gap-3.5 py-3 text-left transition-colors duration-75 active:bg-interactive-active"
+          onClick={props.onTap}
+          type="button"
+        >
+          <DeviceGlyph device={host.device} status={host.status} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[17px] leading-[22px]">
+              {host.name}
+            </span>
+            <span className="mt-0.5 block truncate text-[12px] text-muted-foreground leading-4">
+              {host.detail}
+            </span>
           </span>
-          <span className="mt-0.5 block truncate text-[12px] text-muted-foreground leading-4">
-            {host.detail}
-          </span>
-        </span>
-      </button>
+        </button>
+        {waitingChip}
+        <button
+          aria-label={`进入${host.name}`}
+          className="flex min-h-11 shrink-0 items-center px-1 transition-colors duration-75 active:bg-interactive-active"
+          onClick={props.onTap}
+          type="button"
+        >
+          <Icon
+            className="size-5 text-muted-foreground/50"
+            name="chevron-right"
+          />
+        </button>
+      </div>
+      {props.hint === undefined || props.confirm ? null : (
+        <div className="px-1 pb-3">
+          <InlineNote
+            action={
+              <span className="-my-1.5 flex shrink-0 items-center gap-1">
+                {props.onRequestRemove === undefined ? null : (
+                  <button
+                    className="flex min-h-11 items-center rounded-lg px-3 font-medium text-[13px] leading-[18px] transition-colors duration-75 active:bg-interactive-active"
+                    onClick={props.onRequestRemove}
+                    type="button"
+                  >
+                    移除
+                  </button>
+                )}
+                <button
+                  className="flex min-h-11 items-center rounded-lg px-3 font-medium text-[13px] leading-[18px] transition-colors duration-75 active:bg-interactive-active"
+                  onClick={props.onDismissHint}
+                  type="button"
+                >
+                  知道了
+                </button>
+              </span>
+            }
+            tone={props.hint === OFFLINE_HINT ? "warn" : "info"}
+          >
+            {props.hint}
+          </InlineNote>
+        </div>
+      )}
       {props.confirm ? (
         <div className="flex flex-col gap-3 px-1 pb-4">
           <p className="text-[13px] text-muted-foreground leading-[18px]">

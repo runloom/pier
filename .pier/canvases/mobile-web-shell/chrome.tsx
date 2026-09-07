@@ -56,7 +56,6 @@ export function PhoneShell(props: {
 
 export function NavBar(props: {
   back?: { label: string; onClick?: (() => void) | undefined } | undefined;
-  backIconOnly?: boolean | undefined;
   divider?: boolean | undefined;
   ghost?: boolean | undefined;
   /** split：返回 | 标题 | 动作，给会话驾驶舱。overlay：iOS 居中标题。 */
@@ -76,27 +75,14 @@ export function NavBar(props: {
     props.back === undefined ? null : (
       <button
         aria-label={`返回${props.back.label}`}
-        className={cx(
-          "flex min-h-11 items-center rounded-xl transition-colors duration-75 active:bg-interactive-active",
-          props.backIconOnly === true
-            ? "w-11 justify-center"
-            : "max-w-full gap-0.5 pr-2.5 pl-1"
-        )}
+        className="flex min-h-11 max-w-full items-center gap-0.5 rounded-xl pr-2.5 pl-1 transition-colors duration-75 active:bg-interactive-active"
         onClick={props.back.onClick}
         type="button"
       >
-        <Icon
-          className={cx(
-            "size-6 shrink-0",
-            props.backIconOnly !== true && "-ml-0.5"
-          )}
-          name="chevron-left"
-        />
-        {props.backIconOnly === true ? null : (
-          <span className="truncate text-[15px] leading-5">
-            {props.back.label}
-          </span>
-        )}
+        <Icon className="-ml-0.5 size-6 shrink-0" name="chevron-left" />
+        <span className="truncate text-[15px] leading-5">
+          {props.back.label}
+        </span>
       </button>
     );
 
@@ -178,25 +164,6 @@ export function NavBar(props: {
         </>
       )}
     </header>
-  );
-}
-
-/** 根面大标题（主机）。推入页用 NavBar 居中标题，不混用。 */
-export function LargeTitle(props: {
-  subtitle?: string | undefined;
-  title: string;
-}): ReactNode {
-  return (
-    <div className="px-5 pt-0.5 pb-2">
-      <h1 className="font-bold text-[30px] leading-9 tracking-[-0.022em]">
-        {props.title}
-      </h1>
-      {props.subtitle === undefined ? null : (
-        <p className="mt-0.5 text-[13px] text-muted-foreground leading-[18px]">
-          {props.subtitle}
-        </p>
-      )}
-    </div>
   );
 }
 
@@ -357,7 +324,9 @@ export function NavAction(props: {
 
 export function IconButton(props: {
   className?: string | undefined;
-  dot?: boolean | undefined;
+  /** 未读计数：>0 时显示数字徽标。 */
+  count?: number | undefined;
+  disabled?: boolean | undefined;
   icon: IconName;
   label: string;
   onClick?: (() => void) | undefined;
@@ -367,10 +336,11 @@ export function IconButton(props: {
     <button
       aria-label={props.label}
       className={cx(
-        "relative flex size-11 items-center justify-center rounded-xl",
+        "relative flex size-11 items-center justify-center rounded-xl disabled:opacity-35",
         TOUCH_PRESS,
         props.className
       )}
+      disabled={props.disabled}
       onClick={props.onClick}
       type="button"
     >
@@ -381,35 +351,29 @@ export function IconButton(props: {
         )}
         name={props.icon}
       />
-      {props.dot === true ? (
-        <span className="absolute top-2 right-2 size-2 rounded-full bg-action-danger ring-2 ring-background" />
+      {props.count !== undefined && props.count > 0 ? (
+        <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-action-danger px-1 font-medium text-[10px] text-status-solid-foreground tabular-nums leading-none ring-2 ring-background">
+          {props.count}
+        </span>
       ) : null}
     </button>
   );
 }
 
-/** 规则卡里的按键样式示例；可发送键集由实际协议决定。 */
+/** 规则卡里的按键样式示例；键帽不着色、不表达选项语义。 */
 export function KeyCap(props: {
   children: ReactNode;
   disabled?: boolean | undefined;
   label?: string | undefined;
   onClick?: (() => void) | undefined;
-  tone?: "default" | "accent" | "waiting" | undefined;
   wide?: boolean | undefined;
 }): ReactNode {
-  const tone = props.tone ?? "default";
   return (
     <button
       aria-label={props.label}
       className={cx(
-        "flex h-11 shrink-0 items-center justify-center rounded-[10px] font-mono text-[13px] leading-none ring-1 transition-[background-color,opacity] duration-75 disabled:opacity-35",
-        props.wide === true ? "min-w-[4.25rem] px-3" : "min-w-11 px-2.5",
-        tone === "accent" &&
-          "bg-action-accent font-medium text-action-accent-foreground ring-action-accent active:opacity-80",
-        tone === "waiting" &&
-          "bg-status-warning-bg font-medium text-status-warning-fg ring-status-warning-border active:opacity-80",
-        tone === "default" &&
-          "bg-secondary ring-border active:bg-interactive-active"
+        "flex h-12 shrink-0 items-center justify-center rounded-[10px] bg-secondary font-mono text-[13px] leading-none ring-1 ring-border transition-[background-color,opacity] duration-75 active:bg-interactive-active disabled:opacity-35",
+        props.wide === true ? "min-w-[4.25rem] px-3" : "min-w-11 px-2.5"
       )}
       disabled={props.disabled}
       onClick={props.onClick}
@@ -497,26 +461,12 @@ export function connLabel(state: ConnState): string {
   return CONN_LABEL[state];
 }
 
-const SESSION_STATUS_LABEL: Record<SessionStatus, string> = {
+/** 会话状态词全壳单一来源：工作台、切换面板、会话页、规则卡都用它，不要各页自造。 */
+export const SESSION_STATE_LABEL: Record<SessionStatus, string> = {
   processing: "运行中",
   ready: "等待输入",
   waiting: "需要你处理",
 };
-
-export function sessionStatusBadge(session: DemoSession): ReactNode {
-  if (session.kind === "terminal") {
-    return null;
-  }
-  const variant =
-    session.status === "waiting"
-      ? "warning"
-      : session.status === "processing"
-        ? "info"
-        : "neutral";
-  return (
-    <Badge variant={variant}>{SESSION_STATUS_LABEL[session.status]}</Badge>
-  );
-}
 
 export function sessionSubtitle(session: DemoSession): string {
   const agent = session.agent ?? "智能体";
