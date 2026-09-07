@@ -5,13 +5,15 @@
 范围：所有给人看的**窗口名字**——macOS Mission Control / App Exposé / 程序坞「显示全部窗口」/ `⌘\`` / 菜单栏「窗口」、右键「移动到其他窗口」子菜单、智能体 Index Quick Pick 的跨窗限定、`window.list` / `pier windows list` 的 `title`。  
 不包含：窗内标题栏的当前面板长路径、tab 短标题（OSC / cwd / 用户钉名）、只有一个其他窗时的动作句「移动到另一窗口」、终端调试窗、窗口染色、Dock 应用图标、用户可配 `window.title` 模板、`representedFilename`。
 
-相关：窗口仍是多路径锚点工作台，不以「一文件夹一窗口」为前提（[`2026-09-03-workbench-ux-and-ergonomics-design.md`](./2026-09-03-workbench-ux-and-ergonomics-design.md) K1）。tab 标题与身份无关（[`2026-08-29-panel-tab-chrome-gold-standard.md`](./2026-08-29-panel-tab-chrome-gold-standard.md)）。右键组序仍以 [`2026-08-31-context-menu-order-gold-standard.md`](./2026-08-31-context-menu-order-gold-standard.md) 为准；本文只改子菜单里窗口怎么叫。
+相关：窗口仍是多路径锚点工作台，不以「一文件夹一窗口」为前提（[`2026-09-07-workbench-worktree-tiles-design.md`](./2026-09-07-workbench-worktree-tiles-design.md) §4 / §8：一个窗口装 1…N 个工作树 tile）。tab 标题与身份无关（[`2026-08-29-panel-tab-chrome-gold-standard.md`](./2026-08-29-panel-tab-chrome-gold-standard.md)）。右键组序仍以 [`2026-08-31-context-menu-order-gold-standard.md`](./2026-08-31-context-menu-order-gold-standard.md) 为准；本文只改子菜单里窗口怎么叫。
 
 权威实现：[`src/shared/window-display/`](../../../src/shared/window-display/)（算法单源，由今日 `src/renderer/components/workspace/transfer/window-display.ts` 迁入）。  
 最终字符串只允许 main 写入：`WindowInfo.title` + `AppWindow`/`BaseWindow.setTitle`。  
 检查点：`tests/unit/shared/window-display.test.ts`、`tests/unit/main/windows/os-title.test.ts`、`tests/unit/renderer/window-display-governance.test.ts`。
 
 ---
+
+> 2026-09-07 接口修订（[工作台骨架：工作树 tile 与主 / 子窗口](./2026-09-07-workbench-worktree-tiles-design.md) §5.1）：「工作区叶子名」的输入是窗口记录的**锚 tile**（该窗口第一个 tile 的工作树；关闭时按创建序顺延；可「设为窗口名称」重钉）。主窗口切换可见 tile 不改窗口名；格式 `锚叶子 · +N · 限定`，N = 可见 tile 数 − 1（0 不显示，隐藏 tile 不计）；撞名限定只比锚叶子，`+N` 段不参与；退化单元 `~` 的叶子名就是 `~`。撞名限定链（分支 → 父目录 → 稳定 tab 名 → ` · N`）与「单一函数、单一字符串、main 写入」原则不变。
 
 ## 一句话终态
 
@@ -63,7 +65,9 @@ macOS 工作台窗是 `BaseWindow` + `WebContentsView`，**不会**像 `BrowserW
 
 对**全部活窗口**的身份草稿跑唯一的 `buildWindowDisplays`（或等价的「草稿 → 消歧」导出）。测试可以用 `WindowInfo[]` + `PanelSnapshot[]` 喂同一函数。对外单行名 = `menuLabel`。产品表面禁止自己再喂一个窗口子集。
 
-身份路径（活动面板，否则该窗第一块有路径的面板）：
+身份路径（[工作台骨架 §5.1](./2026-09-07-workbench-worktree-tiles-design.md)）：窗口记录的**锚 tile** 的工作树路径（`worktreeRoot ?? projectRootPath`）。主窗口切换可见 tile **不改**锚，因此不改 `menuLabel`。尚未有锚（欢迎态 `~`）时叶子名就是 `~`。
+
+实现落地前的过渡输入（今日仍按活动面板）：
 
 ```
 worktreeRoot ?? projectRootPath ?? cwd

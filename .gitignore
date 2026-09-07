@@ -78,6 +78,9 @@ playwright-report/
 .superpowers/
 
 
+# Impeccable skill: local consent, hook cache, generated comps
+.impeccable/
+
 # cursor
 .cursor/
 

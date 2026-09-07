@@ -75,7 +75,7 @@ Pier 以用户原有的命令行工作流为中心。智能体继续在自己的
 - [移动端路由](apps/mobile-web/src/lib/routes.ts)、[会话页](apps/mobile-web/src/pages/session.tsx)、[终端读屏](apps/mobile-web/src/components/terminal-screen.tsx)：当前移动端页面、会话定位与可操作范围的实现证据。
 - [远程契约](src/shared/contracts/remote.ts)、[会合服务说明](apps/relay/README.md)、[发布指南](docs/release.md)：客户端类型、配对机制、会合服务职责与各部分发布方式。
 - [官方插件说明](docs/plugins.md)：现有来源范围、加载流程与信任模型。
-- [移动端方案](docs/superpowers/specs/2026-08-26-mobile-companion-design.md)、[移动端视觉与触控方案](docs/superpowers/specs/2026-09-01-mobile-web-visual-language.md)、[工作台体验提案](docs/superpowers/specs/2026-09-03-workbench-ux-and-ergonomics-design.md)：均带有待评审、待实施或待验证内容，使用时必须区分目标和当前实现。
+- [移动端方案](docs/superpowers/specs/2026-08-26-mobile-companion-design.md)、[移动端视觉与触控方案](docs/superpowers/specs/2026-09-01-mobile-web-visual-language.md)、[工作台骨架设计](docs/superpowers/specs/2026-09-07-workbench-worktree-tiles-design.md)：均带有待评审、待实施或待验证内容，使用时必须区分目标和当前实现。
 
 本次初始化没有用户访谈、可用性测试报告或经验证的效率指标；不据此编写客户背书、性能倍数、全面平台支持或无障碍达标声明。
 

@@ -144,6 +144,14 @@
   --pier-file-icon-purple: #d568ea;
   --pier-file-icon-pink: #ff678d;
   --pier-file-icon-mauve: #79697b;
+  /* Worktree identity swatches (spec 2026-09-07 §7.2). Classification only;
+     hue kept off status bands. Dark = default :root. */
+  --identity-1: oklch(0.72 0.09 205);
+  --identity-2: oklch(0.72 0.1 285);
+  --identity-3: oklch(0.74 0.1 345);
+  --identity-4: oklch(0.74 0.08 100);
+  --identity-5: oklch(0.72 0.09 180);
+  --identity-6: oklch(0.72 0.1 315);
   --chart-1: var(--info);
   --chart-2: var(--success);
   --chart-3: var(--warning);
@@ -428,6 +436,12 @@
   --pier-file-icon-purple: #a631be;
   --pier-file-icon-pink: #d32a61;
   --pier-file-icon-mauve: #594c5b;
+  --identity-1: oklch(0.6 0.09 205);
+  --identity-2: oklch(0.58 0.1 285);
+  --identity-3: oklch(0.6 0.1 345);
+  --identity-4: oklch(0.58 0.08 100);
+  --identity-5: oklch(0.6 0.09 180);
+  --identity-6: oklch(0.58 0.1 315);
   /* shadcn neutral LIGHT (opt-in 由 ThemeProvider apply class="light") */
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

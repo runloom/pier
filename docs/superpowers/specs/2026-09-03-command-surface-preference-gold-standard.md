@@ -13,7 +13,7 @@
 
 ---
 
-2026-09-05 待实施提案：[工作台重设计](./2026-09-03-workbench-ux-and-ergonomics-design.md) §5 / §9.1 已集中说明字符稿与迁移约束，拟以固定默认启动动作 + 完整提供方二级目录精简「开始」，并新增工具入口。这会替换本文的「新建终端首项 / 提供方不折叠 / 第一层管理智能体 footer」政策；不代表当前实现已改变。无 MRU、目录稳定、默认设置真源与共享搜索保留，实施时同轮更新本规范和检查点。
+2026-09-07 更新：09-03 的「开始」精简与「工具」入口提案已归档（[归档稿](../../archive/superpowers/specs/2026-09-03-workbench-ux-and-ergonomics-design.md)），本文的「新建终端首项 / 提供方不折叠 / 第一层管理智能体 footer」政策继续有效。现行方向见 [工作台骨架：工作树 tile 与主 / 子窗口](./2026-09-07-workbench-worktree-tiles-design.md) §9.1：同一份 create-menu 挂在 tile 头部 `+` 与侧栏行 `+` 上，`sourcePanelContext` 指向该工作树。
 
 ## 一句话终态
 

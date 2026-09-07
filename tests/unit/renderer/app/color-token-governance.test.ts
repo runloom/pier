@@ -433,6 +433,22 @@ describe("color token governance", () => {
     expect(cssVariable(dark, "diff-modification-fg")).toBe("#69b1ff");
   });
 
+  it("owns worktree identity swatches on both themes", () => {
+    const globals = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    for (const block of [
+      cssBlock(globals, ":root"),
+      cssBlock(globals, ":root.light"),
+    ]) {
+      for (const index of [1, 2, 3, 4, 5, 6]) {
+        expect(hasCssVariable(block, `identity-${index}`)).toBe(true);
+        expect(cssVariable(block, `identity-${index}`)).toMatch(/^oklch\(/);
+      }
+    }
+  });
+
   it("keeps mermaid kind/tone cards on the light pastel wash in both themes", () => {
     const globals = readFileSync(
       join(ROOT, "src/renderer/app/globals.css"),

@@ -1,6 +1,12 @@
 import { parsePierCanvasMeta } from "@shared/contracts/pier-canvas.ts";
 import { PIER_CANVAS_EXPORT_NAMES } from "@shared/pier-canvas-export-names.ts";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import type { ComponentType } from "react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -34,6 +40,7 @@ const IN_REPO_REACT_CANVASES = [
   "mobile-web-shell/mobile-web-shell.canvas.tsx",
   "pier-cli-user-manual/pier-cli-user-manual.canvas.tsx",
   "smoke/hello.canvas.tsx",
+  "workbench-shell/workbench-shell.canvas.tsx",
 ] as const;
 
 describe("project canvases render", () => {
@@ -43,7 +50,7 @@ describe("project canvases render", () => {
     );
   });
 
-  it("finds exactly the in-repo React canvases (kit + mobile shell + cli manual + smoke)", () => {
+  it("finds exactly the in-repo React canvases (kit + mobile shell + cli manual + smoke + workbench shell)", () => {
     const relative = Object.keys(CANVAS_MODULES)
       .filter((path) => !path.endsWith(".canvas.solid.tsx"))
       .map((path) => path.replace("../../../.pier/canvases/", ""))
@@ -113,6 +120,66 @@ describe("project canvases render", () => {
     expect(
       document.querySelector("[data-slot='mobile-slide-overlay']")
     ).not.toBeNull();
+  });
+
+  it("switches the workbench-shell main window tile from the sidebar and restores each worktree's layout", () => {
+    const path = Object.keys(CANVAS_MODULES).find((entry) =>
+      entry.endsWith("workbench-shell/workbench-shell.canvas.tsx")
+    );
+    if (path === undefined) {
+      throw new Error("workbench-shell canvas is missing");
+    }
+    const Canvas = CANVAS_MODULES[path]?.default as ComponentType | undefined;
+    if (typeof Canvas !== "function") {
+      throw new Error("workbench-shell canvas must default-export a component");
+    }
+    render(<Canvas />);
+    // B4 内嵌同一主窗口，查询限定在 B1。
+    const frame = document.querySelector<HTMLElement>(
+      "[data-pier-comment-id='main']"
+    );
+    if (!frame) {
+      throw new Error("workbench-shell main frame is missing");
+    }
+    const main = within(frame);
+    expect(main.getByTestId("tile-status-pier-login").textContent).toContain(
+      "fix/login"
+    );
+    expect(main.queryByTestId("tile-status-pier-billing")).toBeNull();
+    expect(main.getByText("更改")).not.toBeNull();
+    fireEvent.click(main.getByRole("button", { name: "切换到 pier-billing" }));
+    expect(main.getByTestId("tile-status-pier-billing").textContent).toContain(
+      "feat/billing"
+    );
+    expect(main.queryByTestId("tile-status-pier-login")).toBeNull();
+    expect(
+      main.getByText("pier-login", {
+        selector: ".truncate.font-medium.text-muted-foreground",
+      })
+    ).not.toBeNull();
+    expect(main.queryByText("更改")).toBeNull();
+    expect(main.getByText("invoice.ts")).not.toBeNull();
+    fireEvent.click(main.getByRole("button", { name: "切换到 pier-login" }));
+    expect(main.getByText("更改")).not.toBeNull();
+    fireEvent.click(main.getByRole("button", { name: "切换到 relay" }));
+    expect(main.getByText("relay 还没有打开任何视图")).not.toBeNull();
+    fireEvent.click(main.getByRole("button", { name: "定位 连接数指标" }));
+    expect(main.getByText("将激活窗口 relay")).not.toBeNull();
+    fireEvent.click(main.getByRole("button", { name: "打开 任务" }));
+    expect(main.getByText("任务跟踪")).not.toBeNull();
+    expect(main.getByText("#412")).not.toBeNull();
+    expect(main.queryByText("将打开任务跟踪")).toBeNull();
+    const sub = document.querySelector<HTMLElement>(
+      "[data-pier-comment-id='sub']"
+    );
+    if (!sub) {
+      throw new Error("workbench-shell sub frame is missing");
+    }
+    expect(within(sub).queryByRole("navigation", { name: "项目" })).toBeNull();
+    expect(
+      within(sub).getByRole("button", { name: "添加工作树到此窗口" })
+    ).not.toBeNull();
+    expect(within(sub).getAllByTestId(/^tile-status-/u)).toHaveLength(4);
   });
 
   it("renders material cards with fixed well and flush chrome", () => {

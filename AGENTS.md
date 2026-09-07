@@ -439,10 +439,21 @@ section 根节点下的裸子节点。
 权威规格：[`docs/superpowers/specs/2026-09-04-window-os-title-gold-standard.md`](docs/superpowers/specs/2026-09-04-window-os-title-gold-standard.md)。
 
 - 对外单行名只来自 `src/shared/window-display` 的 `menuLabel`。main 写入 `WindowInfo.title` 与 `setTitle`。macOS `BaseWindow` 必须显式 `setTitle`，禁止依赖 `document.title`。
+- **叶子名的输入是窗口记录的锚 tile**（该窗口第一个工作树 tile；关闭时按创建序顺延；可「设为窗口名称」重钉）。主窗口切换可见 tile 不改窗口名。多 tile 格式 `锚叶子 · +N · 限定`（N = 可见 tile 数 − 1，0 不显示，隐藏 tile 不计）；撞名限定只比锚叶子。欢迎态退化单元的叶子名是 `~`。
 - 消歧集合是全部活窗口。撞名限定：分支 → 父目录 → 稳定 tab 名（文件名或用户钉名）→ ` · N`。OSC / cwd 派生 tab / 任务 chrome 不得进 `menuLabel` 任何一段。
 - 右键「移动/复制到其他窗口」子菜单、Index 跨窗行、协作会话跨窗定位、`window.list` 只读 `title`。本窗用「本窗口」。
 - 窗内标题栏长路径与 tab OSC 不是窗口名。
 - 检查点：`tests/unit/shared/window-display.test.ts`、`tests/unit/main/windows/os-title.test.ts`、`tests/unit/renderer/window-display-governance.test.ts`。
+
+### 工作台骨架：工作树 tile 与主 / 子窗口
+
+权威规格：[`docs/superpowers/specs/2026-09-07-workbench-worktree-tiles-design.md`](docs/superpowers/specs/2026-09-07-workbench-worktree-tiles-design.md)。
+
+- **工作树是单元**，tile（用户词「区域」）是它在某个窗口里的一棵 pane 树；窗口装 1…N 个 tile，恰好一个窗口带侧栏。
+- 工作树事实（身份、分支、`±N`、`↑↓`、聚合状态）只写在 **tile 底部状态栏**；tab 不带工作树标识；每终端状态栏与窗口级状态行都不存在。
+- 侧栏上半是**项目**树（工作树行只切主窗，会话行定位可跳窗，会话用智能体品牌图标）；下半是工作区级插件目的地（「任务」只有一条，打开已有面板，不嵌进某个项目、不列出议题）。tab 只能落在自己工作树的 tile 里（含隐藏集 = 已有 → 恢复）。
+- 身份色 `--identity-1…6` 由 `src/renderer/app/globals.css` 持有。
+- 检查点：`tests/unit/renderer/workbench/tile-governance.test.ts`；设计稿 `.pier/canvases/workbench-shell/`。
 
 ### 路径锚点上下文 `src/main/services/panel-context-resolver.ts` + `src/shared/contracts/panel.ts`
 
