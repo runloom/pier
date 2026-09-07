@@ -102,6 +102,7 @@ export class FileEditorController extends FileEditorControllerViewFacade {
       documents: this.#documents,
       onRemoveDocuments: (documentIds) => {
         for (const documentId of documentIds) {
+          this.#documents.suppressRestore(documentId);
           this.viewCommands.disposeDocument(documentId);
         }
       },
@@ -162,6 +163,25 @@ export class FileEditorController extends FileEditorControllerViewFacade {
     return this.#documents.documentId(source);
   }
 
+  ensureDocument(
+    source: FilesDocumentPanelSource,
+    editorSessionId?: string
+  ): FilesDocument | null {
+    const document = this.#documents.ensureDocument(source);
+    if (!document) {
+      return null;
+    }
+    this.#pathMutationGuards.syncDocument(document);
+    if (editorSessionId) {
+      this.viewCommands.prepareDocumentReplacement(
+        editorSessionId,
+        this.views.getSession(editorSessionId)?.documentId,
+        document.id
+      );
+    }
+    return document;
+  }
+
   documentIdForPanel(panelId: string): string | null {
     return this.#documents.getPanelDocumentId(panelId);
   }
@@ -205,7 +225,6 @@ export class FileEditorController extends FileEditorControllerViewFacade {
     const documentId =
       this.#documents.getPanelDocumentId(input.panelId) ??
       this.documentId(input.source);
-    // 面板关闭即清理传输种子与记录模式，避免泄漏与过期模式被后续传输捕获。
     clearFilesPanelTransferState({
       documentId,
       panelId: input.panelId,
@@ -227,7 +246,6 @@ export class FileEditorController extends FileEditorControllerViewFacade {
     this.#documents.discardDocument(documentId);
   }
 
-  /** Re-read disk; forceAdopt replaces a dirty/protected buffer (banner action). */
   async reloadDocumentFromDisk(
     documentId: string,
     options: { forceAdopt?: boolean } = {}
@@ -235,7 +253,6 @@ export class FileEditorController extends FileEditorControllerViewFacade {
     await this.#documents.reloadDocumentFromDisk(documentId, options);
   }
 
-  /** Keep local edits and clear disk-conflict chrome. */
   dismissDocumentDiskConflict(documentId: string): void {
     this.#documents.dismissDocumentDiskConflict(documentId);
   }

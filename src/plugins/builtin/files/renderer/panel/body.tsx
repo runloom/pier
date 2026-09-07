@@ -7,7 +7,7 @@ import type {
   FilesDocumentPanelSource,
   FileViewMode,
 } from "../document/types.ts";
-import { useFilesDocument } from "../document/use-document.ts";
+import { useEnsureRestoredDocument } from "../document/use-ensure-document.ts";
 import { FileEditorAdapter } from "../editor/adapter.tsx";
 import type { FileEditorController } from "../editor/controller.ts";
 import { FileChangesSurface } from "../git-changes/surface.tsx";
@@ -71,7 +71,11 @@ export function ResolvedFilePanel({
   t: FilesTranslate;
 }) {
   const documentId = controller.documentId(source);
-  const document = useFilesDocument(documentId);
+  const { document, restoreAttempted } = useEnsureRestoredDocument({
+    controller,
+    editorSessionId,
+    source,
+  });
   const previewCaptureRef = useRef<
     (() => MarkdownCrossModeAnchor | null) | null
   >(null);
@@ -290,6 +294,9 @@ export function ResolvedFilePanel({
   });
 
   if (!document) {
+    if (!restoreAttempted) {
+      return null;
+    }
     if (source.kind === "untitled") {
       return <MissingTemporaryState name={source.name} t={t} />;
     }

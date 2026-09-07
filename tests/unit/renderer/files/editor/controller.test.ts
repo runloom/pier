@@ -1398,4 +1398,66 @@ describe("FileEditorController", () => {
     harness.controller.dispose();
     harness.watchHub.dispose();
   });
+
+  it("re-arms auto-save after ensure restores a dropped dirty disk document", async () => {
+    vi.useFakeTimers();
+    const harness = createHarness({ autoSave: true });
+    await harness.controller.initialize();
+    const release = harness.controller.acquirePanel("panel-1", SOURCE);
+    await flushPromises();
+    const documentId = harness.controller.documentId(SOURCE);
+    updateDocumentContents(documentId, "# Local draft\n");
+    await flushFilesDraftWrites();
+    harness.writeText.mockClear();
+    clearFilesDocumentStore({ persisted: false });
+    expect(getDocument(documentId)).toBeNull();
+
+    harness.controller.ensureDocument(SOURCE);
+    await flushPromises();
+    expect(getDocument(documentId)?.currentContents).toBe("# Local draft\n");
+    expect(getDocument(documentId)?.dirty).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(harness.writeText).toHaveBeenCalledWith(
+      expect.objectContaining({ contents: "# Local draft\n" })
+    );
+
+    release();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
+
+  it("does not recreate a discarded document from ensure until the panel is acquired again", async () => {
+    const harness = createHarness();
+    await harness.controller.initialize();
+    const release = harness.controller.acquirePanel("panel-1", SOURCE);
+    await flushPromises();
+    const documentId = harness.controller.documentId(SOURCE);
+    harness.controller.discardDocument(documentId);
+    expect(getDocument(documentId)).toBeNull();
+    expect(harness.controller.ensureDocument(SOURCE)).toBeNull();
+    expect(getDocument(documentId)).toBeNull();
+    release();
+
+    const reopen = harness.controller.acquirePanel("panel-1", SOURCE);
+    await flushPromises();
+    expect(getDocument(documentId)?.currentContents).toBe("# Initial\n");
+    reopen();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
+
+  it("does not recreate a path-deleted document from ensure", async () => {
+    const harness = createHarness();
+    await harness.controller.initialize();
+    const release = harness.controller.acquirePanel("panel-1", SOURCE);
+    await flushPromises();
+    const documentId = harness.controller.documentId(SOURCE);
+    harness.controller.removeDiskDocumentForPath(ROOT, SOURCE.path);
+    expect(getDocument(documentId)).toBeNull();
+    expect(harness.controller.ensureDocument(SOURCE)).toBeNull();
+    release();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
 });
