@@ -1,13 +1,11 @@
 import type { RefObject } from "react";
 import { useEffect, useState } from "react";
-import {
-  readTerminalDraftComposition,
-  writeTerminalDraftComposition,
-} from "@/stores/terminal-drafts.store.ts";
+import { writeTerminalDraftComposition } from "@/stores/terminal-drafts.store.ts";
 import {
   readComposerEditorSnapshot,
+  type TerminalComposerSession,
   writeComposerEditorSnapshot,
-} from "../composer-helpers.ts";
+} from "../composer/session.ts";
 import type { StructuredComposerEditorHandle } from "../structured-composer/editor.tsx";
 
 /**
@@ -21,25 +19,25 @@ import type { StructuredComposerEditorHandle } from "../structured-composer/edit
  */
 export function useComposerEditorSnapshot(input: {
   editorRef: RefObject<StructuredComposerEditorHandle | null>;
-  panelId: string;
+  session: TerminalComposerSession;
   value: string;
 }): string | null {
-  const { editorRef, panelId, value } = input;
-  const [initialSnapshotJson] = useState(
-    () =>
-      (readTerminalDraftComposition(panelId)?.editorText === value
-        ? readTerminalDraftComposition(panelId)?.editorJson
-        : undefined) ?? readComposerEditorSnapshot(panelId)
+  const { editorRef, session, value } = input;
+  const [initialSnapshotJson] = useState(() =>
+    readComposerEditorSnapshot(session)
   );
   useEffect(() => {
+    if (session.signal.aborted) {
+      return;
+    }
     const json = editorRef.current?.getEditorJson();
     if (json != null) {
-      writeComposerEditorSnapshot(panelId, json);
-      writeTerminalDraftComposition(panelId, {
+      writeComposerEditorSnapshot(session, json);
+      writeTerminalDraftComposition(session.panelId, {
         editorJson: json,
         editorText: value,
       });
     }
-  }, [editorRef, panelId, value]);
+  }, [editorRef, session, value]);
   return initialSnapshotJson;
 }

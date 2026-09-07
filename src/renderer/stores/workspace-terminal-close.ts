@@ -1,4 +1,5 @@
 import i18next from "i18next";
+import { disposeTerminalComposerSession } from "@/panel-kits/terminal/composer/session.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { clearTaskRunSelectionForPanel } from "@/stores/task-run-selection.store.ts";
 import { clearTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
@@ -13,6 +14,7 @@ export async function closeNativeTerminalPanel(
   try {
     await flushTerminalDraft(panelId);
     await window.pier.terminal.close(panelId);
+    disposeTerminalComposerSession(panelId);
     forgetTerminalDraft(panelId);
     clearTerminalRelaunchRequest(panelId);
     clearTaskRunSelectionForPanel(panelId);

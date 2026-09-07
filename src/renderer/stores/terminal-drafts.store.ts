@@ -6,6 +6,12 @@ import {
 } from "@shared/contracts/terminal/draft.ts";
 import i18next from "i18next";
 import { create } from "zustand";
+import {
+  getTerminalComposerSession,
+  writeComposerAttachments,
+  writeComposerDraft,
+  writeComposerEditorSnapshot,
+} from "@/panel-kits/terminal/composer/session.ts";
 import { showAppAlert } from "./app-dialog.store.ts";
 
 interface DraftMirror {
@@ -62,18 +68,32 @@ export function acceptTerminalDraft(
       : draft.text;
     value = [previous.value, added].filter(Boolean).join("\n\n");
   }
+  const composition = previous.dirty ? previous.composition : draft.composition;
   setMirror(panelId, {
     frozen: previous.frozen,
     durable: draft,
     value,
-    composition: previous.dirty ? previous.composition : draft.composition,
+    composition,
     dirty:
       value !== draft.text ||
-      terminalDraftCompositionKey(
-        previous.dirty ? previous.composition : draft.composition
-      ) !== terminalDraftCompositionKey(draft.composition),
+      terminalDraftCompositionKey(composition) !==
+        terminalDraftCompositionKey(draft.composition),
     loaded: true,
   });
+  const session = getTerminalComposerSession(panelId);
+  if (!session) {
+    return;
+  }
+  writeComposerDraft(session, value);
+  if (!previous.dirty) {
+    writeComposerAttachments(
+      session,
+      (composition?.attachments ?? []).map((item) => ({ ...item }))
+    );
+    if (composition?.editorJson) {
+      writeComposerEditorSnapshot(session, composition.editorJson);
+    }
+  }
 }
 export function freezeTerminalDraft(panelId: string, frozen: boolean): void {
   setMirror(panelId, { ...mirror(panelId), frozen });

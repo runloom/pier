@@ -405,7 +405,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const panels = [...api.panels];
     for (const p of panels) {
       if (p.view.contentComponent === "terminal") {
-        closeNativeTerminalPanel(p.id);
+        await closeNativeTerminalPanel(p.id);
       }
       api.removePanel(p);
     }

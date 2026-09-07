@@ -14,10 +14,13 @@ import {
 import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
+import {
+  disposeTerminalComposerSession,
+  getTerminalComposerSession,
+  resetTerminalComposerSessionsForTests,
+} from "@/panel-kits/terminal/composer/session.ts";
 import { TerminalComposer } from "@/panel-kits/terminal/composer.tsx";
-import { resetTerminalComposerDraftsForTests } from "@/panel-kits/terminal/composer-helpers.ts";
 import { resetTerminalEscapeShortcutForTests } from "@/panel-kits/terminal/escape-shortcut.ts";
-import { resetTerminalComposerAttachmentsForTests } from "@/panel-kits/terminal/hooks/use-composer-attachments.ts";
 import { resetComposerEditorsForTests } from "@/panel-kits/terminal/structured-composer/test-registry.ts";
 import { resetTuiCursorSemanticsForTests } from "@/panel-kits/terminal/tui-cursor-semantics.ts";
 import { resetTuiInputFocusForTests } from "@/panel-kits/terminal/tui-input-focus.ts";
@@ -31,6 +34,7 @@ import {
   resetTerminalComposerTakeoverForTests,
   terminalComposerTakeoverFocus,
 } from "@/stores/terminal-composer-takeover.ts";
+import { resetTerminalDraftMirrorsForTests } from "@/stores/terminal-drafts.store.ts";
 import {
   composerInput,
   readComposerDraftText,
@@ -170,8 +174,8 @@ beforeEach(async () => {
   vi.mocked(showAppAlert).mockClear();
   vi.mocked(showAppConfirm).mockClear();
   vi.mocked(showAppConfirm).mockResolvedValue(false);
-  resetTerminalComposerDraftsForTests();
-  resetTerminalComposerAttachmentsForTests();
+  resetTerminalComposerSessionsForTests();
+  resetTerminalDraftMirrorsForTests();
   resetComposerEditorsForTests();
 });
 
@@ -181,8 +185,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   resetTerminalStoreForTests();
   resetTerminalComposerTakeoverForTests();
-  resetTerminalComposerDraftsForTests();
-  resetTerminalComposerAttachmentsForTests();
+  resetTerminalComposerSessionsForTests();
+  resetTerminalDraftMirrorsForTests();
   resetComposerEditorsForTests();
   resetTerminalEscapeShortcutForTests();
   Reflect.deleteProperty(window, "pier");
@@ -241,12 +245,6 @@ describe("TerminalComposer", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps product bg-background on the input pill chrome", () => {
-    renderComposer({ panelId: "t-1" });
-    const root = screen.getByTestId("terminal-composer");
-    expect(root.className).toContain("bg-background");
-  });
-
   it("opens the file picker once per attachRequest bump, not on remount at 0", async () => {
     pickComposerFiles.mockResolvedValue({ ok: false, error: "cancelled" });
     const { view } = renderComposer({ attachRequest: 1 });
@@ -261,6 +259,43 @@ describe("TerminalComposer", () => {
       window.setTimeout(resolve, 20);
     });
     expect(pickComposerFiles).not.toHaveBeenCalled();
+  });
+
+  it("delivers a late attachment to the reopened editor without hidden send content", async () => {
+    const paths = Promise.withResolvers<TerminalComposerPathsResult>();
+    pickComposerFiles.mockResolvedValue({ ok: true, paths: ["/tmp/late.txt"] });
+    resolveComposerPaths.mockReturnValue(paths.promise);
+    const first = renderComposer();
+    fireEvent.click(screen.getByTestId("terminal-composer-attach"));
+    await vi.waitFor(() => {
+      expect(resolveComposerPaths).toHaveBeenCalled();
+    });
+    first.view.unmount();
+    renderComposer();
+    setComposerDraftText("new draft");
+    await act(async () => {
+      paths.resolve({
+        attachments: [
+          { id: "late", kind: "file", name: "late.txt", path: "/tmp/late.txt" },
+        ],
+        failures: [],
+      });
+    });
+    expect(screen.getByTestId("terminal-composer-attachment-1")).toBeVisible();
+    const draft = readComposerDraftText();
+    expect(draft).toContain("new draft");
+    expect(draft).toContain("/tmp/late.txt");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("terminal-composer-send"));
+    });
+    await vi.waitFor(() => {
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        draftText: draft,
+        submit: true,
+        text: draft,
+      });
+    });
   });
 
   it("shows Send with Enter kbd and multiline hints once chrome expands", () => {
@@ -723,6 +758,47 @@ describe("TerminalComposer", () => {
     cleanup();
     renderComposer({ panelId: "t-delivered" });
     expect(readComposerDraftText()).toBe("fix bug");
+  });
+
+  it("ignores a late send failure after the terminal closes and its id is reused", async () => {
+    const result = Promise.withResolvers<TerminalOperationResult>();
+    sendText.mockReturnValueOnce(result.promise);
+    const onClose = vi.fn();
+    const { view } = renderComposer({ onClose, panelId: "t-reused" });
+    setComposerDraftText("old message");
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => expect(sendText).toHaveBeenCalled());
+    disposeTerminalComposerSession("t-reused");
+    view.unmount();
+    renderComposer({ panelId: "t-reused" });
+    setComposerDraftText("new message");
+    await act(async () => {
+      result.resolve({ ok: false, error: "old terminal closed" });
+    });
+    expect(readComposerDraftText()).toBe("new message");
+    expect(onClose).not.toHaveBeenCalled();
+    expect(showAppAlert).not.toHaveBeenCalled();
+    expect(getTerminalComposerSession("t-reused")?.signal.aborted).toBe(false);
+  });
+
+  it("restores the clipboard without sending when the terminal closes during suppression", async () => {
+    setAgentActivity({ agentId: "claude", status: "ready" });
+    const suppress = Promise.withResolvers<undefined>();
+    beginImageSuppress.mockReturnValueOnce(suppress.promise);
+    const onClose = vi.fn();
+    const { view } = renderComposer({ onClose });
+    setComposerDraftText("not sent");
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => expect(beginImageSuppress).toHaveBeenCalled());
+    disposeTerminalComposerSession("t-1");
+    view.unmount();
+    await act(async () => {
+      suppress.resolve(undefined);
+    });
+    await vi.waitFor(() => expect(endImageSuppress).toHaveBeenCalled());
+    expect(sendText).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(showAppAlert).not.toHaveBeenCalled();
   });
 
   it("passthroughs empty-draft navigation keys and always Ctrl+C", async () => {

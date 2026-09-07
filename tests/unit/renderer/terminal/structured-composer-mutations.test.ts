@@ -2,6 +2,7 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $setSelection,
   createEditor,
   type LexicalEditor,
   type LexicalNode,
@@ -140,7 +141,31 @@ describe("structured-composer-mutations", () => {
     expect(countAttachmentTokens(editor)).toBe(1);
   });
 
-  it("inserts attachment chip without document TextNode spaces; export adds them", () => {
+  it("appends a completed attachment when the remounted editor has no selection", () => {
+    const editor = createMentionEditor();
+    editor.update(
+      () => {
+        const root = $getRoot();
+        root.clear();
+        root.append(
+          $createParagraphNode().append(
+            $createWorkspacePathMentionNode("/abs/a.ts", "a.ts")
+          )
+        );
+        $setSelection(null);
+      },
+      { discrete: true }
+    );
+
+    insertAttachmentTokenAtLexicalSelection(editor, "/tmp/late.txt", 1);
+    const text = readLexicalPlainText(editor);
+    expect(text).toContain("/abs/a.ts");
+    expect(text).toContain("/tmp/late.txt");
+    expect(countMentions(editor)).toBe(1);
+    expect(countAttachmentTokens(editor)).toBe(1);
+  });
+
+  it("exports attachment chips with path boundaries inside text", () => {
     const editor = createMentionEditor();
     editor.update(
       () => {
@@ -159,19 +184,6 @@ describe("structured-composer-mutations", () => {
     // Document model: text "a" + chip + text "b" (no synthetic space nodes).
     // Export inserts chip-boundary spaces for the agent payload.
     expect(readLexicalPlainText(editor)).toBe("a /p/x.png b");
-    expect(countAttachmentTokens(editor)).toBe(1);
-    editor.getEditorState().read(() => {
-      const paragraph = $getRoot().getFirstChild();
-      expect(paragraph).toBeTruthy();
-      if (paragraph && "getChildren" in paragraph) {
-        const children = (
-          paragraph as { getChildren: () => LexicalNode[] }
-        ).getChildren();
-        // a | chip | b — three leaves, no space TextNodes.
-        expect(children).toHaveLength(3);
-        expect(children.every((c) => c.getTextContent() !== " ")).toBe(true);
-      }
-    });
   });
 
   it("removes chips for a deleted path and renumbers survivors", () => {

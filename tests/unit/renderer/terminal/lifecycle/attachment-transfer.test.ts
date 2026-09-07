@@ -7,9 +7,11 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import type { ClipboardEvent } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
-  resetTerminalComposerAttachmentsForTests,
-  useTerminalComposerAttachments,
-} from "@/panel-kits/terminal/hooks/use-composer-attachments.ts";
+  getOrCreateTerminalComposerSession,
+  resetTerminalComposerSessionsForTests,
+  writeComposerDraft,
+} from "@/panel-kits/terminal/composer/session.ts";
+import { useTerminalComposerAttachments } from "@/panel-kits/terminal/hooks/use-composer-attachments.ts";
 import {
   acceptTerminalDraft,
   flushTerminalDraft,
@@ -28,7 +30,7 @@ const resolved = {
 };
 beforeEach(() => {
   resetTerminalDraftMirrorsForTests();
-  resetTerminalComposerAttachmentsForTests();
+  resetTerminalComposerSessionsForTests();
   pick.mockReset();
   materialize.mockReset();
   durable = emptyTerminalDraft();
@@ -52,21 +54,26 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  resetTerminalComposerSessionsForTests();
   resetTerminalDraftMirrorsForTests();
 });
 
 function composer() {
+  const session = getOrCreateTerminalComposerSession("p");
   return renderHook(() =>
     useTerminalComposerAttachments({
       disabled: false,
-      panelId: "p",
+      session,
       reportError: vi.fn(),
       t: (key) => key,
       getDraftAndCursor: () => ({
         draft: readTerminalDraftText("p"),
         cursor: readTerminalDraftText("p").length,
       }),
-      onDraftChange: (text) => writeTerminalDraftText("p", text),
+      onDraftChange: (text) => {
+        writeComposerDraft(session, text);
+        writeTerminalDraftText("p", text);
+      },
     })
   );
 }
