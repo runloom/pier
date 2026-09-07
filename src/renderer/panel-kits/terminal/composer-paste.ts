@@ -40,6 +40,7 @@ export function materializeTieredPlainPaste(input: {
     base?: { cursor: number; draft: string }
   ) => void;
   mergeAttachments: (incoming: readonly ComposerAttachment[]) => boolean;
+  signal: AbortSignal;
   t: (key: string) => string;
   text: string;
   tier: Exclude<PlainPasteTier, "small">;
@@ -49,24 +50,32 @@ export function materializeTieredPlainPaste(input: {
     enqueueMerge,
     insertPlainTextAtCursor,
     mergeAttachments,
+    signal,
     t,
     text,
     tier,
   } = input;
-  if (disabled) {
+  if (disabled || signal.aborted) {
     return;
   }
   (async () => {
     await enqueueMerge(async () => {
+      if (signal.aborted) {
+        return;
+      }
       try {
         const result = await window.pier.terminal.materializeComposerTextBytes({
           text,
         });
+        if (signal.aborted) {
+          return;
+        }
         if (!result.ok) {
           await offerLargePasteFallback({
             detail: result.error,
             insertPlainTextAtCursor,
             plain: text,
+            signal,
             t,
           });
           return;
@@ -85,6 +94,7 @@ export function materializeTieredPlainPaste(input: {
           detail: error instanceof Error ? error.message : String(error),
           insertPlainTextAtCursor,
           plain: text,
+          signal,
           t,
         });
       }
@@ -105,6 +115,7 @@ export function handleComposerPaste(input: {
   ) => void;
   mergeAttachments: (incoming: readonly ComposerAttachment[]) => boolean;
   reportError: (titleKey: string, detail: string) => void;
+  signal: AbortSignal;
 }): void {
   const {
     collectFiles,
@@ -115,9 +126,10 @@ export function handleComposerPaste(input: {
     insertPlainTextAtCursor,
     mergeAttachments,
     reportError,
+    signal,
   } = input;
 
-  if (disabled) {
+  if (disabled || signal.aborted) {
     return;
   }
 
@@ -141,9 +153,15 @@ export function handleComposerPaste(input: {
       await collectFiles(files);
     } else if (hasImageItem) {
       await enqueueMerge(async () => {
+        if (signal.aborted) {
+          return;
+        }
         try {
           const result =
             await window.pier.terminal.materializeComposerClipboardImage();
+          if (signal.aborted) {
+            return;
+          }
           if (!result.ok) {
             reportError("terminal.composer.attachFailed", result.error);
             return;
@@ -152,15 +170,17 @@ export function handleComposerPaste(input: {
             mergeAttachments([dtoToAttachment(result.attachment)]);
           }
         } catch (error: unknown) {
-          reportError(
-            "terminal.composer.attachFailed",
-            error instanceof Error ? error.message : String(error)
-          );
+          if (!signal.aborted) {
+            reportError(
+              "terminal.composer.attachFailed",
+              error instanceof Error ? error.message : String(error)
+            );
+          }
         }
       });
     }
 
-    if (plain) {
+    if (plain && !signal.aborted) {
       // Never pass `base` string rewrite here — that flattens Lexical chips via
       // setValue. Always insert through editorMutations when available.
       insertPlainTextAtCursor(plain);
@@ -175,16 +195,20 @@ async function offerLargePasteFallback(input: {
     base?: { cursor: number; draft: string }
   ) => void;
   plain: string;
+  signal: AbortSignal;
   t: (key: string) => string;
 }): Promise<void> {
-  const { detail, insertPlainTextAtCursor, plain, t } = input;
+  const { detail, insertPlainTextAtCursor, plain, signal, t } = input;
+  if (signal.aborted) {
+    return;
+  }
   const confirmed = await showAppConfirm({
     body: detail,
     confirmLabel: t("terminal.composer.pasteInsertAnyway"),
     intent: "default",
     title: t("terminal.composer.largePasteAttachFailed"),
   });
-  if (confirmed) {
+  if (confirmed && !signal.aborted) {
     insertPlainTextAtCursor(plain);
   }
 }

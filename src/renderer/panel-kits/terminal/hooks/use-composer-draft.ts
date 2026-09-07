@@ -1,19 +1,34 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import {
   clearReviewChipDraft,
+  readComposerDraft,
   readReviewChipDraft,
+  subscribeComposerSession,
+  type TerminalComposerSession,
   writeComposerDraft,
-} from "../composer-helpers.ts";
+} from "../composer/session.ts";
 
-/** Persist plain draft and drop stale review-chip side-channel meta. */
-export function useComposerDraft(panelId: string, value: string): void {
+/** The terminal owns the draft; mounts observe it instead of keeping stale copies. */
+export function useComposerDraft(
+  session: TerminalComposerSession
+): readonly [string, (value: string) => void] {
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeComposerSession(session, listener),
+    [session]
+  );
+  const getSnapshot = useCallback(() => readComposerDraft(session), [session]);
+  const value = useSyncExternalStore(subscribe, getSnapshot);
+  const setValue = useCallback(
+    (next: string) => writeComposerDraft(session, next),
+    [session]
+  );
   useEffect(() => {
-    writeComposerDraft(panelId, value);
     // Chip meta is a side-channel for remount; drop it when the payload leaves
     // the draft (user deleted the chip or edited away the expanded text).
-    const chip = readReviewChipDraft(panelId);
+    const chip = readReviewChipDraft(session);
     if (chip && !value.includes(chip.payloadText.trim())) {
-      clearReviewChipDraft(panelId);
+      clearReviewChipDraft(session);
     }
-  }, [panelId, value]);
+  }, [session, value]);
+  return [value, setValue];
 }

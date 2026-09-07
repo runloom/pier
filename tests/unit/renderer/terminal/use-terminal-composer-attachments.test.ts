@@ -3,17 +3,25 @@ import type {
   TerminalComposerPathsResult,
   TerminalComposerPickResult,
 } from "@shared/contracts/terminal.ts";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ClipboardEvent } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  disposeTerminalComposerSession,
+  getOrCreateTerminalComposerSession,
+  readComposerAttachments,
+  resetTerminalComposerSessionsForTests,
+} from "@/panel-kits/terminal/composer/session.ts";
 import {
   type ComposerAttachment,
   MAX_COMPOSER_SEND_TEXT_LENGTH,
 } from "@/panel-kits/terminal/composer-attachments-model.ts";
-import {
-  resetTerminalComposerAttachmentsForTests,
-  useTerminalComposerAttachments,
-} from "@/panel-kits/terminal/hooks/use-composer-attachments.ts";
+import { useTerminalComposerAttachments } from "@/panel-kits/terminal/hooks/use-composer-attachments.ts";
+import { showAppConfirm } from "@/stores/app-dialog.store.ts";
+
+vi.mock("@/stores/app-dialog.store.ts", () => ({
+  showAppConfirm: vi.fn(async () => false),
+}));
 
 const pickComposerFiles = vi.fn<() => Promise<TerminalComposerPickResult>>();
 const resolveComposerPaths =
@@ -88,14 +96,17 @@ function setup(input: HookInput = {}) {
   });
   const reportError = vi.fn();
   const getDraftAndCursor = vi.fn(() => ({ ...draftRef.current }));
+  const session = getOrCreateTerminalComposerSession(
+    input.panelId ?? "panel-1"
+  );
 
   const hook = renderHook(() =>
     useTerminalComposerAttachments({
       disabled: input.disabled ?? false,
       getDraftAndCursor,
       onDraftChange,
-      panelId: input.panelId ?? "panel-1",
       reportError,
+      session,
       t: (key) => key,
     })
   );
@@ -106,6 +117,7 @@ function setup(input: HookInput = {}) {
     hook,
     onDraftChange,
     reportError,
+    session,
   };
 }
 
@@ -116,11 +128,13 @@ beforeEach(() => {
   materializeComposerClipboardImage.mockReset();
   materializeComposerImageBytes.mockReset();
   materializeComposerTextBytes.mockReset();
-  resetTerminalComposerAttachmentsForTests();
+  vi.mocked(showAppConfirm).mockReset().mockResolvedValue(false);
+  resetTerminalComposerSessionsForTests();
 });
 
 afterEach(() => {
-  resetTerminalComposerAttachmentsForTests();
+  cleanup();
+  resetTerminalComposerSessionsForTests();
   Reflect.deleteProperty(window, "pier");
 });
 
@@ -214,6 +228,7 @@ describe("useTerminalComposerAttachments", () => {
     });
     const reportError = vi.fn();
     const listInvalidAttachmentRefs = vi.fn(() => ["9"]);
+    const session = getOrCreateTerminalComposerSession("panel-invalid");
 
     const hook = renderHook(() =>
       useTerminalComposerAttachments({
@@ -231,8 +246,8 @@ describe("useTerminalComposerAttachments", () => {
         },
         getDraftAndCursor: () => ({ ...draftRef.current }),
         onDraftChange,
-        panelId: "panel-invalid",
         reportError,
+        session,
         t: (key) => key,
       })
     );
@@ -317,46 +332,7 @@ describe("useTerminalComposerAttachments", () => {
     expect(hook.result.current.canSendWithDraft("")).toBe(true);
   });
 
-  it("clearAll empties attachments and module map", async () => {
-    const { draftRef, hook } = setup({ panelId: "p-clear" });
-    draftRef.current = { cursor: 0, draft: "", selectionEnd: 0 };
-
-    pickComposerFiles.mockResolvedValue({
-      ok: true,
-      paths: ["/a.png"],
-    });
-    resolveComposerPaths.mockResolvedValue({
-      attachments: [dtoFrom("/a.png")],
-      failures: [],
-    });
-
-    await act(async () => {
-      hook.result.current.pickFiles();
-    });
-    await waitFor(() => {
-      expect(hook.result.current.attachments).toHaveLength(1);
-    });
-
-    act(() => {
-      hook.result.current.clearAll();
-    });
-    expect(hook.result.current.attachments).toEqual([]);
-
-    const restored = renderHook(() =>
-      useTerminalComposerAttachments({
-        disabled: false,
-        getDraftAndCursor: () => ({ cursor: 0, draft: "", selectionEnd: 0 }),
-        onDraftChange: vi.fn(),
-        panelId: "p-clear",
-        reportError: vi.fn(),
-        t: (key) => key,
-      })
-    );
-    expect(restored.result.current.attachments).toEqual([]);
-    restored.unmount();
-  });
-
-  it("hydrateFromMaps restores attachments after remount", async () => {
+  it("restores attachments when the same terminal remounts", async () => {
     const { draftRef, hook } = setup({ panelId: "p-hydrate" });
     draftRef.current = { cursor: 0, draft: "", selectionEnd: 0 };
 
@@ -376,24 +352,21 @@ describe("useTerminalComposerAttachments", () => {
       expect(hook.result.current.attachments).toHaveLength(1);
     });
     hook.unmount();
+    const session = getOrCreateTerminalComposerSession("p-hydrate");
 
     const next = renderHook(() =>
       useTerminalComposerAttachments({
         disabled: false,
         getDraftAndCursor: () => ({ cursor: 0, draft: "", selectionEnd: 0 }),
         onDraftChange: vi.fn(),
-        panelId: "p-hydrate",
         reportError: vi.fn(),
+        session,
         t: (key) => key,
       })
     );
     expect(next.result.current.attachments).toHaveLength(1);
     expect(next.result.current.attachments[0]?.path).toBe("/keep.png");
 
-    act(() => {
-      next.result.current.hydrateFromMaps();
-    });
-    expect(next.result.current.attachments[0]?.path).toBe("/keep.png");
     next.unmount();
   });
 });
@@ -561,5 +534,209 @@ describe("tiered plain-text paste", () => {
       expect(hook.result.current.attachments[0]?.pasteTier).toBe("medium");
       expect(hook.result.current.attachments[0]?.pasteContent).toBe(plain);
     });
+  });
+});
+
+describe("attachment session disposal", () => {
+  it("does not resolve paths returned by a picker after its terminal closes", async () => {
+    const pick = Promise.withResolvers<TerminalComposerPickResult>();
+    pickComposerFiles.mockReturnValue(pick.promise);
+    const { hook, onDraftChange, reportError, session } = setup();
+    act(() => hook.result.current.pickFiles());
+    act(() => disposeTerminalComposerSession(session.panelId));
+    await act(async () => {
+      pick.resolve({ ok: true, paths: ["/late.png"] });
+    });
+    expect(resolveComposerPaths).not.toHaveBeenCalled();
+    expect(onDraftChange).not.toHaveBeenCalled();
+    expect(reportError).not.toHaveBeenCalled();
+    expect(readComposerAttachments(session)).toEqual([]);
+  });
+
+  it("discards a resolved attachment and failure details after panel id reuse", async () => {
+    const paths = Promise.withResolvers<TerminalComposerPathsResult>();
+    pickComposerFiles.mockResolvedValue({ ok: true, paths: ["/late.png"] });
+    resolveComposerPaths.mockReturnValue(paths.promise);
+    const old = setup();
+    await act(async () => {
+      old.hook.result.current.pickFiles();
+    });
+    expect(resolveComposerPaths).toHaveBeenCalled();
+    act(() => disposeTerminalComposerSession(old.session.panelId));
+    old.hook.unmount();
+    const current = setup();
+    await act(async () => {
+      paths.resolve({
+        attachments: [dtoFrom("/late.png")],
+        failures: [{ path: "/other.png", reason: "missing" }],
+      });
+    });
+    expect(old.onDraftChange).not.toHaveBeenCalled();
+    expect(old.reportError).not.toHaveBeenCalled();
+    expect(current.hook.result.current.attachments).toEqual([]);
+    expect(current.draftRef.current.draft).toBe("");
+    expect(readComposerAttachments(current.session)).toEqual([]);
+  });
+
+  it("ignores late clipboard failure and companion text but reports a live failure", async () => {
+    const image = Promise.withResolvers<TerminalComposerMaterializeResult>();
+    materializeComposerClipboardImage.mockReturnValue(image.promise);
+    const event = {
+      clipboardData: {
+        files: [],
+        items: [{ kind: "file", type: "image/png" }],
+        getData: () => "companion text",
+      },
+      preventDefault: vi.fn(),
+    } as unknown as ClipboardEvent;
+    const old = setup();
+    await act(async () => {
+      old.hook.result.current.onPaste(event);
+    });
+    act(() => disposeTerminalComposerSession(old.session.panelId));
+    await act(async () => {
+      image.reject(new Error("clipboard unavailable"));
+    });
+    expect(old.onDraftChange).not.toHaveBeenCalled();
+    expect(old.reportError).not.toHaveBeenCalled();
+    const live = setup({ panelId: "live" });
+    materializeComposerClipboardImage.mockResolvedValue({
+      ok: false,
+      error: "clipboard unavailable",
+    });
+    await act(async () => {
+      live.hook.result.current.onPaste(event);
+    });
+    expect(live.reportError).toHaveBeenCalledWith(
+      "terminal.composer.attachFailed",
+      "clipboard unavailable"
+    );
+    expect(live.draftRef.current.draft).toBe("companion text");
+  });
+
+  it("stops image materialization when close occurs during the file read", async () => {
+    const bytes = Promise.withResolvers<ArrayBuffer>();
+    const file = new File(["image"], "image.png", { type: "image/png" });
+    const arrayBuffer = vi.fn(() => bytes.promise);
+    Object.defineProperty(file, "arrayBuffer", { value: arrayBuffer });
+    const event = {
+      clipboardData: { files: [file], items: [], getData: () => "" },
+      preventDefault: vi.fn(),
+    } as unknown as ClipboardEvent;
+    const { hook, onDraftChange, session } = setup();
+    await act(async () => {
+      hook.result.current.onPaste(event);
+    });
+    expect(arrayBuffer).toHaveBeenCalled();
+    act(() => disposeTerminalComposerSession(session.panelId));
+    await act(async () => {
+      bytes.resolve(new ArrayBuffer(4));
+    });
+    expect(materializeComposerImageBytes).not.toHaveBeenCalled();
+    expect(onDraftChange).not.toHaveBeenCalled();
+  });
+
+  it("discards materialized large paste content after close", async () => {
+    const paste = Promise.withResolvers<TerminalComposerMaterializeResult>();
+    materializeComposerTextBytes.mockReturnValue(paste.promise);
+    const { hook, onDraftChange, session } = setup();
+    await act(async () => {
+      hook.result.current.onLargePlainPaste("x".repeat(10_000));
+    });
+    expect(materializeComposerTextBytes).toHaveBeenCalled();
+    act(() => disposeTerminalComposerSession(session.panelId));
+    await act(async () => {
+      paste.resolve({
+        ok: true,
+        attachment: { ...dtoFrom("/late.txt"), kind: "paste" },
+      });
+    });
+    expect(onDraftChange).not.toHaveBeenCalled();
+    expect(readComposerAttachments(session)).toEqual([]);
+    expect(showAppConfirm).not.toHaveBeenCalled();
+  });
+
+  it("does not open a fallback dialog for a late paste failure", async () => {
+    const paste = Promise.withResolvers<TerminalComposerMaterializeResult>();
+    materializeComposerTextBytes.mockReturnValue(paste.promise);
+    const { hook, session } = setup();
+    await act(async () => {
+      hook.result.current.onLargePlainPaste("x".repeat(10_000));
+    });
+    act(() => disposeTerminalComposerSession(session.panelId));
+    await act(async () => {
+      paste.reject(new Error("disk full"));
+    });
+    expect(showAppConfirm).not.toHaveBeenCalled();
+  });
+
+  it("does not insert fallback text when its terminal closes during confirmation", async () => {
+    const confirmation = Promise.withResolvers<boolean>();
+    vi.mocked(showAppConfirm).mockReturnValue(confirmation.promise);
+    materializeComposerTextBytes.mockResolvedValue({
+      ok: false,
+      error: "disk full",
+    });
+    const { hook, onDraftChange, session } = setup();
+    await act(async () => {
+      hook.result.current.onLargePlainPaste("x".repeat(10_000));
+    });
+    expect(showAppConfirm).toHaveBeenCalled();
+    act(() => disposeTerminalComposerSession(session.panelId));
+    await act(async () => {
+      confirmation.resolve(true);
+    });
+    expect(onDraftChange).not.toHaveBeenCalled();
+    expect(readComposerAttachments(session)).toEqual([]);
+  });
+});
+
+describe("attachment delivery across composer mounts", () => {
+  it("retains a completed medium paste while hidden and applies it on the next mount", async () => {
+    const paste = Promise.withResolvers<TerminalComposerMaterializeResult>();
+    materializeComposerTextBytes.mockReturnValue(paste.promise);
+    const text = ["one", "two", "three", "four", "five", "six"].join("\n");
+    const old = setup();
+    await act(async () => old.hook.result.current.onLargePlainPaste(text));
+    old.hook.unmount();
+    await act(async () => {
+      paste.resolve({
+        ok: true,
+        attachment: { ...dtoFrom("/hidden.txt"), kind: "paste" },
+      });
+    });
+    expect(old.onDraftChange).not.toHaveBeenCalled();
+
+    const current = setup();
+    expect(current.hook.result.current.attachments[0]?.path).toBe(
+      "/hidden.txt"
+    );
+    expect(
+      current.hook.result.current.buildPayloadOrReport(
+        current.draftRef.current.draft
+      )
+    ).toBe(text);
+    current.hook.rerender();
+    expect(current.onDraftChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("discards completed hidden edits when the terminal closes before reopening", async () => {
+    const paths = Promise.withResolvers<TerminalComposerPathsResult>();
+    pickComposerFiles.mockResolvedValue({
+      ok: true,
+      paths: ["/discarded.png"],
+    });
+    resolveComposerPaths.mockReturnValue(paths.promise);
+    const old = setup();
+    await act(async () => old.hook.result.current.pickFiles());
+    old.hook.unmount();
+    await act(async () => {
+      paths.resolve({ attachments: [dtoFrom("/discarded.png")], failures: [] });
+    });
+    disposeTerminalComposerSession(old.session.panelId);
+    const current = setup();
+    expect(current.hook.result.current.attachments).toEqual([]);
+    expect(current.hook.result.current.buildPayloadOrReport("")).toBeNull();
+    expect(current.onDraftChange).not.toHaveBeenCalled();
   });
 });

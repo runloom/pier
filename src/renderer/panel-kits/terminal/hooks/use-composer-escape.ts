@@ -2,7 +2,10 @@ import { useEffect } from "react";
 import { activeTerminalPanelId } from "@/lib/actions/renderer-action-runtime.ts";
 import { isImePendingKeyboardEvent } from "@/lib/keybindings/is-text-input.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
-import { writeComposerDraft } from "../composer-helpers.ts";
+import {
+  type TerminalComposerSession,
+  writeComposerDraft,
+} from "../composer/session.ts";
 import {
   acquireTerminalEscapeShortcut,
   isBareEscapeForward,
@@ -20,18 +23,20 @@ export function useTerminalComposerEscape(input: {
   isActive: boolean;
   onClose: () => void;
   panelId: string;
+  session: TerminalComposerSession;
   valueRef: { current: string };
 }): void {
-  const { disabled, editorRef, isActive, onClose, panelId, valueRef } = input;
+  const { disabled, editorRef, isActive, onClose, panelId, session, valueRef } =
+    input;
 
   useEffect(() => {
-    if (disabled || !isActive) {
+    if (disabled || !isActive || session.signal.aborted) {
       return;
     }
     const releaseEscapeShortcut = acquireTerminalEscapeShortcut();
 
     const closeFromEscape = (): boolean => {
-      if (activeTerminalPanelId() !== panelId) {
+      if (session.signal.aborted || activeTerminalPanelId() !== panelId) {
         return false;
       }
       if (useKeybindingScope.getState().overlayStack.length > 0) {
@@ -41,7 +46,7 @@ export function useTerminalComposerEscape(input: {
         editorRef.current.dismissMentionMenu();
         return true;
       }
-      writeComposerDraft(panelId, valueRef.current);
+      writeComposerDraft(session, valueRef.current);
       onClose();
       return true;
     };
@@ -83,5 +88,5 @@ export function useTerminalComposerEscape(input: {
       unsubscribeForward?.();
       releaseEscapeShortcut();
     };
-  }, [disabled, editorRef, isActive, onClose, panelId, valueRef]);
+  }, [disabled, editorRef, isActive, onClose, panelId, session, valueRef]);
 }

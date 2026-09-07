@@ -13,6 +13,7 @@ import type { DockviewApi } from "dockview-react";
 import { getPluginPanelRevision } from "@/lib/plugins/panel-registry.ts";
 import { flushWorkspaceLayout } from "@/lib/workspace/layout-persistence.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import { disposeTerminalComposerSession } from "@/panel-kits/terminal/composer/session.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { clearCurrentWindowLayout } from "@/stores/workspace-panel-helpers.ts";
 import { panelKindOf } from "../panel-registry.ts";
@@ -255,6 +256,10 @@ async function handleReleaseSource(
   const remainingParams = collectRemainingParams(api, sourcePanelId);
   setPanelRelocationSuppressed(true);
   api.removePanel(panel);
+  if (component === "terminal") {
+    // Ownership has moved; release only this renderer's input, not the live PTY.
+    disposeTerminalComposerSession(sourcePanelId);
+  }
   clearPanelTransferTearOff();
   if (reg?.kind === "custom" && reg.releaseSource) {
     await reg.releaseSource({

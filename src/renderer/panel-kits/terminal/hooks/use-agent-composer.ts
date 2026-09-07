@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -10,6 +11,7 @@ import {
   requestTerminalFocusIntent,
   setTerminalNativeFocusDisabled,
 } from "@/stores/terminal-input-routing-slice.ts";
+import { getOrCreateTerminalComposerSession } from "../composer/session.ts";
 import { registerComposerOpener } from "../composer-bridge.ts";
 import {
   TERMINAL_COMPOSER_GAP_PX,
@@ -52,6 +54,10 @@ export function useAgentComposer({
   restored,
   hasStatusBar,
 }: UseAgentComposerParams): UseAgentComposerResult {
+  const session = useMemo(
+    () => getOrCreateTerminalComposerSession(panelId),
+    [panelId]
+  );
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerFocusRequest, setComposerFocusRequest] = useState(0);
   const [attachRequest, setAttachRequest] = useState(0);
@@ -100,13 +106,13 @@ export function useAgentComposer({
     if (!canUseAgentComposer({ activityKind, restored })) {
       return;
     }
-    return registerComposerOpener(panelId, () => {
+    return registerComposerOpener(session, () => {
       setComposerOpen(true);
       setComposerFocusRequest((value) => value + 1);
       ensureTuiInputFocus(panelId).catch(() => undefined);
       activatePanel();
     });
-  }, [activatePanel, activityKind, panelId, restored]);
+  }, [activatePanel, activityKind, panelId, restored, session]);
 
   // 资格失效（非 agent / 恢复态）时强制关闭，避免 open 位悬挂。
   useEffect(() => {

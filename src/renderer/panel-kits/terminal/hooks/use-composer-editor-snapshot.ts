@@ -2,8 +2,9 @@ import type { RefObject } from "react";
 import { useEffect, useState } from "react";
 import {
   readComposerEditorSnapshot,
+  type TerminalComposerSession,
   writeComposerEditorSnapshot,
-} from "../composer-helpers.ts";
+} from "../composer/session.ts";
 import type { StructuredComposerEditorHandle } from "../structured-composer/editor.tsx";
 
 /**
@@ -17,19 +18,22 @@ import type { StructuredComposerEditorHandle } from "../structured-composer/edit
  */
 export function useComposerEditorSnapshot(input: {
   editorRef: RefObject<StructuredComposerEditorHandle | null>;
-  panelId: string;
+  session: TerminalComposerSession;
   value: string;
 }): string | null {
-  const { editorRef, panelId, value } = input;
+  const { editorRef, session, value } = input;
   const [initialSnapshotJson] = useState(() =>
-    readComposerEditorSnapshot(panelId)
+    readComposerEditorSnapshot(session)
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: `value` re-runs capture after each commit
   useEffect(() => {
+    if (session.signal.aborted) {
+      return;
+    }
     const json = editorRef.current?.getEditorJson();
     if (json != null) {
-      writeComposerEditorSnapshot(panelId, json);
+      writeComposerEditorSnapshot(session, json);
     }
-  }, [editorRef, panelId, value]);
+  }, [editorRef, session, value]);
   return initialSnapshotJson;
 }

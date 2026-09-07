@@ -142,15 +142,17 @@ export function insertAttachmentTokenAtLexicalSelection(
   editor.update(
     () => {
       const selection = $getSelection();
-      if (!$isRangeSelection(selection)) {
-        return;
-      }
+      // A newly mounted editor can receive completed input before it gains a
+      // caret. Append to its document rather than silently losing the token.
+      const target = $isRangeSelection(selection)
+        ? selection
+        : $getRoot().selectEnd();
       const token = $createAttachmentTokenNode(
         absolutePath,
         ordinal1Based,
         true
       );
-      selection.insertNodes([token]);
+      target.insertNodes([token]);
       $placeCaretAfterComposerChip(token);
     },
     { discrete: true }
