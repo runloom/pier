@@ -7,7 +7,6 @@ import {
   KeyCap,
   ListRow,
   SectionLabel,
-  sessionStatusBadge,
 } from "./chrome.tsx";
 import { Icon } from "./icons.tsx";
 
@@ -57,24 +56,6 @@ export function PressKitScreen(): ReactNode {
           subtitle="按下 · bg-interactive-active"
           title="列表行"
         />
-        <ListRow
-          chevron
-          leading={<Icon className="size-5" name="sparkle" />}
-          subtitle="需要你处理 · 警告底置顶"
-          title="等待项"
-          tone="waiting"
-          trailing={sessionStatusBadge({
-            agent: "Claude Code",
-            hasGit: true,
-            hostId: "kit",
-            id: "kit-wait",
-            kind: "agent",
-            screen: [],
-            status: "waiting",
-            title: "等待项",
-            worktree: "feat-mobile",
-          })}
-        />
       </Group>
       <SectionLabel>按钮 · 44px</SectionLabel>
       <div className="flex gap-2">
@@ -86,16 +67,14 @@ export function PressKitScreen(): ReactNode {
           填充
         </HitButton>
       </div>
-      <SectionLabel>终端键帽 · 44px</SectionLabel>
+      <SectionLabel>终端键帽 · 48px</SectionLabel>
       <div className="flex gap-1.5">
         <KeyCap>Esc</KeyCap>
-        <KeyCap>Tab</KeyCap>
-        <KeyCap tone="accent" wide>
-          Enter
-        </KeyCap>
-        <KeyCap tone="waiting">y</KeyCap>
-        <KeyCap tone="waiting">n</KeyCap>
+        <KeyCap>y</KeyCap>
+        <KeyCap>n</KeyCap>
+        <KeyCap wide>Enter</KeyCap>
       </div>
+      <Rule>键帽一律不着色、不强调：不表达选项语义，不暗示哪个键是「批准」。</Rule>
       <SectionLabel>设备图标 · 状态点在右下</SectionLabel>
       <div className="flex items-center gap-3">
         <DeviceGlyph device="mini" status="online" />
@@ -147,7 +126,8 @@ export function MotionKitScreen(): ReactNode {
       </Rule>
       <SectionLabel>同页切换 · 不推入</SectionLabel>
       <Rule>
-        文件页目录往下走、变更页点开单文件、底部面板切同机会话、按键面板显隐：只换内容，不做页面过渡。
+        文件页目录往下走、变更页点开单文件、底部面板切同机会话、按键面板显隐：只换内容，不做页面过渡。同页切换保留「‹
+        文件列表 / ‹ 上一级」形态的返回控件，是 K2「有返回就有反向滑出」的点名豁免。
       </Rule>
       <SectionLabel>prefers-reduced-motion</SectionLabel>
       <Rule>取消位移，改为 120ms 淡入淡出。</Rule>
@@ -199,12 +179,17 @@ export function StateKitScreen(): ReactNode {
           note="点卡给去电脑上开的提示"
           sample={<DeviceGlyph device="studio" status="offline" />}
         />
+        <StateRow
+          label="状态未知"
+          note="点卡给「会自动重试」提示；提示条走 info"
+          sample={<DeviceGlyph device="laptop" status="unknown" />}
+        />
       </div>
       <SectionLabel>会话态 · 只对智能体</SectionLabel>
       <div className="divide-y divide-border/60">
         <StateRow
           label="需要你处理"
-          note="预览下方标状态；按键按需展开"
+          note="窗栏色点 + 卡片 11px 状态词；会话页一行主按钮"
           sample={<Badge variant="warning">需要你处理</Badge>}
         />
         <StateRow

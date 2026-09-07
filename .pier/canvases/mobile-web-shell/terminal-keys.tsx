@@ -20,6 +20,8 @@ const KEY_LABELS: Partial<Record<DemoResponseKey, string>> = {
   escape: "Esc",
 };
 const SEND_FEEDBACK_MS = 450;
+/** 「已发送」到终端画面经下一轮轮询实际变化之间的空窗：锁住按键，防重复发送。 */
+const ECHO_WAIT_MS = 1500;
 
 /** 受限按键面板。13 个原始键，不解释终端选项，也不模拟命令完成。 */
 export function TerminalKeys(props: {
@@ -27,6 +29,10 @@ export function TerminalKeys(props: {
   onLayoutChange: () => void;
   onClose: () => void;
   initialDigitsOpen?: boolean | undefined;
+  /** 静态帧直接定格「已发送，等待终端响应」的回执锁键态。 */
+  initialEcho?: DemoResponseKey | undefined;
+  /** 静态帧 / 发送回 stale 时面板先停住，由用户收起。 */
+  initialStale?: boolean | undefined;
 }): ReactNode {
   const digitsId = useId();
   const [digitsOpen, setDigitsOpen] = useState(
@@ -41,7 +47,13 @@ export function TerminalKeys(props: {
   const [feedback, setFeedback] = useState<{
     key: DemoResponseKey;
     result: DemoKeyResult;
-  } | null>(null);
+  } | null>(
+    props.initialEcho === undefined
+      ? null
+      : { key: props.initialEcho, result: "accepted" }
+  );
+  const [echoWait, setEchoWait] = useState(props.initialEcho !== undefined);
+  const [staleHold, setStaleHold] = useState(props.initialStale === true);
   const sendRef = useRef(props.onSend);
   sendRef.current = props.onSend;
   useEffect(() => {
@@ -54,21 +66,33 @@ export function TerminalKeys(props: {
         result = "failed";
       }
       setFeedback({ key: pending, result });
+      setEchoWait(result === "accepted");
+      if (result === "stale") setStaleHold(true);
       setPending(null);
     }, SEND_FEEDBACK_MS);
     return () => clearTimeout(timer);
   }, [pending]);
-  const blocked = pending !== null || feedback?.result === "stale";
+  useEffect(() => {
+    if (!echoWait) return;
+    const timer = setTimeout(() => {
+      // 等待窗口结束后保留「已发送」回执，用户回头看仍能确认刚才发出过什么。
+      setEchoWait(false);
+    }, ECHO_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [echoWait]);
+  const blocked = pending !== null || echoWait || staleHold;
   const message =
-    pending !== null
-      ? `正在发送 ${KEY_LABELS[pending] ?? pending}…`
-      : feedback?.result === "accepted"
-        ? `已发送 ${KEY_LABELS[feedback.key] ?? feedback.key}，请查看终端回应`
-        : feedback?.result === "stale"
-          ? "这次回应已失效，请重新查看终端"
-          : feedback?.result === "failed"
-            ? "未能发送，请重试"
-            : "按终端提示发送按键";
+    staleHold
+      ? "这次回应已失效。收起后，等新的提示出现再发送。"
+      : pending !== null
+        ? `正在发送 ${KEY_LABELS[pending] ?? pending}…`
+        : echoWait && feedback?.result === "accepted"
+          ? `已发送 ${KEY_LABELS[feedback.key] ?? feedback.key}，等待终端响应…`
+          : feedback?.result === "accepted"
+            ? `已发送 ${KEY_LABELS[feedback.key] ?? feedback.key}。当前屏幕还没更新，请稍等，或到电脑上确认。`
+            : feedback?.result === "failed"
+              ? "未能发送，请重试"
+              : "按终端提示发送按键";
   const keyButton = (key: DemoResponseKey) => (
     <button
       aria-label={`发送 ${KEY_LABELS[key] ?? key} 键`}
@@ -121,10 +145,9 @@ export function TerminalKeys(props: {
         <button
           aria-label="收起按键"
           className={cx(
-            "-mr-1 flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground disabled:opacity-40",
+            "-mr-1 flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground",
             TOUCH_PRESS
           )}
-          disabled={pending !== null}
           onClick={props.onClose}
           type="button"
         >
@@ -132,8 +155,11 @@ export function TerminalKeys(props: {
         </button>
       </div>
       {digitsOpen ? (
-        <div className="mb-2 grid grid-cols-3 gap-2" id={digitsId}>
-          {DIGITS.map(keyButton)}
+        <div className="mb-3 border-border/60 border-b pb-3" id={digitsId}>
+          <p className="mb-2 px-1 text-[12px] text-muted-foreground leading-4">
+            数字键
+          </p>
+          <div className="grid grid-cols-3 gap-2">{DIGITS.map(keyButton)}</div>
         </div>
       ) : null}
       <div className="grid grid-cols-[1fr_1fr_1fr_1.2fr] gap-2">
@@ -142,7 +168,7 @@ export function TerminalKeys(props: {
       <p
         className={cx(
           "mt-2 min-h-5 px-1 text-[12px] leading-5",
-          feedback?.result === "failed" || feedback?.result === "stale"
+          staleHold || feedback?.result === "failed"
             ? "text-status-warning-fg"
             : "text-muted-foreground"
         )}

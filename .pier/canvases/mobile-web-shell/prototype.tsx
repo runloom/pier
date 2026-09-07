@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useReducer, useRef, useState } from "react";
 import {
   demoKeyDelivery,
+  type DemoHost,
   type DemoNotification,
   type DemoState,
   INITIAL_DEMO,
@@ -8,13 +9,14 @@ import {
   reduceDemo,
   sessionsOf,
   unreadCount,
+  waitingCountByHost,
 } from "./model.ts";
 import { NavStack, type StackEntry } from "./nav-stack.tsx";
-import { repoScope, worktreeIsDirty } from "./repo.ts";
+import { repoScope } from "./repo.ts";
 import { HostsScreen, PairScreen } from "./screens-hosts.tsx";
 import { NotificationsScreen } from "./screens-inbox.tsx";
 import { ChangesScreen, FilesScreen } from "./screens-review.tsx";
-import { SessionScreen } from "./screens-session.tsx";
+import { SessionEndedScreen, SessionScreen } from "./screens-session.tsx";
 import { HostScreen } from "./screens-workbench.tsx";
 
 type Frame =
@@ -23,10 +25,12 @@ type Frame =
   | { kind: "workbench"; hostId: string }
   | { kind: "inbox"; hostId: string }
   | { kind: "session"; sessionId: string }
+  | { kind: "session-ended"; hostId: string; sessionTitle?: string | undefined }
   | { kind: "changes"; worktree: string }
   | { kind: "files"; sessionId: string };
 
 const PUSH_ENABLE_MS = 1200;
+const INBOX_REFRESH_MS = 700;
 
 function frameTitle(frame: Frame, demo: DemoState): string {
   switch (frame.kind) {
@@ -39,12 +43,14 @@ function frameTitle(frame: Frame, demo: DemoState): string {
         demo.hosts.find((host) => host.id === frame.hostId)?.name ?? "这台电脑"
       );
     case "inbox":
-      return "通知";
+      return "收件箱";
     case "session":
       return (
         demo.sessions.find((session) => session.id === frame.sessionId)
           ?.title ?? "会话"
       );
+    case "session-ended":
+      return "会话已结束";
     case "changes":
       return "变更";
     case "files":
@@ -88,15 +94,26 @@ export function PrototypePhone(): ReactNode {
   // 返回标签在推入时定下：出场层滑出期间也保持原样。
   const backLabels = useRef(new Map<number, string>());
 
+  const backLabelFor = (top: StackEntry<Frame> | undefined): string => {
+    if (top === undefined) return "返回";
+    if (top.frame.kind === "workbench") return "这台电脑";
+    return frameTitle(top.frame, demo);
+  };
+
+  const pushFrames = (frames: Frame[]) => {
+    setStack((current) => {
+      let next = current;
+      for (const frame of frames) {
+        const id = nextId.current;
+        nextId.current += 1;
+        backLabels.current.set(id, backLabelFor(next[next.length - 1]));
+        next = [...next, { frame, id }];
+      }
+      return next;
+    });
+  };
   const push = (frame: Frame) => {
-    const id = nextId.current;
-    nextId.current += 1;
-    const top = stack[stack.length - 1];
-    backLabels.current.set(
-      id,
-      top === undefined ? "返回" : frameTitle(top.frame, demo)
-    );
-    setStack((current) => [...current, { frame, id }]);
+    pushFrames([frame]);
   };
   const pop = () => {
     setStack((current) =>
@@ -104,11 +121,51 @@ export function PrototypePhone(): ReactNode {
     );
   };
 
+  const enterHost = (host: DemoHost, preferWaiting: boolean) => {
+    if (!preferWaiting) {
+      push({ hostId: host.id, kind: "workbench" });
+      return;
+    }
+    const waiting = sessionsOf(demo, host.id).filter(
+      (session) => session.status === "waiting"
+    );
+    const only = waiting.length === 1 ? waiting[0] : undefined;
+    if (only === undefined) {
+      push({ hostId: host.id, kind: "workbench" });
+      return;
+    }
+    pushFrames([
+      { hostId: host.id, kind: "workbench" },
+      { kind: "session", sessionId: only.id },
+    ]);
+  };
+
   const openNotification = (item: DemoNotification) => {
     dispatch({ id: item.id, type: "notification.read" });
-    if (item.sessionId !== null) {
-      push({ kind: "session", sessionId: item.sessionId });
+    if (item.sessionId === null) {
+      return;
     }
+    // 通知落点必须存在：会话已结束时不推空帧，落到明示的终态页。
+    const exists = demo.sessions.some(
+      (session) => session.id === item.sessionId
+    );
+    push(
+      exists
+        ? { kind: "session", sessionId: item.sessionId }
+        : {
+            hostId: item.hostId,
+            kind: "session-ended",
+            sessionTitle: item.sessionTitle,
+          }
+    );
+  };
+
+  const [inboxRefreshing, setInboxRefreshing] = useState(false);
+  const refreshInbox = () => {
+    setInboxRefreshing(true);
+    later(INBOX_REFRESH_MS, () => {
+      setInboxRefreshing(false);
+    });
   };
 
   const enablePush = () => {
@@ -159,7 +216,10 @@ export function PrototypePhone(): ReactNode {
       case "inbox":
         return (
           <NotificationsScreen
-            hostName={backLabel}
+            hostName={
+              demo.hosts.find((item) => item.id === frame.hostId)?.name ??
+              backLabel
+            }
             items={notificationsOf(demo, frame.hostId)}
             onBack={pop}
             onEnablePush={enablePush}
@@ -170,7 +230,10 @@ export function PrototypePhone(): ReactNode {
             onReadAll={() => {
               dispatch({ type: "notification.readAll" });
             }}
+            onRefresh={refreshInbox}
+            persistPushDismiss
             push={demo.push}
+            refreshing={inboxRefreshing}
             sessions={sessionsOf(demo, frame.hostId)}
           />
         );
@@ -178,13 +241,15 @@ export function PrototypePhone(): ReactNode {
         const session = demo.sessions.find(
           (item) => item.id === frame.sessionId
         );
+        // 防御：openNotification 已拦截悬空落点，这里是会话在停留期间结束。
         if (session === undefined) {
-          return null;
+          return (
+            <SessionEndedScreen backLabel={backLabel} onBack={pop} />
+          );
         }
         return (
           <SessionScreen
             backLabel={backLabel}
-            dirty={session.hasGit && worktreeIsDirty(session.worktree)}
             onBack={pop}
             onOpenChanges={
               session.hasGit
@@ -225,6 +290,20 @@ export function PrototypePhone(): ReactNode {
             scope={frame.worktree}
           />
         );
+      case "session-ended":
+        return (
+          <SessionEndedScreen
+            backLabel={backLabel}
+            onBack={pop}
+            onOpenWorkbench={() => {
+              // 收件箱在工作台之上：回两层到这台电脑的工作台。
+              setStack((current) =>
+                current.slice(0, Math.max(1, current.length - 2))
+              );
+            }}
+            title={frame.sessionTitle ?? "会话"}
+          />
+        );
       case "files": {
         const session = demo.sessions.find(
           (item) => item.id === frame.sessionId
@@ -247,11 +326,15 @@ export function PrototypePhone(): ReactNode {
               push({ kind: "pair" });
             }}
             onEnter={(host) => {
-              push({ hostId: host.id, kind: "workbench" });
+              enterHost(host, false);
+            }}
+            onEnterWaiting={(host) => {
+              enterHost(host, true);
             }}
             onRemove={(hostId) => {
               dispatch({ hostId, type: "host.remove" });
             }}
+            waitingByHost={waitingCountByHost(demo)}
           />
         );
     }
