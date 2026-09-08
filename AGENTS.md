@@ -453,7 +453,7 @@ section 根节点下的裸子节点。
 - 工作树事实（身份、分支、`±N`、`↑↓`、聚合状态）只写在 **tile 底部状态栏**；tab 不带工作树标识；每终端状态栏与窗口级状态行都不存在。
 - 侧栏上半是**项目**树（工作树行只切主窗，会话行定位可跳窗，会话用智能体品牌图标）；下半是工作区级插件目的地（「任务」只有一条，打开已有面板，不嵌进某个项目、不列出议题）。tab 只能落在自己工作树的 tile 里（含隐藏集 = 已有 → 恢复）。
 - 身份色 `--identity-1…6` 由 `src/renderer/app/globals.css` 持有。
-- 检查点：`tests/unit/renderer/workbench/tile-governance.test.ts`；设计稿 `.pier/canvases/workbench-shell/`。
+- 检查点：`tests/unit/renderer/workbench/tile-governance.test.ts`。
 
 ### 路径锚点上下文 `src/main/services/panel-context-resolver.ts` + `src/shared/contracts/panel.ts`
 

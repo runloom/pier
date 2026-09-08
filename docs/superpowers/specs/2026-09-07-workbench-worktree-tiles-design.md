@@ -2,7 +2,6 @@
 
 日期：2026-09-07
 状态：**方向已确认（2026-09-07 21:31），待实现。** 本文是工作台骨架的唯一权威文档，合并并取代同日的三份草稿（工作区栏设计、统一模型、架构头脑风暴）与 [`2026-09-03-workbench-ux-and-ergonomics-design.md`](../../archive/superpowers/specs/2026-09-03-workbench-ux-and-ergonomics-design.md)（已归档；其正确性修复项在 §14 保留）。
-设计稿：`.pier/canvases/workbench-shell/`（B1 主窗口 · B2 子窗口 · B3 拖拽落点 · B4 解剖 · B5 首启与加载）。
 实施方案：[`2026-09-08-workbench-worktree-tiles-implementation.md`](../plans/2026-09-08-workbench-worktree-tiles-implementation.md)（三次闭环任务）。
 修订：2026-09-07 21:50 工作树事实栏从 tile 顶部改到 tile 底部（沿用状态栏在底部的习惯），tab 不带工作树标识。2026-09-07 23:56 侧栏重做：上半「项目」树（会话行用智能体品牌图标）；下半工作区级插件目的地（「任务」只有一条，打开已有面板，不嵌进某个项目）。
 

@@ -19,9 +19,6 @@ may land here when a test or catalog consumer exists.
   pier-cli-user-manual/  CLI user manual; data.json is the CLI docs source
                          of truth (tests/unit/cli locks coverage)
   mobile-web-shell/      visual mockup for the mobile Web shell (not the IA source)
-  workbench-shell/       desktop workbench boards: main window (sidebar + one
-                         worktree tile), sub-window tile wall, drop rules, anatomy
-                         (not the IA source)
 ```
 
 | Folder | Role |
@@ -30,7 +27,6 @@ may land here when a test or catalog consumer exists.
 | **canvas-kit/** | Primitive catalog referenced by SKILL + settings 物料 page |
 | **pier-cli-user-manual/** | End-user CLI manual rendered as a canvas. GitHub README is four-locale (`README.md` zh-CN source, plus `README.en.md` / `README.ja.md` / `README.ko.md`). `data.json` stays the command SSOT (Chinese); do not copy it per locale. |
 | **mobile-web-shell/** | Phone artboards for the Web shell visual language. IA stays in `docs/superpowers/specs/2026-08-26-mobile-companion-design.md` §11. |
-| **workbench-shell/** | Desktop boards for the worktree-tile shell: main window, sub-window tile wall, drag-and-drop landing rules, anatomy. Rules live in `docs/superpowers/specs/2026-09-07-workbench-worktree-tiles-design.md`; this is not the IA source. |
 
 ## Conventions
 

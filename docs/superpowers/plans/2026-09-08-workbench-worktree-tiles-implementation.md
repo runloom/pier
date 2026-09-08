@@ -1,7 +1,6 @@
 # 工作台骨架实施方案
 
-规格：[工作树 tile 与主 / 子窗口](../specs/2026-09-07-workbench-worktree-tiles-design.md)（已确认）。  
-设计稿：`.pier/canvases/workbench-shell/`（视觉金，不是 IA 真源）。  
+规格：[工作树 tile 与主 / 子窗口](../specs/2026-09-07-workbench-worktree-tiles-design.md)（已确认，唯一真源）。  
 三次任务，每次合并后产品可日常使用；禁止半套 chrome（例如侧栏已切工作树、主区仍混放）。
 
 ## 闭环原则
@@ -21,7 +20,7 @@
 - 新文件放子目录，勿再堆 `src/renderer/components/workspace/` 根上：`workspace/tiles/`、`workspace/rail/`。`WorkspaceHost` 仍是 dockview 唯一业务边界，改成「一个 tile 一棵 dockview」。
 - 用户文案走 locale（智能体 / 工作树 / 区域 / 需要你处理）；`tile` 只出现在规格与代码。
 - 每任务结束跑文内验证命令；失败只修本任务引入的问题。
-- 画板已锁视觉与 IA，实现时对齐 B1–B5，不要另发明入口。
+- 实现时对齐规格本文，不要另发明入口。
 
 ---
 
@@ -72,7 +71,7 @@
 
 6. **侧栏（仅主窗）**  
    数据：`worktree.list` 按仓库分组 + Index `entries` 按 `worktreeKey` 挂会话 + 空态最近（`panel-context-state` 的 `recent`，不是新列表）。  
-   IA 对齐画板：上半「项目」树（项目行 `[+]` = 现有新建工作树对话框；工作树行只切主窗；会话行品牌图标 + 定位）；发丝线下一条「任务」（`sidebarEntries`，`pier.tasks` 声明打开 `pier.tasks.board`，上下文 = 当前可见工作树）。不列议题。  
+   IA 对齐规格：上半「项目」树（项目行 `[+]` = 现有新建工作树对话框；工作树行只切主窗；会话行品牌图标 + 定位）；发丝线下一条「任务」（`sidebarEntries`，`pier.tasks` 声明打开 `pier.tasks.board`，上下文 = 当前可见工作树）。不列议题。  
    `⌘B`：`pier.view.toggleSideTree` 改为折叠这条侧栏；面板内文件树 / 审查树改 `⌘⇧B`（四语文案一起改）。
 
 7. **欢迎态**  
