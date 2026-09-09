@@ -169,13 +169,13 @@ diagram; there is no `type` prop and Pier does not sniff the source header.
 | `tone` | State machine, error exit, delivery status | `info` `success` `warning` `danger` `done` `muted` |
 | neither | Only if the graph has no roles and no status | Default `bg-card` |
 
-| `kind` | Chrome (status hue, not `--primary` / `--muted`) |
+| `kind` | Chrome (same `color-mix` recipe as `WorkflowDiagram`) |
 |---|---|
-| `actor` | info blue · User |
-| `agent` | done purple · Bot |
-| `tool` | success green · Terminal |
-| `artifact` | info blue, **dashed** · AppWindow |
-| `external` | warning amber, **dashed** · ExternalLink |
+| `actor` | info 10% into `--card` · User |
+| `agent` | done 18% · Bot |
+| `tool` | success 18% · Terminal |
+| `artifact` | info 10%, **dashed** · AppWindow |
+| `external` | muted 12%, **dashed** · ExternalLink (same as workflow `external`) |
 
 Rules:
 
@@ -185,12 +185,15 @@ Rules:
   Stop nodes.
 - Set **one** field per node. If both are set, fill follows `tone`;
   `kind` still shows the role glyph.
-- Chrome is the soft status pairing: pale tint + same-hue hairline
-  border + a title-row glyph. Kind glyphs use foreground (readable at
-  20px); hue lives in the card surface. Run-status marks stay chromatic.
-  **No left color rail.** **No one-color-per-node rainbow.**
+- Chrome matches `WorkflowDiagram`: mix `--status-*-fg` into `--card`
+  (info 10%, success/warning/danger/done 18%, muted 12%) plus the
+  same-hue hairline. Text uses theme `--foreground`. Kind glyphs use
+  the hairline stroke. Run-status marks stay chromatic. **No light
+  pastel island.** **No `status-*-bg` chips.** **No left color rail.**
+  **No one-color-per-node rainbow.**
 - Do not use `bg-muted` / `bg-primary/10` for roles: light `--muted` is
-  near `--card`, light `--primary` is near-black.
+  near `--card`, light `--primary` is near-black. External uses the
+  muted mix, not a warning chip.
 - One-shot / out-of-product nodes are `external` (example: 原生 agent CLI).
   Their edges dash too.
 - Short predicates on edges; long copy belongs on node `meta` or a caption.

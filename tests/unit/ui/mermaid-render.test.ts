@@ -21,13 +21,13 @@ describe("Mermaid render", () => {
     );
   });
 
-  it("paints default flowchart nodes with card fill and mixed connectors", async () => {
+  it("paints default flowchart nodes with card fill and info-fg connectors", async () => {
     const source = await readFile(
       join(import.meta.dirname, "../../../packages/ui/src/mermaid/theme.ts"),
       "utf8"
     );
     expect(MERMAID_THEME_CSS).toContain(
-      "stroke: color-mix(in srgb, var(--foreground) 45%, var(--background)) !important;"
+      "stroke: var(--status-info-fg) !important;"
     );
     expect(MERMAID_THEME_CSS).toMatch(
       /\.node rect, \.node polygon, \.node circle, \.node \.label-container, \.node \.basic \{\s*fill: var\(--card\) !important;\s*stroke: var\(--border\) !important;/
@@ -111,12 +111,15 @@ describe("Mermaid render", () => {
     expect(source).toContain("text-sm");
     expect(source).toContain("break-words");
     expect(source).toContain("text-xs");
+    expect(source).toContain('data-slot="mermaid-node-title"');
     expect(source).toContain(
       'className="min-w-0 whitespace-normal break-words font-medium text-card-foreground! text-sm leading-5!"'
     );
     expect(source).toContain("min-h-full");
     expect(source).toContain("justify-start");
-    expect(source).toContain("data-mermaid-wash");
+    expect(source).toContain("mermaidNodePaint");
+    expect(source).not.toContain("data-mermaid-wash");
+    expect(source).not.toContain("bg-status-");
     expect(source).not.toContain("justify-center");
   });
 

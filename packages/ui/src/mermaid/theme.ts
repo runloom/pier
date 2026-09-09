@@ -15,11 +15,11 @@ export const MERMAID_THEME_CSS = `
     filter: none !important;
   }
   .flowchart-link, .edge-thickness-normal, .relation, .transition, .messageLine0, .messageLine1, .actor-line, .loopLine {
-    stroke: color-mix(in srgb, var(--foreground) 45%, var(--background)) !important;
+    stroke: var(--status-info-fg) !important;
   }
   marker path, .arrowMarkerPath, .marker {
-    fill: color-mix(in srgb, var(--foreground) 45%, var(--background)) !important;
-    stroke: color-mix(in srgb, var(--foreground) 45%, var(--background)) !important;
+    fill: var(--status-info-fg) !important;
+    stroke: var(--status-info-fg) !important;
   }
   .nodeLabel, .edgeLabel, .label, .actor, .messageText, .labelText, .loopText, .noteText, .entityLabel, .classTitle, .titleText, .taskText, .legendText,
   .messageText > tspan, .labelText > tspan, .loopText > tspan, .noteText > tspan,

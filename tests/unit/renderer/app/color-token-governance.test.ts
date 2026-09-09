@@ -50,7 +50,11 @@ const COLOR_MIX_OWNERS = new Set([
   // Pierre Diff header hover mixes muted into background inside unsafeCSS
   // (shadow DOM cannot consume Tailwind opacity utilities).
   "src/renderer/app/globals.css",
-  "packages/ui/src/mermaid/theme.ts",
+  // Diagram node fills mix status-fg into --card (WorkflowDiagram gold;
+  // Mermaid kind/tone cards reuse the same recipe).
+  "packages/ui/src/canvas-workflow/kind.ts",
+  "packages/ui/src/canvas-workflow/paint.tsx",
+  "packages/ui/src/mermaid/model.ts",
 ]);
 
 function sourceFiles(dir: string): string[] {
@@ -449,30 +453,13 @@ describe("color token governance", () => {
     }
   });
 
-  it("keeps mermaid kind/tone cards on the light pastel wash in both themes", () => {
+  it("does not pin mermaid cards to a light pastel island", () => {
     const globals = readFileSync(
       join(ROOT, "src/renderer/app/globals.css"),
       "utf8"
     );
-    const light = cssBlock(globals, ":root.light");
-    const wash = cssBlock(
-      globals,
-      '[data-slot="mermaid-node"][data-mermaid-wash="pastel"]'
-    );
-    expect(cssVariable(wash, "status-info-bg")).toBe(
-      cssVariable(light, "status-info-bg")
-    );
-    expect(cssVariable(wash, "status-success-bg")).toBe(
-      cssVariable(light, "status-success-bg")
-    );
-    expect(cssVariable(wash, "status-warning-bg")).toBe(
-      cssVariable(light, "status-warning-bg")
-    );
-    expect(cssVariable(wash, "status-danger-bg")).toBe(
-      cssVariable(light, "status-danger-bg")
-    );
-    expect(cssVariable(wash, "foreground")).toBe("oklch(0.145 0 0)");
-    expect(cssVariable(wash, "muted-foreground")).toBe("oklch(0.42 0 0)");
+    expect(globals).not.toContain("data-mermaid-wash");
+    expect(globals).not.toContain("mermaid-wash");
   });
 
   // ── Tier 3: design decision — solid status seeds vs white glyphs ────
