@@ -36,6 +36,7 @@ import {
   MAC_FOLDER_USAGE_DESCRIPTIONS,
   MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS,
   MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS,
+  MAC_UNUSED_USAGE_DESCRIPTION_KEYS,
   renderInfoPlistStrings,
 } from "./mac-privacy-descriptions.mjs";
 
@@ -58,7 +59,7 @@ const MAC_DEV_ELECTRON_ICON_REVISION = 12;
  * Info.plist contents such as the TCC usage descriptions) so stale copies are
  * rebuilt.
  */
-export const MAC_DEV_ELECTRON_SIGN_REVISION = 2;
+export const MAC_DEV_ELECTRON_SIGN_REVISION = 3;
 const MAC_DEV_HELPER_VARIANTS = [
   { id: "helper", suffix: "" },
   { id: "helper.GPU", suffix: " (GPU)" },
@@ -262,6 +263,12 @@ function upsertPlistStrings(plistFile, entries) {
   }
 }
 
+function stripUnusedUsageDescriptions(plistFile) {
+  for (const key of MAC_UNUSED_USAGE_DESCRIPTION_KEYS) {
+    removePlistKey(plistFile, key);
+  }
+}
+
 function removePlistKey(plistFile, key) {
   const result = spawnSync("plutil", ["-remove", key, plistFile], {
     encoding: "utf8",
@@ -336,6 +343,9 @@ export function brandPierDevHelpers(targetApp) {
     removePlistKey(
       path.join(helperApp, "Contents", "Info.plist"),
       "CFBundleIconName"
+    );
+    stripUnusedUsageDescriptions(
+      path.join(helperApp, "Contents", "Info.plist")
     );
     if (helperApp !== brandedApp) {
       renameSync(helperApp, brandedApp);
@@ -1377,6 +1387,9 @@ function prepareMacDevElectronRuntime(profile, env) {
       // TCC 弹窗英文回退（与正式包 extendInfo 同源）。
       ...MAC_FOLDER_USAGE_DESCRIPTIONS,
     });
+    stripUnusedUsageDescriptions(
+      path.join(targetApp, "Contents", "Info.plist")
+    );
     // 简体中文 lproj（签名前写入）。
     for (const relative of MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS) {
       const localizedStrings = path.join(

@@ -4,14 +4,23 @@ const DISPLAY_CAPTURE_PERMISSION = "display-capture";
 const MEDIA_PERMISSION = "media";
 const DEPRECATED_SYNC_CLIPBOARD_READ = "deprecated-sync-clipboard-read";
 const DISABLE_FEATURES_SWITCH = "disable-features";
-const SCREEN_CAPTURE_DISABLE_FEATURES = [
+
+/**
+ * Chromium capture probes that can raise macOS Screen Recording TCC.
+ * Names must match the spec 功能名核对 table; do not use Feature:param form.
+ */
+export const SCREEN_CAPTURE_DISABLE_FEATURES = [
   "ScreenCaptureKitPickerScreen",
   "ScreenCaptureKitStreamPickerSonoma",
   "ScreenCaptureKitMacScreen",
   "ScreenCaptureKitDeviceMac",
-  "ThumbnailCapturerMac:capture_mode/sc_screenshot_manager",
+  "ScreenCaptureKitFullDesktopFallback",
+  "ThumbnailCapturerMac",
+  "UseSCContentSharingPicker",
   "MacCatapLoopbackAudioForScreenShare",
-].join(",");
+  "MacCatapLoopbackAudioForCast",
+  "ScreenAIOCREnabled",
+] as const;
 
 function isDeniedPermission(permission: string): boolean {
   return (
@@ -38,15 +47,23 @@ export function applyDisplayCapturePolicy(target: Session): void {
   });
 }
 
+export function mergeDisabledScreenCaptureFeatures(existing: string): string {
+  const names = existing
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  return [...new Set([...names, ...SCREEN_CAPTURE_DISABLE_FEATURES])].join(",");
+}
+
 export function disableUnusedScreenCaptureFeatures(): void {
   if (process.platform !== "darwin") {
     return;
   }
   const existing = app.commandLine.getSwitchValue(DISABLE_FEATURES_SWITCH);
-  const merged = existing
-    ? `${existing},${SCREEN_CAPTURE_DISABLE_FEATURES}`
-    : SCREEN_CAPTURE_DISABLE_FEATURES;
-  app.commandLine.appendSwitch(DISABLE_FEATURES_SWITCH, merged);
+  app.commandLine.appendSwitch(
+    DISABLE_FEATURES_SWITCH,
+    mergeDisabledScreenCaptureFeatures(existing)
+  );
 }
 
 export function installDisplayCapturePolicy(): void {

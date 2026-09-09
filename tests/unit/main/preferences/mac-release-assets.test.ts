@@ -31,6 +31,8 @@ import {
 } from "../../../../scripts/publish-mac-release-artifacts.mjs";
 import { validateLatestRelease } from "../../../../scripts/verify-github-latest-isolation.mjs";
 import {
+  evaluateMacAppDesignatedRequirement,
+  MAC_RELEASE_TEAM_ID,
   parseArgs,
   validateMacReleaseArtifacts,
   validatePackagedMacApp,
@@ -227,6 +229,27 @@ files:
     ).toEqual([]);
   });
 
+  it("accepts identifier plus Team ID designated requirements and rejects cdhash-only", () => {
+    const stable = `designated => identifier "io.pier.app" and anchor apple generic and certificate leaf[subject.OU] = ${MAC_RELEASE_TEAM_ID}`;
+    expect(evaluateMacAppDesignatedRequirement(stable)).toBeNull();
+    expect(
+      evaluateMacAppDesignatedRequirement(
+        'designated => cdhash H"70e72b09c382b01c22a64118aca472f5e877aa03"'
+      )
+    ).toMatch(/cdhash-only/);
+    expect(
+      evaluateMacAppDesignatedRequirement(
+        'designated => identifier "com.github.Electron" and anchor apple generic'
+      )
+    ).toMatch(/identifier "io.pier.app"/);
+    expect(
+      evaluateMacAppDesignatedRequirement(
+        'designated => identifier "io.pier.app" and anchor apple generic'
+      )
+    ).toMatch(new RegExp(MAC_RELEASE_TEAM_ID));
+    expect(evaluateMacAppDesignatedRequirement("unsigned fixture")).toBeNull();
+  });
+
   it("parseArgs reads dir/version/assets", () => {
     expect(
       parseArgs([
@@ -293,6 +316,26 @@ files:
     expect(errors.join("\n")).toMatch(/Pier Helper \(Renderer\).*Assets\.car/i);
     expect(errors.join("\n")).toMatch(
       /Pier Helper \(Renderer\).*CFBundleIconName/i
+    );
+  });
+
+  it("rejects a Helper that ships an unused capture usage description", async () => {
+    const app = await makePackagedAppFixture();
+    const plist = join(
+      app,
+      "Contents/Frameworks/Pier Helper (GPU).app/Contents/Info.plist"
+    );
+    await writeFile(
+      plist,
+      (await readFile(plist, "utf8")).replace(
+        "</dict>",
+        "<key>NSCameraUsageDescription</key><string></string></dict>"
+      ),
+      "utf8"
+    );
+    const errors = await validatePackagedMacApp(app);
+    expect(errors.join("\n")).toMatch(
+      /Pier Helper \(GPU\).*NSCameraUsageDescription must not be present/
     );
   });
 

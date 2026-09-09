@@ -197,6 +197,15 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
 - 分栏 / 浮层改大小不藏 native，只拦输入；扫描范围必须含 `packages/ui/src`、`src/renderer`、`src/plugins/builtin`；例外在治理测试 allowlist 写明原因。
 - 检查点在 `tests/unit/renderer/app/gpu-compositing-governance.test.ts`。
 
+### macOS 未使用隐私权限
+
+权威规格：[`docs/superpowers/specs/2026-09-09-macos-screen-recording-tcc-gold-standard.md`](docs/superpowers/specs/2026-09-09-macos-screen-recording-tcc-gold-standard.md)。
+
+- Pier 不录屏、不采集系统音频、不用相机 / 麦克风 / 蓝牙。启动与日常不得弹出这些系统卡；根治是不再调用对应 API，并删掉 Electron 默认用途说明，不是引导用户授权。
+- Chromium 采集功能在 `app.whenReady()` 前写入 `--disable-features`（功能名单一来源，禁止参数形式）；每个 session 拒绝 `display-capture` / `media` 并回空显示媒体流。禁止启动时枚举采集源。
+- 未使用用途说明黑名单与采集 / 辅助功能 / 照片图库 API 禁止出现在产品源码与 Info.plist；正式包 afterPack 与 PierDev 必须从主应用和 Helper 删掉黑名单键。例外进治理测试 allowlist。
+- 检查点在 `tests/unit/main/macos-screen-recording-governance.test.ts`、`tests/unit/main/display-capture-policy.test.ts`、`tests/unit/scripts/mac-privacy-descriptions.test.ts`。
+
 ### shadcn 组件使用规范
 
 权威规格：[`docs/superpowers/specs/2026-09-09-shadcn-usage-gold-standard.md`](docs/superpowers/specs/2026-09-09-shadcn-usage-gold-standard.md)（组合边界、表单原语、专用渲染例外）。

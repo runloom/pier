@@ -7,6 +7,7 @@ import {
   MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS,
   MAC_INFO_PLIST_STRINGS_LOCALE_DIRS,
   MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS,
+  MAC_UNUSED_USAGE_DESCRIPTION_KEYS,
   renderInfoPlistStrings,
 } from "../../../scripts/mac-privacy-descriptions.mjs";
 import { validatePackagedMacApp } from "../../../scripts/verify-mac-release-artifacts.mjs";
@@ -35,6 +36,17 @@ describe("macOS TCC usage descriptions", () => {
     expect(Object.keys(MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS).sort()).toEqual(
       EXPECTED_KEYS
     );
+    for (const key of MAC_UNUSED_USAGE_DESCRIPTION_KEYS) {
+      expect(EXPECTED_KEYS, key).not.toContain(key);
+    }
+    expect([...MAC_UNUSED_USAGE_DESCRIPTION_KEYS]).toEqual([
+      "NSScreenCaptureUsageDescription",
+      "NSAudioCaptureUsageDescription",
+      "NSCameraUsageDescription",
+      "NSMicrophoneUsageDescription",
+      "NSBluetoothAlwaysUsageDescription",
+      "NSBluetoothPeripheralUsageDescription",
+    ]);
   });
 
   it("keeps the Info.plist fallback English-only and readable", () => {
@@ -122,6 +134,8 @@ describe("macOS TCC usage descriptions", () => {
       "renderInfoPlistStrings(MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS)"
     );
     expect(source).toContain("MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS");
+    expect(source).toContain("MAC_UNUSED_USAGE_DESCRIPTION_KEYS");
+    expect(source).toContain("stripUnusedUsageDescriptions");
   });
 });
 
@@ -215,6 +229,25 @@ describe("packaged-app usage description gate", () => {
     );
     expect(errors.join("\n")).toMatch(
       /zh_CN\.lproj\/InfoPlist\.strings drifted.*--write/
+    );
+  });
+
+  it("rejects a bundle that ships unused capture usage descriptions", async () => {
+    const app = await writePackagedFixture({
+      plistEntries: {
+        CFBundleIdentifier: "io.pier.app",
+        ...MAC_FOLDER_USAGE_DESCRIPTIONS,
+        NSScreenCaptureUsageDescription: "Pier wants to record the screen.",
+        NSCameraUsageDescription: "This app needs access to the camera",
+      },
+      localizedStrings: fullLocalizedStrings(),
+    });
+    const errors = await validatePackagedMacApp(app);
+    expect(errors.join("\n")).toMatch(
+      /NSScreenCaptureUsageDescription must not be present/
+    );
+    expect(errors.join("\n")).toMatch(
+      /NSCameraUsageDescription must not be present/
     );
   });
 
