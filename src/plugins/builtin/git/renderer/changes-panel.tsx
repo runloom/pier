@@ -310,14 +310,22 @@ function GitChangesPanelBody({
       }),
     };
   }, [language]);
+  const expectedIndexRevision =
+    state.kind === "loaded" ? (state.result.indexRevision ?? null) : null;
+  const uncommitted = source?.target.kind === "uncommitted";
   const treeModel = useMemo(
     () =>
       gitReviewTreeModel(entries, collidingFileLabel, treeGroupLabels, {
-        expectedIndexRevision:
-          state.kind === "loaded" ? (state.result.indexRevision ?? null) : null,
-        uncommitted: source?.target.kind === "uncommitted",
+        expectedIndexRevision,
+        uncommitted,
       }),
-    [collidingFileLabel, entries, source?.target.kind, state, treeGroupLabels]
+    [
+      collidingFileLabel,
+      entries,
+      expectedIndexRevision,
+      treeGroupLabels,
+      uncommitted,
+    ]
   );
 
   const handlePendingRevealHandled = useCallback(() => {

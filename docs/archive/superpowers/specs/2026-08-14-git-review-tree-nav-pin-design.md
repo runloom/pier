@@ -34,8 +34,12 @@
 | D4 | navigating 时 demand 不含目标上方、尚未 follower 的新文件 | 邻文件撑高是远跳主因 |
 | D5 | `selectedEntryKey != null` 时 `updateItem` 带 `preserveAnchor` | pending 结束后上方水合仍钉顶 |
 | D6 | estimate 虚高用 numstat（`additions+deletions`），clamp 5..48 行 | 5 行骨架只是 UI |
-| D7 | 用户滚轮走 `clearForUserIntent`，清 pending 与选中钉住 | 阅读权在用户 |
+| D7 | 用户滚正文（滚轮 / 触控 / 滚动键 / 滚动槽 pointerdown）走 `clearForUserIntent`，清 pending 与**阅读钉** | 阅读权在用户 |
 | D8 | 禁止 `loader.settled` / 整页水合 / verify 轮询 rescroll | 金标准 K4 仍成立 |
+| D9 | **B-Select ≠ 阅读钉**。`selectedTreeSectionKey` / `isActiveOpenPath` 是侧栏高亮，用户滚正文后仍钉在点过的文件。`navigation.selectedSectionKey` 是 restore / 保锚阅读钉，用户接手后必须清掉（D7）。禁止合成一套选中去清侧栏高亮。 |
+| D10 | **空 render window 不是恢复信号**。`visibleItemIds.length === 0` 不得 `restoreSelectedNavigation`。非空且不含选中项、且用户未接手时，才允许 restore。 |
+| D11 | **同路径 selection 重报不是点树**。`items` 替换 / git 状态刷新 / `resetPaths` 再报同一文件，不得 `onOpenPath`、不得 `reveal`、不得加 `navigationNonce`。用户再点当前行（含 click salvage）可以重新定位正文，但不得把树拽回。 |
+| D12 | **CodeView 总高权威是 Σ `items[].height`（geometry 钉过的槽高）**。Pierre `reconcileRenderedItems` 把 `scrollHeight` 收成可见窗时必须钉回，且赶在 `syncContainerHeight` / clamp 之前。普通滚动禁止全表 `applyDiffVirtualHeights`；允许总高被改写时按已有槽高 `pin`，仅逻辑总高变化时标脏；容器高用 Pierre 分页值，不得用未分页 Σ 对打。 |
 
 ---
 
@@ -86,6 +90,10 @@ estimateHeight = header + virtualLines × lineHeight + pad
 | navigating demand | 不含目标上方新 entry |
 | 选中未滚动时 hydrate | `preserveAnchor: true`；无第三次 `scrollTo` |
 | 用户滚动 | pending 立即 false |
+| 空 visibleItemIds | 0 次 restore |
+| 同路径 items 替换 | 0 次 `onOpenPath` / `navigationNonce` |
+| 阅读钉仍在时同 section 再 `requestTreeOpen`（无行级 reveal） | nonce 不变 |
+| 用户接手后再点同一文件 | 重新武装导航；树不 reveal |
 
 ---
 

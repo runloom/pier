@@ -6,8 +6,9 @@
  *
  * 钩子策略（性能）：
  * - recomputeLayout 后：全表 apply（结构/折叠变更）
- * - computeRenderRangeAndEmit：仅 collapse-all 意图期间全表 apply+pin
- *   （防止 Pierre 局部重算写回窗外虚高）；普通滚动不付 O(n)）
+ * - computeRenderRangeAndEmit：collapse-all 全表 apply+pin；
+ *   普通滚动禁止全表 apply。钉回赶在 Pierre syncContainerHeight / clamp 之前
+ *   （仅 logical scrollHeight 变化时标脏；容器高用分页值）
  */
 import {
   DIFF_ITEM_GAP_PX,
@@ -17,6 +18,9 @@ import {
 } from "./geometry.ts";
 
 const PATCHED = new WeakSet<object>();
+/** Pierre CodeView `SCROLL_REBASE_CONTAINER_HEIGHT` / `THRESHOLD`。 */
+const PIERRE_PAGED_SCROLL_HEIGHT_PX = 12e6;
+const PIERRE_PAGED_SCROLL_THRESHOLD_PX = 11e6;
 
 interface CodeViewLayoutItem {
   height: number;
@@ -39,7 +43,13 @@ interface CodeViewLike {
   computeRenderRangeAndEmit?: (timestamp?: number) => void;
   container?: HTMLElement | null;
   containerHeight?: number;
-  getLayout?: () => { gap: number; paddingTop?: number };
+  getHeight?: () => number;
+  getLayout?: () => {
+    gap: number;
+    paddingBottom?: number;
+    paddingTop?: number;
+  };
+  getPagedScrollHeight?: () => number;
   items?: CodeViewLayoutItem[];
   layoutDirtyIndex?: number | undefined;
   pendingLayoutReset?: unknown;
@@ -47,6 +57,7 @@ interface CodeViewLike {
   render?: (immediate?: boolean) => void;
   scrollDirty?: boolean;
   scrollHeight?: number;
+  syncContainerHeight?: () => void;
 }
 
 export interface DiffVirtualHeightOptions {
@@ -261,7 +272,10 @@ export function reconcileDiffVirtualHeights(
   return true;
 }
 
-/** 用 items[].height 之和钉死 scrollHeight 与 container.style.height。 */
+/**
+ * 逻辑总高钉成 Σ items[].height；容器高走 Pierre 分页值。
+ * 只在逻辑总高变化时标脏，避免与分页容器每帧对打。
+ */
 export function pinCodeViewScrollHeight(
   codeView: unknown,
   gap: number = DIFF_ITEM_GAP_PX
@@ -285,23 +299,30 @@ export function pinCodeViewScrollHeight(
   const layoutGap = codeView.getLayout?.().gap ?? gap;
   const heights = items.map((item) => item?.height ?? 0);
   const total = totalScrollHeight(heights, layoutGap);
-  const changed =
+  const logicalChanged =
     typeof codeView.scrollHeight !== "number" ||
-    Math.abs(codeView.scrollHeight - total) > 0.5 ||
-    codeView.containerHeight !== total;
-  codeView.scrollHeight = total;
-  codeView.scrollDirty = true;
-  if (codeView.container != null) {
-    codeView.container.style.height = `${total}px`;
-    codeView.containerHeight = total;
+    Math.abs(codeView.scrollHeight - total) > 0.5;
+  if (logicalChanged) {
+    codeView.scrollHeight = total;
+    codeView.scrollDirty = true;
   }
-  return changed;
+  const paged = pagedContainerHeight(codeView, total);
+  const containerChanged =
+    codeView.container != null &&
+    (codeView.containerHeight !== paged ||
+      codeView.container.style.height !== `${paged}px`);
+  if (containerChanged && codeView.container != null) {
+    codeView.container.style.height = `${paged}px`;
+    codeView.containerHeight = paged;
+  }
+  return logicalChanged || containerChanged;
 }
 
 /**
  * 安装 recomputeLayout + computeRenderRangeAndEmit 钩子。
  * - recomputeLayout 后：全表 apply（结构/折叠变更真源）
- * - emit：仅 collapse-all 意图期间全表 apply+pin（防窗外虚高写回）
+ * - emit：collapse-all 全表 apply+pin；普通滚动禁止全表 apply。
+ *   先包 syncContainerHeight，避免同一拍 clamp 把 scrollTop 收成 0。
  * 钩子只调用 geometry 公式，不引入第二套高度语义。
  */
 export function installDiffVirtualHeightReconciler(
@@ -324,20 +345,50 @@ export function installDiffVirtualHeightReconciler(
     };
   }
 
+  if (typeof codeView.syncContainerHeight === "function") {
+    const originalSync = codeView.syncContainerHeight.bind(codeView);
+    codeView.syncContainerHeight = () => {
+      pinCodeViewScrollHeight(codeView, optionsRef.current.metrics.gap);
+      originalSync();
+    };
+  }
+
   if (typeof codeView.computeRenderRangeAndEmit === "function") {
     const originalEmit = codeView.computeRenderRangeAndEmit.bind(codeView);
     codeView.computeRenderRangeAndEmit = (timestamp?: number) => {
       originalEmit(timestamp);
-      // 普通滚动：不付 O(n) 全表代价。
-      // 折叠全部期间：每帧全表钉高，盖住 Pierre 对可见窗的局部重算。
-      if (optionsRef.current.isCollapseAllIntent?.() === true) {
-        applyDiffVirtualHeights(codeView, optionsRef.current);
-        pinCodeViewScrollHeight(codeView, optionsRef.current.metrics.gap);
+      const options = optionsRef.current;
+      if (options.isCollapseAllIntent?.() === true) {
+        // 折叠全部：每帧全表钉高，盖住 Pierre 对可见窗的局部重算。
+        applyDiffVirtualHeights(codeView, options);
+        pinCodeViewScrollHeight(codeView, options.metrics.gap);
+        return;
       }
+      // 普通滚动：禁止全表 apply。总高若被可见窗改写，按已钉槽高 pin。
+      pinCodeViewScrollHeight(codeView, options.metrics.gap);
     };
   }
 
   applyDiffVirtualHeights(codeView, optionsRef.current);
+}
+
+function pagedContainerHeight(codeView: CodeViewLike, total: number): number {
+  if (typeof codeView.getPagedScrollHeight === "function") {
+    return codeView.getPagedScrollHeight();
+  }
+  const viewport =
+    typeof codeView.getHeight === "function" ? codeView.getHeight() : 0;
+  const layout = codeView.getLayout?.();
+  const paddingTop = layout?.paddingTop ?? 0;
+  const paddingBottom = layout?.paddingBottom ?? 0;
+  const maxScrollTop = Math.max(
+    paddingTop + total + paddingBottom - viewport,
+    0
+  );
+  if (maxScrollTop > PIERRE_PAGED_SCROLL_THRESHOLD_PX) {
+    return Math.min(total, PIERRE_PAGED_SCROLL_HEIGHT_PX);
+  }
+  return total;
 }
 
 function isCodeViewLike(value: unknown): value is CodeViewLike {

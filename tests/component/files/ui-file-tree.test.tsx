@@ -222,6 +222,105 @@ describe("PierFileTree", () => {
     expect(onOpenPath).toHaveBeenCalledWith("src/app.tsx");
   });
 
+  it("does not reopen the selected file when items are replaced with the same paths", async () => {
+    const onOpenPath = vi.fn();
+    const { container, rerender } = render(
+      <PierFileTree
+        items={items}
+        label="Project files"
+        onOpenPath={onOpenPath}
+      />
+    );
+
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", {
+        name: APP_TSX_NAME_PATTERN,
+      })
+    );
+    expect(onOpenPath).toHaveBeenCalledOnce();
+    expect(onOpenPath).toHaveBeenCalledWith("src/app.tsx");
+    onOpenPath.mockClear();
+
+    rerender(
+      <PierFileTree
+        items={items.map((item) => ({ ...item }))}
+        label="Project files"
+        onOpenPath={onOpenPath}
+      />
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onOpenPath).not.toHaveBeenCalled();
+  });
+
+  it("keeps scrollTop when items are replaced with the same paths", async () => {
+    const onOpenPath = vi.fn();
+    const manyItems: PierFileTreeItem[] = [
+      { kind: "directory", path: "group-a", hasChildren: true },
+      ...Array.from({ length: 40 }, (_, index) => ({
+        kind: "file" as const,
+        path: `group-a/file-${String(index).padStart(2, "0")}.ts`,
+      })),
+    ];
+    const { container, rerender } = render(
+      <PierFileTree
+        items={manyItems}
+        label="Changed files"
+        onOpenPath={onOpenPath}
+        stickyFolders
+      />
+    );
+    const host = getFileTreeHost(container);
+    const scroller = host.shadowRoot?.querySelector<HTMLElement>(
+      '[data-file-tree-virtualized-scroll="true"]'
+    );
+    expect(scroller).toBeInstanceOf(HTMLElement);
+    const scrollElement = scroller as HTMLElement;
+    await act(async () => {
+      scrollElement.scrollTop = 280;
+      scrollElement.dispatchEvent(new Event("scroll"));
+    });
+    expect(scrollElement.scrollTop).toBeGreaterThan(0);
+    const scrollBefore = scrollElement.scrollTop;
+    onOpenPath.mockClear();
+
+    rerender(
+      <PierFileTree
+        items={manyItems.map((item) => ({ ...item, gitStatus: "modified" }))}
+        label="Changed files"
+        onOpenPath={onOpenPath}
+        stickyFolders
+      />
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onOpenPath).not.toHaveBeenCalled();
+    expect(scrollElement.scrollTop).toBe(scrollBefore);
+  });
+
+  it("re-opens the selected file when the user clicks it again", () => {
+    const onOpenPath = vi.fn();
+    const { container } = render(
+      <PierFileTree
+        items={items}
+        label="Project files"
+        onOpenPath={onOpenPath}
+      />
+    );
+    const appRow = within(getFileTree(container)).getByRole("treeitem", {
+      name: APP_TSX_NAME_PATTERN,
+    });
+    fireEvent.click(appRow);
+    expect(onOpenPath).toHaveBeenCalledOnce();
+    expect(onOpenPath).toHaveBeenCalledWith("src/app.tsx");
+    onOpenPath.mockClear();
+    fireEvent.click(appRow);
+    expect(onOpenPath).toHaveBeenCalledOnce();
+    expect(onOpenPath).toHaveBeenCalledWith("src/app.tsx");
+  });
+
   it("revealPath API selects and expands a directory without opening it", async () => {
     const onOpenPath = vi.fn();
     const treeApi = { current: null as PierFileTreeApi | null };

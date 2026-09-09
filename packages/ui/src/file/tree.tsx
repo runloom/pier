@@ -181,9 +181,13 @@ export function PierFileTree({
 
         refsSnapshot.onSelectPaths?.(outwardSelectedPaths);
 
-        if (selectedItem?.kind === "file" && !suppressOpenPath) {
+        if (selectedItem?.kind === "file") {
+          const alreadyOpen = lastOpenedPathRef.current === selectedItem.path;
           lastOpenedPathRef.current = selectedItem.path;
-          refsSnapshot.onOpenPath?.(selectedItem.path);
+          // 投影噪音不是 open（items 替换 / git 状态 / resetPaths）。
+          if (!(suppressOpenPath || alreadyOpen)) {
+            refsSnapshot.onOpenPath?.(selectedItem.path);
+          }
         }
       },
       [readRefs]

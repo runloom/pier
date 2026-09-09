@@ -294,13 +294,63 @@ describe("useGitReviewNavigation demand sync", () => {
 
     act(() => {
       hook.result.current.notifyRenderWindowApplied({
+        bufferedItemIds: ["section:b"],
+        estimatedItemIds: [],
+        visibleItemIds: ["section:b"],
+      });
+    });
+    expect(hook.result.current.navigationPending).toBe(true);
+    expect(hook.result.current.getNavigationMemberReason()).toBe("restore");
+  });
+
+  it("does not restore from an empty render window (layout churn)", async () => {
+    const { hook } = setup();
+    act(() => {
+      hook.result.current.beginNavigation({
+        entryKey: "entry:a",
+        sectionKey: "section:a",
+      });
+      hook.result.current.tryPendingNavigation();
+    });
+    acknowledgeTargetWindow(hook);
+    await flushFrames();
+    expect(hook.result.current.navigationPending).toBe(false);
+
+    act(() => {
+      hook.result.current.notifyRenderWindowApplied({
         bufferedItemIds: [],
         estimatedItemIds: [],
         visibleItemIds: [],
       });
     });
-    expect(hook.result.current.navigationPending).toBe(true);
-    expect(hook.result.current.getNavigationMemberReason()).toBe("restore");
+    expect(hook.result.current.navigationPending).toBe(false);
+    expect(hook.result.current.getNavigationMemberReason()).toBeNull();
+  });
+
+  it("does not restore after the user takes over scrolling", async () => {
+    const { hook } = setup();
+    act(() => {
+      hook.result.current.beginNavigation({
+        entryKey: "entry:a",
+        sectionKey: "section:a",
+      });
+      hook.result.current.tryPendingNavigation();
+    });
+    acknowledgeTargetWindow(hook);
+    await flushFrames();
+
+    act(() => {
+      hook.result.current.clearForUserIntent();
+    });
+    act(() => {
+      hook.result.current.notifyRenderWindowApplied({
+        bufferedItemIds: ["section:b"],
+        estimatedItemIds: [],
+        visibleItemIds: ["section:b"],
+      });
+    });
+    expect(hook.result.current.navigationPending).toBe(false);
+    expect(hook.result.current.getSelectedSectionKey()).toBeNull();
   });
 
   it("does not resubmit a restore scroll when predecessor measurement changes", () => {

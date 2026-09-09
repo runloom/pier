@@ -101,13 +101,17 @@ function GitReviewTreeSidebarComponent({
   const handleOpenPath = useCallback(
     (path: string) => {
       onOpenPath(path);
+      // 再点当前打开项：salvage 仍会 open 拉回正文，但不得 explicit reveal 拽树。
+      if (isActiveOpenPath?.(path) === true) {
+        return;
+      }
       revealGitReviewTreeSelection(
         treeSearch.treeApiRef.current,
         path,
         treeSearch.open ? { preserveFocus: true } : undefined
       );
     },
-    [onOpenPath, treeSearch.open, treeSearch.treeApiRef]
+    [isActiveOpenPath, onOpenPath, treeSearch.open, treeSearch.treeApiRef]
   );
 
   return (

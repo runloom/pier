@@ -437,11 +437,13 @@ export function useGitReviewNavigation({
         const selectedSection = selectedSectionKeyRef.current;
         if (
           selectedSection !== null &&
+          window.visibleItemIds.length > 0 &&
           !window.visibleItemIds.includes(selectedSection)
         ) {
           // Pierre 可在标签页重新显示后继续异步校正前序项高度。
           // 语义选择仍有效且用户未接手滚动时，窗口回报就是恢复信号；
           // 重新武装一次定位，直到所选项在最终布局中可见。
+          // 空 visibleItemIds 是布局抖动，不是选中项被挤出。
           restoreSelectedNavigation();
         }
       }

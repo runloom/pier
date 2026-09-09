@@ -96,6 +96,28 @@ export function buildActivateNavigationRequest(
   };
 }
 
+/**
+ * 同 section 且阅读钉仍在：不是点树，不得加 navigationNonce。
+ * 行级 reveal 或用户已接手（pin 已空）必须放行。
+ */
+export function shouldSkipDuplicateTreeOpen(input: {
+  readonly currentPin: {
+    readonly entryKey: string;
+    readonly sectionKey: string;
+  } | null;
+  readonly entryKey: string;
+  readonly reveal?: ReviewTreeOpenReveal;
+  readonly sectionKey: string;
+}): boolean {
+  if (input.reveal !== undefined) {
+    return false;
+  }
+  return (
+    input.currentPin?.entryKey === input.entryKey &&
+    input.currentPin?.sectionKey === input.sectionKey
+  );
+}
+
 /** 活动面的正文工具条能力（折叠等），由共享 header trailing 消费 */
 export interface ReviewActiveChrome {
   readonly allCollapsed: boolean;
@@ -139,6 +161,8 @@ export interface ReviewSurfaceProps {
   readonly onSurfaceNavigationSettled: (
     request: ReviewSurfaceNavigationRequest
   ) => void;
+  /** 用户接手正文滚动：父级放开阅读钉，允许再点当前文件拉回。 */
+  readonly onUserReleasedReadingPin: () => void;
   readonly panelId: string;
   readonly panelVisible: boolean;
   /** 评论 reveal 意图（状态栏跳转）；反查后触发 onRequestTreeOpen(reveal)。 */
@@ -164,6 +188,7 @@ export type ReviewDocumentsProps = Omit<
   | "onSurfaceNavigationSettled"
   | "onMutationTransition"
   | "onRequestTreeOpen"
+  | "onUserReleasedReadingPin"
   | "onAcquireMutationAuthority"
   | "onSelectSurface"
   | "viewOptions"

@@ -62,15 +62,15 @@ export function useGitReviewTreeOpen(options: {
       if (!fileRef) {
         return;
       }
-      if (onRequestOpen) {
-        onRequestOpen(fileRef);
-        return;
-      }
       const alreadyOpen =
         getSelectedEntryKey() === fileRef.entryKey &&
         getSelectedSectionKey() === fileRef.sectionKey;
-      // 已打开同一 section：硬 no-op（含 setState），避免 revealPath 双写抖树。
+      // 文档自带树的 openTreeNode：已打开同一 section 则 no-op。侧栏点击走 requestTreeOpen。
       if (alreadyOpen) {
+        return;
+      }
+      if (onRequestOpen) {
+        onRequestOpen(fileRef);
         return;
       }
       setSelectedTreeTarget({
