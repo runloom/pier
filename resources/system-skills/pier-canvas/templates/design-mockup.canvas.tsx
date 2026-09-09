@@ -17,22 +17,9 @@ import {
 } from "pier/canvas";
 
 /**
- * Showcase for the board stage: one product surface ("Library") mocked at
- * three device sizes on a world plane, plus a caption note in world space.
- * The responsive differences between frames are the design story.
- * Rewrite every user-visible string into the user's language before delivery.
- *
- * Composition notes (this template doubles as a reference):
- * - `Text` sizing/weight/color come from `as` + `tone` variants (inline
- *   styles own typography; `text-*` / `font-*` classes would be ignored).
- * - `Stack` / `Row` stretch to 100% width. Fixed-width blocks (sidebar,
- *   caption) use a plain flex `div` so `w-*` classes apply.
- * - `Row` alignment comes from the `align` / `justify` / `wrap` props.
- *
- * Fonts: UI font only — design frames must look like product UI.
- * Comments stay in host Design Mode: keep a stable `data-pier-comment-id`
- * on each frame so whole-frame pins survive reload. Inner controls stay
- * pickable; do not fake pin chrome.
+ * recipe=design: one product surface at three device sizes on WorldStage.
+ * Keep a stable `data-pier-comment-id` on each frame. Do not fake pin chrome.
+ * Rewrite every user-visible string into the user's language.
  */
 export const canvas = {
   description: "Multi-device Library mockup on a world stage.",

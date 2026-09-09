@@ -22,7 +22,8 @@
     "./diff-view": "./src/diff-view/index.tsx",
     "./diff-view.tsx": "./src/diff-view/index.tsx",
     "./comments/*": "./src/comments/*",
-    "./hooks/*": "./src/hooks/*"
+    "./hooks/*": "./src/hooks/*",
+    "./canvas-workflow/*": "./src/canvas-workflow/*"
   },
   "dependencies": {
     "@mermaid-js/layout-elk": "^0.2.3",

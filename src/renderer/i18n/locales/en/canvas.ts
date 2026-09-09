@@ -34,4 +34,8 @@ export const canvas = {
     costPeriod: "Cost · last {{count}} days",
     costTokens: "Tokens · last {{count}} days",
   },
+  workflow: {
+    invalidTitle: "This flowchart can’t be drawn",
+    invalidHint: "{{message}} Next: {{fix}}",
+  },
 } as const;

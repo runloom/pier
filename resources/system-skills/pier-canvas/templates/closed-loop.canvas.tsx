@@ -24,29 +24,28 @@ import {
 import { useState } from "react";
 
 /**
- * Starter for methodology / primary_nav_5 (closed-loop):
- * overview → problem → design → path (Day 1) → landing.
- *
- * - Default static expression (see references/methodology.md Expression selection)
- * - Bind adjacent data.json (useCanvasFile); do not add Play/Step chrome
- * - Rewrite every user-visible string into the user's language before delivery
+ * primary_nav_5: overview → problem → design → path (Day 1) → landing.
+ * Approval / recover loops use recipe=workflow, not the Day-1 Mermaid.
+ * Bind adjacent data.json in the generated canvas; this starter is structure
+ * only. Do not add Play/Step chrome.
+ * Rewrite every user-visible string into the user's language.
  */
 export const canvas = {
   description:
-    "Closed-loop overview: conclusion first, five sections including a Day-1 recipe, static figures and tables. No required interactive demo.",
+    "Closed-loop product spine: conclusion first, five sections including a Day-1 recipe. No required interactive demo.",
   kind: "composition" as const,
-  title: "Proposal overview",
+  title: "Closed-loop proposal",
 };
 
 function H2({ children }: { children: string }) {
   return <Text as="h2">{children}</Text>;
 }
 
-export default function OverviewCanvasTemplate() {
+export default function ClosedLoopCanvasTemplate() {
   const [tab, setTab] = useState("overview");
 
   return (
-    <Frame maxWidth={960}>
+    <Frame>
       <Stack gap={16}>
         <Stack gap={8}>
           <Row gap={8} wrap>
@@ -294,25 +293,21 @@ export default function OverviewCanvasTemplate() {
           <TabsContent className="mt-4" value="path">
             <Stack gap={14}>
               <H2>Day 1</H2>
+              <Text tone="secondary">
+                Day 1 is the shortest command path. Approval, deny, and retry
+                belong on <code>recipe=workflow</code>, not this page.
+              </Text>
               <Mermaid
-                aria-label="Day-1 loop"
+                aria-label="Day-1 command path"
                 direction="left-to-right"
                 edges={[
                   { source: "A", target: "B" },
                   { source: "B", target: "C" },
-                  { label: "continue", source: "C", target: "D" },
-                  { source: "D", target: "C" },
-                  { label: "needs a person", source: "C", target: "E" },
-                  { source: "E", target: "C" },
-                  { label: "failed", source: "C", target: "F" },
                 ]}
                 nodes={[
                   { id: "A", kind: "tool", title: "Discover" },
                   { id: "B", kind: "tool", title: "Start" },
-                  { id: "C", title: "Actionable exit", tone: "warning" },
-                  { id: "D", kind: "tool", title: "Next turn" },
-                  { id: "E", kind: "artifact", title: "Attention list" },
-                  { id: "F", title: "Stop + next", tone: "danger" },
+                  { id: "C", kind: "artifact", title: "Next turn" },
                 ]}
               />
               <div className="overflow-x-auto rounded-lg border">

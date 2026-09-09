@@ -195,11 +195,11 @@ describe("pier-canvas methodology packs", () => {
     expect(pathView?.label).toBe("Day 1");
   });
 
-  it("overview template is a solid five-section product spine without demo chrome", () => {
+  it("closed-loop template is a solid five-section product spine without demo chrome", () => {
     const template = readFileSync(
       join(
         process.cwd(),
-        "resources/system-skills/pier-canvas/templates/overview.canvas.tsx"
+        "resources/system-skills/pier-canvas/templates/closed-loop.canvas.tsx"
       ),
       "utf8"
     );
@@ -263,11 +263,12 @@ describe("pier-canvas methodology packs", () => {
       readdirSync(join(PACKS_ROOT, "recipes"))
         .filter((name) => !name.startsWith("."))
         .sort()
-    ).toEqual(["design", "task-dag", "task-list"]);
+    ).toEqual(["design", "task-dag", "task-list", "workflow"]);
     const recipes = [
       { id: "design", stage: "world" },
       { id: "task-list", stage: "flow" },
       { id: "task-dag", stage: "flow" },
+      { id: "workflow", stage: "world" },
     ] as const;
     for (const recipe of recipes) {
       const pack = JSON.parse(
@@ -291,6 +292,8 @@ describe("pier-canvas methodology packs", () => {
     expect(skill).toContain("templates/design-mockup.canvas.tsx");
     expect(skill).toContain("recipe=task-list");
     expect(skill).toContain("recipe=task-dag");
+    expect(skill).toContain("recipe=workflow");
+    expect(skill).toContain("templates/workflow.canvas.tsx");
     expect(skill).not.toContain("recipe=tracker-board");
     expect(skill).not.toContain("templates/tracker-board.canvas.tsx");
     expect(skill).not.toContain("packs/recipes/tracker-board/");
@@ -321,5 +324,48 @@ describe("pier-canvas methodology packs", () => {
     );
     expect(hostData).not.toContain("workbench-examples");
     expect(authoring).not.toContain("workbench-examples");
+    expect(authoring).toContain("WorkflowDiagram");
+    expect(authoring).toContain("validateWorkflowSpec");
+    expect(authoring).toContain("## Workflow diagrams");
+  });
+
+  it("keeps a closed starter set: one template per shell or recipe", () => {
+    const templatesDir = join(
+      process.cwd(),
+      "resources/system-skills/pier-canvas/templates"
+    );
+    const templates = readdirSync(templatesDir)
+      .filter((name) => name.endsWith(".canvas.tsx"))
+      .sort();
+    expect(templates).toEqual([
+      "closed-loop.canvas.tsx",
+      "decision.canvas.tsx",
+      "design-mockup.canvas.tsx",
+      "docs.canvas.tsx",
+      "one-pager.canvas.tsx",
+      "task-dag.canvas.tsx",
+      "task-list.canvas.tsx",
+      "workflow.canvas.tsx",
+    ]);
+
+    const expectedByPack: Record<string, string> = {
+      "presentation/decision_nav_4": "templates/decision.canvas.tsx",
+      "presentation/one_pager": "templates/one-pager.canvas.tsx",
+      "presentation/primary_nav_5": "templates/closed-loop.canvas.tsx",
+      "recipes/design": "templates/design-mockup.canvas.tsx",
+      "recipes/task-dag": "templates/task-dag.canvas.tsx",
+      "recipes/task-list": "templates/task-list.canvas.tsx",
+      "recipes/workflow": "templates/workflow.canvas.tsx",
+    };
+    for (const [key, template] of Object.entries(expectedByPack)) {
+      const slash = key.indexOf("/");
+      const axis = key.slice(0, slash);
+      const id = key.slice(slash + 1);
+      const pack = JSON.parse(
+        readFileSync(join(PACKS_ROOT, axis, id, "pack.json"), "utf8")
+      ) as { template?: string };
+      expect(pack.template, key).toBe(template);
+      expect(templates).toContain(template.slice("templates/".length));
+    }
   });
 });

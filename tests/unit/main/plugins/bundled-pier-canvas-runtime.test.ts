@@ -13,11 +13,7 @@ const skillRoot = join(
   "system-skills",
   "pier-canvas"
 );
-const templateNames = [
-  "composition.canvas.tsx",
-  "docs.canvas.tsx",
-  "kit.canvas.tsx",
-] as const;
+const templateNames = ["one-pager.canvas.tsx", "docs.canvas.tsx"] as const;
 
 const temporaryRoots: string[] = [];
 const services: ReturnType<typeof createLiveModulesService>[] = [];

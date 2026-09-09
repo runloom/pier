@@ -436,6 +436,20 @@ describe("context-menu composed sketches", () => {
       "|",
       FILES_REVEAL_COMMAND_ID,
     ]);
+    expect(
+      menuSketch("files/canvas-preview", {
+        metadata: {
+          flowMeasure: false,
+          path: "a.canvas.tsx",
+          root: "/repo",
+        },
+      })
+    ).toEqual([
+      "pier.panel.copySelection",
+      "pier.panel.selectAll",
+      "|",
+      FILES_REVEAL_COMMAND_ID,
+    ]);
   });
 
   it("sketches panel/content clipboard then layout when multi-group", () => {

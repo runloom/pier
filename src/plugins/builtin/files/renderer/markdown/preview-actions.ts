@@ -15,12 +15,23 @@ import { createFilesTranslate, type FilesTranslate } from "../i18n.ts";
 import { FILES_CANVAS_PREVIEW_SURFACE } from "../preview/canvas-preview-surface.ts";
 import {
   FILES_MARKDOWN_PREVIEW_SURFACE,
+  type MarkdownMeasureMode,
   type MarkdownReadingAppearance,
   readMarkdownMeasureMode,
   readMarkdownReadingAppearance,
   writeMarkdownMeasureMode,
   writeMarkdownReadingAppearance,
 } from "./preview-preferences.ts";
+
+function canvasMeasureHidden(
+  mode: MarkdownMeasureMode,
+  invocation?: RendererPluginActionInvocation
+): boolean {
+  if (invocation?.metadata?.flowMeasure === false) {
+    return true;
+  }
+  return readMarkdownMeasureMode() === mode;
+}
 
 function previewAction(action: {
   group: string;
@@ -137,7 +148,8 @@ export function createFilesMarkdownPreviewActions(
       surfaces: [FILES_MARKDOWN_PREVIEW_SURFACE, FILES_CANVAS_PREVIEW_SURFACE],
       title: () =>
         t("filePanel.markdown.measure.comfortable", "Comfortable reading"),
-      menuHidden: () => readMarkdownMeasureMode() === "comfortable",
+      menuHidden: (invocation) =>
+        canvasMeasureHidden("comfortable", invocation),
       handler: () => {
         writeMarkdownMeasureMode("comfortable");
       },
@@ -148,7 +160,7 @@ export function createFilesMarkdownPreviewActions(
       sortOrder: 2,
       surfaces: [FILES_MARKDOWN_PREVIEW_SURFACE, FILES_CANVAS_PREVIEW_SURFACE],
       title: () => t("filePanel.markdown.measure.wide", "Wide reading"),
-      menuHidden: () => readMarkdownMeasureMode() === "wide",
+      menuHidden: (invocation) => canvasMeasureHidden("wide", invocation),
       handler: () => {
         writeMarkdownMeasureMode("wide");
       },

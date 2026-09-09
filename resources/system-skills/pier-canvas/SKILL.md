@@ -11,364 +11,177 @@ disable-model-invocation: true
 
 # Create a Pier Canvas
 
-This skill only creates or updates Pier Canvases. Its canonical identifier is
-`pier-canvas`:
+Canonical id: `pier-canvas`. In Pier, type `/canvas` and select it. Codex:
+`$pier-canvas`. Cursor / Claude Code: `/pier-canvas`.
+`disable-model-invocation` is a Cursor hint; Pier still sends the explicit
+invocation. If Cursor's `canvas` skill is present, follow this file.
 
-- In Pier, type `/canvas` and select `pier-canvas` from the suggestions.
-- Codex receives `$pier-canvas`; Cursor, Claude Code, and compatible agents
-  receive `/pier-canvas`.
-- `disable-model-invocation` is a Cursor compatibility hint. Pier still sends
-  the canonical explicit invocation because this field is not portable across
-  every Agent Skills client.
-- If Cursor's built-in `canvas` skill is also present, follow this file for the
-  current task. The two skills use different protocols.
+Canvas is a product-core overview, not a CLI side effect. Parameters are
+**skill invocation args**, not shell flags.
 
-**Canvas is a product-core overview surface**, not a CLI side effect. Parameters
-below are **skill invocation args**, not shell flags.
+| File | Owns |
+| --- | --- |
+| [authoring.md](references/authoring.md) | APIs, fonts, geometry, Mermaid, WorkflowDiagram |
+| [methodology.md](references/methodology.md) | Axes, expression, tab IA |
+| [verification.md](references/verification.md) | Delivery checks |
+| [host-data.md](references/host-data.md) | Plugin snapshots, applets, `settings.open` |
+| `packs/*/pack.json` | Fields, gates, anti-patterns, `template` |
 
 ## Invocation parameters
 
-Parse these from the user message when present. **You infer omitted route
-args from intent** (see **Auto-resolve**). The host only injects `locale=`; it
-does not stamp `mode` / `recipe` / `content`. Unknown pack ids are hard
-failures (do not guess). Explicit `mode=` / `recipe=` / `content=` /
-`presentation=` always win.
+Parse from the user message. **You infer omitted route args** (see
+**Auto-resolve**). The host only injects `locale=`. Unknown pack ids are hard
+failures. Explicit `mode=` / `recipe=` / `content=` / `presentation=` always
+win.
 
 | Param | Default | Meaning |
 | --- | --- | --- |
-| `mode` | *you infer* | `methodology` = overview packs; `freeform` = classic free authoring. Fallback after you infer: `methodology`. |
-| `content` | *you infer* | Content pack id under `packs/content/`. Used in methodology. Fallback: `design-doc`. |
-| `presentation` | *resolved* | See **Pack selection**. Do not default every overview to five tabs. |
-| `ui` | `pier-default` | UI pack id under `packs/ui/` |
-| `recipe` | *you infer* | Freeform starter: `design`, `task-list`, or `task-dag` (see **Stage selection**). Ignored in methodology mode. Project-level tracking is the **plugin panel** (⌘N / command palette “Task tracker”). Canvas recipes are named list/DAG **islands**, not a second kanban. |
-| `slug` | derived from title | Directory name under `.pier/canvases/<slug>/` |
-| `locale` | injected by Pier | BCP-47 UI language (`en`, `zh-CN`, …). Host adds this on send. |
+| `mode` | *you infer* | `methodology` or `freeform`. Fallback after infer: `methodology`. |
+| `content` | *you infer* | `packs/content/` id. Methodology only. Fallback: `design-doc`. |
+| `presentation` | *resolved* | **Pack selection** below. Do not default every overview to five tabs. |
+| `ui` | `pier-default` | `packs/ui/` id |
+| `recipe` | *you infer* | `design`, `workflow`, `task-list`, or `task-dag`. Ignored in methodology. Daily tracking is the plugin panel (⌘N), not a canvas kanban. |
+| `slug` | from title | `.pier/canvases/<slug>/` |
+| `locale` | injected | BCP-47 (`en`, `zh-CN`, …). |
 
-**Pack selection** (presentation omitted → resolve from content; explicit id wins):
+**Pack selection** (omitted presentation → from content; explicit id wins):
 
-| content | resolved presentation | Use when |
+| content | presentation | Use when |
 | --- | --- | --- |
-| `design-doc` (default) | `decision_nav_4` | Architecture / RFC / product decision. Four tabs: Overview → Problem → Design → Landing. **No Day-1 tab.** |
-| `closed-loop` | `primary_nav_5` | Runtime / CLI control plane with a copyable Day-1 recipe. Five tabs: Overview → Problem → Design → **Day 1** → Landing. |
-| either | `one_pager` (explicit) | Short single-scroll BLUF |
+| `design-doc` | `decision_nav_4` | RFC / architecture. Overview → Problem → Design → Landing. No Day-1 tab. |
+| `closed-loop` | `primary_nav_5` | Runtime with a copyable Day-1 recipe. Overview → Problem → Design → **Day 1** → Landing. |
+| either | `one_pager` (explicit) | Single-scroll BLUF |
 
-Unknown pack ids are hard failures. Do not invent a Day-1 tab for `design-doc` unless the user has a real ≤4-step recipe **and** they pass `presentation=primary_nav_5`.
+Do not invent a Day-1 tab for `design-doc` unless the user has a real ≤4-step
+recipe **and** passes `presentation=primary_nav_5`. Project override:
+`.pier/canvas-packs/{content,presentation,ui}/<id>/pack.json`.
 
 ## Audience language
 
-Skill files and pack ids are English (agent protocol). **Every user-visible string in the Canvas and `data.json` must match the user.**
+Skill files and pack ids are English. **Every user-visible string must match
+the user.**
 
-Resolve language in this order:
+1. `locale=` (Pier injects UI language).
+2. Else the language of the current request.
+3. Never keep template English because the starter used it.
 
-1. The `locale=` invocation arg (Pier injects the current UI language on send).
-2. If `locale` is missing, the language of the current user request.
-3. Never keep the template language just because the starter file used it.
-
-Tab labels come from **one glossary**: `i18n/nav.json`.
-
-```text
-labels[<viewId>][<locale>] ?? labels[<viewId>].en ?? view.label
-```
-
-`en` is required. Other locales are optional — missing keys fall back to `en`. Adding a language means adding a column in `i18n/nav.json` only.
-
-Apply that language to tab labels, titles, badges, body copy, table headers, `aria-label`s, and `canvas.title` / `canvas.description`. View **ids** stay English (`overview`, `problem`, `design`, `path`, `landing`).
-
-Examples (skill calls, not shell). Outcomes below are **what you decide**,
-not tags the host injects:
-
-```text
-/pier-canvas
-  No extra ask → methodology design-doc (reading Frame)
-
-/pier-canvas 帮我出 UI 设计稿
-  You infer: freeform design recipe (WorldStage). Do not wrap in Frame.
-
-/pier-canvas content=closed-loop
-  Runtime closed-loop (primary_nav_5, includes Day 1)
-
-/pier-canvas content=design-doc presentation=one_pager
-  One-page design overview for <topic>
-
-/pier-canvas mode=freeform recipe=design
-  Multi-device mockup on a world stage (explicit)
-
-/pier-canvas mode=freeform recipe=task-list
-  Named list island in a flow canvas. Import
-  `@pier-applet/pier.tasks/task-list`. Daily tracking is ⌘N → Task tracker.
-
-/pier-canvas mode=freeform recipe=task-dag
-  Named experimental dependency island. Prefer the panel or list when the
-  graph is hard to read.
-
-Do **not** treat `pier tasks` CLI (run a script) as the tracker board.
-Do **not** scaffold a tracker-board canvas — the kanban lives in the plugin
-panel. If the user wants to “see tasks / verify the tracker”, tell them to
-open the Task tracker panel after connecting a tracker in project settings.
-Only scaffold a canvas when they ask for a **named list or DAG slice**.
-```
-
-Recommended combo for runtime/control-plane schemes:
-
-```text
-content=closed-loop presentation=primary_nav_5 ui=pier-default
-```
-
-Project pack override (when present, wins over built-in):
-
-```text
-.pier/canvas-packs/{content,presentation,ui}/<id>/pack.json
-```
-
-## Hard boundaries
-
-- Before assembling, look at `.pier/canvases/canvas-kit/canvas-kit.canvas.tsx`
-  and `sdk/*.d.ts`. Only import named exports that already exist in
-  `pier/canvas`. Import commands, events, and snapshots from `pier/host`.
-  The API tab is a capability catalog (`useCanvasFile` plus host domains).
-  Do not invent APIs or import workbench widgets.
-  Plugin data: `plugin.list` / `inspect` → `useHostSnapshot("plugin:<id>/<key>")`
-  → declared `pluginAction.invoke` only. Add/remove/OAuth via `settings.open`.
-  Compose with primitives (`Item`, `Table`, `Progress`); see
-  `references/host-data.md`. Never ship `AccountsCard` / `canvasWidgets`.
-
-- Write outputs only under `.pier/canvases/**` in the current project
-  (product default). Preview roots are the full editable list in
-  `.pier/live-modules.json` → `contentDirectories` (factory defaults:
-  `.pier/canvases` + `docs`, also editable under Settings → Projects →
-  General). Legacy `extraContentDirectories` is one-way migrated as
-  defaults ∪ extras. `/pier-canvas` still creates under `.pier/canvases`
-  unless the user explicitly asks otherwise.
-
-- Import React Canvas UI from `pier/canvas`. Import commands from
-  `pier/host`. Never use `cursor/canvas`.
-- Never write to product-private caches such as
-  `~/.cursor/projects/**/canvases`.
-- Do not access `window.pier`, Electron, Node.js, IPC, `eval`, or dynamic
-  imports.
-- Do not copy Pier host component source. Compose `pier/canvas` primitives and
-  existing project components.
-- A Canvas runs as trusted project code in the host renderer realm. It is not a
-  security sandbox.
-- Do not register extra system skills for each methodology pack. Packs live
-  under this skill's `packs/` directory.
+Tab labels: `i18n/nav.json` →
+`labels[<viewId>][<locale>] ?? labels[<viewId>].en ?? view.label`.
+View ids stay English (`overview`, `problem`, `design`, `path`, `landing`).
 
 ## Auto-resolve (do this first)
 
 **You choose the preview shell.** The host does not infer the shell and does
-not rewrite the invoke with `mode=` / `recipe=` / `content=`. Do not start
-Workflow A just because `/pier-canvas` was typed. Do not ask which shell to
-use. Do not match a keyword list — judge the **intended artifact**.
+not rewrite the invoke. Do not start Workflow A just because `/pier-canvas`
+was typed. Do not ask which shell to use.
 
-When `mode`, `recipe`, `content`, and `presentation` are all omitted, decide
-before writing any file:
-
-1. **What will they look at?** Pick the geometry that artifact needs.
-2. **Write that root.** You do not need to stamp tags onto the user's message.
-
-| Intended artifact | Infer | Root shell | Workflow |
+| Intended artifact | Infer | Root | Pack / start from |
 | --- | --- | --- | --- |
-| App / product **screens** at device size (mockup, wireframe, visual UI, multi-device layout) | `mode=freeform recipe=design` | `WorldStage` | B |
-| A **one-screen operational board** that owns its own scroll | `mode=freeform` | `<Stack fill>` | B |
-| A **named task list or DAG island** (not the project tracker) | `mode=freeform recipe=task-list` (or `task-dag`) | `Frame` | B |
-| A **manual / handbook** with chapters and sidebar | `mode=freeform` | `DocsShell` | B |
-| A **control plane** they will run tomorrow (Day-1 recipe) | `mode=methodology content=closed-loop` | `Frame` | A |
-| A **decision / RFC / architecture write-up**, or a bare invoke with no extra ask | `mode=methodology content=design-doc` | `Frame` | A |
+| Product **screens** | `mode=freeform recipe=design` | `WorldStage` | `packs/recipes/design/` · `templates/design-mockup.canvas.tsx` |
+| Approval / recover flowchart | `mode=freeform recipe=workflow` | `WorkflowDiagram` | `packs/recipes/workflow/` · `templates/workflow.canvas.tsx` |
+| One-screen board that owns scroll | `mode=freeform` | `<Stack fill>` | compose; no starter |
+| Named task list island | `mode=freeform recipe=task-list` | `Frame` | `packs/recipes/task-list/` · `templates/task-list.canvas.tsx` |
+| Named task DAG island | `mode=freeform recipe=task-dag` | `Frame` | `packs/recipes/task-dag/` · `templates/task-dag.canvas.tsx` |
+| Manual / handbook | `mode=freeform` | `DocsShell` | `templates/docs.canvas.tsx` |
+| Component catalog | `mode=freeform` | `Frame` | `.pier/canvases/canvas-kit/` (no skill starter) |
+| Control plane with Day-1 recipe | `mode=methodology content=closed-loop` | `Frame` | `templates/closed-loop.canvas.tsx` |
+| Decision / RFC, or a bare invoke | `mode=methodology content=design-doc` | `Frame` | `templates/decision.canvas.tsx` |
+| Short single-scroll BLUF | `presentation=one_pager` | `Frame` | `templates/one-pager.canvas.tsx` |
 
-If intent is mixed, pick the **primary** artifact (what they spend time looking
-at). “Design” of an architecture is still a document. “Design” of an app
-screen is a world mockup.
-
-Hard rules:
+Mixed intent → pick the **primary** artifact. Architecture “design” is a
+document. App-screen “design” is a world mockup.
 
 - A mockup is **not** a design-doc with Artboards inside a Design tab.
 - Do not wrap a reading doc in `WorldStage`.
 - Do not stack phone/desktop frames as a document inside `Frame`.
-- Explicit args always win over inference.
-- Omitted `mode` is **not** a synonym for methodology.
+- Explicit args win. Omitted `mode` is **not** a synonym for methodology.
+- Do **not** scaffold a tracker-board canvas. Daily tracking is ⌘N → Task
+  tracker.
+
+Unknown `recipe` ids are hard failures. When `recipe=` is set, use
+**Workflow B**.
 
 ## Stage selection (flow vs world vs fill)
 
-The files preview is **one shell**. The canvas root chooses the geometry.
-Do not set a meta flag or invent a third “app mode”.
+The files preview is **one shell**. **Pick the shell from the user's ask** —
+do not ask the user. Geometry: [authoring.md](references/authoring.md).
 
-Four root shells exist. **Pick the shell from the user's ask before writing
-code — do not ask the user to choose a shell:**
-
-| Root shell | Auto-select when the ask is… | Preview chrome it gets |
+| Root shell | When | Preview chrome |
 | --- | --- | --- |
-| `Frame` (flow, default) | An article, decision overview, dashboard that scrolls | Reading measure (`max-w-5xl`); no zoom chrome |
-| `DocsShell` (flow, docs) | A manual / multi-section docs site with sidebar nav | Inherits global reading size + document font passively; **no floating font-scale control** — the docs shell owns its chrome |
-| `<Stack fill>` (`data-canvas-fill`) | A one-screen board or app shell that owns its own scroll | Full-bleed; the flow measure is dropped |
-| `WorldStage` | Multi-device mockups, live DAG, whiteboard layout | Viewport zoom/pan; fit / 100% controls (world only) |
+| `Frame` (flow) | Article, decision overview, scrolling dashboard | Reading measure (`max-w-5xl` comfortable / full-bleed wide); no zoom |
+| `DocsShell` (flow) | Manual with sidebar | Document font + reading size; **no floating font-scale control** |
+| `<Stack fill>` | One-screen board that owns scroll | Full-bleed; measure dropped |
+| `WorldStage` | Multi-device mockups, whiteboard | Viewport zoom/pan; fit / 100% |
 
-- Do not wrap a reading doc in `WorldStage`.
-- Do not stack phone/desktop frames as a document inside `Frame` — use
-  `WorldStage` + `Artboard` (`preset`) + `Layer`.
-- Full-bleed app shells use **fill**, not world.
-- `ArtboardStage` stays a **fit-all card in flow** (same as `Mermaid`). Inline
-  zoom/pan is world only.
-- Unknown `recipe` ids are hard failures. Known recipes:
+- Full-bleed boards use **fill**, not world.
+- `ArtboardStage` is a **fit-all card in flow** (same as `Mermaid`). Wheel
+  zoom is world only.
 
-| `recipe` | Pack | Stage | Start from |
-| --- | --- | --- | --- |
-| `design` | `packs/recipes/design/` | world | `templates/design-mockup.canvas.tsx` |
-| `task-list` | `packs/recipes/task-list/` | flow | `templates/task-list.canvas.tsx` |
-| `task-dag` | `packs/recipes/task-dag/` | flow | `templates/task-dag.canvas.tsx` |
+## Hard boundaries
 
-When `recipe=` is set, use **Workflow B** (freeform). Do not invent methodology
-tabs for a mockup or a DAG viewer.
+- Look at `.pier/canvases/canvas-kit/canvas-kit.canvas.tsx` and `sdk/*.d.ts`.
+  **Only import named exports** from `pier/canvas`. Commands from
+  `pier/host`. Plugin data: `plugin.list` / `inspect` →
+  `useHostSnapshot("plugin:<id>/<key>")` → declared `pluginAction.invoke`.
+  CRUD/OAuth via `settings.open`. See [host-data.md](references/host-data.md).
+  Never ship `AccountsCard` / `canvasWidgets`.
+- Write under `.pier/canvases/**` unless the user asks otherwise.
+- Never `cursor/canvas`, `window.pier`, Electron, Node, IPC, `eval`, dynamic
+  import, or host component source.
+- Do not register extra system skills per pack.
 
 ## Workflow A — methodology
 
-Use when you inferred an overview, or the user passed `mode=methodology`.
-**Do not use this workflow for a UI mockup / screen-design ask.**
+Use when you inferred an overview or `mode=methodology`. Not for a UI mockup.
 
-1. Resolve packs: project `.pier/canvas-packs/...` then this skill's `packs/`.
-   Read each `pack.json`. Hard fail if any id is missing.
-2. Choose `kind: "composition"` for product overviews unless the user
-   explicitly needs `docs` or `kit`.
-3. Create or update:
+1. Resolve packs (project then built-in). Hard fail if missing.
+2. `kind: "composition"` unless the user needs `docs` or `kit`.
+3. Write `.pier/canvases/<slug>/{instance.json,data.json,<slug>.canvas.tsx}`.
+4. Content pack → `data.json` from `required` / `gates` / `agentPrompt`. No
+   layout.
+5. Run gates; stop on failure.
+6. Presentation pack → `views` / `antiPatterns` / `template`. BLUF first; one
+   `primary`; ≤5 tabs. **static product design** (methodology
+   **Expression selection**). No Play/Step unless a mechanism explainer.
+7. UI pack `rules` / `forbidden` (default `pier-default`).
+8. `instance.json`: `content`, `presentation`, `ui`, `status: "draft"`,
+   `role: "overview"`.
+9. Read `sdk/index.d.ts`. Run [verification.md](references/verification.md).
 
-   ```text
-   .pier/canvases/<slug>/
-     instance.json
-     data.json
-     <slug>.canvas.tsx
-   ```
-
-4. **Content pack**: fill or update `data.json` only. Follow `required`,
-   `gates`, and `agentPrompt` in the pack. Do not invent layout here.
-5. Run content gates. If any fail, stop and list missing fields.
-6. **Presentation pack**: implement the overview Canvas from `views` and
-   `antiPatterns`. Overview obligations:
-   - First screen: BLUF/conclusion + goals or constraints + ≤1 main diagram
-   - Ordered nav with exactly one `primary` view; ≤5 top-level tabs
-   - Plan DAGs, competitor essays, and review archives are not the default tab
-   - **Expression**: default **static** product design (see methodology
-     «Expression selection»). Do not add Play/Step demo chrome unless the user
-     explicitly needs a mechanism explainer with per-frame insight.
-7. **UI pack**: apply `rules` / `forbidden` (default `pier-default`).
-8. Write `instance.json`:
-
-   ```json
-   {
-     "schemaVersion": 1,
-     "content": "<content id>",
-     "presentation": "<presentation id>",
-     "ui": "<ui id>",
-     "status": "draft",
-     "role": "overview"
-   }
-   ```
-
-9. Templates: `templates/decision.canvas.tsx` for `decision_nav_4` (four tabs, no Day 1);
-   `templates/overview.canvas.tsx` for `primary_nav_5` (five tabs including Day 1);
-   single scrolling Frame for `one_pager`. Starters are English scaffolds —
-   rewrite visible copy into the user's language.
-10. Read `sdk/index.d.ts` and focused declarations before using APIs.
-11. Run verification requirements before delivery.
-
-Restyle (same content, new presentation/ui): keep `data.json`, change
-presentation/ui packs, regenerate the Canvas and update `instance.json`.
+Restyle: keep `data.json`, change packs, regenerate the Canvas.
 
 ## Workflow B — freeform
 
-Use when `mode=freeform`, `recipe=` is set, you inferred a freeform shell,
-or the user clearly asks for an unconstrained canvas.
+Use when `mode=freeform`, `recipe=` is set, or you inferred a freeform shell.
 
-1. Check `.pier/canvases/**` for a matching Canvas. Update in place when it
-   exists.
-2. Read only relevant project code, design system, and existing Canvases.
-3. Read `sdk/index.d.ts`, then focused declarations for every API used.
-4. Choose one kind: `composition` | `docs` | `kit`.
-5. Default structure:
-
-   ```text
-   .pier/canvases/<slug>/<slug>.canvas.tsx
-   ```
-
-   Optional adjacent `data.json` via `useCanvasFile`.
-6. Start from the closest thin template in `templates/`.
-   - **`docs`**: start from `templates/docs.canvas.tsx` and use **`DocsShell`**
-     for left nav + right article (do not hand-roll dual ScrollArea shells).
-     Body text uses the host **document font**; live component demos inside
-     the article keep the **UI font**.
-   - **`composition` / `kit`**: use the **UI font** only — never the host
-     document font or a custom reading serif (design frames and component
-     catalogs must look like product UI).
-     - **`recipe=design`**: `WorldStage` root; `Artboard preset` + `Layer`;
-       comments stay in host Design Mode (do not fake annotation chrome).
-     - **`recipe=task-list`**: a **named island**, not the project kanban.
-       Daily tracking is the `pier.tasks` panel (⌘N). Import
-       `TaskList` from `@pier-applet/pier.tasks/task-list` inside `Frame`.
-       The applet defaults to island chrome (same as a markdown
-       `pier-applet` fence). Pass repo plus a milestone or label. Discover
-       applets with `pier plugins applets` / `plugin.inspect` — do not copy
-       applet source into the canvas skill or the project. Do not import
-       `@pier-applet/pier.tasks/tracker-board` on a canvas.
-     - **`recipe=task-dag`**: experimental layered dependencies as an
-       island; `import TaskGraph from "@pier-applet/pier.tasks/task-dag"`.
-       Prefer the panel or list when the graph is hard to read.
-     - Multi-screen mockups without `recipe=`: still prefer `WorldStage`.
-       `ArtboardStage` is only the flow fit-all card (no wheel capture).
-     - Command inventories: one Accordion list; badge only unfinished items.
-7. Export valid `canvas` metadata.
-8. Do **not** require `instance.json` methodology fields.
-9. Run verification requirements.
+1. Update in place when a matching Canvas exists.
+2. Read relevant project code and `sdk/index.d.ts`.
+3. Kind: `composition` | `docs` | `kit`. File:
+   `.pier/canvases/<slug>/<slug>.canvas.tsx`.
+4. Start from the Auto-resolve template (or canvas-kit for `kit`). Pack
+   `agentPrompt` + [authoring.md](references/authoring.md) own details. Do
+   not copy applet source. Do not import
+   `@pier-applet/pier.tasks/tracker-board`.
+5. Export `canvas` metadata. No methodology `instance.json`.
+6. Run [verification.md](references/verification.md).
 
 ## Content requirements
 
-- Write user-visible copy in the user's language (see **Audience language**).
-- Establish a clear information hierarchy before decoration.
-- Charts must identify metrics, units, time ranges, and sources.
-- Do not render fabricated data or empty decorative cards.
-- **Mermaid chrome:** flowchart / architecture use `nodes` / `edges`.
-  Architecture / main-loop nodes set `kind`
-  (`actor` | `agent` | `tool` | `artifact` | `external`). State-machine /
-  error-exit nodes set `tone`. Sequence / state / `class` / ER / mindmap
-  use native mermaid `source` (`sequenceDiagram`, `stateDiagram-v2`,
-  `classDiagram`, `erDiagram`, `mindmap`) — do not invent a nodes/edges
-  dialect for `sequence` or class diagrams. Do not paint `tone` as
-  decoration, and do not invent a left color rail. The host writes mermaid
-  flowchart text and paints Pier chrome on slotted nodes. Mermaid is a
-  **static** diagram: do not build a polling viewer that recolors it from
-  live data. Mermaid `status` / `renderNodeContent` is leftover for static
-  architecture diagrams that need a run glyph.
-  See [authoring](references/authoring.md) **Mermaid**.
-- Prefer direct layout over unnecessary card stacking.
-- Every user action needs a recognizable UI change or error response.
-- Add `schemaVersion` to adjacent `data.json` files. Data-focused Canvases
-  should also record `source` and `generatedAt`.
-
-## Verification requirements
-
-Before delivery, confirm at least:
-
-1. Files are under `.pier/canvases/**`, the entry default-exports a mountable
-   component, and the `canvas` metadata is valid.
-2. Compilation has no error-level diagnostics.
-3. The Canvas mounts in practice; type checking alone is not runtime evidence.
-4. Exercise at least one primary interaction. For a read-only Canvas, inspect
-   the main reading path and responsive layout.
-5. `useCanvasFile` writes only adjacent files and handles `conflict` and
-   `failed` results.
-6. No `cursor/canvas`, product-private cache path, or host-private API is used.
-7. **Methodology mode only**: `instance.json` pins the three pack ids;
-   overview has a BLUF-level conclusion; tab count ≤5 when using tabbed
-   presentation packs.
-
-See [verification](references/verification.md),
-[authoring](references/authoring.md), and
-[methodology](references/methodology.md).
+- User-visible copy in the user's language.
+- Hierarchy before decoration. No fabricated data or empty decorative cards.
+- Charts: metrics, units, time ranges, sources.
+- **Mermaid chrome:** flowchart / architecture use `nodes` / `edges` with
+  `kind` (`actor` | `agent` | `tool` | `artifact` | `external`). Status uses
+  `tone`. Sequence (`sequence` / `sequenceDiagram`), state, `class`, ER,
+  mindmap use native mermaid `source`. No left color rail. Mermaid is
+  **static**. Details: [authoring.md](references/authoring.md) **Mermaid**.
+- Approval / recover: `WorkflowDiagram`, not Mermaid. Details:
+  [authoring.md](references/authoring.md) **Workflow diagrams**.
+- Every user action needs a recognizable UI change or error.
 
 ## Delivery
 
-The final response must include:
-
-- The project-relative Canvas path.
-- Whether the Canvas was created or updated, and the selected `kind`.
-- For methodology mode: `content`, `presentation`, `ui` actually used.
-- The compilation, mount, and interaction checks actually completed.
-- Any checks not completed. Do not present manual inspection as automated
-  evidence.
+- Project-relative path; created vs updated; `kind`.
+- Methodology: `content`, `presentation`, `ui` used.
+- Compilation, mount, interaction checks actually completed — and any that
+  were not.

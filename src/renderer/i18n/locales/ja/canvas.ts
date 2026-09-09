@@ -37,4 +37,8 @@ export const canvas = {
     costPeriod: "コスト · 直近 {{count}} 日",
     costTokens: "トークン · 直近 {{count}} 日",
   },
+  workflow: {
+    invalidTitle: "このフロー図は描けません",
+    invalidHint: "{{message}} 次：{{fix}}",
+  },
 } as const;

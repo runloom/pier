@@ -27,5 +27,5 @@
     "Badge spam on every shipped command",
     "Dual ScrollArea + vh-height fake full-page shells inside Frame"
   ],
-  "agentPrompt": "Apply Pier desktop-tool visual discipline. pier/canvas only. Docs → DocsShell. Command lists → single Accordion, badge only unfinished. No dual inventory, no dual ScrollArea shells. See references/authoring.md and sdk/core.d.ts DocsShell."
+  "agentPrompt": "pier/canvas only. Docs → DocsShell. Command lists → one Accordion, badge only unfinished. No dual inventory, no dual ScrollArea shells."
 }

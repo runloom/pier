@@ -152,10 +152,6 @@ const output = await host.invoke({ type: "run.output", runId: outcome.runId })
 // Re-pull when runsChanged.data ticks. Parse chunks[].text locally.
 ```
 
-The template uses `cat graph.json` so the command output *is* the graph
-(offline closed loop). Replace that string with the orchestrator CLI when
-you have one.
-
 ## Markdown applet fence
 
 Preview-only. Add `<!-- pier-applets: enable -->` near the top of that

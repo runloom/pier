@@ -12,7 +12,7 @@ read `../sdk/index.d.ts` and `../sdk/host.d.ts`. Then read the focused
 declaration for each API you plan to use:
 
 - `core.d.ts` for `Frame`, `Artboard`, `ArtboardStage`, `WorldStage`, `Layer`,
-  `Stack`, `Row`, and `Text`.
+  `Stack`, `Row`, `Text`, `WorkflowDiagram`, and `validateWorkflowSpec`.
 - API (canvas-kit → API, plus `sdk/host.d.ts` and `sdk/files.d.ts`) for
   `import { host, useHostSnapshot } from "pier/host"` and
   `import { useCanvasFile } from "pier/canvas"`. Bind
@@ -104,14 +104,13 @@ stay there. Put complex calculations in pure adjacent modules.
   utilities that already exist in the product; for **docs two-pane layout**,
   always use **`DocsShell`** (inline flex columns) instead of inventing
   arbitrary `grid-cols-[…]` shells.
-- `Frame` is a **reading column** (max-width + padding), not a full-height app
-  chrome. Do not nest dual `ScrollArea` + `70vh` fake viewports inside it.
-- **Stage:** you infer from intent when the invoke does not pin `mode` /
-  `recipe` / `content` (SKILL.md **Auto-resolve**). The host does not infer.
-  Flow `Frame` for docs and overviews; `<Stack fill>` for a one-screen board
-  that owns scroll; `WorldStage` for multi-device mockups and live DAGs. See
-  SKILL.md **Stage selection**. Do not put a UI mockup inside a methodology
-  Design tab.
+- `Frame` is a **flow column**. Omit `maxWidth` so the files preview shell owns
+  comfortable / wide measure. Do not nest dual `ScrollArea` + `70vh` fake
+  viewports inside it.
+- **Stage:** SKILL.md **Auto-resolve** and **Stage selection** choose the
+  root. This file owns geometry: omit `Frame` `maxWidth`; `Artboard` presets;
+  `WorldStage` floor vs product ink; `WorkflowDiagram` IR. Do not put a UI
+  mockup inside a methodology Design tab.
 - Product UI mockups (settings, panels, chrome) go on **`Artboard`**
   (`preset="desktop" | "laptop" | "phone" | "tablet"`). In **world** they sit
   on `WorldStage` with `Layer` (`x` / `y`). Flow children always wrap; omit
@@ -198,6 +197,35 @@ Rules:
 - Do not infer `kind` from the title string.
 - `Mermaid` `status` / `renderNodeContent` stays for static architecture
   diagrams that need a run glyph, not for a polling viewer.
+
+## Workflow diagrams
+
+Interaction / approval / recover flows use `WorkflowDiagram`, not `Mermaid`
+and not `recipe=design` Artboards.
+
+1. Write a `WorkflowSpec`: `title`, `lanes`, `nodes` (`lane` + `col` 0..8),
+   `edges`, optional `mainPath`, `phases`, `groups`, `notes`, and node
+   `detail` / `tag` / `kind` (`step` | `gate` | `system` | `store` |
+   `external`).
+2. Call `validateWorkflowSpec(spec)`. If `status` is `1`, apply **only the
+   first** `supportedFixes` entry, then validate again. Do not mount a
+   diagram that failed validation — the host would paint Empty.
+3. Mount `<WorkflowDiagram spec={spec} />`. The host compiles lane frames,
+   phase headers, group frames, orthogonal elbows, a kind legend, and
+   caption notes. `mainPath` is the heavier idle walk. The exception lane
+   is the recovery band; a gate may also sit on `mainPath`. The host owns
+   retry routing. Do not export or call `compileWorkflowLayout`.
+
+Allowed intent (not coordinates): `role: "main" | "branch" | "return" |
+"error"`; `lane.variant: "exception"`; `kind` and `tag` on nodes; `phases`
+and `groups` as column ranges; `notes` as caption facts. Omit `role` for
+the happy path. Do not write `x` / `y` / `via` / `labelAt` / `fromSide` /
+`edge.color`. Do not use `Layer` or `Artboard` as graph nodes. Architecture
+and sequence stay `Mermaid`.
+
+Hover dims the rest and flows dashes along the related edges (source to
+target). Cards stay still. There is no click-to-pin, no edge catalog,
+and no keyboard edge focus.
 
 ## Data and state
 

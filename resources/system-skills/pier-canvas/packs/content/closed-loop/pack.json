@@ -68,5 +68,5 @@
     "efficiencyDefaults": "{ id, name, detail }[]",
     "competitors": "{ name, take }[]"
   },
-  "agentPrompt": "Fill data.json for a closed-loop PRODUCT DESIGN overview. Required: bluf (or decision), hardConstraints[], closedLoops[] (or settled model), day1Commands[] (≤4), safetyRails[], acceptance[]. Write every string field in the user's language. Prefer insight + problem pains + defaults before→after. Quiet ≠ ready; no fake completed. Default expression is STATIC (tables + diagrams). Do not invent Play/Step demos. Content only — presentation owns navigation (overview/problem/design/path/landing). Default presentation is primary_nav_5."
+  "agentPrompt": "Fill data.json only. Required: bluf (or decision), hardConstraints[], closedLoops[], day1Commands[] (≤4), safetyRails[], acceptance[]. Quiet ≠ ready. Default expression is static. Default presentation is primary_nav_5."
 }

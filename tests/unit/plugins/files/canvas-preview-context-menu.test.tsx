@@ -97,6 +97,7 @@ describe("FileCanvasPreview context menu", () => {
       }),
       expect.objectContaining({
         metadata: expect.objectContaining({
+          flowMeasure: true,
           path: ".pier/canvases/smoke/hello.canvas.tsx",
           projectRoot: "/proj",
           root: "/proj",
