@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "source": "src/renderer/app/globals.css",
+  "sourceTokenDigest": "e47c9956c1724d067e6f10b0718d2b6c3e6a56381b3370d6df44a746092d9cf8",
+  "dark": {
+    "1": "oklch(0.72 0.09 205)",
+    "2": "oklch(0.72 0.1 285)",
+    "3": "oklch(0.74 0.1 345)",
+    "4": "oklch(0.74 0.08 100)",
+    "5": "oklch(0.72 0.09 180)",
+    "6": "oklch(0.72 0.1 315)"
+  },
+  "light": {
+    "1": "oklch(0.6 0.09 205)",
+    "2": "oklch(0.58 0.1 285)",
+    "3": "oklch(0.6 0.1 345)",
+    "4": "oklch(0.58 0.08 100)",
+    "5": "oklch(0.6 0.09 180)",
+    "6": "oklch(0.58 0.1 315)"
+  }
+}
