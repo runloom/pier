@@ -12,10 +12,12 @@ import { HtmlWorldCanvas } from "@pier/ui/image-preview/world-canvas.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import {
   Children,
+  createContext,
   isValidElement,
   type ReactElement,
   type ReactNode,
   type RefObject,
+  useContext,
   useLayoutEffect,
   useRef,
   useState,
@@ -23,6 +25,13 @@ import {
 import { openHtmlWorldPreview } from "@/stores/content-preview.store.ts";
 import { ArtboardCaption } from "./pier-canvas-artboard-caption.tsx";
 import { worldStageCaptionVars } from "./pier-canvas-world-ink.ts";
+
+const WorldStageScopeContext = createContext(false);
+
+/** True when the caller already sits inside a `WorldStage` plane. */
+export function useWorldStageScope(): boolean {
+  return useContext(WorldStageScopeContext);
+}
 
 const DEFAULT_ARTBOARD_WIDTH = 1280;
 const DEFAULT_ARTBOARD_HEIGHT = 800;
@@ -366,7 +375,9 @@ export function WorldStage({
         ...(captionInk ?? {}),
       }}
     >
-      {children}
+      <WorldStageScopeContext.Provider value={true}>
+        {children}
+      </WorldStageScopeContext.Provider>
     </div>
   );
 }

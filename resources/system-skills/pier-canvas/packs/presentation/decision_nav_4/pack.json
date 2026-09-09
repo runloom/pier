@@ -32,6 +32,7 @@
       "shows": ["milestones", "acceptance", "risks", "openQuestions"]
     }
   ],
+  "template": "templates/decision.canvas.tsx",
   "antiPatterns": [
     "more than 4 top-level tabs",
     "a Day-1 tab without a copyable recipe",
@@ -44,5 +45,5 @@
     "overviewMax": 1,
     "preferred": ["flowchart"]
   },
-  "agentPrompt": "Build a composition Canvas with exactly 4 ordered Tabs (ids: overview primary, problem, design, landing). Resolve visible labels from i18n/nav.json using locale= (labels[id][locale] ?? labels[id].en ?? view.label). This pack is the default for content=design-doc. Do NOT add a Day-1 / path tab. Put migration phases and acceptance on landing only. Start from templates/decision.canvas.tsx and rewrite all user-visible copy into the user's language."
+  "agentPrompt": "Exactly 4 Tabs: overview (primary), problem, design, landing. No Day-1 / path tab. Labels from i18n/nav.json. Phases and acceptance go on landing."
 }

@@ -57,10 +57,15 @@ export function detectCanvasStage(host: HTMLElement): CanvasStageInfo {
   return FLOW_CANVAS_STAGE;
 }
 
+/** True when the preview shell’s comfortable / wide measure can change layout. */
+export function canvasFlowMeasureApplies(info: CanvasStageInfo): boolean {
+  return info.stage === "flow" && !info.fill;
+}
+
 /**
  * Flow-shell measure. World callers skip this (they only keep `relative`).
- * Wide reading drops the cap only for DocsShell roots — composition flow
- * stays `max-w-5xl`.
+ * Wide reading drops the cap for every scrolling flow canvas (composition
+ * and DocsShell). Fill boards own their scroll.
  */
 export function canvasFlowMeasureClass(
   info: CanvasStageInfo,
@@ -69,7 +74,7 @@ export function canvasFlowMeasureClass(
   if (info.fill) {
     return FLOW_FILL_CLASS;
   }
-  if (info.docs && measureMode === "wide") {
+  if (measureMode === "wide") {
     return FLOW_PAD_CLASS;
   }
   return `${FLOW_PAD_CLASS} ${FLOW_MEASURE_CLASS}`;

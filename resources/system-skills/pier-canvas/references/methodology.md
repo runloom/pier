@@ -3,6 +3,9 @@
 Canvas is Pier's **product-core overview**. Methodology mode makes overviews
 scannable and reproducible without inventing a second skill entry.
 
+When `mode` / `recipe` / `content` / `presentation` are omitted, follow
+SKILL.md **Auto-resolve**. This file does not restamp those tags.
+
 ## Three axes
 
 | Axis | Pack root | Question |
@@ -17,36 +20,10 @@ Do not mix axes:
 - Presentation packs never invent domain fields missing from content.
 - UI packs never change required content fields.
 
-## Defaults
-
-The **agent infers** route from intent when `mode` / `recipe` / `content` /
-`presentation` are omitted. The host does not stamp those tags. See SKILL.md
-**Auto-resolve**.
-
-```text
-content      = design-doc     (methodology fallback only)
-presentation = resolved from content (see Pack selection)
-ui           = pier-default
-mode         = methodology    (fallback only — not used for a UI mockup)
-```
-
-Bare `/pier-canvas` with **no extra ask** → `design-doc` + `decision_nav_4`.  
-`/pier-canvas` plus an ask for product screens / a visual mockup → **not this
-file**; freeform `recipe=design` on `WorldStage`.  
-`content=closed-loop` with no presentation → `primary_nav_5`.
-
 ## Pack selection
 
-Content decides the default presentation. Five-tab **Day 1** is not a universal
-gold standard — it is the closed-loop / Day-1 recipe slot.
-
-| Job | content | presentation | Tabs (en) |
-| --- | --- | --- | --- |
-| Architecture, RFC, product decision | `design-doc` | `decision_nav_4` | Overview → Problem → Design → Landing |
-| Short BLUF | `design-doc` | `one_pager` | none (single scroll) |
-| Runtime / CLI “tomorrow run these ≤4 commands” | `closed-loop` | `primary_nav_5` | Overview → Problem → Design → **Day 1** → Landing |
-
-Rules:
+The content → presentation map lives in SKILL.md **Pack selection**. This
+section owns the Day-1 rules.
 
 1. **Do not** open a Day-1 / `path` tab unless `day1Commands` (≤4) or a copyable
    recipe exists. Migration phases belong on **Landing**.
@@ -56,6 +33,9 @@ Rules:
    `preferredPresentation`. Explicit `presentation=` still wins.
 4. Industry design docs (Google Design Doc, RFC, ADR) have no Day-1 chapter.
    Getting-started / runbooks do. Match that split.
+
+Five-tab **Day 1** is not a universal gold standard — it is the closed-loop
+recipe slot. `recipe=design` mockups are **WorldStage**, not this file.
 
 ## Built-in packs (P0)
 
@@ -74,13 +54,9 @@ Rules:
 
 - `pier-default` — pier/canvas desktop-tool discipline
 
-## Recipes (not methodology axes)
-
-`packs/recipes/design` and the `pier.tasks` islands (`task-list`,
-`task-dag`) are **freeform** starters (`recipe=` on `/pier-canvas`).
-The project kanban is the plugin panel, not a canvas recipe. They do
-not add a fourth axis, do not invent overview tabs, and do not replace
-`design-doc` / `closed-loop`. See SKILL.md **Stage selection**.
+Starters are the pack `template` field. Recipes (`design`, `workflow`,
+`task-list`, `task-dag`) are freeform, not a fourth axis. See SKILL.md
+**Stage selection**. The project kanban is the plugin panel.
 
 ## Resolve order
 
@@ -110,7 +86,7 @@ not acceptance-table dumps. Choose expression by job-to-be-done:
 
 ### 硬规则
 
-1. **默认静态。** `templates/overview.canvas.tsx` 与 closed-loop 金标路径不包含交互演示壳。
+1. **默认静态。** closed-loop 金标路径不包含交互演示壳。
 2. **不为「显得高级」加演示。** 若去掉播放控件后方案仍完整可读，就不要加播放控件。
 3. **验收表不进首页。** C0–C10 / L0–L7 放落地（或实现）页；速览只放决策与路径。
 4. **竞品与过程考古不进首页。** 附录或落地末尾。
@@ -126,35 +102,31 @@ not acceptance-table dumps. Choose expression by job-to-be-done:
 
 ## Recommended information architecture
 
+Visible English labels: Overview, Problem, Design, Day 1, Landing.
+Tab labels come from `i18n/nav.json`.
+
 ### `decision_nav_4` (design-doc default)
 
-| Tab id | Label | Role |
-| --- | --- | --- |
-| `overview` | `i18n/nav.json` | insight + decision (BLUF) + three summary cards |
-| `problem` | `i18n/nav.json` | pains + anti-goals |
-| `design` | `i18n/nav.json` | layers, alternatives, product frames |
-| `landing` | `i18n/nav.json` | phases, acceptance, risks |
-
-Start from `templates/decision.canvas.tsx`.
+| Tab id | Role |
+| --- | --- |
+| `overview` | insight + decision (BLUF) + three summary cards |
+| `problem` | pains + anti-goals |
+| `design` | layers, alternatives, product frames |
+| `landing` | phases, acceptance, risks |
 
 ### `primary_nav_5` (closed-loop only)
 
-| Tab id | Label | Role |
-| --- | --- | --- |
-| `overview` | `i18n/nav.json` | insight + decision (BLUF) + three summary cards |
-| `problem` | `i18n/nav.json` | pains + anti-goals |
-| `design` | `i18n/nav.json` | layers, settled/states, identity, hard constraints |
-| `path` | `i18n/nav.json` | main path diagram + day-1 commands + recipe |
-| `landing` | `i18n/nav.json` | defaults before→after, phases, acceptance, rails |
+| Tab id | Role |
+| --- | --- |
+| `overview` | insight + decision (BLUF) + three summary cards |
+| `problem` | pains + anti-goals |
+| `design` | layers, settled/states, identity, hard constraints |
+| `path` | main path diagram + day-1 commands + recipe |
+| `landing` | defaults before→after, phases, acceptance, rails |
 
-Start from `templates/overview.canvas.tsx`.
+### `one_pager`
 
-## Freeform recipes
-
-`recipe=` is **not** a fourth methodology axis. Packs live under
-`packs/recipes/` and force Workflow B (freeform). Known ids: `design`
-(world mockup), `task-list` / `task-dag` (tracker islands in flow).
-There is no canvas kanban recipe and no local `board.json` ledger.
+Single scrolling Frame. No tabs.
 
 ## Entry
 

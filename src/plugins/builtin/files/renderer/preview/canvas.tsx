@@ -26,7 +26,10 @@ import {
 import { useCanvasCompileSession } from "./canvas-compile-session.ts";
 import type { CanvasPreviewState } from "./canvas-compile-state.ts";
 import { useCanvasPreviewContextMenu } from "./canvas-preview-surface.ts";
-import { canvasFlowMeasureClass } from "./canvas-stage.ts";
+import {
+  canvasFlowMeasureApplies,
+  canvasFlowMeasureClass,
+} from "./canvas-stage.ts";
 import {
   CanvasCompileErrorEmpty,
   CanvasLoadingSkeleton,
@@ -230,6 +233,7 @@ export function FileCanvasPreview(props: {
   });
   const { onContextMenu, previewRootRef } = useCanvasPreviewContextMenu({
     context: props.context,
+    flowMeasure: canvasFlowMeasureApplies(stageInfo),
     panelContext: props.panelContext,
     panelId: props.panelId,
     path: props.path,

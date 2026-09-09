@@ -164,6 +164,7 @@ export const {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  WorkflowDiagram,
   WorldStage,
   formatBytes,
   formatCompactCurrency,
@@ -177,4 +178,5 @@ export const {
   useCostOverview,
   useSystemResources,
   useCanvasFile,
+  validateWorkflowSpec,
 } = pierCanvasExports;

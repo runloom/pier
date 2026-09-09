@@ -32,4 +32,8 @@ export const canvas = {
     costPeriod: "近 {{count}} 天成本",
     costTokens: "近 {{count}} 天 tokens",
   },
+  workflow: {
+    invalidTitle: "这张流程图画不出来",
+    invalidHint: "{{message}} 下一步：{{fix}}",
+  },
 } as const;

@@ -16,5 +16,5 @@
     "Treating this as a general drawing canvas",
     "Copying applet source instead of importing @pier-applet/pier.tasks/task-dag"
   ],
-  "agentPrompt": "Freeform composition. Root in Frame (flow). Import TaskGraph from @pier-applet/pier.tasks/task-dag and mount it as an island card — the applet defaults to island chrome. Pass repo plus a milestone or label. This view is experimental. Do not copy applet source. Do not import tracker-board. Do not fetch tracker APIs from the canvas. Rewrite every user-visible string into the user's language. See templates/task-dag.canvas.tsx."
+  "agentPrompt": "Import TaskGraph from @pier-applet/pier.tasks/task-dag as an island. Pass repo plus a milestone or label. Experimental. Do not copy applet source or import tracker-board."
 }

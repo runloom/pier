@@ -20,6 +20,10 @@ export interface RowProps {
 export interface FrameProps {
   children?: ReactNode;
   className?: string;
+  /**
+   * Optional inner cap. Omit so the files preview shell owns comfortable /
+   * wide measure (`max-w-5xl` vs full bleed).
+   */
   maxWidth?: number;
 }
 
@@ -203,3 +207,96 @@ export const Droppable: (props: DroppableProps) => ReactNode;
  */
 export const DocsShell: (props: DocsShellProps) => ReactNode;
 export const Text: (props: TextProps) => ReactNode;
+
+export type WorkflowEdgeRole = "main" | "branch" | "return" | "error";
+export type WorkflowLaneVariant = "default" | "exception";
+export type WorkflowNodeKind =
+  | "step"
+  | "gate"
+  | "system"
+  | "store"
+  | "external";
+
+export interface WorkflowLane {
+  id: string;
+  label: string;
+  variant?: WorkflowLaneVariant;
+}
+
+export interface WorkflowNode {
+  col: number;
+  detail?: string;
+  id: string;
+  kind?: WorkflowNodeKind;
+  label: string;
+  lane: string;
+  tag?: string;
+}
+
+export interface WorkflowPhase {
+  fromCol: number;
+  id: string;
+  label: string;
+  toCol: number;
+}
+
+export interface WorkflowGroup {
+  fromCol: number;
+  id: string;
+  label: string;
+  lane: string;
+  toCol: number;
+}
+
+export interface WorkflowNote {
+  items: readonly string[];
+  title: string;
+}
+
+export interface WorkflowEdge {
+  from: string;
+  id: string;
+  label: string;
+  role?: WorkflowEdgeRole;
+  to: string;
+}
+
+export interface WorkflowSpec {
+  edges: readonly WorkflowEdge[];
+  groups?: readonly WorkflowGroup[];
+  lanes: readonly WorkflowLane[];
+  mainPath?: readonly string[];
+  nodes: readonly WorkflowNode[];
+  notes?: readonly WorkflowNote[];
+  phases?: readonly WorkflowPhase[];
+  title: string;
+}
+
+export interface WorkflowDiagnostic {
+  code: string;
+  evidence?: Readonly<Record<string, string | number>>;
+  message: string;
+  severity: "error" | "warning";
+  subject: { edgeId?: string; nodeId?: string; path?: string };
+  supportedFixes: readonly string[];
+}
+
+export interface WorkflowValidateReceipt {
+  diagnostics: readonly WorkflowDiagnostic[];
+  status: 0 | 1;
+}
+
+export interface WorkflowDiagramProps {
+  className?: string;
+  spec: WorkflowSpec;
+}
+
+/**
+ * Compiled interaction flowchart. Authors write `spec` only — no pixels,
+ * `via`, or colors. Failed validation paints Empty, not a partial graph.
+ */
+export const WorkflowDiagram: (props: WorkflowDiagramProps) => ReactNode;
+/** Fail-closed receipt. Apply the first `supportedFixes` entry, then re-run. */
+export const validateWorkflowSpec: (
+  spec: WorkflowSpec
+) => WorkflowValidateReceipt;

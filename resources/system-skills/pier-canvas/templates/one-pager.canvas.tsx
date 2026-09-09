@@ -19,11 +19,9 @@ import {
 } from "pier/canvas";
 
 /**
- * Starter for composition: conclusion → evidence → relationship diagram.
- * Rewrite every user-visible string into the user's language before delivery.
- *
- * Fonts: UI font and component defaults. Do not apply the host document font
- * (design frames should look like product UI, not long-form reading).
+ * one_pager: conclusion → evidence → one diagram. No tabs.
+ * Approval / recover loops use recipe=workflow, not Mermaid.
+ * Rewrite every user-visible string into the user's language.
  */
 export const canvas = {
   description: "Proposal composition: conclusion first, with a diagram and options.",
@@ -31,9 +29,9 @@ export const canvas = {
   title: "Proposal canvas",
 };
 
-export default function CompositionCanvas() {
+export default function OnePagerCanvas() {
   return (
-    <Frame maxWidth={960}>
+    <Frame>
       <Stack gap={20}>
         <Stack gap={8}>
           <Row gap={8} wrap>
@@ -61,21 +59,24 @@ export default function CompositionCanvas() {
         </Card>
 
         <Stack gap={8}>
-          <Text as="h2">Critical path</Text>
+          <Text as="h2">Architecture</Text>
+          <Text tone="secondary">
+            Mermaid is for static architecture and sequence. Approval and
+            recover loops belong on <code>recipe=workflow</code>.
+          </Text>
           <Mermaid
-            aria-label="Example flow"
+            aria-label="Example architecture"
             direction="left-to-right"
             edges={[
-              { source: "A", target: "B" },
-              { source: "B", target: "C" },
-              { source: "B", target: "D" },
-              { source: "D", target: "B" },
+              { label: "writes spec", source: "author", target: "file" },
+              { label: "compile", source: "file", target: "host" },
+              { label: "preview", source: "host", target: "board" },
             ]}
             nodes={[
-              { id: "A", kind: "artifact", title: "Input" },
-              { id: "B", kind: "tool", title: "Process" },
-              { id: "C", kind: "artifact", title: "Output" },
-              { id: "D", title: "Error", tone: "danger" },
+              { id: "author", kind: "actor", title: "Author" },
+              { id: "file", kind: "artifact", title: "Canvas file" },
+              { id: "host", kind: "tool", title: "Canvas host" },
+              { id: "board", kind: "artifact", title: "Preview" },
             ]}
           />
         </Stack>

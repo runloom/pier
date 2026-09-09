@@ -23,9 +23,8 @@ import {
 import { useState } from "react";
 
 /**
- * Starter for methodology / decision_nav_4 (design-doc default):
- * overview → problem → design → landing. No Day-1 tab.
- * Rewrite every user-visible string into the user's language before delivery.
+ * decision_nav_4: overview → problem → design → landing. No Day-1 tab.
+ * Rewrite every user-visible string into the user's language.
  */
 export const canvas = {
   description:
@@ -42,7 +41,7 @@ export default function DecisionCanvasTemplate() {
   const [tab, setTab] = useState("overview");
 
   return (
-    <Frame maxWidth={960}>
+    <Frame>
       <Stack gap={16}>
         <Stack gap={8}>
           <Row gap={8} wrap>

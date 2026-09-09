@@ -65,6 +65,8 @@ function readSelectedText(): string {
 
 export function useCanvasPreviewContextMenu(options: {
   context: RendererPluginContext;
+  /** When false, comfortable / wide items hide (world and fill stages). */
+  flowMeasure?: boolean;
   panelContext?: PanelContext | undefined;
   panelId?: string | undefined;
   path: string;
@@ -74,7 +76,15 @@ export function useCanvasPreviewContextMenu(options: {
   onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
   previewRootRef: RefObject<HTMLDivElement | null>;
 } {
-  const { context, panelContext, panelId, path, root, t } = options;
+  const {
+    context,
+    flowMeasure = true,
+    panelContext,
+    panelId,
+    path,
+    root,
+    t,
+  } = options;
   const previewRootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -105,6 +115,7 @@ export function useCanvasPreviewContextMenu(options: {
           { x: event.clientX, y: event.clientY },
           {
             metadata: {
+              flowMeasure,
               path,
               root,
               ...(panelContext?.projectRootPath
@@ -129,7 +140,7 @@ export function useCanvasPreviewContextMenu(options: {
             .catch(() => undefined);
         });
     },
-    [context, panelContext, panelId, path, root, t]
+    [context, flowMeasure, panelContext, panelId, path, root, t]
   );
 
   return { onContextMenu, previewRootRef };

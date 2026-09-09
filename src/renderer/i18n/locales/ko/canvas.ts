@@ -34,4 +34,8 @@ export const canvas = {
     costPeriod: "비용 · 최근 {{count}}일",
     costTokens: "토큰 · 최근 {{count}}일",
   },
+  workflow: {
+    invalidTitle: "이 흐름도를 그릴 수 없습니다",
+    invalidHint: "{{message}} 다음: {{fix}}",
+  },
 } as const;

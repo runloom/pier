@@ -195,6 +195,13 @@ export const CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> = {
     p("renderNodeContent", "(node) => ReactNode", "—", "renderNodeContent"),
     p("expandable", "boolean", "true", "expandable")
   ),
+  WorkflowDiagram: entry(
+    [
+      "const receipt = validateWorkflowSpec(spec)",
+      "<WorkflowDiagram spec={spec} />",
+    ].join("\n"),
+    p("spec", "WorkflowSpec", "—", "workflowSpec")
+  ),
   Pagination: entry(
     "<Pagination><PaginationContent>…</PaginationContent></Pagination>",
     CLASS_NAME_PROP

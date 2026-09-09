@@ -31,6 +31,7 @@ function displayPath(path: string): string {
 
 const IN_REPO_REACT_CANVASES = [
   "canvas-kit/canvas-kit.canvas.tsx",
+  "mobile-web-flows/mobile-web-flows.canvas.tsx",
   "mobile-web-shell/mobile-web-shell.canvas.tsx",
   "pier-cli-user-manual/pier-cli-user-manual.canvas.tsx",
   "smoke/hello.canvas.tsx",
@@ -43,7 +44,7 @@ describe("project canvases render", () => {
     );
   });
 
-  it("finds exactly the in-repo React canvases (kit + mobile shell + cli manual + smoke)", () => {
+  it("finds exactly the in-repo React canvases (kit + mobile shell + mobile flows + cli manual + smoke)", () => {
     const relative = Object.keys(CANVAS_MODULES)
       .filter((path) => !path.endsWith(".canvas.solid.tsx"))
       .map((path) => path.replace("../../../.pier/canvases/", ""))
@@ -86,7 +87,7 @@ describe("project canvases render", () => {
     render(<Canvas />);
     expect(screen.getByText("对准二维码")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "停止扫码" }));
-    expect(screen.getByText("取景框")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "开始扫码" })).not.toBeNull();
   });
 
   it("pushes the session overlay from the mobile-web-shell prototype", () => {
