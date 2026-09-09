@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 const SPEC =
   "docs/superpowers/specs/2026-09-07-workbench-worktree-tiles-design.md";
-const WITHDRAWN_CANVAS = ".pier/canvases/workbench-shell";
+const SHELL_CANVAS = ".pier/canvases/workbench-shell";
 
 function read(rel: string): string {
   return readFileSync(join(ROOT, rel), "utf8");
@@ -31,10 +31,13 @@ describe("workbench worktree tiles design", () => {
   });
 
   it("does not treat a workbench-shell canvas as visual authority", () => {
-    expect(existsSync(join(ROOT, WITHDRAWN_CANVAS))).toBe(false);
-    expect(read("AGENTS.md")).not.toContain(WITHDRAWN_CANVAS);
-    expect(read(SPEC)).not.toContain(WITHDRAWN_CANVAS);
+    const spec = read(SPEC);
+    const agents = read("AGENTS.md");
+    expect(spec).toContain(SHELL_CANVAS);
+    expect(spec).toContain("不得当治理对照物");
+    expect(agents).toContain(`${SHELL_CANVAS}/`);
     expect(read(".pier/canvases/README.md")).not.toContain("workbench-shell");
+    expect(existsSync(join(ROOT, SHELL_CANVAS))).toBe(false);
   });
 
   it("keeps worktree facts on the tile status bar, not on tabs", () => {
@@ -52,5 +55,24 @@ describe("workbench worktree tiles design", () => {
     expect(spec).toContain("品牌图标");
     expect(spec).toContain("工作区级插件目的地");
     expect(spec).toContain("「任务」只有一条");
+  });
+
+  it("locks sidebar visual vocabulary in spec §5.3", () => {
+    const spec = read(SPEC);
+    const agents = read("AGENTS.md");
+    expect(spec).toContain("### 5.3 侧栏视觉词汇（L0 行形）");
+    expect(spec).toContain("任务在项目树之下");
+    expect(spec).toContain("分支名、`↑↓`");
+    expect(spec).toContain("**不得出现**");
+    expect(spec).toContain("本机目录");
+    expect(spec).toContain("**分组标题**");
+    expect(spec).toContain("普通终端用终端图标");
+    expect(spec).toContain("欢迎态 `~` 不进侧栏");
+    expect(spec).toContain("所有可点单行 **28px**");
+    expect(spec).toContain("项目 < 工作树 < 会话");
+    expect(spec).toContain("无身份色块、无仓库/文件夹图标");
+    expect(spec).toContain("B1 主窗口");
+    expect(agents).toContain("分支名不进侧栏");
+    expect(agents).toContain("§5.3");
   });
 });

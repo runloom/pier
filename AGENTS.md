@@ -52,147 +52,47 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 ### 宿主弹窗使用规范
 
-宿主级确认/提示弹窗统一走 `src/renderer/components/common/dialogs/host.tsx`：
+权威规格：[`docs/superpowers/specs/2026-09-09-dialog-system-gold-standard.md`](docs/superpowers/specs/2026-09-09-dialog-system-gold-standard.md)（简单弹窗布局 / `size` / `intent` 细则、选型决策树、弹窗表单提交型 / 即时偏好两模型与「记住上次」禁令、浮层后打开）。
 
-- 业务代码不要直接 import `@pier/ui/alert-dialog.tsx`；宿主 renderer 使用 `showAppConfirm` / `showAppAlert` / `showAppChoice` / `showAppPrompt`，插件使用 `RendererPluginContext.dialogs` / `ExternalRendererPluginContext.dialogs`。
-- builtin 与 external 插件的简单弹窗 API **同构**：`alert` / `confirm` / `choice` / `prompt`；复杂内容另加 `open` / `update` / `close`。
-- 布局（路线 B：桌面工具对话框；macOS 优先，全平台同一套壳）：
-  - 文案一律左齐；宽度只由 kind 决定，不再切换居中营销卡
-  - 密度：`p-5` + `gap-4`、标题 `text-base`、footer **右簇**（禁止 sm 两列等宽铺满）
-  - destructive `confirm`：侧标必须用共享 `@pier/ui/status-icon`（与 toast / Alert 同套，`kind="error"`），禁止手写 Lucide 大圆/方底
-  - `choice` / 普通 confirm / prompt：**无**侧标；危险只靠按钮色
-  - `alert`：单主按钮（右簇）
-  - `confirm` / `prompt`：`取消 | 主按钮`（主按钮最右）
-  - `choice`：`alt | 取消 | confirm`（例：不保存 | 取消 | 保存）；横排三键
-- **`size` 禁止调用方传入**（宿主 `appDialogSizeForKind` / 插件 facade 同构强制）：
-  - `alert` / `confirm` / `prompt` → 固定 `sm`
-  - `choice` → 固定 `default`（三键横排）
-  - 业务与插件 API **不接受** `size` 字段；更长内容走 content dialog（`openAppContentDialog` / `dialogs.open`），不要用宽 confirm 硬塞说明
-  - 禁止回退为「每个确认各自传 sm/default」
-- `intent`：调用方必填，不要在 `AppDialogHost` 里按标题或文案猜测危险程度
-  - 破坏性确认必须显式传 `intent: "destructive"`，普通确认显式传 `intent: "default"`
-  - `confirm` / `prompt`：作用在**主按钮**
-  - `choice`：作用在 **alt**（不保存/丢弃）；confirm 始终 default 样式
-  - 若破坏动作落在 `choice.confirm`（如覆盖），`intent` 仍必须 `"default"`，不能为了“看起来危险”去染 alt
-- 取消按钮一律 `outline`（含 destructive 场景）；Esc / 点遮罩 = 取消
-- 检查点在 `tests/unit/renderer/notifications/app-dialog-governance.test.ts` 与 `tests/component/app-dialog-host.test.tsx`
-
-复杂内容弹窗（表单、多步、等待态、带自定义 body）统一走宿主 `AppContentDialogHost`：
-
-- 宿主业务使用 `openAppContentDialog` / `updateAppContentDialog` / `closeAppContentDialog`；插件使用 `context.dialogs.open` / `update` / `close`（不要再挂自己的 `@pier/ui/dialog` 产品壳）。
-- 插件 renderer 禁止 import `@pier/ui/dialog` 或 `@pier/ui/alert-dialog`；嵌套插件 Dialog（Settings 内再开插件 Dialog）一律禁止。
-- **决策树**（必须按此选型，禁止“图省事全走 content dialog”）：
-  1. 短成功 / 弱反馈 → toast
-  2. 只告知、无决策 → `alert`（固定 `sm`）
-  3. 取消 | 确认 → `confirm`（固定 `sm`）
-  4. alt | 取消 | 确认 → `choice`（固定 `default`）
-  5. 单行输入 + 校验 → `prompt`（固定 `sm`）
-  6. 多控件 / 多步 / 等待态 / 结构化结果 → `dialogs.open`（content dialog）
-  7. 全页产品壳（设置、物料库）→ 宿主自有 `Dialog`（非插件）
-- **无自定义控件的纯确认/提示，禁止塞进 content dialog**（含“title/description + 两个按钮”）。
-- 短确认/破坏性确认仍走 `dialogs.confirm` / `showAppConfirm`。
-- 模态层级约定：content dialog 栈 > `AppDialogHost` 单槽 > Settings 等宿主产品壳；`AppDialogHost` 新请求会顶替未决简单弹窗，content 栈独立。
-- `context.overlays` **已删除**：历史“插件自挂 Dialog 壳”通道不再存在；新代码与存量一律 `dialogs.open`。
-- 检查点在 `tests/unit/renderer/plugin-product-dialog-governance.test.ts` 与 content dialog 单测。
-
-#### 弹窗表单规范（交互 + 字段布局，禁止再发明第三套）
-
-弹窗里一旦出现输入控件，只允许下列两种交互模型；壳、footer、字段方向都由模型决定。共享 class 单一来源：`packages/ui/src/dialog-form-layout.ts`（`@pier/ui/dialog-form-layout.ts`）。
-
-| 模型 | 何时用 | 壳 | 字段方向 | Footer | 保存时机 |
-|------|--------|----|----------|--------|----------|
-| **提交型（commit form）** | 创建/写入/有草稿可取消（新建 worktree、建 skill、SSH host、账号添加主路径） | `AppContentDialogHost` / `dialogs.open` | **垂直** `Field`（Label → 全宽控件 → Description/Error；`DIALOG_COMMIT_FORM_CLASS` + `DIALOG_COMMIT_FIELD_GROUP_CLASS`） | **必须** `setFooter` / `useContentDialogFooter`：右簇 `取消 \| 主按钮`（`DIALOG_FOOTER_ACTIONS_CLASS`）；宿主可复用 `ContentDialogFooterActions` | 点主按钮才提交；取消/ Esc 丢弃草稿 |
-| **即时偏好（live preference）** | 改了即生效、无独立「保存」语义 | **设置页** 内：水平 `*Row`（密度）；content dialog 内若有即时偏好，字段布局 **与提交型相同**（垂直 Label → 全宽控件） | 用 `DIALOG_COMMIT_FORM_CLASS`；**禁止** 再套 Card/`rounded-xl border` 表单壳；禁止左标签右窄控件的「设置行」伪装 dialog 表单 | **默认无「保存」footer**；关窗用 Header X | `onChange` 即时写 |
-
-硬规则：
-
-1. **禁止 body 内仿 footer**：content dialog 的取消/主按钮不得写在滚动 body 底部（`flex justify-end` 一排冒充 footer）；一律 `setFooter`，由宿主 sticky `DialogFooter` 承载。行内次要动作（列表「添加」、授权「打开浏览器」）除外。
-2. **禁止嵌套产品壳**：Dialog body 内不得再挂 `@pier/ui/dialog` / `Card` 当表单分区；分区用 `FieldSet` + `FieldLegend` 或扁平 `DIALOG_SECTION_TITLE_CLASS`（对齐 skill 详情）。
-3. **控件密度**：弹窗表单主路径 Select / Input / Button 用默认 28px 密度；**禁止**为「显得紧凑」给主表单 `SelectTrigger size="sm"` / footer `Button size="sm"`。列表内图标排序等次要 hit 可用 `icon-xs`。
-4. **设置页即时偏好**：设置页内水平 `*Row`；若在 content dialog 里做即时偏好，字段布局必须与提交型 dialog 一致（垂直堆叠、全宽 Select/Input，参考 worktree）。不得自挂 Dialog，不得用设置页水平 `SelectRow` 样式塞进 content dialog。多实例列表用 `Item outline` 表达块边界。**添加/创建类草稿** 走 **二级 content dialog**（`openAppContentDialog` + sticky `取消|确认`）。
-5. **校验**：提交型在 submit 时校验并用 `FieldError`；`prompt` 走 `validate`。即时偏好以合法枚举/开关为主，避免半填草稿。
-6. **提交型 dialog 的可选勾选 / 开关默认值（禁止第三套「记住上次」）**：先判定字段性质；禁止 dialog host 或通用 `rememberDialogField`。
-   - **情境决策**（跟这次 status / 候选 / 远程资格绑定）：每次从当前快照推导；取消与 Esc 丢弃；禁止 `localStorage` / 上次勾选。例：git 确认提交的「包含未暂存」；SSH 导入勾选主机；账号切换同步到其他工具。dialog 里对设置初值的**这一次改动**（如关掉「提交后推送」）同样不回写。
-   - **稳定工作流习惯**（同一人反复同一套，且与这次快照无关）：仅允许该表面旁的小模块，**显式切换即写**（取消窗不清缓存；也不靠提交才写）。例：新建工作树的命名方式 / 立即开始任务。不得把草稿（说明、名称、路径）一并记住。
-   - **能在设置里叫出名字的**（提交后推送默认值、退出确认）：走设置页（宿主 `ProjectPreferences` 或插件 `configuration`）；dialog **只读初值**，勾选不回写。未做设置前用安全默认，禁止用粘滞勾选冒充。
-   - 即时视图偏好仍走该表面已有 store（审查 diff、Markdown 阅读、侧栏收起），不经提交型 dialog 记忆层。
-7. **检查点**：`tests/unit/renderer/app/dialog-form-governance.test.ts`（与本节标题绑定）。
+- 简单弹窗唯一入口：宿主 `showAppConfirm` / `showAppAlert` / `showAppChoice` / `showAppPrompt`，插件 `context.dialogs`；builtin 与 external 插件的简单弹窗 API **同构**；复杂内容走 `dialogs.open`（content dialog）。
+- **`size` 禁止调用方传入**（按 kind 固定）；`intent` 调用方必填，宿主不按标题或文案猜危险程度。
+- 插件 renderer 禁止 import `@pier/ui/dialog` / `@pier/ui/alert-dialog`（含嵌套插件 Dialog）；宿主业务代码不直接 import `@pier/ui/alert-dialog.tsx`。
+- 弹窗表单只有提交型 / 即时偏好两种模型，共享 class 单一来源 `@pier/ui/dialog-form-layout.ts`；规格沉默处禁止发明第三套。
+- 检查点：`tests/unit/renderer/notifications/app-dialog-governance.test.ts`、`tests/unit/renderer/app/dialog-form-governance.test.ts`、`tests/unit/renderer/plugins/plugin-product-dialog-governance.test.ts`、`tests/component/app/dialog-host.test.tsx`。
 
 ### 浮层后打开 Dialog / 设置
 
-从 DropdownMenu / ContextMenu / Select 等 Radix overlay 的菜单项打开 Dialog 或设置时，业务代码写普通 controlled state 即可：
+权威规格：[`docs/superpowers/specs/2026-09-09-dialog-system-gold-standard.md`](docs/superpowers/specs/2026-09-09-dialog-system-gold-standard.md)（浮层后打开）。
 
-- `@pier/ui/dialog` / `@pier/ui/alert-dialog` 对 controlled `open`：无 overlay 时同步打开；检测到菜单/select 仍在或 body `pointer-events: none` 时，内部等待 unlock 后再挂载。关闭始终同步。
-- 若等待超时仍被锁，**放弃打开**（不强制挂载），避免 body 指针锁残留导致整页点不动；`open` 变回 `false` 会取消 pending。
-- 打开设置继续走 `useSettingsDialogStore.open` / `openSection` 或插件 `context.app.openSettings`，不要在业务侧再套 `setTimeout` / `scheduleAfterOverlay` / `modal={false}`。
-- 检查点在 `tests/unit/renderer/overlay-dialog-governance.test.ts`、`tests/unit/renderer/use-deferred-dialog-open.test.tsx` 与 `tests/unit/renderer/schedule-after-overlay.test.ts`。
+- 从 Radix overlay（DropdownMenu / ContextMenu / Select）打开 Dialog 或设置：业务只写普通 controlled `open`，组件内部等待 overlay 关闭 / body 指针锁解锁后再挂载，超时放弃打开；业务侧禁止 `setTimeout` / `scheduleAfterOverlay` / `modal={false}`。
+- 检查点在 `tests/unit/renderer/app/overlay-dialog-governance.test.tsx`、`tests/unit/renderer/app/use-deferred-dialog-open.test.tsx` 与 `tests/unit/renderer/app/schedule-after-overlay.test.ts`。
 
 ### 操作反馈规范
 
-所有用户触发的动作必须有可识别的完成或失败信号，静默失败（`catch (err) { console.error(...) }` 就结束）一律禁止。选择反馈方式时按以下顺序判断，防止漏报也防止重复：
+权威规格：[`docs/superpowers/specs/2026-09-09-action-feedback-gold-standard.md`](docs/superpowers/specs/2026-09-09-action-feedback-gold-standard.md)（反馈选型顺序、双反馈禁令、代码审查检查点）。
 
-- **后台/系统事件（非用户动作触发）一律经 `systemNotify()`**（`src/renderer/lib/notifications/system-notify.ts`）：上报 NCS 落档；打断由 main `resolveDeliveryPlan` 统一调度——**有 Pier key-window → 形态 B 单窗 toast**（`NOTIFICATION_CENTER_MESSAGE_TOAST`）；**无 key-window 且 kind 在 OS 白名单 → 系统通知**。禁止 renderer 订阅快照后自弹、禁止裸 `toast.*` 发系统事件、禁止业务直调 OS API。只落档不打扰时传 `suppressToast: true`。记录去重用 `dedupeKey`（NCS 统一合并）。多窗：inbox 全窗同步；消息 toast / OS / 声音进程级各一次（见 `docs/superpowers/specs/2026-08-02-notification-focus-routed-delivery-design.md`）。
-- 已经有**强自然 UI 反馈**（列表新增/删除、导航切换、Modal 关闭、面板打开、表单值即时更新等）→ **不再加 toast**；重复反馈是噪声。
-- 只有**弱 UI 反馈**（Save 按钮从 enabled → disabled、dirty 位清零等）或**完全无 UI 反馈**（写盘、无 refetch 的写请求、后台任务触发） → 成功走 `toast.success(t("..."))`。
-- 短失败（用户能从 title 理解、无技术详情）→ `toast.error(t("...Failed"))`。
-- 带技术详情的失败（`Error.message`、IPC 错误串、多行说明）→ **直接** `showAppAlert({ title: t("...Failed"), body: err instanceof Error ? err.message : String(err) })`，禁止 `toast.*(…, { description })`。`console.error` 不面向用户，只能作为额外日志。唯一例外：消息型 toast（形态 B）的详情槽位是契约一部分，唯一实现 `show-notification-toast.tsx`（治理测试锁定），其余调用点仍禁 description。
-- Toast 复用 `sonner`（胶囊短 title；可选 action 如撤销）；宿主代码从 `sonner` 直接 `import { toast }`，插件走 `context.notifications.{success,error}`；文案必须走 i18n key，禁止内联字符串。
-
-**代码审查检查点**：
-- 每个 `onClick` / `onSubmit` / async mutation 都要能回答"用户怎么知道刚才发生了什么"。答不出 → finding。
-- 遇到 `catch` 里只有 `console.error` / `console.warn` 而没有 `toast.error` / `showAppAlert` → finding，除非注释里明确说明不面向用户的路径（如启动阶段 boot log）。
-- 遇到"有明显 UI 变化 + 又加了 toast"的双反馈 → minor finding，建议删掉冗余 toast。
-- 遇到内联 toast 文案字符串（未走 i18n） → finding。
-- 遇到 `toast.*(…, { description })` → finding，详情应走 `showAppAlert`（`show-notification-toast.tsx` 的形态 B 详情槽位除外）。
+- 每个用户动作都必须有可识别的完成 / 失败信号；静默失败（`catch` 里只有 `console.error`）一律禁止。
+- 强自然 UI 反馈 → 不再加 toast；弱 / 无反馈的成功 → `toast.success`；短失败 → `toast.error`；带技术详情的失败 → `showAppAlert`，禁止 `toast.*(…, { description })`。
+- 后台 / 系统事件一律经 `systemNotify()` 落 NCS，打断由 main `resolveDeliveryPlan` 统一调度；toast 文案走 i18n key，禁止内联字符串。
 
 ### 消息中心（统一系统消息）
 
-统一消息中心是全部系统/后台消息的收件箱：main 侧 `src/main/services/notification-center/`（NCS）是唯一写入方，契约在 `src/shared/contracts/notification-center.ts`，广播通道 `pier://notification-center:changed`；renderer 镜像 store 是 `stores/notification-center.store.ts`。
+权威规格：[`docs/superpowers/specs/2026-09-09-notification-center-gold-standard.md`](docs/superpowers/specs/2026-09-09-notification-center-gold-standard.md)（toast 双形态、路由与聚焦互斥、去重下沉、agent 通知同构、入口与 popover 四条例、设置三卡）。
 
-硬规则：
-
-1. **toast 双形态**：确认型（用户动作即时反馈，不进消息中心）维持 **触发窗** sonner 反色胶囊（默认 Toaster `position="top-center"`）；消息型（系统/后台事件，进消息中心）仅经 main 单投 → `NotificationMessageToastBridge` → `lib/notifications/show-notification-toast.tsx` 标准 shadcn sonner 卡片（同 Toaster，per-call `position: "top-right"`）——**标题 + 详情（必备，必须由调用方提供友好内容：下一步/上下文/摘要；类型行回退仅为防御兜底，不得作为常态）+ ≤1 outline 操作 + 关闭 X（右上），无前置状态图标**。消息中心卡片唯一实现是 `components/common/notification-card.tsx` 的 `NotificationCard`（无前置图标；标题/详情/时间 + 未读红点 + 操作），**仅 Popover 列表使用**（无 dockview panel），禁止另写一套卡片样式。action 统一走 `lib/notifications/actions.ts` 分发（同一 id 各载体行为一致；toast 副本按 dedupeKey 标已读）。
-2. **状态图标的归属**：StatusIcon 只出现在确认型 toast（结果确认着色）与 Alert 等即时反馈中；**消息型 toast 与消息中心条目一律无前置状态图标**。severity 只驱动行为：徽标只计 warning/error 未读（`attentionUnreadCount`）、toast 时长 error 10s / warning 6s / success·info 4s、DND 仅 error 弹出。不要给 inbox 条目重新引入 severity 图标。
-3. **路由单一实现**：投递判定只走 `src/shared/notification-delivery.ts` 的 `resolveDeliveryPlan`（inbox / toast / OS 互斥；mutedKinds → DND（error 除外）→ suppressToast → 聚焦路由 → agent 细粒度静音）；业务代码不得手写 DND / 聚焦 / OS 判定。兼容薄封装 `routeDelivery` / `resolveToastTarget` 假定有 key 窗。
-4. **聚焦路由（打断互斥）**：有 Pier key-window → 仅形态 B toast（多窗只投 key 窗；`task-run.finished` 可 origin）；无 key-window → 仅 OS 且 kind ∈ `OS_ELIGIBLE_KINDS`（v1：`agent.attention` / `agent.turn-finished`）。**禁止**同一事件 toast+OS 双发。panel/owner 静音只关打断，**仍落 inbox**。
-5. **去重下沉**：同 `dedupeKey` 窗口（24h，`NOTIFICATION_DEDUPE_WINDOW_MS`，契约单一来源）内由 NCS 合并（`repeatCount`），调用方不维护版本/runId 级记录去重；OS 冷却（`cooldownMs`）仅约束系统通知横幅。dedupe 判定依赖镜像水合（`hydrated`），启动期未水合时门面延后判定。
-6. **agent 通知同构**：agent「需要你处理」/ 回合结束 / 出错经 agent-attention **只分类 + ingest**；**OS 发送权唯一在 NCS `deliverOs`**（`system-notification.ts` 为适配层）；深链 `focus-panel` 聚焦 agent 面板并标记已读。**提示音跟随打断**（toast 投递成功或 OS `shown`；与 inbox 落档解耦；同一决策互斥不双响）。
-7. **入口**：标题栏铃铛（mac `title-bar.tsx` 与非 mac `agent-index-chrome-bar.tsx` 必须同位同步）+ Popover 全量列表（滚动触底加载更多；**无**独立 dockview panel、**无**筛选/搜索）。命令面板 / 默认快捷键 `⌘⇧N`（`pier.notifications.open`，toggle）打开同一 Popover（`useNotificationCenterPopoverStore`）。Header「全部已读」仅在有未读时显示；全部已读 / 勿扰成功后 **保持** Popover 打开（列表即时反映已读/勿扰状态）；卡片导航 action（查看输出 / 聚焦面板 / 重启等）点击后关 Popover；失败走 `showAppAlert`（禁止 silent catch + 假关闭）。
-8. **popover 在终端上的四条例**：① 打开期间挂 `registerTerminalFullscreenWebOverlay`（否则点终端不收起）；② `requestTerminalWebFocus` 钉键盘但不 `pushBlockingScope`（否则吞全局快捷键）；③ 订阅 Dialog 打开信号自动收起；④ **终端向 outside 关闭后**才 `markWebOverlayOutsideDismissIfNeeded`（仅 `.terminal-anchor` / `body` / `html`；**排除** trigger 与其它 web 控件）→ cleanup 里 `restoreTerminalFocusAfterWebOverlayDismiss`。Dialog 让路 / Esc / 点铃铛自关不要补聚焦。新增 `+` 创建器等同款。分支状态栏 **Dropdown** 不走全屏路径（modal + blur），勿混用。
-9. **设置三卡**：通知设置页按消息生命周期排序——消息中心（记录）→ 提醒内容（类别）→ 提醒方式（通道）；权限/hooks 警示在「提醒方式」卡内顶部 StatusStack。DND **只挡应用内 toast**（error 除外），不挡系统通知。
-
-检查点在 `tests/unit/renderer/notification-center-governance.test.ts` 与 `tests/unit/main/notification-center-governance.test.ts`。
+- main 侧 NCS 是唯一写入方；toast 双形态：确认型 = 触发窗胶囊（`position="top-center"`），消息型 = main 单投标准卡片（`position: "top-right"`，必备详情、无前置状态图标）；inbox 卡片唯一实现 `NotificationCard`（仅 Popover 列表，无 dockview panel）。
+- 投递判定唯一实现 `resolveDeliveryPlan`（inbox / toast / OS 互斥）；**OS 发送权唯一在 NCS**；同 `dedupeKey` 窗口内由 NCS 合并，调用方不做记录级去重。
+- 入口 = 标题栏铃铛 + Popover 全量列表（无筛选 / 搜索）；popover 叠终端的四条例见规格。
+- 检查点在 `tests/unit/renderer/notifications/notification-center-governance.test.ts`。
 
 ### 用户可见文案规范
 
-面向用户的 toast、空态、错误、状态栏、确认弹窗和设置说明必须让非实现者读得懂，并尽量给出下一步动作。文案进 locale（宿主 `src/renderer/i18n/locales/**`，插件 `src/plugins/builtin/*/locales/**`），禁止在业务代码里内联中文/英文用户串。
+权威规格：[`docs/superpowers/specs/2026-09-09-user-copy-gold-standard.md`](docs/superpowers/specs/2026-09-09-user-copy-gold-standard.md)（写作规则、产品词表、严格度分层、审查检查点）。
 
-写作规则：
-
-- **说用户动作，不说内部概念。** 反例：「没有可打开的终端选区」；正例：「请先在终端中选中文本。」
-- **失败与空态要带下一步。** 反例：「无项目上下文」；正例：「未打开项目」+「请先打开项目文件夹以浏览文件。」
-- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、Canvas 发现面「物料」（仓库 `.pier/canvases/canvas-kit`，后续官网文档；不要做进设置）、需要你处理（中文不要直出 Needs you）、git 产品名用全大写 GIT（插件名、设置页标题、命令面板分组头、命令前缀与终端状态栏芯片标签）；正文与说明仍用小写 git，不要写成 Git；GitHub 等专有名除外。界面语言与根 README 的语言集合均为 `SUPPORTED_LOCALES`（`zh-CN` / `en` / `ja` / `ko`）。
-- **根 README 与产品语言集合一致。** `README.md` 为简体中文真源；并列 `README.en.md` / `README.ja.md` / `README.ko.md`。语言标签只用上述四项，不要 `zh` / `zh_CN` / `jp` / `kr`。改中文前门必须同步三份译文。检查点在 `tests/unit/docs/readme-locale-governance.test.ts`。
-- **CLI GitHub 手册同样四语。** `.pier/canvases/pier-cli-user-manual/README.md` 为简体中文真源；并列同目录 `README.en.md` / `README.ja.md` / `README.ko.md`。命令语义仍以同目录 `data.json` 为真源，不要把 `data.json` 复制成四份。应用内 Canvas 暂不按语言分文件。检查点同上。
-- **实现词禁止进入前台主路径文案。** 包括但不限于：选区、上下文、面板参数、耐久性、绑定、运行标识、运行态、renderer、清单预览、hook（首次可写「钩子（hook）」）、tip tree、upstream（应写「上游分支」）。
-- **中文界面少夹英文状态码。** git 状态用「分离头指针 / 合并中 / 变基中」等，不要用 DETACHED / MERGING 全大写码。
-- **fallback 英文与 en locale 同步可读**；改中文时必须核对英文是否同样术语化。
-
-严格度分层：
-
-- Toast / 空态 / 确认弹窗标题：最严，禁实现词，优先给动作。
-- 状态栏短标签：严，统一产品词。
-- 设置说明：中，可保留 git 等领域词，仍要白话。
-- 插件权限列表、开发模式提示：可偏技术，但不得污染前台主路径。
-- 路径占位与代码标识符（如 `{项目名}.worktree`、命令 id）不受禁词约束。
-
-**代码审查检查点**：
-
-- 新增用户文案能否回答「用户看懂吗 / 下一步做什么 / 和现有产品词一致吗」。
-- 中文界面出现 Agent、worktree、选区、上下文、耐久性、Needs you、DETACHED、Title Case Git 等 → finding。
-- 业务代码 `toast.*("…")` / `showAppAlert({ title: "…" })` 内联用户串未走 i18n → finding。
-
-检查点在 `tests/unit/renderer/app/user-copy-governance.test.ts`：锁定本节存在，并扫描中英日韩 locale 字符串值中的禁用实现词。根 README 四语检查点在 `tests/unit/docs/readme-locale-governance.test.ts`。
+- 说用户动作，不说内部概念；失败与空态要带下一步；文案一律进 locale，禁止在业务代码里内联用户串。
+- 产品词全产品统一：智能体、工作树、Canvas 发现面「物料」、需要你处理；git 产品名用全大写 GIT。
+- 实现词（选区 / 上下文 / renderer / 耐久性等）禁止进入前台主路径文案；中文界面少夹英文状态码。
+- **根 README 与产品语言集合一致**（`SUPPORTED_LOCALES` 四语）；**CLI GitHub 手册同样四语**，`data.json` 保持单一语义真源。
+- 检查点在 `tests/unit/renderer/app/user-copy-governance.test.ts`；根 README 四语检查点在 `tests/unit/docs/readme-locale-governance.test.ts`。
 
 ### Markdown 预览大纲布局复用（最高优先级）
 
@@ -268,171 +168,69 @@ Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 
 Pier 桌面端的单行交互控件统一使用 28px 高度：
 
-- 高度所有权在 `packages/ui/src/interactive-density.ts`；基础控件消费统一定义，业务代码不得用 `h-8`、`h-8!` 或额外纵向内边距把标准控件恢复到 32px。
-- Button、Input、InputGroup、Select trigger、Toggle、Tabs、Menubar、命令面板输入框和同类单行控件默认高度为 28px；纯图标默认控件为 28×28px。
-- Select、Dropdown Menu、Context Menu、Menubar、Command 和 Navigation Menu 的内容型选项统一使用“最小 28px”：单行必须为 28px，多行说明可按内容自然增高，禁止为了固定 28px 裁切文字。
-- `asChild` 触发器由子控件持有尺寸；应优先组合 `@pier/ui` 的 Button 等统一控件，不在业务层复制高度。
-- Textarea、卡片内容、头像、骨架内容块、导航分组标题等非单行交互控件不适用本规则。
-- 检查点在 `tests/unit/renderer/interactive-density-governance.test.ts`；新增通用交互原语必须接入统一密度定义，例外必须在测试中说明原因。
+- 高度所有权在 `packages/ui/src/interactive-density.ts`；业务代码不得用 `h-8` 或额外纵向内边距把标准控件恢复到 32px；纯图标默认控件 28×28px。
+- 内容型选项（Select / Dropdown / Context Menu / Menubar / Command / Navigation Menu）：单行必须为 28px，多行说明可按内容自然增高，禁止为固定 28px 裁切文字。
+- 检查点在 `tests/unit/renderer/app/interactive-density-governance.test.ts`；新增通用交互原语必须接入统一密度定义，例外必须在测试中说明原因。
 
 ### 焦点与 Tab 序规范
 
-桌面工作台的 focus 纪律：**去掉不该 focus 的脏环；该 focus 的只用产品 `focus-visible` ring。**  
-不要为了「干净」全局消灭键盘焦点指示。
+权威规格：[`docs/superpowers/specs/2026-09-09-focus-and-tab-order-gold-standard.md`](docs/superpowers/specs/2026-09-09-focus-and-tab-order-gold-standard.md)（七条硬规则与 `tabIndex={0}` 白名单全文）。
 
-硬规则：
-
-1. **鼠标点中不画 UA outline。** 底座在 `src/renderer/app/globals.css`：
-   `:focus:not(:focus-visible) { outline: none; }`。禁止依赖 Electron/macOS 系统强调色
-   的 `outline: auto` 粗环。
-2. **真正可操作控件**（Button / Input / Select / Toggle / 菜单项 / 拖拽把手等）使用
-   **`focus-visible:ring-*` + `outline-none`（或等价）**；token 优先 `ring-ring/30~50`，
-   禁止用 `ring-primary` 当 focus 铬（主题橙会像脏 focus 环）。
-3. **展示型 / 只读表面不进 Tab 序**：图表（`ChartContainer` 默认注入
-   `accessibilityLayer={false}`，子节点经 `Children.map`/Fragment 处理）、
-   纯展示节点图（无 `onSelectNode`/`editable` 时 `focusable=false`、`role="img"`；
-   有选择/编辑合约时节点可键盘聚焦并带产品 `ring-ring`）、
-   状态徽标（短标签 + 完整 `aria-label`，不要为 tooltip 硬挂 `tabIndex={0}`）、
-   装饰 SVG。hover tooltip / 点击选点仍可用。
-4. **业务高亮 ≠ focus。** 短时反馈用轻量 `ring-1 ring-ring/40`（或阴影）；禁止与 focus 环共用 `ring-primary/50` 粗描边。
-5. **`tabIndex={0}` 白名单**（产品源码；新增必须在治理测试里登记理由）：
- - 图片预览画布（缩放/平移快捷键）
- - 图片 diff 左右滑动条（`role="slider"`，方向键调整对比比例）
- - dockview panel tab 内容（标签激活）
- - 设置「项目」列表行（`role="button"` 打开项目；须处理 Enter/Space）
- - 任务 applet 卡片/列表行（applet 视图 spec 键盘契约：focus ring；「移动到列」走菜单）
-6. **`role="button"` 的非 button 元素**必须同时具备：键盘激活（Enter/Space）、
-   `tabIndex={0}`、以及可见的 `focus-visible` 环（或复用已带 ring 的 `Item` 等原语）。
-   能改成真正 `<button>` / `Button` 时优先改。
-7. 菜单/列表的 `:focus` 背景高亮（Radix roving focus）保留；那是选中态，不是 UA outline。
-
-检查点在 `tests/unit/renderer/chart-focus-governance.test.ts`（锁定本节标题、全局
-outline 抑制、Chart/DataChart/Mermaid 默认、状态徽标不进 Tab、`tabIndex={0}` 白名单、
-禁止 `ring-primary` focus 铬）。
+- 鼠标点中不画 UA outline（`:focus:not(:focus-visible)` 底座在 `globals.css`）；可操作控件只用产品 `focus-visible` ring，禁止 `ring-primary` 当 focus 铬。
+- 展示型 / 只读表面不进 Tab 序：图表默认 `accessibilityLayer={false}`、状态徽标、纯展示节点图、装饰 SVG。
+- `tabIndex={0}` 走白名单（规格 §5），新增必须在治理测试登记理由；业务高亮 ≠ focus（轻量 `ring-1 ring-ring/40`）。
+- 检查点在 `tests/unit/renderer/app/chart-focus-governance.test.ts`。
 
 ### 颜色使用规范
 
-产品界面颜色按“主题原色 → 语义令牌 → 组件变体 → 业务映射”单向使用：
+权威规格：[`docs/superpowers/specs/2026-09-09-color-token-gold-standard.md`](docs/superpowers/specs/2026-09-09-color-token-gold-standard.md)（所有权分层、例外清单、对比度 Tier 1 / Tier 3 治理）。
 
-- `src/renderer/app/globals.css` 是产品 UI 调色板和语义令牌的唯一所有者。`info`、
-  `success`、`warning`、`destructive`、`done` 不随编辑器或终端主题改变。
-- `src/renderer/lib/theme/` 只负责中性外壳、主强调色、图表序列和终端 ANSI 色派生，
-  不得重新派生产品状态色。
-- `packages/ui` 组件只消费 `background`、`foreground`、`status-*`、`action-*` 等
-  语义令牌；业务代码只选择语义，不持有具体颜色值。
-- 普通动作使用 `action-accent`，破坏性动作使用 `action-danger`，结构性控件使用
-  `action-muted`；不要用成功绿表达导航或普通按钮。
-- 业务源码禁止新增十六进制、`rgb()`、`hsl()`、`oklch()` 和 Tailwind 固定色阶。
-  允许的例外只有主题/终端颜色引擎、原生窗口启动兜底、第三方图表选择器和品牌图标。
-- 检查点在 `tests/unit/renderer/color-token-governance.test.ts`，新增颜色例外必须同时说明
-  所有权和无法使用现有语义令牌的原因。
-- 对比度治理分层：Tier 1（严格 WCAG 4.5:1）覆盖正文、toast 容器、shimmer 文字，
-  两个主题都强制；Tier 3（设计决策）覆盖暗色主题 badge 内 glyph 对比度——
-  `:root` 使用亮色状态色 + 统一亮色 `--status-solid-foreground`，WCAG 亮度公式
-  报告 1.6–2.7（低于 3:1），但 glyph 是简单形状、暗色 surround 提升感知亮度、
-  色相对比提供额外辨识线索，由设计决策覆盖，测试只验证 token 存在。如设计
-  变更需恢复严格检查，把 `:root` 加回 Tier 1 循环。
+- 产品界面颜色按“主题原色 → 语义令牌 → 组件变体 → 业务映射”单向使用；`src/renderer/app/globals.css` 是产品 UI 调色板和语义令牌的唯一所有者。
+- `packages/ui` 只消费语义令牌；普通动作 `action-accent`、破坏性 `action-danger`、结构性 `action-muted`；业务源码禁止新增十六进制 / `rgb()` / `hsl()` / `oklch()` / Tailwind 固定色阶（例外见规格）。
+- 检查点在 `tests/unit/renderer/app/color-token-governance.test.ts`，新增颜色例外必须同时说明所有权和无法使用现有语义令牌的原因。
 
 ### 透明 web 叠 Ghostty 合成
 
-macOS 是透明 `WebContentsView` 叠 Ghostty。终端洞必须透出 native；洞上的 web 不得再开会采样或缓存旧像素的合成层。
-
 权威规格：[`docs/superpowers/specs/2026-09-04-transparent-web-over-ghostty-compositing-gold-standard.md`](docs/superpowers/specs/2026-09-04-transparent-web-over-ghostty-compositing-gold-standard.md)。
 
-- 禁止产品源码 `backdrop-filter` / `backdrop-blur*` / `filter: blur()`，以及 `translate3d` / `translateZ` / `transform-gpu` / `will-change: transform`。预览字号、图片 diff 字幕用不透明 `bg-background`。
-- 扫描必须包括 `packages/ui/src`、`src/renderer`、`src/plugins/builtin`。只扫 renderer 会漏掉共享控件。
-- 分栏 / 浮层改大小不藏 native，只拦输入（`62b82e2f`）。
-- 例外必须在治理测试 allowlist 写明无法用不透明底或 2D 定位的原因。
+- 终端洞必须透出 native：禁止产品源码 `backdrop-filter` / `backdrop-blur*` / `filter: blur()` 与 `translate3d` / `translateZ` / `transform-gpu` / `will-change: transform`。
+- 分栏 / 浮层改大小不藏 native，只拦输入；扫描范围必须含 `packages/ui/src`、`src/renderer`、`src/plugins/builtin`；例外在治理测试 allowlist 写明原因。
 - 检查点在 `tests/unit/renderer/app/gpu-compositing-governance.test.ts`。
 
 ### shadcn 组件使用规范
 
-宿主 renderer 与官方插件 renderer 的业务界面统一以 `packages/ui` 中的 shadcn 组件为
-组合边界：
+权威规格：[`docs/superpowers/specs/2026-09-09-shadcn-usage-gold-standard.md`](docs/superpowers/specs/2026-09-09-shadcn-usage-gold-standard.md)（组合边界、表单原语、专用渲染例外）。
 
-- 头像必须使用 `Avatar` 并提供 `AvatarFallback`；有独立卡片标题的卡片使用完整的
-  `CardHeader` / `CardContent` 组合。设置页一级标题位于卡片外，不得为了补齐
-  `CardHeader` 把页面标题移入卡片；列表项、提示、空态、进度、骨架和分隔线分别使用
-  `Item`、`Alert`、`Empty`、`Progress`、`Skeleton` 和 `Separator`。
-- 表单使用 `FieldSet` / `FieldGroup` / `Field`；输入内附加元素使用 `InputGroup`；
-  选项组使用 `ToggleGroup`。业务代码不得直接渲染原生 `input`、`select`、`textarea`
-  或 `hr`。
-- `SelectItem`、菜单条目、`CommandItem` 和 `TabsTrigger` 必须处于对应 Group / List
-  容器中；对外拆出的条目渲染函数也必须由调用方在同一文件内提供容器。
-- Button 和菜单中的图标不设置尺寸类，由组件变体控制；Button 图标必须声明
-  `data-icon`。组件 `className` 只承担布局、尺寸约束和交互状态，不覆盖组件色彩或字体。
-- 不得用上一条机械删除产品语义：命令、路径、环境变量和格式标识继续使用等宽字体，
-  `Kbd` 只表示键盘输入；终端状态栏、搜索栏和响应式物料可保留已验证的紧凑几何。
-- 禁止 `space-x-*` / `space-y-*`、`className` 模板字符串、手写加载占位、提示卡、
-  徽标和普通交互按钮。条件类统一走 `cn()`。
-- 允许保留专用渲染：Dockview tab 原生动作、shadcn Sidebar 自身实现、终端/调试几何
-  画布、图表及物料静态预览。这些例外不得扩展为普通业务表单或信息卡。
-
-检查点在 `tests/unit/renderer/app/shadcn-governance.test.ts`；新增例外必须写明组件边界和
-无法使用现有 shadcn 原语的原因。
+- 头像必须使用 `Avatar` 并提供 `AvatarFallback`；有独立卡片标题的卡片使用完整的 `CardHeader` / `CardContent` 组合。
+- 允许保留专用渲染：Dockview tab 原生动作、shadcn Sidebar 自身实现、终端/调试几何画布、图表及物料静态预览。这些例外不得扩展为普通业务表单或信息卡。
+- 检查点在 `tests/unit/renderer/app/shadcn-governance.test.ts`；新增例外必须写明组件边界和无法使用现有 shadcn 原语的原因。
 
 ### 设置页状态提示布局
 
-宿主设置页（`src/renderer/pages/settings/**`）里用于权限、错误、模式说明的
-`@pier/ui/Alert` **必须放在 `Card` / `CardContent` 内**，不得与 `Card` 并列作为
-section 根节点下的裸子节点。
+宿主设置页（`src/renderer/pages/settings/**`）里用于权限、错误、模式说明的 `@pier/ui/Alert` **必须放在 `Card` / `CardContent` 内**，不得与 `Card` 并列作为 section 根节点下的裸子节点。
 
-- 设置页一级标题（`h1`）仍在卡片外（见上节 shadcn 规范）。
-- 多卡片分段时：健康/错误提示**并入内容 Card 顶部**（与表单/列表同卡）；禁止
-  `h1 → 裸 Alert → Card`，也禁止「仅包一层 Alert 的空壳 Card」（Alert 已自带
-  边框，套 Card 会双重描边）。
-- 参考：`plugins-section.tsx`（错误 Alert 在内容 Card 内）、
-  `notifications-section.tsx`（权限/hooks Alert 在策略 Card 顶部）。
-- 一次性动作失败的详情仍走 `showAppAlert`（与本条不冲突）。
+- 设置页一级标题（`h1`）仍在卡片外；健康/错误提示并入内容 Card 顶部，禁止空壳 Card 套 Alert。
 - 检查点在 `tests/unit/renderer/settings/section-alert-layout-governance.test.ts`（仅扫描 `settings-dialog` 直接挂载的 `*-section.tsx`；嵌套在父 Card 内的子块不扫）。
 
 ### 前台活动模块 `src/main/services/foreground-activity/`
 
-统一 agent / task / shell / idle 四态活动聚合器：
+统一 agent / task / shell / idle 四态活动聚合器。权威规格：[`docs/superpowers/specs/2026-09-06-agent-status-evidence-gold-standard.md`](docs/superpowers/specs/2026-09-06-agent-status-evidence-gold-standard.md)。
 
-- 契约在 `src/shared/contracts/foreground-activity.ts`（`ForegroundActivity` discriminated union）
-- broadcast 通道 `pier://foreground-activity:changed` 是 renderer 侧 canonical UI 状态源
-- 双源迁移已完成：老 `agent-session` broadcast 已下线，此通道是唯一活动广播源
-- 模块内不 import `services/agents/`（agent 只是 activity 的一种 kind，边界单向）
-- Agent 提供方（Provider）原生 session / transcript 只可作为对应适配器内部的兼容输入；宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放
-- **状态证据与回合归属**：advisory Stop 只记候选，不清空状态/工具/交互/子智能体，也不算已结算；子智能体与候选不得刷新主状态的可信期限。旧回合终态不能结算新回合，外来工具/心跳不能抢占显式主回合；跨 session 封账须同一全局唯一 turnId，禁止用“没见过 PromptSubmit”推断父子。原生支持维度必须有完整状态轨迹，禁止缺口白名单。规格：[`docs/superpowers/specs/2026-09-06-agent-status-evidence-gold-standard.md`](docs/superpowers/specs/2026-09-06-agent-status-evidence-gold-standard.md)；检查点：`tests/unit/main/panel/turn-status/`、`tests/unit/agent-integrations/agent-status-trace-e2e.test.ts`。
-- **当前空闲不等于回合完成**：有归属的 `ActivityIdle` 只更新忙闲，保留未结束工作，不封账；后续进展可继续同回合。快照的 `turnResult` 仅由同一 scope 的可信终态产生，完成通知必须读该结果。维护动作的 ID 只配对 `MaintenanceStarted/Completed`，不得认领用户回合；新进展使旧维护收尾失效。文件替换、读失败和容量恢复遵循上述规格，不增加公共 Transcript 或调度服务。
+- 契约 `src/shared/contracts/foreground-activity.ts`；广播 `pier://foreground-activity:changed` 是 renderer 唯一活动源；模块内不 import `services/agents/`。宿主不提供公共 Transcript capability。
 - **Transcript 终态对账纪律**：原生终态行带回合身份时 `classifyLine` 必须提取为 `turnId`（Grok `prompt_id`、Codex `turn_id`），缺席则丢弃该终态行，禁止空 id + owner 回退；无原生身份的空 `turnId` 终态受 PromptSubmit 文件水位约束（行尾 offset ≤ 该 scope 最近一次 PromptSubmit 时的文件 size 则丢弃；文件截断须清水位）；PromptSubmit 须先完成 transcript observe（写下水位）再 ingest；transcript 封账是软封，可被封账之后、同回合（或空 turnId）的新鲜 hook `ToolStart` 解封（事件 `ts` 若为 epoch 纳秒须先收到毫秒再比 `turnEndedAt`），`ToolComplete` 不解封；无回合身份（空 turnId）的 hook `error` 也可被后续空 turnId 的 hook `ToolStart` 解封；有 turnId 的 hook 终态与宿主合成终态（裸 Esc，`evidenceSource=host`）仍是硬封。检查点：`tests/unit/main/agents/transcript/tail-reconciler.test.ts`、`tests/unit/main/agents/grok/transcript-reconciler.test.ts`、`tests/unit/main/panel/foreground-activity-turn-state-machine.test.ts`、`tests/unit/main/agents/transcript/turn-identity-governance.test.ts`、`tests/unit/main/panel/foreground-activity-transcript-unseal.test.ts`
-- 命令行 → 智能体身份只走 `src/shared/agent-command-detection.ts` 的 `matchAgentCommand`（OSC 133 C 先验点亮）：词元只来自 catalog 命令字段，产品 id / label 不参与（`cursor .` / `kiro` / `continue` 是启动器或内置命令，不得点亮）；`agent` / `acli` 泛名进 `AGENT_OSC_BIN_DENYLIST`；`qoder` / `qodercn` 合一启动器按 argv 分流 CLI/IDE；安装探测 `expectedBins`（除 denylist）必须能被 OSC 认到。检查点：`tests/unit/agent/command-detection-governance.test.ts`、`tests/unit/agent/command-detection.test.ts` 与 `tests/unit/main/agents/lifecycle/specs.test.ts` 的 expectedBins 词元锁
+- 命令行 → 智能体身份只走 `src/shared/agent-command-detection.ts` 的 `matchAgentCommand`（OSC 133 C 先验点亮）：词元只来自 catalog 命令字段；`agent` / `acli` 泛名进 `AGENT_OSC_BIN_DENYLIST`。检查点：`tests/unit/agent/command-detection-governance.test.ts`。
 
 #### 智能体 CLI 版本检测与更新 — 金标准
 
-权威规格：[`docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md`](docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md)。
-
-- **latest 权威远端**：brew core → `formulae.brew.sh`（miss 不回退本机 `brew info`）；npm → registry；uv/pipx → PyPI；path/script → `latestProbe`（HTTP / GitHub Releases / Cursor 脚本）。禁止把本机过期 `brew info` 索引当最新（第三方 tap 例外）。
-- **同线比较**：已装 brew token（`claude-code@latest` ≠ `claude-code`）；Claude native 读 `CLAUDE_CONFIG_DIR`（缺省 `~/.claude`）的 `autoUpdatesChannel`；已知安装源不跨生态取 latest / 更新计划。
-- **force 穿透**：catalog `ensureFresh({ force })` → `probe({ checkLatest, force })` → `fetchLatestVersion({ force })`；成功缓存 10 min 对齐 catalog remote TTL；失败负缓存 60s；`latestCheckFailed` 在设置详情可见。
-- **执行端新鲜度**：runner 禁注 `HOMEBREW_NO_AUTO_UPDATE=1`；brew 执行走短节流 auto-update（`HOMEBREW_AUTO_UPDATE_SECS=300`），否则检测新、执行旧 → 更新恒报「版本未变化」。
-- 检查点：`tests/unit/main/agents/lifecycle/latest-source.test.ts`、`latest-governance.test.ts`、`latest-probe.test.ts`、`plan.test.ts`（brew 计划无 npm）、`child-env.test.ts`。
+权威规格：[`docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md`](docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md)。检查点：`tests/unit/main/agents/lifecycle/latest-governance.test.ts`。
 
 #### 宿主发布候选版 — 金标准
 
-权威规格：[`docs/superpowers/specs/2026-08-29-host-release-candidate-gold-standard.md`](docs/superpowers/specs/2026-08-29-host-release-candidate-gold-standard.md)。
-
-- **版本同构**：候选 `package.json` = `X.Y.Z-rc.N`，tag = `vX.Y.Z-rc.N`；正式去掉 `-rc.N`。每轮 rc 一次 bump PR；同 version 不改已发布内容。
-- **三条路径**：默认发候选（GitHub prerelease，不占 Latest、不发博客）→ 观察期后「晋升正式版」；「直接发布」显式触发才走，跳过候选直达正式版（验证不减）。
-- **隔离**：Latest 必须是稳定 `vX.Y.Z`；候选 / 插件均为 prerelease。候选 publish 后 `gh release edit --prerelease --latest=false`；isolation 脚本 `--candidate-tag`。
-- **客户端候选 opt-in**：偏好 `receiveCandidateUpdates`（默认关）；候选目标解析单一实现 `app-updates/candidate-feed.ts`（只认宿主 tag、semver 全序、稳定优先、per_page=100 + 次页兜底 + 10s 超时），**禁止裸用 `allowPrerelease`**（会误选同仓插件 prerelease / 跳过晋升稳定版）；适配器构造后强制置 false（rc 运行版本构造期会被自动开启）。
-- 检查点：`tests/unit/main/app-core/release-workflow.test.ts`、`tests/unit/main/preferences/github-latest-isolation.test.ts`、`mac-release-assets.test.ts`、`tests/unit/main/app-updates/candidate-feed.test.ts`；skill `.agents/skills/publish-project/SKILL.md`。
+权威规格：[`docs/superpowers/specs/2026-08-29-host-release-candidate-gold-standard.md`](docs/superpowers/specs/2026-08-29-host-release-candidate-gold-standard.md)。检查点：`tests/unit/main/app-core/release-workflow.test.ts`。
 
 #### 终端 tab 标题与 Agent 身份（标题 ≠ 身份）— 金标准
 
-**单一真源（对齐 Ghostty）**：终端 tab short = 进程/TUI **OSC 0/2**；无 OSC → **cwd basename**。路径型 OSC（shell 把 cwd 写进标题）short 收成**叶子目录名**（与文件 tab 一致），全文进 long/tooltip。宿主不得用 prompt 截断、catalog 占位抢 tab。入口：`terminalPanelDescriptor`。
-
-- **tab 优先级**：显式 chrome（任务 label / **用户钉名** `source=user` / end-state）→ **OSC**（路径则 basename）→ cwd basename → `"Terminal"`。long / 顶栏 / tooltip：路径型优先**绝对 cwd（OSC 7）**，非路径 OSC 用全文；禁止把 shell 缩写路径当 long。
-- **用户改名 = 钉死 tab**（`user`），优先于后续 OSC，直到再次改名；对话框初值优先当前 tab 所见（OSC/cwd）。
-- **活体 agent**：overlay 只写状态点 + icon；无 user 钉名时 `stripTabChromeTitle`，勿让旧 chrome title 压 OSC。
-- **产品 `sessionTitle`（改名域 + 列表降级兜底，不再是列表主标题）**：枚举只有 `provider` | `user`；历史 `prompt`/`auto`/`rule`/`model` **读取期整段丢弃**；**禁止** prompt 派生与 Claude derive 双写（gen≥11 已卸，`derive.ts` 已删）。
-- **智能体列表主标题 = tab short（完全一致，单一实现 `resolveAgentListTitle`）**：Index quickpick / 活动总览行 / 协作会话列表共用 `src/renderer/lib/agent-runtime/list-title.ts`——本窗面板直接消费 `PanelDescriptorStore` 已解析 `display.short`（OSC / 改名变化随动）；跨窗 / descriptor 未注册时按 tab 优先级降级 user 钉名 → cwd 叶子名 → provider 标题 → catalog 标签。禁止各列表再各自 `resolveAgentSessionTitle` 当主标题，否则列表与 tab 无法一一对应。
-- **provider 写入**：`applyProviderAgentSessionTitle` 只收真自生成名（如 `ai-title`），不收 `custom-title`/`agent-name`；同秩不覆盖。
-- **OSC 展示**：折叠空白后进 short；安全上限 `MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH`；视觉截断 CSS。落盘可更长。
-- **身份**与标题无关：`agentId` + 路径锚点 + `panelId` + actor/session 字段；判据只在 `agent-session-actor.ts`。
-- 检查点：`tests/unit/app/cwd-derive.test.ts`、`tests/unit/agent/session-title-governance.test.ts`、`tests/unit/agent/session-title-hook-parity.test.ts`、`tests/unit/main/agents/agent-session-title-hook-event.test.ts`、`tests/unit/renderer/agent-runtime/list-title.test.ts`。
+tab short = OSC 0/2 → cwd basename → `"Terminal"`。用户钉名优先于后续 OSC。智能体列表主标题 = tab short（`resolveAgentListTitle`）。身份与标题无关。检查点：`tests/unit/agent/session-title-governance.test.ts`、`tests/unit/renderer/agent-runtime/list-title.test.ts`。
 
 ### 窗口系统标题与多窗显示名
 
@@ -451,9 +249,9 @@ section 根节点下的裸子节点。
 
 - **工作树是单元**，tile（用户词「区域」）是它在某个窗口里的一棵 pane 树；窗口装 1…N 个 tile，恰好一个窗口带侧栏。
 - 工作树事实（身份、分支、`±N`、`↑↓`、聚合状态）只写在 **tile 底部状态栏**；tab 不带工作树标识；每终端状态栏与窗口级状态行都不存在。
-- 侧栏上半是**项目**树（工作树行只切主窗，会话行定位可跳窗，会话用智能体品牌图标）；下半是工作区级插件目的地（「任务」只有一条，打开已有面板，不嵌进某个项目、不列出议题）。tab 只能落在自己工作树的 tile 里（含隐藏集 = 已有 → 恢复）。
+- 侧栏上半是**项目**树（工作树行只切主窗，会话行定位可跳窗，会话用智能体品牌图标）；下半是工作区级插件目的地（「任务」只有一条，在项目树之下，打开已有面板，不嵌进某个项目、不列出议题）。分支名不进侧栏。视觉词汇见规格 §5.3。tab 只能落在自己工作树的 tile 里（含隐藏集 = 已有 → 恢复）。
 - 身份色 `--identity-1…6` 由 `src/renderer/app/globals.css` 持有。
-- 检查点：`tests/unit/renderer/workbench/tile-governance.test.ts`。
+- 检查点：`tests/unit/renderer/workbench/tile-governance.test.ts`。整窗 IA 设计稿 `.pier/canvases/workbench-shell/`（不是视觉真源）。
 
 ### 路径锚点上下文 `src/main/services/panel-context-resolver.ts` + `src/shared/contracts/panel.ts`
 
@@ -667,16 +465,9 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 
 ### 滚动条外观
 
-产品滚动条必须是同一条滑块。权威规格：
-`docs/superpowers/specs/2026-08-19-scrollbar-visual-gold-standard.md`。
+产品滚动条必须是同一条滑块。权威规格：[`docs/superpowers/specs/2026-08-19-scrollbar-visual-gold-standard.md`](docs/superpowers/specs/2026-08-19-scrollbar-visual-gold-standard.md)。
 
-- 空闲透明；滚动或槽位悬停显现；idle 900ms。禁止整容器 hover 当默认亮条。
-- 颜色走不透明 `--shell-scrollbar-thumb`（`--foreground` 混 `--background`），禁止半透明叠在局部底上。
-- 粗细权威是 `scrollbar-width: thin`。`--shell-scrollbar-width-legacy` 是测到的 `thin` 槽宽，只给 Radix / 树 gutter / 渐隐让槽用。
-- 看得见的条：`scroll-fade` / mask 不得盖住拇指。与条同节点时用槽位不透明带（`mask-composite: add`），禁止缩小 `mask-size` 把滑块裁没。`ScrollArea` 的条必须是 viewport 兄弟。
-- `@pierre/trees` / `@pierre/diffs` 自带 webkit 条不是产品表面，Shadow unsafe CSS 必须压住。
-- 槽位 `stable` / `overlay` / `none` 只谈占位。藏条只许 `data-scrollbar="none"`。
-- 关闭清单：终端 AppKit overlay；命令面板 / 画布 / 大纲细轨等 `none`；Markdown 大纲 hover 藏拇指；Dockview Tab 条厚度 4px，颜色对齐，显隐沿用条 hover / 拖拇指（不得关掉 `:hover`）。
+- 空闲透明；滚动或槽位悬停显现。颜色走不透明 `--shell-scrollbar-thumb`。
 - 检查点在 `tests/unit/renderer/styles/scrollbar-visual-governance.test.ts`。
 
 ## 04 项目命令
@@ -694,100 +485,25 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - E2E 测试：优先 `pnpm test:e2e:auto`（见下节）；强制本机仍可用 `pnpm test:e2e`
 - 构建：`pnpm build`（electron-vite build）
 - 会合云本地：`pnpm dev:relay`（默认 `:8787`）；桌面联调 `PIER_RELAY_URL=ws://127.0.0.1:8787 pnpm dev`。操作说明 [`apps/relay/README.md`](apps/relay/README.md)
-- 会合云 / Web 壳发布：tag `relay-v*` / `mobile-web-v*`（与宿主 `v*` 解耦；见 [`docs/release.md`](docs/release.md)）
-- 图标重建：`pnpm build:icons`（修改唯一母版 `build/app-icon-source.svg` 后跑一次；产出 `build/icon.{icns,ico,png}`、`build/icons/*.png` 与正式发布使用的 macOS 26 `build/Assets.car`，并同步更新 `build/Assets.car.inputs`；标准尺寸统一由锁定的 electron-builder 图标工具从 SVG 直接降采样，`sips` 只封装 legacy ICNS，原生资源需 Xcode 26+ `actool`；PierDev 与四类 Helper 仅安装 ICNS，必须移除 `Assets.car` 与 `CFBundleIconName`）
+- 会合云 / Web 壳发布：tag `relay-v*` / `mobile-web-v*`（见 [`docs/release.md`](docs/release.md)）
+- 图标重建：`pnpm build:icons`（母版 `build/app-icon-source.svg`）
 
 ### E2E 执行优先级（编码助手硬约定）
 
-Pier e2e 会启动真实 Electron 窗，**在主力开发机上跑会打扰当前使用**。存在闲置 Mac runner 时：
-
-1. **默认**执行：`pnpm test:e2e:auto` 或  
-   `bash scripts/e2e-runner/run-e2e.sh [playwright 路径/参数…]`  
-   脚本先探测 SSH Host `pier-e2e`（`PIER_E2E_SSH_HOST` 可覆盖）。可达则在远端跑；不可达再回退本机。  
-   主力机须已配置 `~/.ssh/config` 的 `Host pier-e2e`（见 `scripts/e2e-runner/FIRST-BOOT.txt`「主力机 SSH Host」）。
-2. **远端会同步本机 tip**（`git bundle`，不必先 push），在闲置机 `checkout --detach` 后跑 playwright。  
-   - clean 工作区 → 同步 git HEAD  
-   - dirty 工作区 → 同步临时 worktree snapshot（已跟踪改动 + 未忽略未跟踪文件），**开发中的未提交改动默认也能上闲置机**  
-   - 只要已提交 HEAD：`--committed-only`（工作区 dirty 时拒绝远端，避免误测）  
-3. **强制只走远端**（不可达则失败、不回退）：  
-   `bash scripts/e2e-runner/run-e2e.sh --remote …`  
-4. 强制重建：`--rebuild`。tree/SHA 变化或缺少 `out/main` 时远端也会自动 rebuild。  
-5. 禁止在未探测闲置机的情况下，把「全量 e2e」默认打在主力机上；unit/component/integration 仍本机即可。
-
-闲置机装机与 runner：`scripts/e2e-runner/FIRST-BOOT.txt`、`setup-mac.sh`、`install-actions-runner.sh`。
+Pier e2e 会启动真实 Electron 窗。禁止在未探测闲置机的情况下把全量 e2e 默认打在主力机上。默认 `pnpm test:e2e:auto`。步骤与装机见 [`docs/development.md`](docs/development.md) 与 `scripts/e2e-runner/FIRST-BOOT.txt`。
 
 ### 新机首次 clone → dev 一键：`pnpm bootstrap`
 
-`scripts/bootstrap.sh` 会依次预检 & 安装依赖，然后调 `setup:worktree`：
-
-```bash
-git clone <repo> && cd pier
-pnpm bootstrap        # 预检 Xcode CLI / brew / zig@0.15 / pnpm / node → pnpm install → setup:worktree
-pnpm dev              # 起 Electron dev
-```
-
-CI / 无交互场景：`BOOTSTRAP_YES=1 pnpm bootstrap` 缺依赖直接自动装。
+人类步骤见 [`docs/development.md`](docs/development.md)。新 clone：`pnpm bootstrap`。CI：`BOOTSTRAP_YES=1 pnpm bootstrap`。
 
 ### 已有 worktree 首次启动 checklist
 
-git worktree **不复制** `node_modules` 也不复制 `native/build/`。第一次进 worktree 必须先：
-
-```bash
-pnpm setup:worktree   # 用 pnpm store 建立本地 node_modules + 补 GhosttyKit.xcframework + 编译 native addon
-pnpm dev              # 否则 panel 内会报 "Cannot find module .../ghostty_native.node"
-```
-
-`setup:worktree` 内部：
-
-1. 建立 worktree 自己的 `node_modules` 布局，包内容由 pnpm store 去重复用；旧版主仓软链会自动迁移
-2. 若 `native/Vendor/libghostty-spm/GhosttyKit.xcframework/` 缺失（首次 clone / 新电脑）自动跑 `pnpm build:libghostty`——**首次约 3-5 分钟**（含 fetch ghostty 上游、apply patches、跨 arch build），后续增量 60-90s
-3. native addon（`ghostty_native.node` + `libGhosttyBridge.dylib`）过期则重编，约 30s
-
-如旧 worktree 仍把整个 `node_modules` 软链到主仓，pnpm 11 可能在进入
-`setup:worktree` 脚本前就因依赖状态路径不匹配而中止。这种旧状态只需一次性执行
-`node scripts/setup-worktree.mjs` 完成迁移；之后继续使用 `pnpm setup:worktree`。
-
-`pnpm build:libghostty` 依赖：
-- `brew install zig@0.15`（硬要求 zig 0.15.2）
-- `xcode-select --install`
-
-产出：`native/Vendor/libghostty-spm/GhosttyKit.xcframework/` universal（arm64 + x86_64）。xcframework 二进制不入库；patches 在 `native/Vendor/libghostty-spm/Patches/ghostty/` 下按 `0100-` 起编号（Lakr233 的 `0001-0010` 由 `.libghostty-spm-src/` 里的仓提供）。
-
-`pnpm dev` 的 `predev` 阶段也已加 native addon 存在性守卫，缺了会清楚提示去跑 `pnpm setup:worktree`，不会进 Electron 后才在 panel 内炸。
+git worktree **不复制** `node_modules` 与 `native/build/`。第一次进 worktree 必须先 `pnpm setup:worktree`。细节见 [`docs/development.md`](docs/development.md)。
 
 ### 打包分发（`pnpm build:dist`）
 
-`build:dist` 走 `scripts/build-dist.sh`：加载 `electron-builder.env` → `NATIVE_ARCHS="arm64 x86_64" pnpm build:native` → `pnpm build:electron` → `electron-builder --mac --arm64 --x64 --publish never`。
+步骤与公证凭证见 [`docs/app-release.md`](docs/app-release.md) 与 [`docs/development.md`](docs/development.md)。默认 `pnpm build:dist`；只签名不公证加 `--no-notarize`。
 
-- **native 分层**：`libGhosttyBridge.dylib` 和 `ghostty_native.node` 逐 arch 编译再 `lipo -create` 成 universal fat（GhosttyKit.xcframework 本身已 universal）。dev 不打 dist 时 `pnpm build:native` 默认只编 host arch，快。
-- **electron-builder**：`electron-builder.yml` mac target `arch: [arm64, x64]`，产出两个 dmg（`Pier-<ver>-arm64.dmg` + `Pier-<ver>.dmg`）。universal native 二进制两份 dmg 都能吃。
-- **产物**：`dist-builder/` 下的两个 dmg。Apple Silicon 用户下 `-arm64.dmg`，Intel 用户下不带 arch 后缀那个（electron-builder 对 x64 dmg 默认不带 suffix）。
-- **首次约 30 分钟**（native 85s + electron-vite 5s + 每 arch rebuild/pack/sign/notarize 各 ~15 分钟串行）；之后增量 ~20 分钟。
-- **只签名不 notarize**（本机测/CI 无 notarize 凭证）：`pnpm build:dist --no-notarize`。
-
-#### 新机器上首次打包 checklist
-
-`pnpm bootstrap` 只解决**编译依赖**（zig / Xcode CLI / pnpm / native addon）；签名 + notarize 凭证得手动补：
-
-1. **签名证书**（`Developer ID Application`）：
-   - 源机 Keychain Access → 找证书 → 右键 Export → `.p12`（设导出密码）→ 传目标机 → 双击导入。
-   - 或去 Apple Developer 后台各自申请（Team ID 会变）。
-   - 验证：`security find-identity -v -p codesigning` 能看到 `Developer ID Application: ...` 一行。
-2. **notarize keychain profile**：
-   ```bash
-   xcrun notarytool store-credentials pier-notarize \
-     --apple-id "<your-apple-id>" \
-     --team-id <TEAM_ID>
-   # 交互式提示 Password，粘贴 app-specific password（appleid.apple.com 生成，可重用）
-   ```
-   验证：`xcrun notarytool history --keychain-profile pier-notarize` 不报 profile 缺失即可。
-3. **`electron-builder.env`**（gitignored，每台机各建）：
-   ```
-   APPLE_KEYCHAIN_PROFILE=pier-notarize
-   APPLE_TEAM_ID=<TEAM_ID>
-   ```
-   `<TEAM_ID>` 换成签名证书括号里的 10 位。
-4. `pnpm build:dist`。
 ## 04b 目录密度与命名（强制门禁）
 
 与 `check:file-size` 并列的静态门禁：`pnpm check:dir-density`（已挂入 `check:static`）。
@@ -825,3 +541,17 @@ pnpm dev              # 否则 panel 内会报 "Cannot find module .../ghostty_n
 - 需要 commit 时，先 stage 明确路径，展示 `git diff --staged` 和拟用 Conventional Commits message，等待用户确认。
 - 禁止 `git add .`、`git reset`、`git rebase`、`git commit --amend` 和 force-push。
 - 不要用 `@ts-ignore`、`@ts-expect-error` 或 `as any` 压制类型错误。
+
+## 06 设计稿与 UI 交付纪律（编码助手硬约定）
+
+规格是合同，产品组件是视觉真源，测试是记忆。评审意见只留在对话里等于没提。
+
+1. **先列表，后动手。** 改任何有规格的 UI 前，先把规格里涉及该表面的每一句抽成检查项，加上本文适用治理（密度、焦点、颜色、shadcn、文案、合成），交付时附逐项结果。没有检查表的 UI 改动不进评审。
+2. **留白即停下。** 规格沉默处不得用「看起来合理」的默认值补齐（图标、chrome、徽标、入口、分组形态）；列为「未决」交决策，写进规格后再实现。
+3. **偏离先改规格。** 认为规格错了，先改规格或在规格里写偏离记录，再改代码；禁止在画布描述、注释、提交说明里静默偏离。
+4. **产品原语优先，禁止手绘复制。** 图标用 lucide / `AgentIcon` / `PierFileIcon`，事实用产品既有组件（如 `GitChangeSummaryInline`），几何用单一来源常量（行高、缩进步长、字形尺寸）。媒介不允许 import 产品原语时，该媒介只能做 IA 示意，不得充当视觉真源。
+5. **画布不是金标准。** `.pier/canvases/*` 设计稿只表达结构与状态；视觉真源是产品组件；治理测试不得把画布当对照物。
+6. **能算的先算，只能看的必须看。** 缩进阶梯、行高、字号先算数核对；对齐、对比度、光学重量、截断只能靠渲染截图（人眼 + 模型读图）判定，不得凭源码推断宣称通过。UI 改动交付附截图。
+7. **意见变断言。** 每条被接受的评审意见落成测试断言或规格文字，否则视为未处理。
+
+检查点：`tests/unit/docs/ui-delivery-discipline-governance.test.ts`（锁本节标题与七条编号；侧栏具体断言在 `tests/unit/renderer/workbench/`）。

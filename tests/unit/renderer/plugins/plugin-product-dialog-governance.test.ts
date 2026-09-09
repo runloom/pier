@@ -3,6 +3,8 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
+const DIALOG_SPEC =
+  "docs/superpowers/specs/2026-09-09-dialog-system-gold-standard.md";
 const SOURCE_FILE_RE = /\.(ts|tsx)$/;
 const PLUGIN_RENDERER_ROOTS = [
   join(ROOT, "packages", "plugin-claude", "src", "renderer"),
@@ -46,18 +48,21 @@ describe("plugin product dialog governance", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("documents host content dialog rules in AGENTS.md", () => {
+  it("documents host content dialog rules in agent context and spec", () => {
     const agents = readFileSync(join(ROOT, "AGENTS.md"), "utf8");
     expect(agents).toContain("宿主弹窗使用规范");
+    expect(agents).toContain(DIALOG_SPEC);
     expect(agents).toMatch(/content dialog|内容弹窗|AppContentDialogHost/i);
     expect(agents).toMatch(/dialogs\.open|context\.dialogs\.open/);
     expect(agents).toMatch(
       /plugins must not mount|插件.*不得.*@pier\/ui\/dialog|禁止.*插件.*Dialog/i
     );
-    expect(agents).toContain(
+
+    const spec = readFileSync(join(ROOT, DIALOG_SPEC), "utf8");
+    expect(spec).toContain(
       "无自定义控件的纯确认/提示，禁止塞进 content dialog"
     );
-    expect(agents).toMatch(/context\.overlays.*已删除|overlays.*已删除/);
-    expect(agents).toContain("决策树");
+    expect(spec).toMatch(/context\.overlays.*已删除|overlays.*已删除/);
+    expect(spec).toContain("决策树");
   });
 });
