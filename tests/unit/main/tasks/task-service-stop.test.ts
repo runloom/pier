@@ -53,6 +53,7 @@ describe("task service stop policy", () => {
       now: () => time,
       processEnvironment: {
         getHostDiagnostics: () => undefined,
+        hostNodeRuntime: async () => null,
         invalidate: async () => undefined,
         recordHostDiagnostics: () => undefined,
         resolve: async () => ({

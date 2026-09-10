@@ -20,11 +20,14 @@ import { useHostCatalogStore } from "@/stores/host-catalog/store.ts";
 import { makeFakePreferences } from "../../../setup/preferences-fixture.ts";
 
 const appDialogMocks = vi.hoisted(() => ({
-  showAppAlert: vi.fn(async () => undefined),
+  showAppAlert: vi.fn(
+    async (_input: { body: string; title: string }) => undefined
+  ),
   showAppConfirm: vi.fn(async () => true),
 }));
 
 const toastMocks = vi.hoisted(() => ({
+  error: vi.fn(),
   info: vi.fn(),
   success: vi.fn(),
 }));
@@ -147,6 +150,7 @@ describe("AgentsSection", () => {
     appDialogMocks.showAppAlert.mockClear();
     appDialogMocks.showAppConfirm.mockClear();
     appDialogMocks.showAppConfirm.mockResolvedValue(true);
+    toastMocks.error.mockClear();
     toastMocks.info.mockClear();
     toastMocks.success.mockClear();
 
@@ -785,6 +789,139 @@ describe("AgentsSection", () => {
     expect(run.mock.calls.every((call) => call[1] === "update")).toBe(true);
   });
 
+  it("Update all failure alert carries host Node and install paths", async () => {
+    const probes: AgentLifecycleProbe[] = [
+      {
+        agentId: "kimi",
+        canInstall: true,
+        canUninstall: true,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: "1.49.0",
+        support: "full",
+        updateAvailable: true,
+        updateMode: "versioned",
+        updateOffered: true,
+        uninstallMode: "managed",
+        version: "1.48.0",
+      },
+    ];
+    const pier = makePierMock(["kimi"], { probe: async () => probes });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: pier,
+    });
+    useAgentDetectStore.setState({
+      detectedIds: ["kimi"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+
+    render(<AgentsSection />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Update all (1)" })
+      ).toBeInTheDocument();
+    });
+
+    const run = pier.agents.lifecycle.run as ReturnType<typeof vi.fn>;
+    run.mockImplementation(async () => ({
+      action: "update" as const,
+      agentId: "kimi" as const,
+      commandPreview: "npm i -g kimi@latest",
+      errorCode: "version_unchanged" as const,
+      hostNode: { path: "/opt/homebrew/bin/node", version: "v24.15.0" },
+      installPaths: ["/usr/bin/kimi", "/opt/homebrew/bin/kimi"],
+      ok: false,
+      softFailure: "version_unchanged" as const,
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Update all (1)" }));
+
+    await waitFor(() => {
+      expect(appDialogMocks.showAppAlert).toHaveBeenCalled();
+    });
+    const lastCall = appDialogMocks.showAppAlert.mock.calls.at(-1)?.[0];
+    const body =
+      lastCall && typeof lastCall === "object" && "body" in lastCall
+        ? String(lastCall.body)
+        : "";
+    expect(body).toContain("v24.15.0");
+    expect(body).toContain("/opt/homebrew/bin/node");
+    expect(body).toContain("/usr/bin/kimi");
+    expect(body).toContain("/opt/homebrew/bin/kimi");
+    expect(body).not.toContain("npm i -g kimi@latest");
+  });
+
+  it("single-row version_unchanged with facts uses an alert, not a toast", async () => {
+    const probes: AgentLifecycleProbe[] = [
+      {
+        agentId: "kimi",
+        canInstall: true,
+        canUninstall: true,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: "1.49.0",
+        support: "full",
+        updateAvailable: true,
+        updateMode: "versioned",
+        updateOffered: true,
+        uninstallMode: "managed",
+        version: "1.48.0",
+      },
+    ];
+    const pier = makePierMock(["kimi"], { probe: async () => probes });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: pier,
+    });
+    useAgentDetectStore.setState({
+      detectedIds: ["kimi"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+
+    render(<AgentsSection />);
+    const row = await waitFor(() => screen.getByTestId("agent-row-kimi"));
+    const run = pier.agents.lifecycle.run as ReturnType<typeof vi.fn>;
+    run.mockImplementation(async () => ({
+      action: "update" as const,
+      agentId: "kimi" as const,
+      commandPreview: "npm i -g kimi@latest",
+      errorCode: "version_unchanged" as const,
+      hostNode: { path: "/opt/homebrew/bin/node", version: "v24.15.0" },
+      installPaths: ["/usr/bin/kimi"],
+      ok: false,
+      softFailure: "version_unchanged" as const,
+    }));
+
+    fireEvent.click(within(row).getByRole("button", { name: "Update" }));
+
+    await waitFor(() => {
+      expect(appDialogMocks.showAppAlert).toHaveBeenCalled();
+    });
+    const lastCall = appDialogMocks.showAppAlert.mock.calls.at(-1)?.[0];
+    const body =
+      lastCall && typeof lastCall === "object" && "body" in lastCall
+        ? String(lastCall.body)
+        : "";
+    expect(lastCall).toMatchObject({
+      title: "The version didn't change. Another install may still be in use.",
+    });
+    expect(body).toContain("v24.15.0");
+    expect(body).toContain("/opt/homebrew/bin/node");
+    expect(body).toContain("/usr/bin/kimi");
+    expect(body).not.toContain("npm i -g kimi@latest");
+    expect(body).not.toContain("Update failed");
+    expect(toastMocks.error).not.toHaveBeenCalled();
+  });
+
   it("details Reinstall force-refreshes that agent after confirm and stays out of Update all", async () => {
     const probes: AgentLifecycleProbe[] = [
       {
@@ -845,7 +982,7 @@ describe("AgentsSection", () => {
       expect(appDialogMocks.showAppConfirm).toHaveBeenCalledTimes(1);
     });
     await waitFor(() => {
-      expect(run).toHaveBeenCalledWith("cursor", "update");
+      expect(run).toHaveBeenCalledWith("cursor", "update", {});
     });
   });
 

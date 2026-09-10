@@ -17,6 +17,12 @@ export {
   stripHostColorPolicyFromProcessEnv,
   TERMINAL_EMULATOR_ENV_KEYS,
 } from "./clean-env.ts";
+export type {
+  HostNodeRuntime,
+  HostNodeRuntimeProbe,
+  HostNodeRuntimeProbeOptions,
+} from "./host-node-runtime.ts";
+export { createHostNodeRuntimeProbe } from "./host-node-runtime.ts";
 export type { LoginShellSpawnSpec } from "./login-shell-spawn.ts";
 export {
   buildLoginShellDumpCommand,

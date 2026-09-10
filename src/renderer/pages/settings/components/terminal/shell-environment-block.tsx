@@ -104,6 +104,17 @@ export function ShellEnvironmentBlock() {
                 {hostStatus?.error}
               </div>
             ) : null}
+            {hostStatus?.nodeVersion ? (
+              <div className="text-sm">
+                <span className="text-muted-foreground">
+                  {t("settings.shellEnvironment.nodeLabel")}
+                </span>{" "}
+                <span className="font-medium">{hostStatus.nodeVersion}</span>{" "}
+                <span className="break-all text-muted-foreground">
+                  {hostStatus.nodePath}
+                </span>
+              </div>
+            ) : null}
             <div>
               <Button
                 disabled={loading || isWindows}

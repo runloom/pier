@@ -37,6 +37,7 @@ describe("task-service background runs", () => {
     const service = createTaskService({
       processEnvironment: {
         getHostDiagnostics: () => undefined,
+        hostNodeRuntime: async () => null,
         invalidate: async () => undefined,
         recordHostDiagnostics: () => undefined,
         resolve: async () => ({
@@ -69,6 +70,7 @@ describe("task-service background runs", () => {
     const service = createTaskService({
       processEnvironment: {
         getHostDiagnostics: () => undefined,
+        hostNodeRuntime: async () => null,
         invalidate: async () => undefined,
         recordHostDiagnostics: () => undefined,
         resolve: async () => ({
@@ -127,6 +129,7 @@ describe("task-service background runs", () => {
     const service = createTaskService({
       processEnvironment: {
         getHostDiagnostics: () => undefined,
+        hostNodeRuntime: async () => null,
         invalidate: async () => undefined,
         recordHostDiagnostics: () => undefined,
         resolve: async () => ({
@@ -180,6 +183,7 @@ describe("task-service background runs", () => {
     const service = createTaskService({
       processEnvironment: {
         getHostDiagnostics: () => undefined,
+        hostNodeRuntime: async () => null,
         invalidate: async () => undefined,
         recordHostDiagnostics: () => undefined,
         resolve: async () => ({
@@ -242,6 +246,7 @@ describe("task-service background runs", () => {
     const service = createTaskService({
       processEnvironment: {
         getHostDiagnostics: () => undefined,
+        hostNodeRuntime: async () => null,
         invalidate: async () => undefined,
         recordHostDiagnostics: () => undefined,
         resolve: async () => ({
@@ -336,6 +341,7 @@ describe("task-service background runs", () => {
     const service = createTaskService({
       processEnvironment: {
         getHostDiagnostics: () => undefined,
+        hostNodeRuntime: async () => null,
         invalidate: async () => undefined,
         recordHostDiagnostics: () => undefined,
         resolve: async () => ({
@@ -397,6 +403,7 @@ describe("task-service background runs", () => {
     const service = createTaskService({
       processEnvironment: {
         getHostDiagnostics: () => undefined,
+        hostNodeRuntime: async () => null,
         invalidate: async () => undefined,
         recordHostDiagnostics: () => undefined,
         resolve: async () => ({
@@ -446,6 +453,7 @@ describe("task-service background runs", () => {
     const service = createTaskService({
       processEnvironment: {
         getHostDiagnostics: () => undefined,
+        hostNodeRuntime: async () => null,
         invalidate: async () => undefined,
         recordHostDiagnostics: () => undefined,
         resolve: async () => ({

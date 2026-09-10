@@ -503,6 +503,52 @@ describe("process environment service", () => {
       PATH: "/shell/bin",
     });
   });
+
+  it("probes host Node through the merged spawn env, not the construction snapshot", async () => {
+    const service = createProcessEnvironmentService({
+      baseEnv: { HOME: "/Users/me", PATH: "/old/bin" },
+      hostNodeRuntime: {
+        clear() {
+          return;
+        },
+        async probe(env) {
+          const pathEnv = env?.PATH ?? "";
+          if (pathEnv.includes("/nvm")) {
+            return { path: "/nvm/bin/node", version: "v24.16.0" };
+          }
+          return { path: "/old/bin/node", version: "v24.15.0" };
+        },
+      },
+      loadShellEnv: async () => ({
+        env: { PATH: "/nvm/bin" },
+        status: "resolved" as const,
+      }),
+      platform: "darwin",
+      shell: "/bin/zsh",
+    });
+
+    await expect(service.hostNodeRuntime()).resolves.toBeNull();
+
+    const result = await service.resolve({
+      projectRootPath: "/repo",
+      source: "agent",
+    });
+    expect(result.env.PATH).toBe("/nvm/bin");
+    expect(result.diagnostics.nodePath).toBe("/nvm/bin/node");
+    expect(result.diagnostics.nodeVersion).toBe("v24.16.0");
+    expect(result.diagnostics.shell).toBe("/bin/zsh");
+
+    await expect(service.hostNodeRuntime()).resolves.toEqual({
+      path: "/nvm/bin/node",
+      version: "v24.16.0",
+    });
+    await expect(
+      service.hostNodeRuntime({ PATH: "/old/bin" })
+    ).resolves.toEqual({
+      path: "/old/bin/node",
+      version: "v24.15.0",
+    });
+  });
 });
 
 describe("applyHostProcessEnv", () => {

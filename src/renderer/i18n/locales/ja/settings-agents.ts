@@ -122,8 +122,14 @@ export const settingsAgents = {
         "シェル環境を用意できませんでした。更新してもう一度お試しください。",
       package_manager_missing:
         "必要なパッケージマネージャ（npm、Homebrew、pipx、uv）が見つかりません。入れてからもう一度お試しください。",
+      node_requirement_unmet:
+        "このエージェントには Node {{required}} が必要です（現在 {{current}}）。ターミナルで Node をアップグレードしてから再試行してください。",
       still_detected:
         "アンインストールは終わりましたが、エージェントはまだ検出されています。",
+    },
+    facts: {
+      node: "現在の Node: {{version}}（{{path}}）",
+      installs: "{{count}} 件のインストールを検出:\n{{paths}}",
     },
   },
   row: {

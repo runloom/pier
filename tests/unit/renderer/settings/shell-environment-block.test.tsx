@@ -71,6 +71,32 @@ describe("ShellEnvironmentBlock", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders the host Node fact when present", () => {
+    useShellEnvironmentStore.setState({
+      hostStatus: {
+        disabled: false,
+        nodePath: "/opt/homebrew/bin/node",
+        nodeVersion: "v24.15.0",
+        platform: "darwin",
+        shellEnvStatus: "resolved",
+        timeoutMs: 10_000,
+      },
+    });
+    render(<ShellEnvironmentBlock />);
+    expect(
+      screen.getByText("settings.shellEnvironment.nodeLabel")
+    ).toBeInTheDocument();
+    expect(screen.getByText("v24.15.0")).toBeInTheDocument();
+    expect(screen.getByText("/opt/homebrew/bin/node")).toBeInTheDocument();
+  });
+
+  it("omits the Node row when there is no Node fact", () => {
+    render(<ShellEnvironmentBlock />);
+    expect(
+      screen.queryByText("settings.shellEnvironment.nodeLabel")
+    ).toBeNull();
+  });
+
   it("shows plain-language skip reason when shell env is skipped", () => {
     useShellEnvironmentStore.setState({
       hostStatus: {

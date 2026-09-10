@@ -133,6 +133,8 @@ export const agentLifecycleErrorCodeSchema = z.enum([
   "timeout",
   "env_unavailable",
   "package_manager_missing",
+  /** Host Node does not satisfy the spec's declared `requiresNode`. */
+  "node_requirement_unmet",
   /** Uninstall PM exited 0 but post-probe still detects the agent. */
   "still_detected",
 ]);
@@ -156,8 +158,15 @@ export const agentLifecycleActionResultSchema = z.object({
   errorCode: agentLifecycleErrorCodeSchema.optional(),
   /** Optional technical detail (stderr tail) — not for primary title. */
   errorDetail: z.string().optional(),
+  /** Host Node runtime when the outcome depends on it. */
+  hostNode: z
+    .object({ path: z.string().min(1), version: z.string().min(1) })
+    .nullable()
+    .optional(),
+  /** Detected install paths for version_unchanged / not_runnable. */
+  installPaths: z.array(z.string().min(1)).optional(),
   ok: z.boolean(),
-  /** Correlates with cancel(runId). */
+  requiredNode: z.string().optional(),
   runId: z.string().optional(),
   /** True when install was skipped because already present. */
   skipped: z.boolean().optional(),
@@ -171,6 +180,8 @@ export type AgentLifecycleActionResult = z.infer<
 export const agentLifecycleRunRequestSchema = z.object({
   action: agentLifecycleActionSchema,
   agentId: agentKindSchema,
+  /** Project root for env resolution (same PES entry as tasks/terminal). */
+  projectRootPath: z.string().min(1).optional(),
 });
 export type AgentLifecycleRunRequest = z.infer<
   typeof agentLifecycleRunRequestSchema
@@ -179,6 +190,8 @@ export type AgentLifecycleRunRequest = z.infer<
 export const agentLifecycleRunManyRequestSchema = z.object({
   action: agentLifecycleActionSchema,
   agentIds: z.array(agentKindSchema).min(1),
+  /** Project root for env resolution (same PES entry as tasks/terminal). */
+  projectRootPath: z.string().min(1).optional(),
 });
 export type AgentLifecycleRunManyRequest = z.infer<
   typeof agentLifecycleRunManyRequestSchema

@@ -96,6 +96,7 @@ import { resolveWorkspaceDevPluginSpecs } from "./plugin-runtime/workspace-specs
 import { requireAppCoreInitialization } from "./readiness.ts";
 import { sendRendererCommand } from "./renderer-command-host.ts";
 import {
+  createAgentEnvResolver,
   createShellEnvironmentBoot,
   resolvePathEnv,
 } from "./shell-environment-boot.ts";
@@ -245,10 +246,7 @@ function createPierAppCore(): PierAppCore {
 
   // Wait for host shell env (single dump); no second echo $PATH.
   // Detection and lifecycle share PES env so PATH probes stay consistent.
-  const resolveAgentEnv = async () => {
-    const { env } = await processEnvironment.resolve({ source: "agent" });
-    return env;
-  };
+  const resolveAgentEnv = createAgentEnvResolver(processEnvironment);
   const agentDetection = createAgentDetectionService({
     waitForHostEnv,
     getEnv: resolveAgentEnv,
@@ -257,6 +255,7 @@ function createPierAppCore(): PierAppCore {
   const agentLifecycle = createBootedAgentLifecycleService({
     waitForHostEnv,
     getEnv: resolveAgentEnv,
+    getHostNodeRuntime: (env) => processEnvironment.hostNodeRuntime(env),
     preferences,
     refreshDetection: async () => {
       await agentDetection.refresh();

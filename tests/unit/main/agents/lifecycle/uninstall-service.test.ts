@@ -209,6 +209,45 @@ describe("run uninstall service", { timeout: 30_000 }, () => {
     expect(runner.run).not.toHaveBeenCalled();
   });
 
+  it("passes project cwd and hostNode on uninstall command_failed", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-uninstall-cwd-"));
+    cleanups.push(() => rm(root, { recursive: true, force: true }));
+    const binDir = join(root, "lib", "node_modules", ".bin");
+    await writeAgentBin(binDir, "gemini");
+    const spawnEnv = pathEnv(binDir);
+    const seen: Array<NodeJS.ProcessEnv | undefined> = [];
+    const runner: LifecycleRunner = {
+      run: vi.fn(async () => ({
+        ok: false,
+        code: 1,
+        stepIndex: 0,
+        stdout: "",
+        stderr: "npm ERR! EBADENGINE",
+      })),
+    };
+    const svc = createAgentLifecycleService({
+      getEnv: async () => spawnEnv,
+      getHostNodeRuntime: async (env) => {
+        seen.push(env);
+        return { path: "/nvm/bin/node", version: "v24.16.0" };
+      },
+      runner,
+    });
+    const result = await svc.run("gemini", "uninstall", {
+      projectRootPath: "/repo",
+    });
+    expect(result.errorCode).toBe("command_failed");
+    expect(result.hostNode).toEqual({
+      path: "/nvm/bin/node",
+      version: "v24.16.0",
+    });
+    expect(seen).toEqual([spawnEnv]);
+    expect(runner.run).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ cwd: "/repo" })
+    );
+  });
+
   it("formatRemainingInstalls lists [source] path lines", () => {
     const detail = formatRemainingInstalls([
       {

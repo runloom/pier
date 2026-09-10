@@ -205,6 +205,7 @@ function cliClientServices(): PierCoreServices {
     },
     processEnvironment: {
       getHostDiagnostics: () => undefined,
+      hostNodeRuntime: async () => null,
       invalidate: async () => undefined,
       recordHostDiagnostics: () => undefined,
       resolve: async (request) => ({

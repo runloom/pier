@@ -63,13 +63,15 @@ export interface PierAgentsLifecycleAPI {
   ) => () => void;
   run: (
     agentId: AgentKind,
-    action: import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleAction
+    action: import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleAction,
+    options?: { projectRootPath?: string }
   ) => Promise<
     import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleActionResult
   >;
   runMany: (
     agentIds: AgentKind[],
-    action: import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleAction
+    action: import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleAction,
+    options?: { projectRootPath?: string }
   ) => Promise<
     import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleActionResult[]
   >;
