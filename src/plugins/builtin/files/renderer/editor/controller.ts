@@ -52,8 +52,6 @@ import { FileEditorViewPreferences } from "./view-prefs.ts";
 import type { FileEditorViewPresentation } from "./view-session.ts";
 
 export type { FileEditorNavigationResult } from "./controller-view-commands.ts";
-
-/** Documents + CodeMirror lifecycle for the files plugin. */
 export class FileEditorController extends FileEditorControllerViewFacade {
   readonly #context: RendererPluginContext;
   readonly #documents: FileDocumentLifecycle;
@@ -286,11 +284,15 @@ export class FileEditorController extends FileEditorControllerViewFacade {
   removeDiskDocumentForPath(root: string, path: string): void {
     this.#pathMutations.remove(root, path);
   }
-
   removeDocumentsAfterPathMutation(documents: readonly FilesDocument[]): void {
     this.#pathMutations.removeAffected(documents);
   }
-
+  markDocumentsDeletedOnDisk(documents: readonly FilesDocument[]): void {
+    this.#pathMutations.markDeletedOnDisk(documents);
+  }
+  revertDocumentsToSaved(documents: readonly FilesDocument[]): void {
+    this.#pathMutations.revertToSaved(documents);
+  }
   registerPanelModeHandler(
     panelId: string,
     handler: (mode: FileViewMode) => void
@@ -312,7 +314,6 @@ export class FileEditorController extends FileEditorControllerViewFacade {
     this.setPanelMode(panelId, "source");
   }
 
-  /** Apply a panel view mode via the registered handler (capture/restore lives there). */
   setPanelMode(panelId: string, mode: FileViewMode): void {
     const handler = this.#modeHandlers.get(panelId);
     if (handler) {

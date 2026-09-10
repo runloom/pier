@@ -154,6 +154,17 @@ Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 
 检查点在 `tests/unit/plugins/markdown/markdown-open-restore-governance.test.ts`。
 
+### Files 已删除文档与打开标签
+
+权威规格：[`docs/superpowers/specs/2026-09-09-files-deleted-open-document-tab-gold-standard.md`](docs/superpowers/specs/2026-09-09-files-deleted-open-document-tab-gold-standard.md)。
+
+- 路径没了，打开着的标签还在；禁止因删除调用 `closeInstance`。
+- `deletedOnDisk` 不是 `diskConflict`：正文继续显示，上方紧凑条，禁止整页 Empty、禁止冻编辑器。
+- 保存按原路径重建；`deletedOnDisk` 期间自动保存不得写盘。
+- `isDeletionOnlyDirty` 不亮未保存圆点，关 tab 不问保存。不新增「删除时关 tab」设置。
+
+检查点在 `tests/unit/plugins/files/deleted-open-document-tab-governance.test.ts`。
+
 ### Canvas 画板视口记忆
 
 权威规格：[`docs/superpowers/specs/2026-09-01-canvas-world-camera-memory-gold-standard.md`](docs/superpowers/specs/2026-09-01-canvas-world-camera-memory-gold-standard.md)。

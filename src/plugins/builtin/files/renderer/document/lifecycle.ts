@@ -5,6 +5,7 @@ import { showFileDurabilityError } from "../panel/dialog-feedback.ts";
 import type { FileSaveFeedback } from "../save/feedback.ts";
 import type { FileSaveOutcome } from "../save/outcome.ts";
 import type { FilesWatchHub } from "../watch-hub.ts";
+import { filesDocumentRequiresSaveOnClose } from "./disk-protection.ts";
 import { reloadDiskDocument } from "./disk-reload.ts";
 import { FilesDraftRecoveryReporter } from "./draft-recovery-reporter.ts";
 import {
@@ -194,10 +195,7 @@ export class FileDocumentLifecycle {
       return;
     }
     const document = getDocumentForPanelSource(input.source);
-    if (
-      document &&
-      !(document.dirty || document.needsSaveAs || document.durabilityUnknown)
-    ) {
+    if (document && !filesDocumentRequiresSaveOnClose(document)) {
       this.discardDocument(document.id);
     }
   }

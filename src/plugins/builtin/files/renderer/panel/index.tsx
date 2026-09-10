@@ -7,6 +7,7 @@ import type {
 import type { FileEntry } from "@shared/contracts/file.ts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
+import { isDeletionOnlyDirty } from "../document/disk-protection.ts";
 import {
   type FilesDocumentPanelSource,
   sameFilesDocumentPanelSource,
@@ -165,6 +166,9 @@ function FilePanelContent({
   const trackedSource = panelSourceForDocument(trackedDocument);
   const trackedDirty = trackedDocument?.dirty === true;
   const trackedUnsaved = fileDocumentShowsUnsavedMark({
+    deletionOnlyDirty: trackedDocument
+      ? isDeletionOnlyDirty(trackedDocument)
+      : false,
     dirty: trackedDirty,
     needsSaveAs: trackedDocument?.needsSaveAs === true,
   });
