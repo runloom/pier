@@ -47,6 +47,7 @@ import {
 } from "@/components/workspace/transfer/runtime.ts";
 import {
   PANEL_TRANSFER_IN_TRANSIT_ATTR,
+  panelTransferTearOffHoldForTests,
   resetPanelTransferTearOffForTests,
 } from "@/components/workspace/transfer/tear-off.ts";
 import {
@@ -149,6 +150,16 @@ function createApi(panels: ReturnType<typeof panel>[]) {
       return list.length;
     },
   };
+}
+
+function mountTransferTab(panelId: string): HTMLElement {
+  const tab = document.createElement("div");
+  tab.className = "dv-tab";
+  const inner = document.createElement("div");
+  inner.dataset.panelTabId = panelId;
+  tab.append(inner);
+  document.body.append(tab);
+  return tab;
 }
 
 function installPier(overrides: Record<string, unknown> = {}) {
@@ -725,6 +736,81 @@ describe("workspace panel transfer", () => {
         ok: true,
         requestId: "prepare-1",
       });
+    });
+
+    it("prepareSource hides the source tab for move but not copy", async () => {
+      installPier();
+      const tab = mountTransferTab("welcome-1");
+      const welcome = panel({
+        component: "welcome",
+        id: "welcome-1",
+        params: { note: "hi" },
+      });
+      useWorkspaceStore.getState().setApi(createApi([welcome]) as never);
+
+      await runPanelTransferRendererCommand({
+        command: {
+          sourcePanelId: "welcome-1",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.prepareSource",
+        },
+        requestId: "prepare-move-tear-off",
+      });
+      expect(tab.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)).toBe(true);
+      expect(
+        document.documentElement.getAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)
+      ).toBe("welcome-1");
+      expect(panelTransferTearOffHoldForTests()).toBe(true);
+
+      resetPanelTransferTearOffForTests();
+      resetPanelTransferRuntimeForTests();
+
+      await runPanelTransferRendererCommand({
+        command: {
+          mode: "copy",
+          sourcePanelId: "welcome-1",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.prepareSource",
+        },
+        requestId: "prepare-copy-tear-off",
+      });
+      expect(tab.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)).toBe(false);
+      expect(
+        document.documentElement.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)
+      ).toBe(false);
+      expect(panelTransferTearOffHoldForTests()).toBe(false);
+    });
+
+    it("finalize commit clears tear-off when copy skips releaseSource", async () => {
+      installPier();
+      const tab = mountTransferTab("welcome-1");
+      const welcome = panel({ component: "welcome", id: "welcome-1" });
+      useWorkspaceStore.getState().setApi(createApi([welcome]) as never);
+
+      await runPanelTransferRendererCommand({
+        command: {
+          sourcePanelId: "welcome-1",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.prepareSource",
+        },
+        requestId: "prepare-hidden",
+      });
+      expect(tab.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)).toBe(true);
+
+      await runPanelTransferRendererCommand({
+        command: {
+          outcome: "commit",
+          role: "source",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.finalize",
+        },
+        requestId: "finalize-copy-commit",
+      });
+      expect(tab.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)).toBe(false);
+      expect(
+        document.documentElement.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)
+      ).toBe(false);
+      expect(panelTransferTearOffHoldForTests()).toBe(false);
     });
 
     it("stageTarget adds an inert panel with nested position.index for tabs", async () => {
