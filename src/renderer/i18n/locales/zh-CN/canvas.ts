@@ -35,5 +35,10 @@ export const canvas = {
   workflow: {
     invalidTitle: "这张流程图画不出来",
     invalidHint: "{{message}} 下一步：{{fix}}",
+    legend: "图例",
+  },
+  screenFlow: {
+    invalidTitle: "这条界面路径画不出来",
+    invalidHint: "{{message}} 下一步：{{fix}}",
   },
 } as const;

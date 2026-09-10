@@ -24,6 +24,8 @@
 - The primary conclusion or action is easy to find without scrolling.
 - Charts identify metrics, units, time ranges, and sources.
 - Empty data does not produce fabricated results.
+- `WorkflowDiagram` / `ScreenFlow` must not mount as Empty. Apply the first
+  `supportedFixes` entry and re-validate before delivery.
 - Error messages tell the user what to do next.
 - Core content remains usable in both narrow and wide layouts.
 

@@ -21,7 +21,7 @@ Canvas is a product-core overview, not a CLI side effect. Parameters are
 
 | File | Owns |
 | --- | --- |
-| [authoring.md](references/authoring.md) | APIs, fonts, geometry, Mermaid, WorkflowDiagram |
+| [authoring.md](references/authoring.md) | APIs, fonts, geometry, Mermaid, WorkflowDiagram, ScreenFlow |
 | [methodology.md](references/methodology.md) | Axes, expression, tab IA |
 | [verification.md](references/verification.md) | Delivery checks |
 | [host-data.md](references/host-data.md) | Plugin snapshots, applets, `settings.open` |
@@ -173,10 +173,15 @@ Use when `mode=freeform`, `recipe=` is set, or you inferred a freeform shell.
 - **Mermaid chrome:** flowchart / architecture use `nodes` / `edges` with
   `kind` (`actor` | `agent` | `tool` | `artifact` | `external`). Status uses
   `tone`. Sequence (`sequence` / `sequenceDiagram`), state, `class`, ER,
-  mindmap use native mermaid `source`. No left color rail. Mermaid is
-  **static**. Details: [authoring.md](references/authoring.md) **Mermaid**.
+  mindmap use native mermaid `source`. Card wash matches `WorkflowDiagram`
+  (`color-mix` of status-fg into `--card`, theme ink). No left color rail.
+  Mermaid is **static**. Details: [authoring.md](references/authoring.md)
+  **Mermaid**.
 - Approval / recover: `WorkflowDiagram`, not Mermaid. Details:
   [authoring.md](references/authoring.md) **Workflow diagrams**.
+- Multi-screen user path: `recipe=design` + `ScreenFlow` on `WorldStage`.
+  Details: [authoring.md](references/authoring.md) **Screen flows**. Do not
+  use `WorkflowDiagram` for artboards.
 - Every user action needs a recognizable UI change or error.
 
 ## Delivery

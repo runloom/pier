@@ -123,6 +123,7 @@ export const {
   RadioGroup,
   RadioGroupItem,
   Row,
+  ScreenFlow,
   ScrollArea,
   ScrollBar,
   Select,
@@ -178,5 +179,6 @@ export const {
   useCostOverview,
   useSystemResources,
   useCanvasFile,
+  validateScreenFlowSpec,
   validateWorkflowSpec,
 } = pierCanvasExports;

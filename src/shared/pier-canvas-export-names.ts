@@ -126,6 +126,7 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "RadioGroup",
   "RadioGroupItem",
   "Row",
+  "ScreenFlow",
   "ScrollArea",
   "ScrollBar",
   "Select",
@@ -190,6 +191,7 @@ export const PIER_CANVAS_VALUE_EXPORT_NAMES = [
   "useCanvasFile",
   "useCostOverview",
   "useSystemResources",
+  "validateScreenFlowSpec",
   "validateWorkflowSpec",
 ] as const;
 

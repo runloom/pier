@@ -3,18 +3,22 @@
   "id": "design",
   "axis": "recipe",
   "title": "Design mockup",
-  "description": "Multi-device product frames on a world stage. Comments stay in host Design Mode.",
+  "description": "Product frames on a world stage, with a user path compiled by ScreenFlow. Comments stay in host Design Mode.",
   "kind": "composition",
   "stage": "world",
   "template": "templates/design-mockup.canvas.tsx",
-  "primitives": ["WorldStage", "Layer", "Artboard"],
-  "required": ["worldRoot", "deviceFrames"],
+  "primitives": ["WorldStage", "Layer", "Artboard", "ScreenFlow"],
+  "required": ["worldRoot", "deviceFrames", "screenPath"],
   "antiPatterns": [
     "ArtboardStage as the canvas root (that is a flow fit-all card)",
     "stacking phone and desktop frames as a document inside Frame",
     "hand-rolled annotation chrome; use host Design Mode pins",
     "DocsShell or document font on a mockup",
-    "inventing methodology tabs for a mockup"
+    "inventing methodology tabs for a mockup",
+    "hand-drawn SVG noodles or Connector primitives",
+    "using WorkflowDiagram to draw a screen path",
+    "treating three device widths of one surface as the path",
+    "edges between width variants of the same step"
   ],
-  "agentPrompt": "WorldStage root. Artboard preset + Layer x/y. UI font. Do not wrap in Frame. Do not fake comment pins."
+  "agentPrompt": "WorldStage root. Artboard id + preset + Layer x/y. ScreenFlow spec for the user path; validateScreenFlowSpec and apply the first supportedFix. Device variants do not get edges. UI font. Do not wrap in Frame. Do not fake comment pins. Do not set via, labelAt, fromSide, or edge.color."
 }

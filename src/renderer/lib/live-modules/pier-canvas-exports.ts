@@ -190,6 +190,10 @@ import {
   WorldStage,
 } from "./pier-canvas-artboard.tsx";
 import { DocsShell, Frame, Row, Stack, Text } from "./pier-canvas-layout.ts";
+import {
+  ScreenFlow,
+  validateScreenFlowSpec,
+} from "./pier-canvas-screen-flow.tsx";
 import { pierCanvasVisualizationExports } from "./pier-canvas-visualization-exports.ts";
 import {
   validateWorkflowSpec,
@@ -319,6 +323,7 @@ export const pierCanvasExports = {
   RadioGroup,
   RadioGroupItem,
   Row,
+  ScreenFlow,
   ScrollArea,
   ScrollBar,
   Select,
@@ -364,6 +369,7 @@ export const pierCanvasExports = {
   useCanvasFile,
   useCostOverview,
   useSystemResources,
+  validateScreenFlowSpec,
   validateWorkflowSpec,
   WorkflowDiagram,
   WorldStage,

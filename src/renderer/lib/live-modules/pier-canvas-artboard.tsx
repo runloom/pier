@@ -394,6 +394,7 @@ export function Layer({ children, className, h, w, x, y }: LayerProps) {
         position: "absolute",
         top: y,
         width: w ?? "max-content",
+        zIndex: 1,
       }}
     >
       {children}
@@ -406,6 +407,7 @@ export function Artboard({
   className,
   description,
   height: heightProp,
+  id,
   label,
   overflow = "clip",
   preset,
@@ -416,6 +418,8 @@ export function Artboard({
   className?: string;
   description?: string | undefined;
   height?: number;
+  /** Path id for ScreenFlow edges. */
+  id?: string;
   label?: string | undefined;
   /** `clip` matches Figma clip-content. `scroll` is prototype overflow only. */
   overflow?: "clip" | "scroll";
@@ -434,6 +438,7 @@ export function Artboard({
     <section
       aria-label={heading}
       className={className}
+      data-artboard-id={id}
       data-slot="artboard"
       style={{
         display: "flex",

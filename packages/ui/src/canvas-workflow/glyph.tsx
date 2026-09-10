@@ -1,16 +1,5 @@
 import { workflowKindFill, workflowKindStroke } from "./kind.ts";
-import { WORKFLOW_DIM_OPACITY } from "./metrics.ts";
 import type { WorkflowNodeKind, WorkflowNodeLayout } from "./types.ts";
-
-export function workflowState(
-  hot: boolean,
-  active: boolean
-): "dim" | "hot" | "idle" {
-  if (!hot) {
-    return "dim";
-  }
-  return active ? "hot" : "idle";
-}
 
 export function lanePrefix(
   variant: "default" | "exception",
@@ -79,15 +68,13 @@ function KindSigil({
 }
 
 export function NodeGlyph({
-  hot,
   node,
   state,
   onEnter,
 }: {
-  hot: boolean;
   node: WorkflowNodeLayout;
   onEnter: () => void;
-  state: "dim" | "hot" | "idle";
+  state: "hot" | "idle";
 }) {
   const fill = workflowKindFill(node.kind);
   const stroke = workflowKindStroke(node.kind);
@@ -102,7 +89,6 @@ export function NodeGlyph({
       data-tag={node.tag || undefined}
       data-workflow-state={state}
       onPointerEnter={onEnter}
-      opacity={hot ? 1 : WORKFLOW_DIM_OPACITY}
       style={{ cursor: "default" }}
     >
       <rect
@@ -119,7 +105,7 @@ export function NodeGlyph({
         rx={6}
         stroke={stroke}
         strokeDasharray={node.kind === "external" ? "4 3" : undefined}
-        strokeWidth={1.5}
+        strokeWidth={state === "hot" ? 2.4 : 1.5}
         width={node.w}
         x={node.x}
         y={node.y}
@@ -158,7 +144,7 @@ export function NodeGlyph({
           />
           <text
             fill={stroke}
-            fontSize={7}
+            fontSize={9}
             textAnchor="middle"
             x={cx}
             y={node.y + node.h - 7}

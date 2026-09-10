@@ -1,30 +1,28 @@
 import { useId, useState } from "react";
 import { cn } from "../utils.ts";
-import { pointsAttr } from "./geometry.ts";
-import { lanePrefix, NodeGlyph, workflowState } from "./glyph.tsx";
-import { workflowHighlight, workflowHighlightActive } from "./highlight.ts";
+import { WorkflowEdgeMarks, WorkflowEdgeStrokes } from "./edges.tsx";
+import { lanePrefix, NodeGlyph } from "./glyph.tsx";
+import {
+  workflowHighlight,
+  workflowHighlightActive,
+  workflowHoverFromTarget,
+} from "./highlight.ts";
 import {
   workflowKindFill,
   workflowKindStroke,
   workflowNodeKind,
 } from "./kind.ts";
-import {
-  WORKFLOW_DIM_OPACITY,
-  WORKFLOW_HIT_STROKE,
-  WORKFLOW_LABEL_PILL,
-  workflowLabelWidth,
-} from "./metrics.ts";
-import { workflowEdgeDash } from "./role.ts";
 import type { WorkflowHover, WorkflowLayout, WorkflowSpec } from "./types.ts";
-import { edgeVisual } from "./visual.ts";
 
 export function WorkflowPaint({
   className,
   layout,
+  legendLabel = "Legend",
   spec,
 }: {
   className?: string;
   layout: WorkflowLayout;
+  legendLabel?: string;
   spec: WorkflowSpec;
 }) {
   const uid = useId().replaceAll(":", "");
@@ -35,10 +33,14 @@ export function WorkflowPaint({
 
   return (
     <div
+      aria-label={layout.title}
       className={cn("relative", className)}
       data-slot="workflow-diagram"
       onPointerLeave={() => {
         setHover(null);
+      }}
+      onPointerOver={(event) => {
+        setHover(workflowHoverFromTarget(event.target));
       }}
       role="img"
       style={{ height: layout.height, width: layout.width }}
@@ -99,7 +101,7 @@ export function WorkflowPaint({
                   ? "var(--status-danger-fg)"
                   : "var(--border)"
               }
-              strokeDasharray="6 6"
+              strokeDasharray={lane.variant === "exception" ? "6 6" : undefined}
               strokeWidth={1}
               width={lane.w}
               x={lane.x}
@@ -144,25 +146,25 @@ export function WorkflowPaint({
                 rx={9}
                 stroke={groupStroke}
                 strokeDasharray="5 4"
-                strokeOpacity={0.9}
-                strokeWidth={1.15}
+                strokeOpacity={0.55}
+                strokeWidth={1}
                 width={group.w}
                 x={group.x}
                 y={group.y}
               />
               <rect
                 fill="var(--background)"
-                height={10}
-                width={Math.min(group.w - 16, group.label.length * 5.6 + 10)}
+                height={12}
+                width={Math.min(group.w - 16, group.label.length * 6.2 + 12)}
                 x={group.x + 8}
-                y={group.y - 5}
+                y={group.y - 6}
               />
               <text
                 fill={groupStroke}
-                fontSize={7}
+                fontSize={10}
                 fontWeight={600}
                 x={group.x + 10}
-                y={group.y + 3}
+                y={group.y + 4}
               >
                 {group.label}
               </text>
@@ -214,141 +216,33 @@ export function WorkflowPaint({
             </g>
           );
         })}
-        {layout.edges.map((edge) => {
-          const hot = !active || highlight.edges.has(edge.id);
-          const visual = edgeVisual(edge, layout);
-          const shaft = visual.arrow?.stroke ?? edge.points;
-          const flowing = active && hot;
-          const dash =
-            flowing || visual.localMain
-              ? undefined
-              : workflowEdgeDash(visual.markRole, visual.onSpine);
-          const state = workflowState(hot, active);
-          return (
-            <g
-              data-edge-id={edge.id}
-              data-main-path={edge.onMainPath ? "true" : undefined}
-              data-role={visual.paintRole}
-              data-slot="workflow-edge"
-              data-workflow-state={state}
-              key={edge.id}
-              opacity={hot ? 1 : WORKFLOW_DIM_OPACITY}
-            >
-              <polyline
-                data-slot="workflow-edge-stroke"
-                fill="none"
-                points={pointsAttr(shaft)}
-                stroke={visual.stroke}
-                strokeDasharray={dash}
-                strokeLinecap="butt"
-                strokeLinejoin="round"
-                strokeWidth={visual.width}
-              />
-              {flowing ? (
-                <polyline
-                  className="pier-workflow-edge-flow"
-                  data-slot="workflow-edge-flow"
-                  fill="none"
-                  points={pointsAttr(shaft)}
-                  stroke={visual.stroke}
-                  strokeLinecap="butt"
-                  strokeLinejoin="round"
-                  strokeWidth={visual.width}
-                />
-              ) : null}
-              <polyline
-                fill="none"
-                onPointerEnter={() => {
-                  setHover({ id: edge.id, kind: "edge" });
-                }}
-                points={pointsAttr(edge.points)}
-                stroke="transparent"
-                strokeWidth={WORKFLOW_HIT_STROKE}
-                style={{
-                  cursor: "default",
-                  pointerEvents: "stroke",
-                  vectorEffect: "non-scaling-stroke",
-                }}
-              />
-            </g>
-          );
-        })}
+        <WorkflowEdgeStrokes
+          active={active}
+          highlight={highlight}
+          layout={layout}
+          onHover={setHover}
+        />
         {layout.nodes.map((node) => {
-          const hot = !active || highlight.nodes.has(node.id);
+          const related = highlight.nodes.has(node.id);
+          const state =
+            active && related ? ("hot" as const) : ("idle" as const);
           return (
             <NodeGlyph
-              hot={hot}
               key={node.id}
               node={node}
               onEnter={() => {
                 setHover({ id: node.id, kind: "node" });
               }}
-              state={workflowState(hot, active)}
+              state={state}
             />
           );
         })}
-        {layout.edges.map((edge) => {
-          const visual = edgeVisual(edge, layout);
-          if (!visual.arrow) {
-            return null;
-          }
-          const hot = !active || highlight.edges.has(edge.id);
-          return (
-            <polygon
-              data-edge-id={edge.id}
-              data-slot="workflow-edge-arrow"
-              fill={visual.stroke}
-              key={`${edge.id}-arrow`}
-              onPointerEnter={() => {
-                setHover({ id: edge.id, kind: "edge" });
-              }}
-              opacity={hot ? 1 : WORKFLOW_DIM_OPACITY}
-              points={pointsAttr(visual.arrow.head)}
-              style={{ cursor: "default" }}
-            />
-          );
-        })}
-        {layout.edges.map((edge) => {
-          if (edge.label.trim() === "") {
-            return null;
-          }
-          const hot = !active || highlight.edges.has(edge.id);
-          const labelW = workflowLabelWidth(edge.label);
-          const x = edge.labelAt.x - labelW / 2;
-          const y = edge.labelAt.y - WORKFLOW_LABEL_PILL / 2;
-          return (
-            <g
-              data-edge-id={edge.id}
-              data-slot="workflow-edge-label"
-              data-workflow-state={workflowState(hot, active)}
-              key={`${edge.id}-label`}
-              onPointerEnter={() => {
-                setHover({ id: edge.id, kind: "edge" });
-              }}
-              opacity={hot ? 1 : WORKFLOW_DIM_OPACITY}
-              style={{ cursor: "default" }}
-            >
-              <rect
-                fill="var(--background)"
-                height={WORKFLOW_LABEL_PILL}
-                rx={3}
-                width={labelW}
-                x={x}
-                y={y}
-              />
-              <text
-                fill="var(--foreground)"
-                fontSize={7}
-                fontWeight={edge.onMainPath ? 600 : 400}
-                textAnchor="middle"
-                x={edge.labelAt.x}
-                y={edge.labelAt.y + 1}
-              >
-                {edge.label}
-              </text>
-            </g>
-          );
-        })}
+        <WorkflowEdgeMarks
+          active={active}
+          highlight={highlight}
+          layout={layout}
+          onHover={setHover}
+        />
         {layout.legend.length > 0 ? (
           <g data-slot="workflow-legend">
             <text
@@ -358,7 +252,7 @@ export function WorkflowPaint({
               x={originX}
               y={layout.legendY + 12}
             >
-              Legend
+              {legendLabel}
             </text>
             {layout.legend.map((item, index) => {
               const x = originX + 64 + index * 108;

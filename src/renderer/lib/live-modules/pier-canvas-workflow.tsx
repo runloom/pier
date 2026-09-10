@@ -66,6 +66,7 @@ export function WorkflowDiagram({
     <WorkflowPaint
       className={nested ? className : undefined}
       layout={layout}
+      legendLabel={copy("canvas.workflow.legend", "Legend")}
       spec={spec}
     />
   );

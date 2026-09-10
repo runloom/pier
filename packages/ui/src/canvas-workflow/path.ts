@@ -1,14 +1,17 @@
 import {
+  isScreenFlowFrame,
+  SCREEN_FLOW_PORT_CONTENT,
+  SCREEN_FLOW_PORT_RETURN,
+  SCREEN_FLOW_PORT_ROW,
+  SCREEN_FLOW_RETURN_SIDE,
   WORKFLOW_LANE_GUTTER,
   WORKFLOW_RETURN_GAP,
   WORKFLOW_RETURN_SIDE,
   WORKFLOW_STUB,
-  workflowLabelWidth,
 } from "./metrics.ts";
 import { workflowEdgeRole } from "./role.ts";
 import type {
   WorkflowEdge,
-  WorkflowGroupLayout,
   WorkflowLaneLayout,
   WorkflowNodeLayout,
   WorkflowPoint,
@@ -66,6 +69,12 @@ function inferSides(
     if (to.x >= from.x + from.w - 1 && sameBand(from, to)) {
       return { from: "bottom", to: "bottom" };
     }
+    if (to.y > from.y && isScreenFlowFrame(to)) {
+      return {
+        from: "bottom",
+        to: to.x + to.w / 2 >= from.x + from.w / 2 ? "left" : "right",
+      };
+    }
     return { from: "bottom", to: to.y > from.y ? "top" : "left" };
   }
   if (to.y >= from.y + from.h - 1) {
@@ -83,6 +92,10 @@ function inferSides(
     }
     return { from: "left", to: "right" };
   }
+  if (isScreenFlowFrame(from) || isScreenFlowFrame(to)) {
+    const side: WorkflowSide = from.x <= to.x ? "right" : "left";
+    return { from: side, to: side };
+  }
   return { from: "top", to: "bottom" };
 }
 
@@ -94,23 +107,63 @@ function append(points: WorkflowPoint[], point: WorkflowPoint) {
   points.push(point);
 }
 
+function channelBlocked(
+  x: number,
+  from: WorkflowNodeLayout,
+  to: WorkflowNodeLayout,
+  nodes: readonly WorkflowNodeLayout[]
+): boolean {
+  const top = Math.min(from.y, to.y);
+  const bottom = Math.max(from.y + from.h, to.y + to.h);
+  return nodes.some((node) => {
+    if (node.id === from.id || node.id === to.id) {
+      return false;
+    }
+    if (x < node.x - 8 || x > node.x + node.w + 8) {
+      return false;
+    }
+    return !(node.y + node.h < top || node.y > bottom);
+  });
+}
+
 function sideChannelX(
   from: WorkflowNodeLayout,
   to: WorkflowNodeLayout,
   channelOffset: number,
-  clusterCenterX: number
+  clusterCenterX: number,
+  nodes: readonly WorkflowNodeLayout[]
 ): number {
   const left = Math.min(from.x, to.x);
   const right = Math.max(from.x + from.w, to.x + to.w);
-  const offset = WORKFLOW_RETURN_SIDE + channelOffset * 10;
+  const large = isScreenFlowFrame(from) || isScreenFlowFrame(to);
+  const base = large ? SCREEN_FLOW_RETURN_SIDE : WORKFLOW_RETURN_SIDE;
+  let offset = base + channelOffset * 10;
+  for (let step = 0; step < 4; step += 1) {
+    const leftX = left - offset;
+    const rightX = right + offset;
+    const leftHit = channelBlocked(leftX, from, to, nodes);
+    const rightHit = channelBlocked(rightX, from, to, nodes);
+    if (!leftHit && rightHit) {
+      return leftX;
+    }
+    if (!rightHit && leftHit) {
+      return rightX;
+    }
+    if (!(leftHit && rightHit)) {
+      const mid = left / 2 + right / 2;
+      if (mid >= clusterCenterX) {
+        return rightX;
+      }
+      if (leftX >= WORKFLOW_LANE_GUTTER - 8) {
+        return leftX;
+      }
+      return rightX;
+    }
+    offset += 20;
+  }
+  const fallback = base + channelOffset * 10;
   const mid = left / 2 + right / 2;
-  if (mid >= clusterCenterX) {
-    return right + offset;
-  }
-  if (left - offset >= WORKFLOW_LANE_GUTTER - 8) {
-    return left - offset;
-  }
-  return right + offset;
+  return mid >= clusterCenterX ? right + fallback : left - fallback;
 }
 
 function portAlong(
@@ -135,12 +188,15 @@ function routeSameColumnReturn(
   from: WorkflowNodeLayout,
   to: WorkflowNodeLayout,
   channelOffset: number,
-  clusterCenterX: number
+  clusterCenterX: number,
+  nodes: readonly WorkflowNodeLayout[]
 ): WorkflowPoint[] {
-  const sideX = sideChannelX(from, to, channelOffset, clusterCenterX);
+  const sideX = sideChannelX(from, to, channelOffset, clusterCenterX, nodes);
   const side: WorkflowSide = sideX < from.x ? "left" : "right";
-  const start = portAlong(from, side, 0.5);
-  const end = portAlong(to, side, 0.82);
+  const fromT = isScreenFlowFrame(from) ? SCREEN_FLOW_PORT_CONTENT : 0.5;
+  const toT = isScreenFlowFrame(to) ? SCREEN_FLOW_PORT_RETURN : 0.82;
+  const start = portAlong(from, side, fromT);
+  const end = portAlong(to, side, toT);
   const points: WorkflowPoint[] = [];
   append(points, start);
   append(points, { x: sideX, y: start.y });
@@ -166,7 +222,7 @@ export function segmentHitsRect(
   if (right < minX || left > maxX || bottom < minY || top > maxY) {
     return false;
   }
-  if (a.y === b.y) {
+  if (Math.abs(a.y - b.y) < 1) {
     return a.y > minY && a.y < maxY && right > minX && left < maxX;
   }
   return a.x > minX && a.x < maxX && bottom > minY && top < maxY;
@@ -214,16 +270,29 @@ function routeFloor(
   return points;
 }
 
+function sidePort(
+  node: WorkflowNodeLayout,
+  side: WorkflowSide,
+  along: number
+): WorkflowPoint {
+  if (side === "left" || side === "right") {
+    return portAlong(node, side, along);
+  }
+  return port(node, side);
+}
+
 function routeL(
   from: WorkflowNodeLayout,
   to: WorkflowNodeLayout,
   sides: { from: WorkflowSide; to: WorkflowSide },
   nodes: readonly WorkflowNodeLayout[],
   fromLane: WorkflowLaneLayout | undefined,
-  toLane: WorkflowLaneLayout | undefined
+  toLane: WorkflowLaneLayout | undefined,
+  toAlong = 0.5,
+  fromAlong = 0.5
 ): WorkflowPoint[] {
-  const start = port(from, sides.from);
-  const end = port(to, sides.to);
+  const start = sidePort(from, sides.from, fromAlong);
+  const end = sidePort(to, sides.to, toAlong);
   const points: WorkflowPoint[] = [];
   if (
     Math.abs(start.y - end.y) < 1 &&
@@ -265,7 +334,14 @@ function routeL(
     hitsOther(via, endStub, from, to, nodes) ||
     segmentHitsRect(startStub, via, to, 2) ||
     segmentHitsRect(via, endStub, to, 2);
-  const via = blocked(verticalFirst) ? horizontalFirst : verticalFirst;
+  const preferGutter =
+    toLane?.variant === "exception" &&
+    fromLane !== undefined &&
+    toLane.y > fromLane.y + fromLane.h;
+  let via = verticalFirst;
+  if (blocked(verticalFirst) || (preferGutter && !blocked(horizontalFirst))) {
+    via = horizontalFirst;
+  }
   append(points, via);
   append(points, endStub);
   append(points, end);
@@ -286,9 +362,43 @@ export function routeWorkflowEdge(
   const self = from.id === to.id;
   const resolved = workflowEdgeRole(role);
   if (!self && resolved === "return" && sameColumn(from, to)) {
-    return routeSameColumnReturn(from, to, channelOffset, clusterCenterX);
+    return routeSameColumnReturn(
+      from,
+      to,
+      channelOffset,
+      clusterCenterX,
+      nodes
+    );
+  }
+  if (
+    !self &&
+    resolved === "error" &&
+    isScreenFlowFrame(to) &&
+    to.y > from.y + from.h - 8
+  ) {
+    const returnX = sideChannelX(
+      from,
+      to,
+      channelOffset,
+      clusterCenterX,
+      nodes
+    );
+    const side: WorkflowSide = returnX > to.x ? "left" : "right";
+    return routeL(
+      from,
+      to,
+      { from: "bottom", to: side },
+      nodes,
+      fromLane,
+      toLane,
+      SCREEN_FLOW_PORT_CONTENT
+    );
   }
   const sides = inferSides(from, to, role, self);
+  const rowAlong =
+    isScreenFlowFrame(from) && isScreenFlowFrame(to) && sameBand(from, to)
+      ? SCREEN_FLOW_PORT_ROW
+      : 0.5;
   if (self) {
     const start = port(from, sides.from);
     const end = port(to, sides.to);
@@ -307,7 +417,7 @@ export function routeWorkflowEdge(
   if (sides.from === "bottom" && sides.to === "bottom") {
     return routeFloor(from, to, channelOffset, laneFloor);
   }
-  return routeL(from, to, sides, nodes, fromLane, toLane);
+  return routeL(from, to, sides, nodes, fromLane, toLane, rowAlong, rowAlong);
 }
 
 export function laneFor(
@@ -325,174 +435,4 @@ export function laneFloorFor(
 ): number {
   const lane = laneFor(node, lanes);
   return lane ? lane.y + lane.h : node.y + node.h;
-}
-
-function pointHitsNode(
-  point: WorkflowPoint,
-  node: WorkflowNodeLayout,
-  pad: number
-): boolean {
-  return (
-    point.x > node.x - pad &&
-    point.x < node.x + node.w + pad &&
-    point.y > node.y - pad &&
-    point.y < node.y + node.h + pad
-  );
-}
-
-function borderClearance(
-  point: WorkflowPoint,
-  lanes: readonly WorkflowLaneLayout[],
-  groups: readonly WorkflowGroupLayout[]
-): number {
-  let best = 80;
-  for (const lane of lanes) {
-    if (point.x < lane.x - 4 || point.x > lane.x + lane.w + 4) {
-      continue;
-    }
-    best = Math.min(
-      best,
-      Math.abs(point.y - lane.y),
-      Math.abs(point.y - (lane.y + lane.h))
-    );
-  }
-  for (const group of groups) {
-    if (point.x < group.x - 4 || point.x > group.x + group.w + 4) {
-      continue;
-    }
-    best = Math.min(
-      best,
-      Math.abs(point.y - group.y),
-      Math.abs(point.y - (group.y + group.h))
-    );
-  }
-  return best;
-}
-
-function gutterBonus(
-  point: WorkflowPoint,
-  lanes: readonly WorkflowLaneLayout[]
-): number {
-  let bonus = 0;
-  for (let i = 1; i < lanes.length; i += 1) {
-    const above = lanes[i - 1];
-    const below = lanes[i];
-    if (!(above && below)) {
-      continue;
-    }
-    if (point.x < below.x - 4 || point.x > below.x + below.w + 4) {
-      continue;
-    }
-    const top = above.y + above.h + 4;
-    const bottom = below.y - 4;
-    if (point.y > top && point.y < bottom) {
-      bonus += 80;
-    }
-  }
-  return bonus;
-}
-
-function openAirBonus(
-  point: WorkflowPoint,
-  groups: readonly WorkflowGroupLayout[]
-): number {
-  const under = groups.some(
-    (group) => point.x >= group.x && point.x <= group.x + group.w
-  );
-  return under ? 0 : 30;
-}
-
-function keepOffDart(
-  picked: WorkflowPoint,
-  dartBase: WorkflowPoint,
-  halfW: number,
-  nodes: readonly WorkflowNodeLayout[]
-): WorkflowPoint {
-  const pad = 4 + halfW;
-  const alongX =
-    Math.abs(dartBase.x - picked.x) >= Math.abs(dartBase.y - picked.y);
-  let next = picked;
-  if (alongX && picked.x <= dartBase.x) {
-    next = { x: Math.min(picked.x, dartBase.x - pad), y: picked.y };
-  } else if (alongX) {
-    next = { x: Math.max(picked.x, dartBase.x + pad), y: picked.y };
-  } else if (picked.y <= dartBase.y) {
-    next = { x: picked.x, y: Math.min(picked.y, dartBase.y - pad) };
-  } else {
-    next = { x: picked.x, y: Math.max(picked.y, dartBase.y + pad) };
-  }
-  if (nodes.some((node) => pointHitsNode(next, node, 0))) {
-    return picked;
-  }
-  return next;
-}
-
-export function workflowLabelAt(
-  points: readonly WorkflowPoint[],
-  nodes: readonly WorkflowNodeLayout[],
-  lanes: readonly WorkflowLaneLayout[],
-  groups: readonly WorkflowGroupLayout[],
-  boardWidth: number,
-  label = "",
-  dartBase?: WorkflowPoint
-): WorkflowPoint {
-  let bestA = points[0] ?? { x: 0, y: 0 };
-  let bestB = bestA;
-  let bestLen = -1;
-  for (let i = 1; i < points.length; i += 1) {
-    const a = points[i - 1];
-    const b = points[i];
-    if (!(a && b)) {
-      continue;
-    }
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    if (len > bestLen) {
-      bestLen = len;
-      bestA = a;
-      bestB = b;
-    }
-  }
-  const clamp = (point: WorkflowPoint): WorkflowPoint => ({
-    x: Math.min(boardWidth - 36, Math.max(36, point.x)),
-    y: Math.max(18, point.y),
-  });
-  const steps = 11;
-  let picked = {
-    x: bestA.x / 2 + bestB.x / 2,
-    y: bestA.y / 2 + bestB.y / 2,
-  };
-  let pickedScore = Number.NEGATIVE_INFINITY;
-  let pickedT = 0.5;
-  for (let step = 2; step <= steps - 2; step += 1) {
-    const t = step / steps;
-    const point = {
-      x: bestA.x + (bestB.x - bestA.x) * t,
-      y: bestA.y + (bestB.y - bestA.y) * t,
-    };
-    if (nodes.some((node) => pointHitsNode(point, node, 8))) {
-      continue;
-    }
-    const score =
-      borderClearance(point, lanes, groups) +
-      gutterBonus(point, lanes) +
-      openAirBonus(point, groups) +
-      (1 - Math.abs(t - 0.5)) * 20;
-    if (
-      score > pickedScore ||
-      (score === pickedScore && Math.abs(t - 0.5) < Math.abs(pickedT - 0.5))
-    ) {
-      picked = point;
-      pickedScore = score;
-      pickedT = t;
-    }
-  }
-  if (dartBase && label.trim() !== "") {
-    picked = keepOffDart(
-      picked,
-      dartBase,
-      workflowLabelWidth(label) / 2,
-      nodes
-    );
-  }
-  return clamp(picked);
 }

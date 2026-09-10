@@ -68,6 +68,13 @@ export const CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> = {
     p("width", "number", "1280", "width"),
     p("height", "number", "800", "height")
   ),
+  ScreenFlow: entry(
+    [
+      "const receipt = validateScreenFlowSpec(spec)",
+      "<ScreenFlow spec={spec} />",
+    ].join("\n"),
+    p("spec", "ScreenFlowSpec", "—", "screenFlowSpec")
+  ),
   AspectRatio: entry(
     "<AspectRatio ratio={16 / 9}>…</AspectRatio>",
     p("ratio", "number", "1", "ratio")

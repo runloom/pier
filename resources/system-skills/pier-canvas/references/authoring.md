@@ -109,8 +109,8 @@ stay there. Put complex calculations in pure adjacent modules.
   viewports inside it.
 - **Stage:** SKILL.md **Auto-resolve** and **Stage selection** choose the
   root. This file owns geometry: omit `Frame` `maxWidth`; `Artboard` presets;
-  `WorldStage` floor vs product ink; `WorkflowDiagram` IR. Do not put a UI
-  mockup inside a methodology Design tab.
+  `WorldStage` floor vs product ink; `WorkflowDiagram` IR; `ScreenFlow` IR.
+  Do not put a UI mockup inside a methodology Design tab.
 - Product UI mockups (settings, panels, chrome) go on **`Artboard`**
   (`preset="desktop" | "laptop" | "phone" | "tablet"`). In **world** they sit
   on `WorldStage` with `Layer` (`x` / `y`). Flow children always wrap; omit
@@ -169,13 +169,13 @@ diagram; there is no `type` prop and Pier does not sniff the source header.
 | `tone` | State machine, error exit, delivery status | `info` `success` `warning` `danger` `done` `muted` |
 | neither | Only if the graph has no roles and no status | Default `bg-card` |
 
-| `kind` | Chrome (status hue, not `--primary` / `--muted`) |
+| `kind` | Chrome (same `color-mix` recipe as `WorkflowDiagram`) |
 |---|---|
-| `actor` | info blue · User |
-| `agent` | done purple · Bot |
-| `tool` | success green · Terminal |
-| `artifact` | info blue, **dashed** · AppWindow |
-| `external` | warning amber, **dashed** · ExternalLink |
+| `actor` | info 10% into `--card` · User |
+| `agent` | done 18% · Bot |
+| `tool` | success 18% · Terminal |
+| `artifact` | info 10%, **dashed** · AppWindow |
+| `external` | muted 12%, **dashed** · ExternalLink (same as workflow `external`) |
 
 Rules:
 
@@ -185,12 +185,15 @@ Rules:
   Stop nodes.
 - Set **one** field per node. If both are set, fill follows `tone`;
   `kind` still shows the role glyph.
-- Chrome is the soft status pairing: pale tint + same-hue hairline
-  border + a title-row glyph. Kind glyphs use foreground (readable at
-  20px); hue lives in the card surface. Run-status marks stay chromatic.
-  **No left color rail.** **No one-color-per-node rainbow.**
+- Chrome matches `WorkflowDiagram`: mix `--status-*-fg` into `--card`
+  (info 10%, success/warning/danger/done 18%, muted 12%) plus the
+  same-hue hairline. Text uses theme `--foreground`. Kind glyphs use
+  the hairline stroke. Run-status marks stay chromatic. **No light
+  pastel island.** **No `status-*-bg` chips.** **No left color rail.**
+  **No one-color-per-node rainbow.**
 - Do not use `bg-muted` / `bg-primary/10` for roles: light `--muted` is
-  near `--card`, light `--primary` is near-black.
+  near `--card`, light `--primary` is near-black. External uses the
+  muted mix, not a warning chip.
 - One-shot / out-of-product nodes are `external` (example: 原生 agent CLI).
   Their edges dash too.
 - Short predicates on edges; long copy belongs on node `meta` or a caption.
@@ -223,9 +226,43 @@ the happy path. Do not write `x` / `y` / `via` / `labelAt` / `fromSide` /
 `edge.color`. Do not use `Layer` or `Artboard` as graph nodes. Architecture
 and sequence stay `Mermaid`.
 
-Hover dims the rest and flows dashes along the related edges (source to
-target). Cards stay still. There is no click-to-pin, no edge catalog,
-and no keyboard edge focus.
+Keep edge labels to one or two words. The host parks each pill beside
+the longest run, not on the ink. Default lane frames are solid; only
+the exception band is dashed. Idle strokes are always solid — dash
+exists only on the hover flow overlay.
+
+Hover lifts the related cards and edges. The rest stay fully visible.
+Related edges flow dashes from source to target. Cards stay still.
+There is no click-to-pin, no edge catalog, and no keyboard edge focus.
+
+## Screen flows
+
+Multi-screen product paths use `ScreenFlow` on `WorldStage`, not
+`WorkflowDiagram` and not hand-drawn SVG. Approval / recover stays
+`WorkflowDiagram`. Architecture / sequence stay `Mermaid`.
+
+1. Give each step `Artboard` a stable `id`. Place frames with `Layer`
+   `x` / `y`. Width variants of the same step do not get ids on the path.
+2. Write a `ScreenFlowSpec`: `title`, `edges` (`from` / `to` are artboard
+   ids), optional `mainPath` and `start`. Edge `role` is
+   `"main" | "branch" | "return" | "error"`.
+3. Call `validateScreenFlowSpec(spec)`. If `status` is `1`, apply **only
+   the first** `supportedFixes` entry, then validate again. Mount
+   `<ScreenFlow spec={spec} />` as a **direct** child of `WorldStage`.
+
+The host measures `[data-slot="artboard-frame"]` and compiles connectors
+with the same orthogonal engine as `WorkflowDiagram`. Captions above
+the frame are obstacles — a downward error attaches at a side port so
+it cannot run through the title. A same-column return takes the
+opposite side. Idle edges are solid; the happy path is heavier;
+error/return use role color and a thinner stroke — do not draw dashes.
+Labels sit beside the stroke. Hover lifts the related group and does
+not fade the rest. Frames on the path must not overlap and need
+≥120px gutters; failures paint Empty with a Layer move, not a partial
+graph. Do not set `x` / `y` / `via` / `labelAt` / `fromSide` /
+`edge.color`. Do not put device variants on `edges`. For a path,
+set `Artboard` `height` to the content (not the full phone 852)
+so the journey fits at glance.
 
 ## Data and state
 

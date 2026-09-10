@@ -55,6 +55,8 @@ export interface ArtboardProps {
    * preview only. Explicit value beats `preset`.
    */
   height?: number;
+  /** Stable path id for ScreenFlow edges (`data-artboard-id`). */
+  id?: string;
   /** Short id shown before the title, e.g. `K1`. */
   label?: string;
   /** `clip` (default) or `scroll` (prototype overflow only). */
@@ -299,4 +301,28 @@ export const WorkflowDiagram: (props: WorkflowDiagramProps) => ReactNode;
 /** Fail-closed receipt. Apply the first `supportedFixes` entry, then re-run. */
 export const validateWorkflowSpec: (
   spec: WorkflowSpec
+) => WorkflowValidateReceipt;
+
+export type ScreenFlowEdge = WorkflowEdge;
+
+export interface ScreenFlowSpec {
+  edges: readonly ScreenFlowEdge[];
+  mainPath?: readonly string[];
+  start?: string;
+  title: string;
+}
+
+export interface ScreenFlowProps {
+  className?: string;
+  spec: ScreenFlowSpec;
+}
+
+/**
+ * User-path overlay on WorldStage artboards. Authors write spec only.
+ * Failed validation paints Empty over the connectors, not a partial graph.
+ */
+export const ScreenFlow: (props: ScreenFlowProps) => ReactNode;
+/** Fail-closed receipt for screen-flow structure. Geometry runs after measure. */
+export const validateScreenFlowSpec: (
+  spec: ScreenFlowSpec
 ) => WorkflowValidateReceipt;

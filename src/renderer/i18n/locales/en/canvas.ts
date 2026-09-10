@@ -37,5 +37,10 @@ export const canvas = {
   workflow: {
     invalidTitle: "This flowchart can’t be drawn",
     invalidHint: "{{message}} Next: {{fix}}",
+    legend: "Legend",
+  },
+  screenFlow: {
+    invalidTitle: "This screen flow can’t be drawn",
+    invalidHint: "{{message}} Next: {{fix}}",
   },
 } as const;

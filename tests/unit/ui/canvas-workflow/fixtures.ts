@@ -1,3 +1,4 @@
+import type { ScreenFlowSpec } from "@pier/ui/canvas-workflow/screen-flow.ts";
 import type { WorkflowSpec } from "@pier/ui/canvas-workflow/types.ts";
 
 export const reviewWorkflowSpec: WorkflowSpec = {
@@ -82,7 +83,7 @@ export const agentToolCallWorkflowSpec: WorkflowSpec = {
     {
       from: "router",
       id: "e-consent",
-      label: "Needs consent?",
+      label: "Consent?",
       to: "approval",
     },
     { from: "approval", id: "e-allow", label: "", to: "tool" },
@@ -261,7 +262,7 @@ export const agentToolCallWorkflowSpec: WorkflowSpec = {
     {
       items: [
         "Lanes and columns place every step.",
-        "Labels sit on the longest run; same-column retries take a C-shape.",
+        "Labels park off the ink; same-column returns use a C.",
       ],
       title: "Compiler contract",
     },
@@ -280,6 +281,40 @@ export const agentToolCallWorkflowSpec: WorkflowSpec = {
   ],
   title: "Agent tool call",
 };
+
+/** recipe=design gold path aligned with templates/design-mockup.canvas.tsx. */
+export const designMockupScreenFlowSpec: ScreenFlowSpec = {
+  edges: [
+    { from: "library", id: "e-open", label: "Tap asset", to: "detail" },
+    { from: "detail", id: "e-upload", label: "Tap Upload", to: "confirm" },
+    { from: "confirm", id: "e-send", label: "Confirm", to: "success" },
+    {
+      from: "confirm",
+      id: "e-fail",
+      label: "Validation failed",
+      role: "error",
+      to: "blocked",
+    },
+    {
+      from: "blocked",
+      id: "e-retry",
+      label: "Fix file",
+      role: "return",
+      to: "confirm",
+    },
+  ],
+  mainPath: ["library", "detail", "confirm", "success"],
+  start: "library",
+  title: "Upload an asset",
+};
+
+export const designMockupFrameBoxes = [
+  { h: 560, id: "library", w: 393, x: 40, y: 40 },
+  { h: 560, id: "detail", w: 393, x: 641, y: 40 },
+  { h: 560, id: "confirm", w: 393, x: 1234, y: 40 },
+  { h: 560, id: "success", w: 393, x: 1827, y: 40 },
+  { h: 560, id: "blocked", w: 393, x: 1234, y: 820 },
+] as const;
 
 export function crossingWorkflowSpec(): WorkflowSpec {
   return {

@@ -13,7 +13,7 @@ import type {
 } from "./types.ts";
 
 const MIN_LAST_SEGMENT = WORKFLOW_ARROW_GAP + WORKFLOW_ARROW_SIZE;
-const LABEL_MAX_DIST = 10;
+const LABEL_MAX_DIST = 28;
 const VERTICAL_RUN = 24;
 
 function insideNode(point: WorkflowPoint, node: WorkflowNodeLayout): boolean {

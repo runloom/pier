@@ -90,13 +90,19 @@ describe("bundled Pier Canvas templates", () => {
   it("keeps the board-stage showcase above skeleton quality", () => {
     const source = templateSource("design-mockup.canvas.tsx");
     expect(source).toContain("WorldStage");
+    expect(source).toContain("ScreenFlow");
+    expect(source).toContain("validateScreenFlowSpec");
+    expect(source).toContain('role: "error"');
+    expect(source).toContain('role: "return"');
     expect(source).toContain("data-pier-comment-id");
+    expect(source).not.toContain("<svg");
+    const artboardIds = [
+      ...source.matchAll(/id="([a-zA-Z][a-zA-Z0-9_-]*)"/g),
+    ].map((match) => match[1]);
+    expect(new Set(artboardIds).size).toBeGreaterThanOrEqual(4);
     const artboards = source.match(/<Artboard/g) ?? [];
-    expect(artboards.length).toBeGreaterThanOrEqual(3);
-    const presets = new Set(
-      [...source.matchAll(/preset="([a-z]+)"/g)].map((match) => match[1])
-    );
-    expect(presets.size).toBeGreaterThanOrEqual(2);
+    expect(artboards.length).toBeGreaterThanOrEqual(4);
+    expect(source).toContain('preset="phone"');
     expect(source).not.toContain("className={`");
     expect(source).not.toContain("h-auto");
   });

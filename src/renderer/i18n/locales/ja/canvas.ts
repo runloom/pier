@@ -40,5 +40,10 @@ export const canvas = {
   workflow: {
     invalidTitle: "このフロー図は描けません",
     invalidHint: "{{message}} 次：{{fix}}",
+    legend: "凡例",
+  },
+  screenFlow: {
+    invalidTitle: "この画面経路は描けません",
+    invalidHint: "{{message}} 次：{{fix}}",
   },
 } as const;

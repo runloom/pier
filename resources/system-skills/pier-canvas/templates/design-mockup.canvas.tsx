@@ -2,7 +2,6 @@ import {
   Artboard,
   Badge,
   Button,
-  Input,
   Item,
   ItemContent,
   ItemDescription,
@@ -10,188 +9,87 @@ import {
   ItemTitle,
   Layer,
   Row,
-  Separator,
+  ScreenFlow,
   Stack,
   Text,
   WorldStage,
+  type ScreenFlowSpec,
+  validateScreenFlowSpec,
 } from "pier/canvas";
+import type { ReactNode } from "react";
 
 /**
- * recipe=design: one product surface at three device sizes on WorldStage.
+ * recipe=design gold: one user path across product frames on WorldStage.
+ * Connectors come from ScreenFlow (same engine as recipe=workflow).
  * Keep a stable `data-pier-comment-id` on each frame. Do not fake pin chrome.
- * Rewrite every user-visible string into the user's language.
+ * Do not draw SVG noodles. Call validateScreenFlowSpec; apply the first
+ * supportedFix. Rewrite every user-visible string into the user's language.
  */
 export const canvas = {
-  description: "Multi-device Library mockup on a world stage.",
+  description: "Upload-an-asset path on a world stage.",
   kind: "composition" as const,
   title: "Design mockup",
 };
 
-const SECTIONS = ["All assets", "Photos", "Illustrations", "Archive"] as const;
-
 const ASSETS = [
-  { kind: "Photo", name: "Harbor at dusk", size: "4.2 MB", swatch: "muted" },
-  {
-    kind: "Photo",
-    name: "Studio portrait",
-    size: "3.1 MB",
-    swatch: "accent",
-  },
-  {
-    kind: "Illustration",
-    name: "Onboarding hero",
-    size: "820 KB",
-    swatch: "secondary",
-  },
-  {
-    kind: "Illustration",
-    name: "Empty-state set",
-    size: "640 KB",
-    swatch: "muted",
-  },
-  { kind: "Photo", name: "Team offsite", size: "5.8 MB", swatch: "accent" },
-  {
-    kind: "Icon set",
-    name: "Navigation glyphs",
-    size: "96 KB",
-    swatch: "secondary",
-  },
+  { kind: "Photo", name: "Harbor at dusk", size: "4.2 MB" },
+  { kind: "Photo", name: "Studio portrait", size: "3.1 MB" },
+  { kind: "Illustration", name: "Onboarding hero", size: "820 KB" },
 ] as const;
 
-type Asset = (typeof ASSETS)[number];
-type Swatch = Asset["swatch"];
-
-const CARD_SWATCH: Record<Swatch, string> = {
-  accent: "h-24 w-full rounded-sm bg-accent",
-  muted: "h-24 w-full rounded-sm bg-muted",
-  secondary: "h-24 w-full rounded-sm bg-secondary",
+const spec: ScreenFlowSpec = {
+  edges: [
+    { from: "library", id: "e-open", label: "Tap asset", to: "detail" },
+    { from: "detail", id: "e-upload", label: "Tap Upload", to: "confirm" },
+    { from: "confirm", id: "e-send", label: "Confirm", to: "success" },
+    {
+      from: "confirm",
+      id: "e-fail",
+      label: "Validation failed",
+      role: "error",
+      to: "blocked",
+    },
+    {
+      from: "blocked",
+      id: "e-retry",
+      label: "Fix file",
+      role: "return",
+      to: "confirm",
+    },
+  ],
+  mainPath: ["library", "detail", "confirm", "success"],
+  start: "library",
+  title: "Upload an asset",
 };
 
-const THUMB_SWATCH: Record<Swatch, string> = {
-  accent: "size-9 shrink-0 rounded-sm bg-accent",
-  muted: "size-9 shrink-0 rounded-sm bg-muted",
-  secondary: "size-9 shrink-0 rounded-sm bg-secondary",
-};
+validateScreenFlowSpec(spec);
 
-function AssetCard(props: { asset: Asset }) {
+function PhoneChrome(props: {
+  badge: string;
+  children: ReactNode;
+  title: string;
+}) {
   return (
-    <Stack className="rounded-md border border-border bg-card p-3" gap={8}>
-      <div
-        aria-hidden="true"
-        className={CARD_SWATCH[props.asset.swatch]}
-      />
-      <Stack gap={2}>
-        <Text className="truncate">{props.asset.name}</Text>
-        <Row justify="space-between">
-          <Badge variant="outline">{props.asset.kind}</Badge>
-          <Text as="span" tone="tertiary">
-            {props.asset.size}
-          </Text>
-        </Row>
-      </Stack>
+    <Stack className="h-full bg-background p-4" gap={12}>
+      <Row justify="space-between">
+        <Text as="h3">{props.title}</Text>
+        <Badge variant="secondary">{props.badge}</Badge>
+      </Row>
+      {props.children}
     </Stack>
   );
 }
 
-function LibrarySidebar() {
-  return (
-    <div className="flex w-48 shrink-0 flex-col gap-3 border-border border-r pr-4">
-      <Text as="h3">Library</Text>
-      <Stack gap={2}>
-        {SECTIONS.map((section, index) => (
-          <Button
-            className="w-full justify-start"
-            key={section}
-            type="button"
-            variant={index === 0 ? "secondary" : "ghost"}
-          >
-            {section}
-          </Button>
-        ))}
-      </Stack>
-      <Separator />
-      <Text as="span" tone="tertiary">
-        6 assets · 14.6 MB used
-      </Text>
-    </div>
-  );
-}
-
-function LibraryToolbar(props: { compact?: boolean }) {
-  return (
-    <Row gap={8} wrap={false}>
-      <Input
-        aria-label="Search assets"
-        className="flex-1"
-        placeholder="Search assets"
-      />
-      {props.compact ? null : (
-        <Button type="button" variant="outline">
-          Filter
-        </Button>
-      )}
-      <Button type="button">Upload</Button>
-    </Row>
-  );
-}
-
-function DesktopLibrary() {
-  return (
-    <div className="h-full" data-pier-comment-id="library-desktop">
-      <Row
-        align="stretch"
-        className="h-full bg-background p-6"
-        gap={24}
-        wrap={false}
-      >
-        <LibrarySidebar />
-        <Stack className="min-w-0 flex-1" gap={16}>
-          <LibraryToolbar />
-          <div className="grid grid-cols-3 gap-4">
-            {ASSETS.map((asset) => (
-              <AssetCard asset={asset} key={asset.name} />
-            ))}
-          </div>
-        </Stack>
-      </Row>
-    </div>
-  );
-}
-
-function TabletLibrary() {
-  return (
-    <div className="h-full" data-pier-comment-id="library-tablet">
-      <Stack className="h-full bg-background p-5" gap={14}>
-        <Row justify="space-between">
-          <Text as="h3">Library</Text>
-          <Badge variant="outline">All assets</Badge>
-        </Row>
-        <LibraryToolbar />
-        <div className="grid grid-cols-2 gap-4">
-          {ASSETS.slice(0, 4).map((asset) => (
-            <AssetCard asset={asset} key={asset.name} />
-          ))}
-        </div>
-      </Stack>
-    </div>
-  );
-}
-
-function PhoneLibrary() {
+function LibraryPhone() {
   return (
     <div className="h-full" data-pier-comment-id="library-phone">
-      <Stack className="h-full bg-background p-4" gap={12}>
-        <Row justify="space-between">
-          <Text as="h3">Library</Text>
-          <Badge variant="secondary">6</Badge>
-        </Row>
-        <LibraryToolbar compact />
+      <PhoneChrome badge="3" title="Library">
         <ItemGroup>
           {ASSETS.map((asset) => (
             <Item key={asset.name} size="sm">
               <div
                 aria-hidden="true"
-                className={THUMB_SWATCH[asset.swatch]}
+                className="size-9 shrink-0 rounded-sm bg-muted"
               />
               <ItemContent>
                 <ItemTitle>{asset.name}</ItemTitle>
@@ -202,7 +100,80 @@ function PhoneLibrary() {
             </Item>
           ))}
         </ItemGroup>
-      </Stack>
+        <Button className="w-full" type="button">
+          Upload
+        </Button>
+      </PhoneChrome>
+    </div>
+  );
+}
+
+function DetailPhone() {
+  const asset = ASSETS[0];
+  return (
+    <div className="h-full" data-pier-comment-id="library-detail">
+      <PhoneChrome badge={asset.kind} title={asset.name}>
+        <div
+          aria-hidden="true"
+          className="h-48 w-full rounded-md bg-muted"
+        />
+        <Text tone="secondary">{asset.size} · ready to upload</Text>
+        <Button className="w-full" type="button">
+          Upload
+        </Button>
+      </PhoneChrome>
+    </div>
+  );
+}
+
+function ConfirmPhone() {
+  return (
+    <div className="h-full" data-pier-comment-id="library-confirm">
+      <PhoneChrome badge="Review" title="Confirm upload">
+        <Stack className="rounded-md border border-border p-3" gap={6}>
+          <Text>{ASSETS[0].name}</Text>
+          <Text tone="secondary">Library / Photos · {ASSETS[0].size}</Text>
+        </Stack>
+        <Row gap={8}>
+          <Button className="flex-1" type="button" variant="outline">
+            Cancel
+          </Button>
+          <Button className="flex-1" type="button">
+            Confirm
+          </Button>
+        </Row>
+      </PhoneChrome>
+    </div>
+  );
+}
+
+function SuccessPhone() {
+  return (
+    <div className="h-full" data-pier-comment-id="library-success">
+      <PhoneChrome badge="Done" title="Uploaded">
+        <Stack className="items-start" gap={8}>
+          <Text>Harbor at dusk is in the library.</Text>
+          <Button type="button" variant="outline">
+            Back to library
+          </Button>
+        </Stack>
+      </PhoneChrome>
+    </div>
+  );
+}
+
+function BlockedPhone() {
+  return (
+    <div className="h-full" data-pier-comment-id="library-blocked">
+      <PhoneChrome badge="Needs you" title="Couldn’t upload">
+        <Stack className="rounded-md border border-border p-3" gap={6}>
+          <Text>File type isn’t allowed.</Text>
+          <Text tone="secondary">Choose a photo or illustration and retry.</Text>
+        </Stack>
+        <Button className="w-full" type="button">
+          Fix file
+        </Button>
+      </PhoneChrome>
     </div>
   );
 }
@@ -212,13 +183,13 @@ function CaptionNote() {
     <div className="flex w-[560px] flex-col gap-2 rounded-md border border-border bg-muted/40 p-4">
       <Row gap={8}>
         <Badge variant="secondary">Note</Badge>
-        <Text as="h3">One surface, three widths</Text>
+        <Text as="h3">One path, five frames</Text>
       </Row>
       <Text tone="secondary">
-        Desktop keeps the sidebar and a three-column grid; tablet drops the
-        sidebar for two columns; phone becomes a single list with the same
-        data. Pan with the wheel, zoom with ctrl+wheel, double-click to fit.
-        The reading-flow counterpart of this board lives in
+        A guest opens an asset, confirms upload, and lands on success. Validation
+        failure drops to the row below and returns on the opposite side of the
+        frame. Main-path connectors are solid; exception edges use color and
+        weight, not dashes. The reading-flow counterpart lives in
         templates/docs.canvas.tsx.
       </Text>
     </div>
@@ -228,39 +199,70 @@ function CaptionNote() {
 export default function DesignMockupCanvas() {
   return (
     <WorldStage padding={40}>
-      <Layer x={32} y={32}>
+      <Layer x={40} y={40}>
         <Artboard
-          description="Sidebar plus three-column asset grid."
-          label="D1"
-          preset="desktop"
-          title="Library — Desktop"
-        >
-          <DesktopLibrary />
-        </Artboard>
-      </Layer>
-      <Layer x={1400} y={32}>
-        <Artboard
-          description="Single-column list, same data."
-          label="P1"
+          description="Browse the library, then open one asset."
+          height={560}
+          id="library"
+          label="S1"
           preset="phone"
-          title="Library — Phone"
+          title="Library"
         >
-          <PhoneLibrary />
+          <LibraryPhone />
         </Artboard>
       </Layer>
-      <Layer x={1880} y={32}>
+      <Layer x={641} y={40}>
         <Artboard
-          description="Two-column middle ground."
-          label="T1"
-          preset="tablet"
-          title="Library — Tablet"
+          description="Same asset, ready to upload."
+          height={560}
+          id="detail"
+          label="S2"
+          preset="phone"
+          title="Asset"
         >
-          <TabletLibrary />
+          <DetailPhone />
         </Artboard>
       </Layer>
-      <Layer x={32} y={920}>
+      <Layer x={1234} y={40}>
+        <Artboard
+          description="Confirm destination and send."
+          height={560}
+          id="confirm"
+          label="S3"
+          preset="phone"
+          title="Confirm"
+        >
+          <ConfirmPhone />
+        </Artboard>
+      </Layer>
+      <Layer x={1827} y={40}>
+        <Artboard
+          description="Upload finished."
+          height={560}
+          id="success"
+          label="S4"
+          preset="phone"
+          title="Done"
+        >
+          <SuccessPhone />
+        </Artboard>
+      </Layer>
+      <Layer x={1234} y={820}>
+        <Artboard
+          description="Needs you: file type rejected."
+          height={560}
+          id="blocked"
+          label="S3b"
+          preset="phone"
+          title="Needs you"
+        >
+          <BlockedPhone />
+        </Artboard>
+      </Layer>
+      <Layer x={40} y={820}>
         <CaptionNote />
       </Layer>
+      <ScreenFlow spec={spec} />
     </WorldStage>
   );
 }
