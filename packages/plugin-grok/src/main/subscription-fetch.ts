@@ -7,6 +7,7 @@ import {
   type GrokSubscriptionInfo,
   parseGrokSubscriptionResult,
   parseGrokUserSubscriptionResult,
+  resolveGrokMembership,
 } from "./subscription-parse.ts";
 import { parseGrokTaskUsage } from "./task-usage.ts";
 import type { AccountUsageResult } from "./types.ts";
@@ -157,30 +158,26 @@ export async function withSoftSubscription(
     return result;
   }
   const membershipPromise = (async (): Promise<GrokSubscriptionInfo | null> => {
-    // Start both independent probes together. Await the authoritative endpoint
-    // first, but reuse the already-running fallback when the direct probe
-    // soft-fails so their timeout windows never add up.
-    const directPromise = fetchGrokSubscriptionSoft({
+    // Start both probes together. grok.com/rest/subscriptions is the dated
+    // listing; /user is the live tier. A listed SuperGrok SKU must not win
+    // once live membership is already free / expired.
+    const listedPromise = fetchGrokSubscriptionSoft({
       fetchImpl: options.fetchImpl,
       overall: options.overall,
       sessionKey: options.sessionKey,
       signal: options.caller,
       ...(options.userId ? { userId: options.userId } : {}),
     });
-    const fallbackAbort = new AbortController();
-    const fallbackPromise = fetchGrokUserSubscriptionSoft({
+    const livePromise = fetchGrokUserSubscriptionSoft({
       fetchImpl: options.fetchImpl,
       overall: options.overall,
       sessionKey: options.sessionKey,
-      signal: mergeAbortSignals([options.caller, fallbackAbort.signal]),
+      signal: options.caller,
       ...(options.userId ? { userId: options.userId } : {}),
     });
-    const direct = await directPromise;
-    if (direct) {
-      fallbackAbort.abort();
-      return direct;
-    }
-    return await fallbackPromise;
+    const [listed, live] = await Promise.all([listedPromise, livePromise]);
+    if (options.caller.aborted || options.overall?.aborted) return null;
+    return resolveGrokMembership(listed, live, Date.now());
   })();
   const extraMetricsPromise =
     result.status === "ok"

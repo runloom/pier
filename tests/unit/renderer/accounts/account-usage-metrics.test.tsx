@@ -335,6 +335,41 @@ describe("shared account usage metrics", () => {
     expect(screen.queryByText("Stops renewing")).not.toBeInTheDocument();
   });
 
+  it("treats a past period end as expired even when status is still active", () => {
+    render(
+      <accountUsageRenderer.AccountMetadataBadges
+        copy={{
+          cancelAtPeriodEnd: "Stops renewing",
+          cancelsOn: (relative) => `Cancels ${relative}`,
+          expired: "Expired",
+          expires: (relative) => `Expires ${relative}`,
+          trialEnds: (relative) => `Trial ends ${relative}`,
+        }}
+        language="en-US"
+        membership={{
+          expiresAt: Date.parse("2026-09-05T00:00:00Z"),
+          status: "active",
+          tier: "super_grok_pro",
+          updatedAt: Date.parse("2026-09-10T00:00:00Z"),
+        }}
+        membershipLabel={() => "SUPER GROK PRO"}
+        metricLabel={() => "Quota"}
+        metrics={[]}
+        now={Date.parse("2026-09-10T00:00:00Z")}
+      />
+    );
+
+    expect(screen.getByText("SUPER GROK PRO")).toHaveAttribute(
+      "data-variant",
+      "danger"
+    );
+    expect(screen.getByText("Expired")).toHaveAttribute(
+      "data-variant",
+      "danger"
+    );
+    expect(screen.queryByText(/Expires /)).not.toBeInTheDocument();
+  });
+
   it("warns on expiry only when the period is within the attention window", () => {
     render(
       <accountUsageRenderer.AccountMetadataBadges

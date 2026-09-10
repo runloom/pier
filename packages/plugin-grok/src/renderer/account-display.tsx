@@ -55,13 +55,15 @@ export function accountMembershipSummary(
     account.kind === "api_key"
       ? t("pier.grok.accounts.settings.authKindApiKey", "API key")
       : t("pier.grok.accounts.settings.authKindOidc", "OIDC");
-  const subscription = account.subscription;
-  if (!subscription) return kindLabel;
+  const membership = grokAccountMembership(account, 0, now);
+  if (!membership) return kindLabel;
 
-  const plan = subscription.planType.toUpperCase();
+  const plan = membership.tier.toUpperCase().replaceAll("_", " ");
   const parts: string[] = [plan];
-  const periodEndAt = subscription.trialEndsAt ?? subscription.expiresAt;
-  if (subscription.cancelAtPeriodEnd && periodEndAt !== undefined) {
+  const periodEndAt = membership.trialEndsAt ?? membership.expiresAt;
+  if (membership.status === "expired") {
+    parts.push(t("pier.grok.accounts.settings.expired", "Expired"));
+  } else if (membership.cancelAtPeriodEnd && periodEndAt !== undefined) {
     const relative = formatRelativeTime(periodEndAt, now, language);
     parts.push(
       t("pier.grok.accounts.settings.cancelsOn", "Cancels {relative}").replace(
@@ -69,21 +71,21 @@ export function accountMembershipSummary(
         relative
       )
     );
-  } else if (subscription.trialEndsAt !== undefined) {
+  } else if (membership.trialEndsAt !== undefined) {
     parts.push(
       t("pier.grok.accounts.settings.trialEnds", "Trial ends").concat(
         " ",
-        formatRelativeTime(subscription.trialEndsAt, now, language)
+        formatRelativeTime(membership.trialEndsAt, now, language)
       )
     );
-  } else if (subscription.expiresAt !== undefined) {
+  } else if (membership.expiresAt !== undefined) {
     parts.push(
       t("pier.grok.accounts.settings.expires", "Expires").concat(
         " ",
-        formatRelativeTime(subscription.expiresAt, now, language)
+        formatRelativeTime(membership.expiresAt, now, language)
       )
     );
-  } else if (subscription.cancelAtPeriodEnd) {
+  } else if (membership.cancelAtPeriodEnd) {
     parts.push(
       t(
         "pier.grok.accounts.settings.cancelAtPeriodEnd",
@@ -99,15 +101,18 @@ export function AccountBadges({
   account,
   language,
   mode = "all",
+  now,
   t,
 }: {
   account: Pick<GrokAccountSummary, "kind" | "subscription" | "usage">;
   language: string;
   mode?: AccountMetadataBadgeMode;
+  now?: number;
   t: Translate;
 }): JSX.Element | null {
   const updatedAt = account.usage?.updatedAt;
-  const membership = grokAccountMembership(account, updatedAt ?? 0);
+  const clock = now ?? Date.now();
+  const membership = grokAccountMembership(account, updatedAt ?? 0, clock);
   return (
     <AccountMetadataBadges
       copy={{
@@ -132,6 +137,7 @@ export function AccountBadges({
           : t("pier.grok.accounts.settings.authKindOidc", "OIDC")
       }
       language={language}
+      now={clock}
       {...(membership ? { membership } : {})}
       membershipLabel={(value) => value.tier.toUpperCase().replaceAll("_", " ")}
       metricLabel={(metric) => usageMetricLabel(metric, language, t)}
@@ -143,31 +149,44 @@ export function AccountBadges({
 
 export function grokAccountMembership(
   account: Pick<GrokAccountSummary, "subscription">,
-  updatedAt: number
+  updatedAt: number,
+  now = Date.now()
 ): AccountMembershipSnapshot | undefined {
   const subscription = account.subscription;
-  let membershipStatus: AccountMembershipSnapshot["status"] | undefined;
-  if (subscription?.status === "none") {
-    membershipStatus = "free";
-  } else if (subscription) {
-    membershipStatus = subscription.status;
+  if (!subscription) return;
+  const planType = subscription.planType;
+  if (
+    subscription.status === "none" ||
+    planType === "free" ||
+    planType === "none"
+  ) {
+    return { status: "free", tier: "free", updatedAt };
   }
-  return subscription
-    ? {
-        ...(subscription.cancelAtPeriodEnd === undefined
-          ? {}
-          : { cancelAtPeriodEnd: subscription.cancelAtPeriodEnd }),
-        ...(subscription.expiresAt === undefined
-          ? {}
-          : { expiresAt: subscription.expiresAt }),
-        status: membershipStatus ?? "unknown",
-        tier: subscription.planType,
-        ...(subscription.trialEndsAt === undefined
-          ? {}
-          : { trialEndsAt: subscription.trialEndsAt }),
-        updatedAt: updatedAt ?? 0,
-      }
-    : undefined;
+  const expired =
+    subscription.status === "expired" ||
+    (subscription.expiresAt !== undefined && subscription.expiresAt <= now);
+  let status: AccountMembershipSnapshot["status"] = "active";
+  if (expired) {
+    status = "expired";
+  } else if (subscription.status === "canceled") {
+    status = "canceled";
+  } else if (subscription.status === "unknown") {
+    status = "unknown";
+  }
+  return {
+    ...(subscription.cancelAtPeriodEnd === undefined || expired
+      ? {}
+      : { cancelAtPeriodEnd: subscription.cancelAtPeriodEnd }),
+    ...(subscription.expiresAt === undefined
+      ? {}
+      : { expiresAt: subscription.expiresAt }),
+    status,
+    tier: planType,
+    ...(expired || subscription.trialEndsAt === undefined
+      ? {}
+      : { trialEndsAt: subscription.trialEndsAt }),
+    updatedAt,
+  };
 }
 
 export function AccountAvatar({

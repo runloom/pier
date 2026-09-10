@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseGrokSubscriptionResult,
   parseGrokUserSubscriptionResult,
+  resolveGrokMembership,
 } from "../../../../../packages/plugin-grok/src/main/subscription-parse.ts";
 
 describe("parseGrokSubscriptionResult", () => {
@@ -75,6 +76,178 @@ describe("parseGrokSubscriptionResult", () => {
     expect(parseGrokSubscriptionResult({})).toBeNull();
     expect(parseGrokSubscriptionResult({ subscriptions: "nope" })).toBeNull();
   });
+
+  it("maps inactive vendor status to expired", () => {
+    expect(
+      parseGrokSubscriptionResult({
+        subscriptions: [
+          {
+            tier: "SUBSCRIPTION_TIER_SUPER_GROK_PRO",
+            status: "SUBSCRIPTION_STATUS_INACTIVE",
+            billingPeriodEnd: "2026-09-15T00:00:00.000Z",
+          },
+        ],
+      })
+    ).toMatchObject({
+      planType: "super_grok_pro",
+      status: "expired",
+      expiresAt: Date.parse("2026-09-15T00:00:00.000Z"),
+    });
+  });
+
+  it("does not treat past_due as expired without an entitlement end", () => {
+    expect(
+      parseGrokSubscriptionResult({
+        subscriptions: [
+          {
+            tier: "SUBSCRIPTION_TIER_SUPER_GROK_PRO",
+            status: "SUBSCRIPTION_STATUS_PAST_DUE",
+            billingPeriodEnd: "2026-09-15T00:00:00.000Z",
+          },
+        ],
+      })
+    ).toMatchObject({
+      planType: "super_grok_pro",
+      status: "unknown",
+      expiresAt: Date.parse("2026-09-15T00:00:00.000Z"),
+    });
+  });
+
+  it("uses Play entitlement end when auto-renew is already off", () => {
+    expect(
+      parseGrokSubscriptionResult({
+        subscriptions: [
+          {
+            tier: "SUBSCRIPTION_TIER_SUPER_GROK_PRO",
+            status: "SUBSCRIPTION_STATUS_ACTIVE",
+            billingPeriodEnd: "2026-09-15T00:00:00.000Z",
+            google: {
+              autoRenewEnabled: false,
+              expiryTime: "2026-09-05T00:00:00.000Z",
+            },
+          },
+        ],
+      })
+    ).toMatchObject({
+      planType: "super_grok_pro",
+      status: "active",
+      expiresAt: Date.parse("2026-09-05T00:00:00.000Z"),
+    });
+  });
+});
+
+describe("resolveGrokMembership", () => {
+  const now = Date.parse("2026-09-10T00:00:00.000Z");
+
+  it("lets live free clear a listed paid SuperGrok SKU", () => {
+    expect(
+      resolveGrokMembership(
+        {
+          planType: "super_grok_pro",
+          status: "active",
+          expiresAt: Date.parse("2026-09-15T00:00:00.000Z"),
+        },
+        { planType: "free", status: "none" },
+        now
+      )
+    ).toEqual({ planType: "free", status: "none" });
+  });
+
+  it("clock-expires a listed paid SKU whose period already ended", () => {
+    expect(
+      resolveGrokMembership(
+        {
+          planType: "super_grok_pro",
+          status: "active",
+          expiresAt: Date.parse("2026-09-05T00:00:00.000Z"),
+        },
+        null,
+        now
+      )
+    ).toMatchObject({
+      planType: "super_grok_pro",
+      status: "expired",
+      expiresAt: Date.parse("2026-09-05T00:00:00.000Z"),
+    });
+  });
+
+  it("does not revive a clock-expired listing from a leftover live tier string", () => {
+    expect(
+      resolveGrokMembership(
+        {
+          planType: "super_grok_pro",
+          status: "expired",
+          expiresAt: Date.parse("2026-09-05T00:00:00.000Z"),
+        },
+        { planType: "super_grok_pro", status: "active" },
+        now
+      )
+    ).toMatchObject({
+      planType: "super_grok_pro",
+      status: "expired",
+    });
+  });
+
+  it("lets live expired beat a listed ACTIVE SKU with a future period end", () => {
+    expect(
+      resolveGrokMembership(
+        {
+          planType: "super_grok_pro",
+          status: "active",
+          expiresAt: Date.parse("2026-09-15T00:00:00.000Z"),
+        },
+        {
+          planType: "super_grok_pro",
+          status: "expired",
+          expiresAt: Date.parse("2026-09-05T00:00:00.000Z"),
+        },
+        now
+      )
+    ).toMatchObject({
+      planType: "super_grok_pro",
+      status: "expired",
+      expiresAt: Date.parse("2026-09-05T00:00:00.000Z"),
+    });
+  });
+
+  it("keeps a renewed live period instead of expired listing dates", () => {
+    expect(
+      resolveGrokMembership(
+        {
+          planType: "super_grok_pro",
+          status: "expired",
+          expiresAt: Date.parse("2026-09-05T00:00:00.000Z"),
+        },
+        {
+          planType: "super_grok_pro",
+          status: "active",
+          expiresAt: Date.parse("2026-10-10T00:00:00.000Z"),
+        },
+        now
+      )
+    ).toMatchObject({
+      planType: "super_grok_pro",
+      status: "active",
+      expiresAt: Date.parse("2026-10-10T00:00:00.000Z"),
+    });
+  });
+
+  it("keeps a still-live listed membership when the live probe is unavailable", () => {
+    expect(
+      resolveGrokMembership(
+        {
+          planType: "pro",
+          status: "active",
+          expiresAt: Date.parse("2026-10-01T00:00:00.000Z"),
+        },
+        null,
+        now
+      )
+    ).toMatchObject({
+      planType: "pro",
+      status: "active",
+    });
+  });
 });
 
 describe("parseGrokUserSubscriptionResult", () => {
@@ -88,6 +261,19 @@ describe("parseGrokUserSubscriptionResult", () => {
     expect(
       parseGrokUserSubscriptionResult({
         user: { subscriptionTier: "SUBSCRIPTION_TIER_FREE" },
+      })
+    ).toEqual({ planType: "free", status: "none" });
+  });
+
+  it("keeps explicit free even when nested still names a paid SuperGrok row", () => {
+    expect(
+      parseGrokUserSubscriptionResult({
+        subscriptionTier: "SUBSCRIPTION_TIER_FREE",
+        subscription: {
+          billingPeriodEnd: "2026-09-15T00:00:00.000Z",
+          status: "SUBSCRIPTION_STATUS_ACTIVE",
+          tier: "SUBSCRIPTION_TIER_SUPER_GROK_PRO",
+        },
       })
     ).toEqual({ planType: "free", status: "none" });
   });
@@ -110,5 +296,22 @@ describe("parseGrokUserSubscriptionResult", () => {
     { subscriptionTier: 42 },
   ])("leaves unavailable or malformed membership unresolved: %j", (payload) => {
     expect(parseGrokUserSubscriptionResult(payload)).toBeNull();
+  });
+
+  it("reads nested include=subscription status instead of a leftover tier string", () => {
+    expect(
+      parseGrokUserSubscriptionResult({
+        subscriptionTier: "SuperGrokPro",
+        subscription: {
+          tier: "SUBSCRIPTION_TIER_SUPER_GROK_PRO",
+          status: "SUBSCRIPTION_STATUS_EXPIRED",
+          billingPeriodEnd: "2026-09-05T00:00:00.000Z",
+        },
+      })
+    ).toMatchObject({
+      planType: "super_grok_pro",
+      status: "expired",
+      expiresAt: Date.parse("2026-09-05T00:00:00.000Z"),
+    });
   });
 });

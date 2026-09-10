@@ -951,7 +951,7 @@ describe("fetchGrokUsage subscription soft-attach", () => {
     expect(result.metrics[0]).toMatchObject({ usedPercent: 12 });
     expect(result.subscription).toEqual({
       planType: "pro",
-      status: "active",
+      status: "expired",
       expiresAt: Date.parse("2026-07-21T05:50:54.252Z"),
       cancelAtPeriodEnd: false,
       trialEndsAt: Date.parse("2026-07-21T05:50:57.308566Z"),

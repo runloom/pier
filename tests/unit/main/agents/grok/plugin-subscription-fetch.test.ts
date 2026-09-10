@@ -85,7 +85,107 @@ describe("Grok membership soft fallbacks", () => {
     expect(result.subscriptionResolved).toBeUndefined();
   });
 
-  it("starts independent membership probes together and keeps direct membership authoritative", async () => {
+  it("lets live free replace a listed SuperGrok SKU that is still marked active", async () => {
+    const fetchImpl: FetchImpl = async (url) => {
+      if (url === GROK_SUBSCRIPTIONS_URL) {
+        return response({
+          body: {
+            subscriptions: [
+              {
+                billingPeriodEnd: "2026-09-15T00:00:00.000Z",
+                status: "SUBSCRIPTION_STATUS_ACTIVE",
+                tier: "SUBSCRIPTION_TIER_SUPER_GROK_PRO",
+              },
+            ],
+          },
+          ok: true,
+          status: 200,
+        });
+      }
+      if (url === GROK_USER_URL) {
+        return response({
+          body: { userId: "user-1", subscriptionTier: null },
+          ok: true,
+          status: 200,
+        });
+      }
+      if (url === GROK_RATE_LIMITS_URL || url === GROK_REMAINING_RESETS_URL) {
+        return response({ ok: false, status: 404 });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    };
+
+    const result = await withSoftSubscription(
+      { metrics: [], status: "ok" },
+      {
+        caller: new AbortController().signal,
+        fetchImpl,
+        overall: null,
+        sessionKey: "session-key",
+      }
+    );
+
+    expect(result.subscriptionResolved).toBe(true);
+    expect(result.subscription).toEqual({ planType: "free", status: "none" });
+  });
+
+  it("lets live expired replace a listed SuperGrok SKU that is still marked active", async () => {
+    const fetchImpl: FetchImpl = async (url) => {
+      if (url === GROK_SUBSCRIPTIONS_URL) {
+        return response({
+          body: {
+            subscriptions: [
+              {
+                billingPeriodEnd: "2099-09-15T00:00:00.000Z",
+                status: "SUBSCRIPTION_STATUS_ACTIVE",
+                tier: "SUBSCRIPTION_TIER_SUPER_GROK_PRO",
+              },
+            ],
+          },
+          ok: true,
+          status: 200,
+        });
+      }
+      if (url === GROK_USER_URL) {
+        return response({
+          body: {
+            subscription: {
+              billingPeriodEnd: "2026-09-05T00:00:00.000Z",
+              status: "SUBSCRIPTION_STATUS_EXPIRED",
+              tier: "SUBSCRIPTION_TIER_SUPER_GROK_PRO",
+            },
+            subscriptionTier: "SuperGrokPro",
+            userId: "user-1",
+          },
+          ok: true,
+          status: 200,
+        });
+      }
+      if (url === GROK_RATE_LIMITS_URL || url === GROK_REMAINING_RESETS_URL) {
+        return response({ ok: false, status: 404 });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    };
+
+    const result = await withSoftSubscription(
+      { metrics: [], status: "ok" },
+      {
+        caller: new AbortController().signal,
+        fetchImpl,
+        overall: null,
+        sessionKey: "session-key",
+      }
+    );
+
+    expect(result.subscriptionResolved).toBe(true);
+    expect(result.subscription).toMatchObject({
+      planType: "super_grok_pro",
+      status: "expired",
+      expiresAt: Date.parse("2026-09-05T00:00:00.000Z"),
+    });
+  });
+
+  it("starts independent membership probes together and keeps a live listed membership", async () => {
     let resolveDirect:
       | ((value: Awaited<ReturnType<FetchImpl>>) => void)
       | undefined;
@@ -134,6 +234,7 @@ describe("Grok membership soft fallbacks", () => {
         body: {
           subscriptions: [
             {
+              billingPeriodEnd: "2099-10-01T00:00:00.000Z",
               status: "SUBSCRIPTION_STATUS_ACTIVE",
               tier: "SUBSCRIPTION_TIER_GROK_PRO",
             },
@@ -143,12 +244,6 @@ describe("Grok membership soft fallbacks", () => {
         status: 200,
       })
     );
-    const resultSettledBeforeFallback = await Promise.race([
-      resultPromise.then(() => true),
-      new Promise<false>((resolve) => {
-        setTimeout(() => resolve(false), 0);
-      }),
-    ]);
     resolveFallback?.(
       response({
         body: {
@@ -170,6 +265,5 @@ describe("Grok membership soft fallbacks", () => {
       subscriptionResolved: true,
     });
     expect(userStartedBeforeDirectSettled).toBe(true);
-    expect(resultSettledBeforeFallback).toBe(true);
   });
 });
