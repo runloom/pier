@@ -1,4 +1,7 @@
-import type { ScreenFlowSpec } from "@pier/ui/canvas-workflow/screen-flow.ts";
+import {
+  SCREEN_FLOW_CAPTION_STACK,
+  type ScreenFlowSpec,
+} from "@pier/ui/canvas-workflow/screen-flow.ts";
 import type { WorkflowSpec } from "@pier/ui/canvas-workflow/types.ts";
 
 export const reviewWorkflowSpec: WorkflowSpec = {
@@ -308,12 +311,19 @@ export const designMockupScreenFlowSpec: ScreenFlowSpec = {
   title: "Upload an asset",
 };
 
+/** Artboard-frame boxes (Layer.y + caption stack), not Layer origins. */
 export const designMockupFrameBoxes = [
-  { h: 560, id: "library", w: 393, x: 40, y: 40 },
-  { h: 560, id: "detail", w: 393, x: 641, y: 40 },
-  { h: 560, id: "confirm", w: 393, x: 1234, y: 40 },
-  { h: 560, id: "success", w: 393, x: 1827, y: 40 },
-  { h: 560, id: "blocked", w: 393, x: 1234, y: 820 },
+  { h: 560, id: "library", w: 393, x: 40, y: 40 + SCREEN_FLOW_CAPTION_STACK },
+  { h: 560, id: "detail", w: 393, x: 641, y: 40 + SCREEN_FLOW_CAPTION_STACK },
+  { h: 560, id: "confirm", w: 393, x: 1234, y: 40 + SCREEN_FLOW_CAPTION_STACK },
+  { h: 560, id: "success", w: 393, x: 1827, y: 40 + SCREEN_FLOW_CAPTION_STACK },
+  {
+    h: 560,
+    id: "blocked",
+    w: 393,
+    x: 1234,
+    y: 820 + SCREEN_FLOW_CAPTION_STACK,
+  },
 ] as const;
 
 export function crossingWorkflowSpec(): WorkflowSpec {

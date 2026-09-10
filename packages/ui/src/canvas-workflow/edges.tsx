@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { pointsAttr } from "./geometry.ts";
 import type { WorkflowHighlight } from "./highlight.ts";
-import { workflowLabelPaintBox } from "./label.ts";
+import { asLabelObstacle, workflowLabelPaintBox } from "./label.ts";
 import {
   SCREEN_FLOW_LABEL_GAP,
   SCREEN_FLOW_LABEL_PILL,
@@ -14,7 +14,11 @@ import {
   WORKFLOW_LABEL_SIZE,
   workflowLabelWidth,
 } from "./metrics.ts";
-import type { WorkflowHover, WorkflowLayout } from "./types.ts";
+import type {
+  WorkflowHover,
+  WorkflowLayout,
+  WorkflowNodeLayout,
+} from "./types.ts";
 import { type EdgePaintKind, edgeVisual } from "./visual.ts";
 
 interface EdgePaintProps {
@@ -127,6 +131,7 @@ export function WorkflowEdgeLabels({
 }: EdgePaintProps): ReactNode {
   const screens = kind === "screens";
   const pill = screens ? SCREEN_FLOW_LABEL_PILL : WORKFLOW_LABEL_PILL;
+  const parked: WorkflowNodeLayout[] = [];
   return layout.edges.map((edge) => {
     if (edge.label.trim() === "") {
       return null;
@@ -140,9 +145,19 @@ export function WorkflowEdgeLabels({
       edge.labelAt,
       labelW,
       pill,
-      layout.nodes,
+      screens ? [...layout.nodes, ...parked] : layout.nodes,
       screens ? SCREEN_FLOW_LABEL_GAP : WORKFLOW_LABEL_GAP
     );
+    if (screens) {
+      parked.push(
+        asLabelObstacle(`park_${edge.id}`, {
+          h: pill,
+          w: labelW,
+          x: box.x,
+          y: box.y,
+        })
+      );
+    }
     return (
       <g
         data-edge-id={edge.id}

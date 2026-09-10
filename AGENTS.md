@@ -168,9 +168,11 @@ Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 
 权威规格：[`docs/superpowers/specs/2026-09-10-canvas-workflow-screen-flow-gold-standard.md`](docs/superpowers/specs/2026-09-10-canvas-workflow-screen-flow-gold-standard.md)。
 
-- 作者只写 IR；宿主编译正交折线。失败画 `Empty`，不画残缺图。
-- 主线 1.8、旁路 1.4、镖 10×7；idle 实线；hover 只抬高相关组。
+- 作者只写 IR 和帧表；宿主编译正交折线，并拥有旗、图例、标签停车。
+- Empty 只用于重叠、穿盒、缺帧、结构错；亚像素列距与旗抢带由宿主自愈。
+- 主线 1.8、旁路 1.4、镖 10×7；idle 实线；hover 只抬高相关组，不压暗。
 - `compile*` 不进 `pier/canvas`。审批走 `WorkflowDiagram`，多屏路径走 `ScreenFlow`。
+- 作者必须跑 `validateScreenFlowPaint`；`status === 1` 只执行第一条修法，同一诊断两轮不降则停手。
 
 检查点在 `tests/unit/ui/canvas-workflow/governance.test.ts`。
 

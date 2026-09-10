@@ -312,11 +312,6 @@ export function SessionScreen(props: {
           lines={session.screen}
           ref={terminalRef}
         />
-        {keysOpen ? null : (
-          <span className="pointer-events-none absolute top-2 right-3 rounded-full border border-border/60 bg-surface-raised px-2 py-0.5 text-[11px] text-muted-foreground leading-4">
-            {canSend ? "当前屏幕" : "当前屏幕 · 只读"}
-          </span>
-        )}
       </div>
     </PhoneShell>
   );

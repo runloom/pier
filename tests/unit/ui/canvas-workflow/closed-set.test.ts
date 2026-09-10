@@ -2,6 +2,7 @@ import { compileWorkflowLayout } from "@pier/ui/canvas-workflow/compile.ts";
 import { compileWorkflowEdges } from "@pier/ui/canvas-workflow/compile-edges.ts";
 import {
   artboardBoxAsNode,
+  validateScreenFlowPaint,
   validateScreenFlowSpec,
 } from "@pier/ui/canvas-workflow/screen-flow.ts";
 import type { WorkflowSpec } from "@pier/ui/canvas-workflow/types.ts";
@@ -38,7 +39,14 @@ describe("canvas workflow closed set", () => {
   });
 
   it("accepts the design-mockup path and routes its frames", () => {
+    expect(designMockupFrameBoxes[0]?.y).toBe(80);
     expect(validateScreenFlowSpec(designMockupScreenFlowSpec).status).toBe(0);
+    expect(
+      validateScreenFlowPaint({
+        frames: designMockupFrameBoxes,
+        spec: designMockupScreenFlowSpec,
+      }).status
+    ).toBe(0);
     const compiled = compileWorkflowEdges({
       edges: designMockupScreenFlowSpec.edges,
       groups: [],

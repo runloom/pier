@@ -72,7 +72,7 @@ export function TerminalPreview(props: {
           data-slot="terminal-preview-content"
         >
           <span
-            className="block min-h-full shrink-0 whitespace-pre font-mono text-[3.6cqw] text-foreground/85 leading-[1.55]"
+            className="block min-h-full shrink-0 whitespace-pre font-mono text-[11px] text-foreground/85 leading-4"
             data-slot="terminal-preview-text"
           >
             {screenText(props.session.screen)}

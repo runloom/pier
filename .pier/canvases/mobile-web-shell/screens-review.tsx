@@ -131,6 +131,9 @@ export function ChangesScreen(props: {
                 </span>
                 {" · "}
                 <Delta added={current.added} removed={current.removed} />
+                {parentPath(current.path) === ""
+                  ? null
+                  : ` · ${parentPath(current.path)}`}
               </span>
             )
           }

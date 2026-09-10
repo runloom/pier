@@ -191,6 +191,7 @@ export const PIER_CANVAS_VALUE_EXPORT_NAMES = [
   "useCanvasFile",
   "useCostOverview",
   "useSystemResources",
+  "validateScreenFlowPaint",
   "validateScreenFlowSpec",
   "validateWorkflowSpec",
 ] as const;

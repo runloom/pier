@@ -1,3 +1,8 @@
+import { compileWorkflowEdges } from "./compile-edges.ts";
+import {
+  parkScreenFlowLabelAts,
+  screenFlowLabelParkDiagnostics,
+} from "./label.ts";
 import { workflowEdgeRole } from "./role.ts";
 import type {
   WorkflowDiagnostic,
@@ -6,6 +11,13 @@ import type {
   WorkflowValidateReceipt,
 } from "./types.ts";
 import { WORKFLOW_ID_PATTERN } from "./types.ts";
+
+export {
+  SCREEN_FLOW_START_CHIP_GAP,
+  SCREEN_FLOW_START_CHIP_H,
+  screenFlowStartChipPosition,
+  screenFlowStartChipSize,
+} from "./start-chip.ts";
 
 export type ScreenFlowEdge = WorkflowEdge;
 
@@ -251,6 +263,7 @@ export function validateScreenFlowSpec(
 }
 
 export const SCREEN_FLOW_MIN_GUTTER = 120;
+export const SCREEN_FLOW_CAPTION_STACK = 40;
 
 function boxesOverlap(
   a: WorkflowNodeLayout,
@@ -294,11 +307,12 @@ export function screenFlowPlacementDiagnostics(
       const sameCol = Math.abs(a.x - b.x) < 48;
       if (sameRow) {
         const gap = a.x < b.x ? b.x - (a.x + a.w) : a.x - (b.x + b.w);
-        if (gap >= 0 && gap < SCREEN_FLOW_MIN_GUTTER) {
+        const shown = Math.round(gap);
+        if (gap >= 0 && shown < SCREEN_FLOW_MIN_GUTTER) {
           out.push(
             error(
               "screen-flow/tight-row",
-              `Artboards "${a.id}" and "${b.id}" are only ${Math.round(gap)}px apart.`,
+              `Artboards "${a.id}" and "${b.id}" are only ${shown}px apart.`,
               { nodeId: b.id, path: "/edges" },
               [
                 `Move the Layer of "${b.id}" at least ${SCREEN_FLOW_MIN_GUTTER}px from "${a.id}".`,
@@ -309,11 +323,12 @@ export function screenFlowPlacementDiagnostics(
       }
       if (sameCol) {
         const gap = a.y < b.y ? b.y - (a.y + a.h) : a.y - (b.y + b.h);
-        if (gap >= 0 && gap < SCREEN_FLOW_MIN_GUTTER) {
+        const shown = Math.round(gap);
+        if (gap >= 0 && shown < SCREEN_FLOW_MIN_GUTTER) {
           out.push(
             error(
               "screen-flow/tight-column",
-              `Artboards "${a.id}" and "${b.id}" are only ${Math.round(gap)}px apart vertically.`,
+              `Artboards "${a.id}" and "${b.id}" are only ${shown}px apart vertically.`,
               { nodeId: b.id, path: "/edges" },
               [
                 `Move the Layer of "${b.id}" at least ${SCREEN_FLOW_MIN_GUTTER}px below "${a.id}".`,
@@ -366,4 +381,66 @@ export function screenFlowMissingArtboards(
     );
   }
   return out;
+}
+
+/**
+ * Compile errors that Empty the overlay. Quality codes (short last
+ * segment, label drift, stacked verticals) are not Empty — spec §9.
+ */
+export function screenFlowCrossingErrors(
+  diagnostics: readonly WorkflowDiagnostic[]
+): WorkflowDiagnostic[] {
+  return rewriteScreenFlowFixes(
+    diagnostics.filter((item) => item.code === "workflow/edge-crosses-node")
+  );
+}
+
+/**
+ * Author-time paint gate: structure + gutters + through-box + unparkable labels.
+ * `frames` are `[data-slot="artboard-frame"]` boxes (not the caption).
+ * Apply only the first `supportedFixes` entry, then call again.
+ */
+export function validateScreenFlowPaint(input: {
+  frames: readonly ScreenFlowBox[];
+  spec: ScreenFlowSpec;
+}): WorkflowValidateReceipt {
+  const structure = validateScreenFlowSpec(input.spec);
+  if (structure.status === 1) {
+    return structure;
+  }
+  const diagnostics: WorkflowDiagnostic[] = [];
+  const mounted = new Set(input.frames.map((box) => box.id));
+  diagnostics.push(...screenFlowMissingArtboards(input.spec, mounted));
+  const frames = input.frames.map((box) => artboardBoxAsNode(box));
+  diagnostics.push(...screenFlowPlacementDiagnostics(frames));
+  const captions = input.frames.map((box) =>
+    artboardBoxAsNode({
+      h: SCREEN_FLOW_CAPTION_STACK - 10,
+      id: `cap_${box.id}`,
+      w: box.w,
+      x: box.x,
+      y: box.y - SCREEN_FLOW_CAPTION_STACK,
+    })
+  );
+  const width = Math.max(1, ...frames.map((box) => box.x + box.w));
+  const compiled = compileWorkflowEdges({
+    edges: input.spec.edges,
+    groups: [],
+    lanes: [],
+    nodes: [...frames, ...captions],
+    width,
+    ...(input.spec.mainPath === undefined
+      ? {}
+      : { mainPath: input.spec.mainPath }),
+  });
+  const nodes = [...frames, ...captions];
+  const parked = parkScreenFlowLabelAts(compiled.edges, nodes);
+  diagnostics.push(
+    ...screenFlowCrossingErrors(compiled.diagnostics),
+    ...screenFlowLabelParkDiagnostics(parked, nodes)
+  );
+  return {
+    diagnostics,
+    status: diagnostics.some((item) => item.severity === "error") ? 1 : 0,
+  };
 }

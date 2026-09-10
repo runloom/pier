@@ -30,7 +30,11 @@ export const CANVAS_MATERIAL_GROUPS: readonly CanvasMaterialGroup[] = [
   {
     family: "layout",
     id: "ScreenFlow",
-    members: ["ScreenFlow", "validateScreenFlowSpec"],
+    members: [
+      "ScreenFlow",
+      "validateScreenFlowPaint",
+      "validateScreenFlowSpec",
+    ],
   },
   { family: "layout", id: "Separator", members: ["Separator"] },
   { family: "layout", id: "ScrollArea", members: ["ScrollArea", "ScrollBar"] },

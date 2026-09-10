@@ -20,6 +20,26 @@ export function workflowEdgeStrokeVar(role: WorkflowEdgeRole): string {
 }
 
 /** Drop into the recovery band is a caution mark, not the heavy spine. */
+export const SCREEN_FLOW_ROLE_ORDER = [
+  "main",
+  "branch",
+  "return",
+  "error",
+] as const;
+
+export function screenFlowUsedRoles(
+  edges: readonly {
+    readonly onMainPath: boolean;
+    readonly role: WorkflowEdgeRole;
+  }[]
+): WorkflowEdgeRole[] {
+  const used = new Set<WorkflowEdgeRole>();
+  for (const edge of edges) {
+    used.add(edge.onMainPath ? "main" : workflowEdgeRole(edge.role));
+  }
+  return SCREEN_FLOW_ROLE_ORDER.filter((role) => used.has(role));
+}
+
 export function workflowPaintRole(
   onMainPath: boolean,
   role: WorkflowEdgeRole,

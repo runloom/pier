@@ -1,5 +1,12 @@
-import { workflowLabelWidth } from "./metrics.ts";
+import {
+  SCREEN_FLOW_LABEL_GAP,
+  SCREEN_FLOW_LABEL_PILL,
+  SCREEN_FLOW_LABEL_SCALE,
+  workflowLabelWidth,
+} from "./metrics.ts";
 import type {
+  WorkflowDiagnostic,
+  WorkflowEdgeLayout,
   WorkflowGroupLayout,
   WorkflowLaneLayout,
   WorkflowNodeLayout,
@@ -266,4 +273,196 @@ export function workflowLabelPaintBox(
   return (
     open ?? candidates[0] ?? { x: labelAt.x + gap, y: labelAt.y - pill / 2 }
   );
+}
+
+function labelBoxesOverlap(
+  a: { h: number; w: number; x: number; y: number },
+  b: { h: number; w: number; x: number; y: number }
+): boolean {
+  return !(
+    a.x + a.w + 4 <= b.x ||
+    b.x + b.w + 4 <= a.x ||
+    a.y + a.h + 4 <= b.y ||
+    b.y + b.h + 4 <= a.y
+  );
+}
+
+export function asLabelObstacle(
+  id: string,
+  box: { h: number; w: number; x: number; y: number }
+): WorkflowNodeLayout {
+  return {
+    detail: "",
+    h: box.h,
+    id,
+    kind: "step",
+    label: id,
+    tag: "",
+    w: box.w,
+    x: box.x,
+    y: box.y,
+  };
+}
+
+function labelAtCandidates(
+  points: readonly WorkflowPoint[],
+  origin: WorkflowPoint
+): WorkflowPoint[] {
+  const out: WorkflowPoint[] = [origin];
+  for (let i = 1; i < points.length; i += 1) {
+    const a = points[i - 1];
+    const b = points[i];
+    if (!(a && b)) {
+      continue;
+    }
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 40) {
+      continue;
+    }
+    for (const t of [0.25, 0.35, 0.5, 0.65, 0.75]) {
+      out.push({
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+      });
+    }
+  }
+  return out;
+}
+
+function closestSegment(
+  points: readonly WorkflowPoint[],
+  at: WorkflowPoint
+): { a: WorkflowPoint; b: WorkflowPoint } {
+  let bestA = points[0] ?? at;
+  let bestB = points[1] ?? at;
+  let bestD = Number.POSITIVE_INFINITY;
+  for (let i = 1; i < points.length; i += 1) {
+    const a = points[i - 1];
+    const b = points[i];
+    if (!(a && b)) {
+      continue;
+    }
+    const dist = distToSegment(at, a, b);
+    if (dist < bestD) {
+      bestD = dist;
+      bestA = a;
+      bestB = b;
+    }
+  }
+  return { a: bestA, b: bestB };
+}
+
+function offsetAlongNormal(
+  points: readonly WorkflowPoint[],
+  at: WorkflowPoint,
+  sign: 1 | -1
+): WorkflowPoint {
+  const { a, b } = closestSegment(points, at);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const step = SCREEN_FLOW_LABEL_PILL + SCREEN_FLOW_LABEL_GAP;
+  return {
+    x: at.x + (-dy / len) * step * sign,
+    y: at.y + (dx / len) * step * sign,
+  };
+}
+
+function screenFlowLabelBox(
+  edge: WorkflowEdgeLayout,
+  labelAt: WorkflowPoint,
+  nodes: readonly WorkflowNodeLayout[]
+): { h: number; w: number; x: number; y: number } {
+  const width = Math.max(
+    40,
+    workflowLabelWidth(edge.label) * SCREEN_FLOW_LABEL_SCALE
+  );
+  const box = workflowLabelPaintBox(
+    edge.points,
+    labelAt,
+    width,
+    SCREEN_FLOW_LABEL_PILL,
+    nodes,
+    SCREEN_FLOW_LABEL_GAP
+  );
+  return { h: SCREEN_FLOW_LABEL_PILL, w: width, x: box.x, y: box.y };
+}
+
+/**
+ * Park colliding ScreenFlow pills on the other side of the shaft, then along
+ * it. Never drop the wording. Callers Empty if diagnostics remain.
+ */
+export function parkScreenFlowLabelAts(
+  edges: readonly WorkflowEdgeLayout[],
+  nodes: readonly WorkflowNodeLayout[]
+): WorkflowEdgeLayout[] {
+  const next: WorkflowEdgeLayout[] = [];
+  const placed: { h: number; w: number; x: number; y: number }[] = [];
+  for (const edge of edges) {
+    if (edge.label.trim() === "") {
+      next.push(edge);
+      continue;
+    }
+    const obstacles = [
+      ...nodes,
+      ...placed.map((box, index) => asLabelObstacle(`park_${index}`, box)),
+    ];
+    const ats = [
+      ...labelAtCandidates(edge.points, edge.labelAt),
+      offsetAlongNormal(edge.points, edge.labelAt, 1),
+      offsetAlongNormal(edge.points, edge.labelAt, -1),
+    ];
+    let chosenAt = edge.labelAt;
+    let chosenBox = screenFlowLabelBox(edge, edge.labelAt, obstacles);
+    let found = false;
+    for (const at of ats) {
+      const box = screenFlowLabelBox(edge, at, obstacles);
+      if (!placed.some((other) => labelBoxesOverlap(box, other))) {
+        chosenAt = at;
+        chosenBox = box;
+        found = true;
+        break;
+      }
+    }
+    next.push(found ? { ...edge, labelAt: chosenAt } : edge);
+    placed.push(chosenBox);
+  }
+  return next;
+}
+
+export function screenFlowLabelParkDiagnostics(
+  edges: readonly WorkflowEdgeLayout[],
+  nodes: readonly WorkflowNodeLayout[]
+): WorkflowDiagnostic[] {
+  const boxes: ({ h: number; w: number; x: number; y: number } | undefined)[] =
+    [];
+  const parked: WorkflowNodeLayout[] = [];
+  const out: WorkflowDiagnostic[] = [];
+  for (let i = 0; i < edges.length; i += 1) {
+    const edge = edges[i];
+    if (!edge || edge.label.trim() === "") {
+      boxes.push(undefined);
+      continue;
+    }
+    const mine = screenFlowLabelBox(edge, edge.labelAt, [...nodes, ...parked]);
+    for (let j = 0; j < i; j += 1) {
+      const other = boxes[j];
+      if (!(other && labelBoxesOverlap(mine, other))) {
+        continue;
+      }
+      out.push({
+        code: "screen-flow/label-park",
+        message: `Labels on "${edges[j]?.id}" and "${edge.id}" still overlap after parking.`,
+        severity: "error",
+        subject: { edgeId: edge.id, path: "/edges" },
+        supportedFixes: [
+          `Move the Layer of "${edge.to}" so the labels can sit beside the stroke.`,
+        ],
+      });
+      break;
+    }
+    boxes.push(mine);
+    parked.push(asLabelObstacle(`park_${edge.id}`, mine));
+  }
+  return out;
 }

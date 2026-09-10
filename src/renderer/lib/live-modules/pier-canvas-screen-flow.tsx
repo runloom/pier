@@ -11,13 +11,19 @@ import {
   workflowHoverFromTarget,
 } from "@pier/ui/canvas-workflow/highlight.ts";
 import {
+  parkScreenFlowLabelAts,
+  screenFlowLabelParkDiagnostics,
+} from "@pier/ui/canvas-workflow/label.ts";
+import { screenFlowUsedRoles } from "@pier/ui/canvas-workflow/role.ts";
+import {
   artboardBoxAsNode,
-  rewriteScreenFlowFixes,
   type ScreenFlowBox,
   type ScreenFlowSpec,
+  screenFlowCrossingErrors,
   screenFlowMissingArtboards,
   screenFlowPlacementDiagnostics,
   screenFlowReferencedIds,
+  screenFlowStartChipPosition,
   screenFlowStartId,
   validateScreenFlowSpec,
 } from "@pier/ui/canvas-workflow/screen-flow.ts";
@@ -25,14 +31,7 @@ import type {
   WorkflowHover,
   WorkflowLayout,
 } from "@pier/ui/canvas-workflow/types.ts";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@pier/ui/empty.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import i18next from "i18next";
 import {
   type ReactNode,
   useCallback,
@@ -42,55 +41,16 @@ import {
   useState,
 } from "react";
 import { useWorldStageScope } from "./pier-canvas-artboard.tsx";
+import {
+  ScreenFlowEmptyCard,
+  ScreenFlowLegend,
+} from "./pier-canvas-screen-flow-chrome.tsx";
 
 export type { ScreenFlowSpec } from "@pier/ui/canvas-workflow/screen-flow.ts";
-export { validateScreenFlowSpec } from "@pier/ui/canvas-workflow/screen-flow.ts";
-
-function copy(
-  key: string,
-  fallback: string,
-  vars: Record<string, string> = {}
-): string {
-  if (i18next.isInitialized) {
-    return i18next.t(key, { defaultValue: fallback, ...vars });
-  }
-  return Object.entries(vars).reduce(
-    (text, [name, value]) => text.replaceAll(`{{${name}}}`, value),
-    fallback
-  );
-}
-
-function emptyHint(
-  diagnostics: { message: string; supportedFixes: readonly string[] }[]
-) {
-  const first = diagnostics[0];
-  return copy("canvas.screenFlow.invalidHint", "{{message}} Next: {{fix}}", {
-    fix: first?.supportedFixes[0] ?? "",
-    message: first?.message ?? "",
-  });
-}
-
-function EmptyCard({
-  className,
-  diagnostics,
-}: {
-  className?: string;
-  diagnostics: { message: string; supportedFixes: readonly string[] }[];
-}): ReactNode {
-  return (
-    <Empty className={className} data-screen-flow="invalid">
-      <EmptyHeader>
-        <EmptyTitle>
-          {copy(
-            "canvas.screenFlow.invalidTitle",
-            "This screen flow can’t be drawn"
-          )}
-        </EmptyTitle>
-        <EmptyDescription>{emptyHint(diagnostics)}</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  );
-}
+export {
+  validateScreenFlowPaint,
+  validateScreenFlowSpec,
+} from "@pier/ui/canvas-workflow/screen-flow.ts";
 
 function planeVisualScale(
   plane: HTMLElement,
@@ -111,22 +71,37 @@ function boxFromRect(
   scale: number
 ): ScreenFlowBox {
   return {
-    h: rect.height / scale,
+    h: Math.round(rect.height / scale),
     id,
-    w: rect.width / scale,
-    x: (rect.left - planeRect.left) / scale + plane.scrollLeft,
-    y: (rect.top - planeRect.top) / scale + plane.scrollTop,
+    w: Math.round(rect.width / scale),
+    x: Math.round((rect.left - planeRect.left) / scale + plane.scrollLeft),
+    y: Math.round((rect.top - planeRect.top) / scale + plane.scrollTop),
   };
 }
 
 function readBoxes(plane: HTMLElement): {
   boxes: ScreenFlowBox[];
   captions: Map<string, ScreenFlowBox>;
+  layers: ScreenFlowBox[];
 } {
   const planeRect = plane.getBoundingClientRect();
   const scale = planeVisualScale(plane, planeRect);
   const boxes: ScreenFlowBox[] = [];
   const captions = new Map<string, ScreenFlowBox>();
+  const layers: ScreenFlowBox[] = [];
+  for (const child of plane.children) {
+    if (child instanceof HTMLElement && child.dataset.slot === "canvas-layer") {
+      layers.push(
+        boxFromRect(
+          "layer",
+          child.getBoundingClientRect(),
+          plane,
+          planeRect,
+          scale
+        )
+      );
+    }
+  }
   for (const el of plane.querySelectorAll("[data-artboard-id]")) {
     if (!(el instanceof HTMLElement)) {
       continue;
@@ -155,7 +130,7 @@ function readBoxes(plane: HTMLElement): {
       );
     }
   }
-  return { boxes, captions };
+  return { boxes, captions, layers };
 }
 
 function mountedArtboardIds(plane: HTMLElement): Set<string> {
@@ -206,6 +181,7 @@ export function ScreenFlow({
   const [captions, setCaptions] = useState<Map<string, ScreenFlowBox>>(
     () => new Map()
   );
+  const [layers, setLayers] = useState<ScreenFlowBox[]>([]);
   const [planeSize, setPlaneSize] = useState({ height: 0, width: 0 });
   const [directChild, setDirectChild] = useState(true);
   const [measured, setMeasured] = useState(false);
@@ -224,6 +200,7 @@ export function ScreenFlow({
     const next = readBoxes(plane);
     setBoxes(next.boxes);
     setCaptions(next.captions);
+    setLayers(next.layers);
   }, []);
 
   const referenced = useMemo(
@@ -290,12 +267,17 @@ export function ScreenFlow({
           width: worldWidth,
         })
       : null;
+  const parkedEdges = compiled
+    ? parkScreenFlowLabelAts(compiled.edges, [...nodes, ...captionObstacles])
+    : [];
   const geometry = compiled
     ? [
-        ...rewriteScreenFlowFixes(
-          compiled.diagnostics.filter((item) => item.severity === "error")
-        ),
+        ...screenFlowCrossingErrors(compiled.diagnostics),
         ...screenFlowPlacementDiagnostics(allFrames),
+        ...screenFlowLabelParkDiagnostics(parkedEdges, [
+          ...nodes,
+          ...captionObstacles,
+        ]),
       ]
     : [];
   const blocking = [
@@ -318,7 +300,7 @@ export function ScreenFlow({
   const layout =
     compiled && geometry.length === 0
       ? paintLayout({
-          edges: compiled.edges,
+          edges: parkedEdges,
           height: Math.max(planeSize.height, 1),
           nodes: [...nodes, ...captionObstacles],
           title: spec.title,
@@ -398,7 +380,7 @@ export function ScreenFlow({
   if (!nested) {
     return (
       <div className={className} data-screen-flow="invalid" ref={overlayRef}>
-        <EmptyCard diagnostics={blocking} />
+        <ScreenFlowEmptyCard diagnostics={blocking} />
       </div>
     );
   }
@@ -406,8 +388,11 @@ export function ScreenFlow({
   return (
     <div className={overlayClass} data-slot="screen-flow" ref={overlayRef}>
       {invalid ? (
-        <div className="pointer-events-auto absolute top-4 left-4 max-w-md">
-          <EmptyCard diagnostics={blocking} />
+        <div className="pointer-events-auto absolute top-4 left-4 z-10 max-w-sm">
+          <ScreenFlowEmptyCard
+            className="flex-none items-start rounded-xl border border-border bg-background p-4 text-left shadow-sm"
+            diagnostics={blocking}
+          />
         </div>
       ) : null}
       {layout && !invalid ? (
@@ -449,17 +434,29 @@ export function ScreenFlow({
           </WorkflowOverlaySvg>
         </>
       ) : null}
-      {layout && !invalid && startCaption ? (
+      {layout && !invalid && startCaption && startId ? (
         <div
           data-slot="screen-flow-start"
           style={{
-            left: startCaption.x,
-            top: Math.max(0, startCaption.y - 28),
+            ...screenFlowStartChipPosition({
+              caption: startCaption,
+              frames: boxes,
+              layers,
+              startId,
+              title: spec.title,
+            }),
             zIndex: 2,
           }}
         >
           {spec.title}
         </div>
+      ) : null}
+      {layout && !invalid ? (
+        <ScreenFlowLegend
+          left={Math.min(...boxes.map((box) => box.x), 40)}
+          roles={screenFlowUsedRoles(layout.edges)}
+          top={Math.max(...boxes.map((box) => box.y + box.h), 0) + 24}
+        />
       ) : null}
     </div>
   );

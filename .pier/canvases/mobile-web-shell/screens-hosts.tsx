@@ -6,10 +6,10 @@ import {
   DeviceGlyph,
   EmptyState,
   HitButton,
-  IconButton,
   InlineNote,
   NavBar,
   PhoneShell,
+  TOUCH_PRESS,
 } from "./chrome.tsx";
 import { Icon } from "./icons.tsx";
 import { type DemoHost, PAIRED_HOST } from "./model.ts";
@@ -360,7 +360,18 @@ export function HostsScreen(props: {
           title="主机"
           trailing={
             props.onAdd === undefined ? undefined : (
-              <IconButton icon="scan" label="添加主机" onClick={props.onAdd} />
+              <button
+                aria-label="添加主机"
+                className={cx(
+                  "flex min-h-11 items-center gap-1 rounded-xl px-2.5 font-medium text-[13px] leading-5",
+                  TOUCH_PRESS
+                )}
+                onClick={props.onAdd}
+                type="button"
+              >
+                <Icon className="size-5" name="scan" />
+                添加
+              </button>
             )
           }
         />
@@ -440,12 +451,12 @@ function HostRow(props: {
   const waitingChip =
     props.waiting > 0 ? (
       props.onEnterWaiting === undefined ? (
-        <span className="max-w-[7.5rem] shrink-0 px-2 text-right text-[12px] text-status-warning-fg leading-4">
+        <span className="flex min-h-11 max-w-[8.5rem] shrink-0 items-center self-center rounded-xl bg-status-warning-bg px-2.5 text-right text-[12px] text-status-warning-fg leading-4">
           {props.waiting} 个需要你处理
         </span>
       ) : (
         <button
-          className="flex min-h-11 max-w-[7.5rem] shrink-0 items-center px-2 text-right text-[12px] text-status-warning-fg leading-4 transition-colors duration-75 active:bg-interactive-active"
+          className="flex min-h-11 max-w-[8.5rem] shrink-0 items-center self-center rounded-xl bg-status-warning-bg px-2.5 text-right text-[12px] text-status-warning-fg leading-4 transition-colors duration-75 active:bg-interactive-active"
           onClick={props.onEnterWaiting}
           type="button"
         >
@@ -455,7 +466,7 @@ function HostRow(props: {
     ) : null;
   return (
     <div>
-      <div className="flex min-h-[88px] items-stretch gap-0.5 px-1">
+      <div className="flex min-h-[88px] items-center gap-2 px-1">
         <button
           className="flex min-h-[88px] min-w-0 flex-1 items-center gap-3.5 py-3 text-left transition-colors duration-75 active:bg-interactive-active"
           onClick={props.onTap}

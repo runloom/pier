@@ -91,7 +91,7 @@ describe("bundled Pier Canvas templates", () => {
     const source = templateSource("design-mockup.canvas.tsx");
     expect(source).toContain("WorldStage");
     expect(source).toContain("ScreenFlow");
-    expect(source).toContain("validateScreenFlowSpec");
+    expect(source).toContain("validateScreenFlowPaint");
     expect(source).toContain('role: "error"');
     expect(source).toContain('role: "return"');
     expect(source).toContain("data-pier-comment-id");

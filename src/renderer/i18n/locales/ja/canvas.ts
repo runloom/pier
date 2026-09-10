@@ -45,5 +45,15 @@ export const canvas = {
   screenFlow: {
     invalidTitle: "この画面経路は描けません",
     invalidHint: "{{message}} 次：{{fix}}",
+    tight: "この2つの画面が近すぎます。間隔を広げてください。",
+    overlap: "画面が重なっています。どちらかをずらしてください。",
+    missing: "経路上の画面がボードにありません。",
+    cross: "線が別の画面を横切っています。どちらかをずらしてください。",
+    labelPark: "操作名が重なっています。どちらかの画面をずらしてください。",
+    legend: "凡例",
+    legendMain: "本筋",
+    legendBranch: "分岐",
+    legendReturn: "戻り",
+    legendError: "失敗",
   },
 } as const;

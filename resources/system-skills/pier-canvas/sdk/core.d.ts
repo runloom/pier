@@ -312,6 +312,14 @@ export interface ScreenFlowSpec {
   title: string;
 }
 
+export interface ScreenFlowBox {
+  h: number;
+  id: string;
+  w: number;
+  x: number;
+  y: number;
+}
+
 export interface ScreenFlowProps {
   className?: string;
   spec: ScreenFlowSpec;
@@ -326,3 +334,12 @@ export const ScreenFlow: (props: ScreenFlowProps) => ReactNode;
 export const validateScreenFlowSpec: (
   spec: ScreenFlowSpec
 ) => WorkflowValidateReceipt;
+/**
+ * Author-time paint gate: structure + gutters + routing.
+ * `frames` are artboard-frame boxes (Layer.x, Layer.y + caption stack).
+ * If `status` is 1, apply only the first `supportedFixes` entry and re-run.
+ */
+export const validateScreenFlowPaint: (input: {
+  frames: readonly ScreenFlowBox[];
+  spec: ScreenFlowSpec;
+}) => WorkflowValidateReceipt;

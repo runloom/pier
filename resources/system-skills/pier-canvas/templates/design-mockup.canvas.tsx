@@ -14,7 +14,7 @@ import {
   Text,
   WorldStage,
   type ScreenFlowSpec,
-  validateScreenFlowSpec,
+  validateScreenFlowPaint,
 } from "pier/canvas";
 import type { ReactNode } from "react";
 
@@ -22,8 +22,9 @@ import type { ReactNode } from "react";
  * recipe=design gold: one user path across product frames on WorldStage.
  * Connectors come from ScreenFlow (same engine as recipe=workflow).
  * Keep a stable `data-pier-comment-id` on each frame. Do not fake pin chrome.
- * Do not draw SVG noodles. Call validateScreenFlowSpec; apply the first
- * supportedFix. Rewrite every user-visible string into the user's language.
+ * Do not draw SVG noodles. Call validateScreenFlowPaint with frame boxes;
+ * apply the first supportedFix. Rewrite every user-visible string into the
+ * user's language.
  */
 export const canvas = {
   description: "Upload-an-asset path on a world stage.",
@@ -62,7 +63,53 @@ const spec: ScreenFlowSpec = {
   title: "Upload an asset",
 };
 
-validateScreenFlowSpec(spec);
+const CAPTION_STACK = 40;
+const FRAME_W = 393;
+const FRAME_H = 560;
+const library = {
+  h: FRAME_H,
+  id: "library",
+  w: FRAME_W,
+  x: 40,
+  y: 40 + CAPTION_STACK,
+};
+const detail = {
+  h: FRAME_H,
+  id: "detail",
+  w: FRAME_W,
+  x: 641,
+  y: 40 + CAPTION_STACK,
+};
+const confirm = {
+  h: FRAME_H,
+  id: "confirm",
+  w: FRAME_W,
+  x: 1234,
+  y: 40 + CAPTION_STACK,
+};
+const success = {
+  h: FRAME_H,
+  id: "success",
+  w: FRAME_W,
+  x: 1827,
+  y: 40 + CAPTION_STACK,
+};
+const blocked = {
+  h: FRAME_H,
+  id: "blocked",
+  w: FRAME_W,
+  x: 1234,
+  y: 820 + CAPTION_STACK,
+};
+const frames = [library, detail, confirm, success, blocked];
+const paint = validateScreenFlowPaint({ frames, spec });
+if (paint.status === 1) {
+  throw new Error(
+    paint.diagnostics[0]?.supportedFixes[0] ??
+      paint.diagnostics[0]?.message ??
+      "ScreenFlow cannot be drawn"
+  );
+}
 
 function PhoneChrome(props: {
   badge: string;
@@ -199,7 +246,7 @@ function CaptionNote() {
 export default function DesignMockupCanvas() {
   return (
     <WorldStage padding={40}>
-      <Layer x={40} y={40}>
+      <Layer x={library.x} y={library.y - CAPTION_STACK}>
         <Artboard
           description="Browse the library, then open one asset."
           height={560}
@@ -211,7 +258,7 @@ export default function DesignMockupCanvas() {
           <LibraryPhone />
         </Artboard>
       </Layer>
-      <Layer x={641} y={40}>
+      <Layer x={detail.x} y={detail.y - CAPTION_STACK}>
         <Artboard
           description="Same asset, ready to upload."
           height={560}
@@ -223,7 +270,7 @@ export default function DesignMockupCanvas() {
           <DetailPhone />
         </Artboard>
       </Layer>
-      <Layer x={1234} y={40}>
+      <Layer x={confirm.x} y={confirm.y - CAPTION_STACK}>
         <Artboard
           description="Confirm destination and send."
           height={560}
@@ -235,7 +282,7 @@ export default function DesignMockupCanvas() {
           <ConfirmPhone />
         </Artboard>
       </Layer>
-      <Layer x={1827} y={40}>
+      <Layer x={success.x} y={success.y - CAPTION_STACK}>
         <Artboard
           description="Upload finished."
           height={560}
@@ -247,7 +294,7 @@ export default function DesignMockupCanvas() {
           <SuccessPhone />
         </Artboard>
       </Layer>
-      <Layer x={1234} y={820}>
+      <Layer x={blocked.x} y={blocked.y - CAPTION_STACK}>
         <Artboard
           description="Needs you: file type rejected."
           height={560}

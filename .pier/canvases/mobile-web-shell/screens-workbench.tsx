@@ -15,7 +15,7 @@ import { Icon } from "./icons.tsx";
 import type { DemoHost, DemoSession } from "./model.ts";
 import { changesSummary, repoScope } from "./repo.ts";
 import { SessionGlyph } from "./session-glyph.tsx";
-import { TerminalPreview } from "./terminal-preview.tsx";
+import { SessionState, TerminalPreview } from "./terminal-preview.tsx";
 
 const CONNECT_MS = 800;
 
@@ -153,7 +153,7 @@ export function HostScreen(props: {
               {onlyWaiting !== undefined && waiting === 1 ? (
                 <button
                   className={cx(
-                    "flex min-h-11 max-w-[11rem] shrink-0 items-center justify-end truncate text-[12px] text-status-warning-fg leading-5",
+                    "flex min-h-11 max-w-[11rem] shrink-0 items-center justify-end truncate rounded-xl bg-status-warning-bg px-2.5 text-[12px] text-status-warning-fg leading-5",
                     TOUCH_PRESS
                   )}
                   onClick={() => props.onOpenSession?.(onlyWaiting.id)}
@@ -193,11 +193,9 @@ export function HostScreen(props: {
                         {session.agent ?? "终端"}
                       </span>
                     </span>
-                    {session.status === "waiting" ? (
-                      <span className="mt-0.5 block text-[11px] text-status-warning-fg leading-4">
-                        {SESSION_STATE_LABEL.waiting}
-                      </span>
-                    ) : null}
+                    <span className="mt-1 block">
+                      <SessionState session={session} />
+                    </span>
                   </span>
                 </button>
               ))}

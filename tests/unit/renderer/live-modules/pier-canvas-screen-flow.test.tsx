@@ -10,6 +10,7 @@ import {
   WorldStage,
 } from "@/lib/live-modules/pier-canvas-artboard.tsx";
 import { ScreenFlow } from "@/lib/live-modules/pier-canvas-screen-flow.tsx";
+import { ScreenFlowEmptyCard } from "@/lib/live-modules/pier-canvas-screen-flow-chrome.tsx";
 
 function rect(
   left: number,
@@ -408,6 +409,9 @@ describe("ScreenFlow", () => {
     expect(Math.max(...xs)).toBeGreaterThan(200);
     const chip = document.querySelector("[data-slot='screen-flow-start']");
     expect(chip).toHaveStyle({ top: "0px" });
+    expect(
+      document.querySelector("[data-slot='screen-flow-legend']")
+    ).toBeTruthy();
   });
 
   it("keeps strokes behind frames and pointer-events off the overlay svg", () => {
@@ -502,5 +506,39 @@ describe("ScreenFlow", () => {
     );
     expect(document.querySelector("[data-screen-flow='invalid']")).toBeNull();
     expect(document.querySelector("[data-slot='workflow-edge']")).toBeTruthy();
+  });
+
+  it("maps through-box Empty to the product sentence, not other quality codes", () => {
+    const { unmount } = render(
+      <ScreenFlowEmptyCard
+        diagnostics={[
+          {
+            code: "workflow/edge-crosses-node",
+            message: "Edge e-x crosses a node.",
+            supportedFixes: ["Move the Layer of mid."],
+          },
+        ]}
+      />
+    );
+    expect(
+      screen.getByText("A connector crosses another screen. Move one of them.")
+    ).toBeTruthy();
+    unmount();
+    render(
+      <ScreenFlowEmptyCard
+        diagnostics={[
+          {
+            code: "workflow/last-segment-short",
+            message: "Edge e-x last segment is too short for the arrow.",
+            supportedFixes: ["Move an endpoint."],
+          },
+        ]}
+      />
+    );
+    expect(
+      screen.queryByText(
+        "A connector crosses another screen. Move one of them."
+      )
+    ).toBeNull();
   });
 });

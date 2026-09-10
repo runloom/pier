@@ -246,8 +246,14 @@ Multi-screen product paths use `ScreenFlow` on `WorldStage`, not
 2. Write a `ScreenFlowSpec`: `title`, `edges` (`from` / `to` are artboard
    ids), optional `mainPath` and `start`. Edge `role` is
    `"main" | "branch" | "return" | "error"`.
-3. Call `validateScreenFlowSpec(spec)`. If `status` is `1`, apply **only
-   the first** `supportedFixes` entry, then validate again. Mount
+3. Keep one table of **frame** boxes `{ id, x, y, w, h }` for
+   `[data-slot="artboard-frame"]` (Layer.x, Layer.y plus the caption
+   stack ≈ 40px). Place every path `Layer` from that table.
+4. Call `validateScreenFlowPaint({ spec, frames })`. If `status` is `1`,
+   apply **only the first** `supportedFixes` entry, update the table,
+   and call again. Do not mount while it fails — throw the first fix so
+   the live module surfaces it. Repeat until `status` is `0` or the same
+   diagnostic repeats (then stop and report). Mount
    `<ScreenFlow spec={spec} />` as a **direct** child of `WorldStage`.
 
 The host measures `[data-slot="artboard-frame"]` and compiles connectors
@@ -256,13 +262,20 @@ the frame are obstacles — a downward error attaches at a side port so
 it cannot run through the title. A same-column return takes the
 opposite side. Idle edges are solid; the happy path is heavier;
 error/return use role color and a thinner stroke — do not draw dashes.
-Labels sit beside the stroke. Hover lifts the related group and does
-not fade the rest. Frames on the path must not overlap and need
-≥120px gutters; failures paint Empty with a Layer move, not a partial
-graph. Do not set `x` / `y` / `via` / `labelAt` / `fromSide` /
-`edge.color`. Do not put device variants on `edges`. For a path,
-set `Artboard` `height` to the content (not the full phone 852)
-so the journey fits at glance.
+Labels sit beside the stroke; colliding pills park on the other side of
+the shaft, then along it, and keep their wording. Hover lifts the related group and does not fade the rest.
+Frames on the path must not overlap and need ≥120px gutters (prefer
+140). True overlap or a connector through another frame paints Empty
+with a Layer move, not a partial graph. Fit-zoom sub-pixel gutters and
+a note in the start-chip band are healed by the host. `spec.title` is a
+chip above the start caption — keep that band empty, or the host slides
+the chip beside the caption. The host draws a role key (main / branch /
+return / failure) for roles actually used. If the same paint diagnostic
+repeats for two rounds, stop and report it; do not invent a third
+layout. Do not set `x` / `y` / `via` / `labelAt` / `fromSide` /
+`edge.color`. Do not put device variants on `edges`. For a path, set
+`Artboard` `height` to the content (not the full phone 852) so the
+journey fits at glance.
 
 ## Data and state
 

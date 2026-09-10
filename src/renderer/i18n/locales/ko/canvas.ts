@@ -42,5 +42,15 @@ export const canvas = {
   screenFlow: {
     invalidTitle: "이 화면 경로는 그릴 수 없습니다",
     invalidHint: "{{message}} 다음: {{fix}}",
+    tight: "두 화면이 너무 가깝습니다. 간격을 더 벌리세요.",
+    overlap: "화면이 겹칩니다. 하나를 옮기세요.",
+    missing: "경로에 있는 화면이 보드에 없습니다.",
+    cross: "선이 다른 화면을 지나갑니다. 하나를 옮기세요.",
+    labelPark: "동작 이름이 겹칩니다. 화면 하나를 옮기세요.",
+    legend: "범례",
+    legendMain: "주 경로",
+    legendBranch: "갈래",
+    legendReturn: "되돌리기",
+    legendError: "실패",
   },
 } as const;

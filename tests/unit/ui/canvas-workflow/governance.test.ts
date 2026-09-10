@@ -79,6 +79,10 @@ describe("canvas workflow / screen-flow gold standard", () => {
     expect(spec).toContain("1.4");
     expect(spec).toContain(".pier-workflow-edge-flow");
     expect(spec).toContain("不得回潮");
+    expect(spec).toContain("Empty 分界");
+    expect(spec).toContain("失败双面");
+    expect(spec).toContain("validateScreenFlowPaint");
+    expect(spec).toContain("连续两轮");
   });
 
   it("keeps author IR free of pixels, vias, and edge colors", () => {
@@ -106,6 +110,7 @@ describe("canvas workflow / screen-flow gold standard", () => {
     expect(PIER_CANVAS_EXPORT_NAMES).toContain("ScreenFlow");
     expect(PIER_CANVAS_EXPORT_NAMES).toContain("validateWorkflowSpec");
     expect(PIER_CANVAS_EXPORT_NAMES).toContain("validateScreenFlowSpec");
+    expect(PIER_CANVAS_EXPORT_NAMES).toContain("validateScreenFlowPaint");
   });
 
   it("locks the shared pen and rejects the cancelled casing / dim paths", () => {
@@ -146,9 +151,14 @@ describe("canvas workflow / screen-flow gold standard", () => {
     );
     expect(workflow).toContain("validateWorkflowSpec");
     expect(workflow).toContain("WorkflowDiagram");
-    expect(design).toContain("validateScreenFlowSpec");
+    expect(design).toContain("validateScreenFlowPaint");
     expect(design).toContain("ScreenFlow");
+    expect(design).toContain("CAPTION_STACK");
+    expect(design).toContain("y: 40 + CAPTION_STACK");
+    expect(design).toContain("y={library.y - CAPTION_STACK}");
     expect(design).not.toContain("<svg");
+    const sdk = read("resources/system-skills/pier-canvas/sdk/core.d.ts");
+    expect(sdk).not.toContain("layers?: readonly ScreenFlowBox[]");
   });
 
   it("does not revive FlowGraph in the product canvas surface", () => {

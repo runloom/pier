@@ -407,7 +407,7 @@ export function DeviceGlyph(props: {
   return (
     <span className="relative flex size-16 shrink-0 items-center justify-center rounded-3xl bg-secondary text-foreground/85">
       <Icon className="size-8" name={DEVICE_ICON[props.device]} />
-      <span className="absolute right-1 bottom-1 flex size-3.5 items-center justify-center rounded-full bg-card">
+      <span className="absolute right-0.5 bottom-0.5 flex size-4 items-center justify-center rounded-full bg-background">
         <StatusDot pulse={props.pulse} tone={tone} />
       </span>
     </span>
@@ -440,8 +440,10 @@ export function StatusDot(props: {
         props.tone === "online" && "bg-success",
         props.tone === "busy" && "bg-warning",
         props.tone === "working" && "bg-info",
-        props.tone === "offline" && "bg-muted-foreground",
-        props.tone === "unknown" && "bg-muted-foreground/60",
+        props.tone === "offline" &&
+          "size-2.5 bg-muted-foreground ring-2 ring-background",
+        props.tone === "unknown" &&
+          "size-2.5 bg-muted-foreground ring-2 ring-background",
         props.pulse === true && "animate-pulse"
       )}
     />
@@ -490,17 +492,17 @@ export function InlineNote(props: {
       className={cx(
         "flex items-start gap-3 rounded-xl border px-3.5 py-3 text-[13px] leading-[18px]",
         props.tone === "warn" &&
-          "border-status-warning-border bg-status-warning-bg text-status-warning-fg",
+          "border-status-warning-border bg-status-warning-bg",
         props.tone === "danger" &&
-          "border-status-danger-border bg-status-danger-bg text-status-danger-fg",
+          "border-status-danger-border bg-status-danger-bg",
         props.tone === "info" &&
-          "border-status-info-border bg-status-info-bg text-status-info-fg",
+          "border-status-info-border bg-status-info-bg",
         props.tone === "ok" &&
-          "border-status-success-border bg-status-success-bg text-status-success-fg"
+          "border-status-success-border bg-status-success-bg"
       )}
       role="status"
     >
-      <span className="min-w-0 flex-1">{props.children}</span>
+      <span className="min-w-0 flex-1 text-foreground">{props.children}</span>
       {props.action}
     </div>
   );

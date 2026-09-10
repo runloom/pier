@@ -192,6 +192,7 @@ import {
 import { DocsShell, Frame, Row, Stack, Text } from "./pier-canvas-layout.ts";
 import {
   ScreenFlow,
+  validateScreenFlowPaint,
   validateScreenFlowSpec,
 } from "./pier-canvas-screen-flow.tsx";
 import { pierCanvasVisualizationExports } from "./pier-canvas-visualization-exports.ts";
@@ -369,6 +370,7 @@ export const pierCanvasExports = {
   useCanvasFile,
   useCostOverview,
   useSystemResources,
+  validateScreenFlowPaint,
   validateScreenFlowSpec,
   validateWorkflowSpec,
   WorkflowDiagram,

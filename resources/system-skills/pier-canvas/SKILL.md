@@ -180,7 +180,9 @@ Use when `mode=freeform`, `recipe=` is set, or you inferred a freeform shell.
 - Approval / recover: `WorkflowDiagram`, not Mermaid. Details:
   [authoring.md](references/authoring.md) **Workflow diagrams**.
 - Multi-screen user path: `recipe=design` + `ScreenFlow` on `WorldStage`.
-  Details: [authoring.md](references/authoring.md) **Screen flows**. Do not
+  Details: [authoring.md](references/authoring.md) **Screen flows**. Call
+  `validateScreenFlowPaint({ spec, frames })` after placing Layers; if it
+  fails, apply only the first `supportedFixes` entry and re-run. Do not
   use `WorkflowDiagram` for artboards.
 - Every user action needs a recognizable UI change or error.
 

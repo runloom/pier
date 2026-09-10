@@ -18,7 +18,8 @@
     "hand-drawn SVG noodles or Connector primitives",
     "using WorkflowDiagram to draw a screen path",
     "treating three device widths of one surface as the path",
-    "edges between width variants of the same step"
+    "edges between width variants of the same step",
+    "parking a note or kit in the 32px band above the start Artboard caption"
   ],
-  "agentPrompt": "WorldStage root. Artboard id + preset + Layer x/y. ScreenFlow spec for the user path; validateScreenFlowSpec and apply the first supportedFix. Device variants do not get edges. UI font. Do not wrap in Frame. Do not fake comment pins. Do not set via, labelAt, fromSide, or edge.color."
+  "agentPrompt": "WorldStage root. Artboard id + preset + Layer x/y from one frame-box table. ScreenFlow spec for the user path; validateScreenFlowPaint({ spec, frames }) and apply only the first supportedFix. If the same diagnostic repeats two rounds, stop and report. Gutters ≥120px, prefer 140. Leave the band above the start caption empty (host paints spec.title there and a role key). Device variants do not get edges. UI font. Do not wrap in Frame. Do not fake comment pins. Do not set via, labelAt, fromSide, or edge.color."
 }

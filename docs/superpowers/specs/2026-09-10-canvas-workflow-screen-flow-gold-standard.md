@@ -1,41 +1,48 @@
 # Canvas 流程图与界面流程金标准
 
-日期：2026-09-10  
+日期：2026-09-10；2026-09-09 按 Archify 作者/阅读合同修订界面流程终态  
 状态：现行权威（`WorkflowDiagram` / `ScreenFlow` 作者面与绘制）  
 范围：交互流程图与设计稿鸟瞰连线；共享折线引擎、校验回执、hover、导出边界、官方模板。  
-不包含：热区、点击走查、混尺寸自动摆板、作者 `via` / `fromSide`；架构 / 时序（仍 `Mermaid`）；已移除的 `FlowGraph`。
+不包含：热区、点击走查、混尺寸自动摆板、作者 `via` / `fromSide`；架构 / 时序（仍 `Mermaid`）；已移除的 `FlowGraph`。不包含 Archify 式 `col` 求解器、故事播放、Share Card。
 
-设计背景：[`2026-09-09-canvas-workflow-diagram-design.md`](2026-09-09-canvas-workflow-diagram-design.md)、[`2026-09-09-canvas-design-screen-flow-design.md`](2026-09-09-canvas-design-screen-flow-design.md)。
+设计背景：[`2026-09-09-canvas-workflow-diagram-design.md`](2026-09-09-canvas-workflow-diagram-design.md)、[`2026-09-09-canvas-design-screen-flow-design.md`](2026-09-09-canvas-design-screen-flow-design.md)。阅读/作者合同对照 Archify（说话 → 校验过的关系图），产品界面旅程仍由作者摆帧。
+
+---
 
 ## 一句话终态
 
-作者只写意图 IR。宿主用同一支笔编译正交折线；过不了几何门就画 `Empty` + 第一条可执行修法，不画残缺图。线宽、虚线、悬停不由作者挑选。
+作者只写意图 IR 和帧表。宿主用同一支笔编译正交折线，并拥有端口、标签停车、起点旗、图例。真重叠或穿盒才画 `Empty`；铬自己让开。线宽、虚线、悬停、边色不由作者挑选。
 
 ## 终态表
 
 | 属性 | 终态 |
 |---|---|
-| 作者面 | `WorkflowSpec` / `ScreenFlowSpec`。禁止 `x` / `y` / `via` / `labelAt` / `fromSide` / `edge.color` |
+| 作者面 | `WorkflowSpec` / `ScreenFlowSpec`。禁止 `via` / `labelAt` / `fromSide` / `edge.color`。`WorkflowDiagram` 节点写 `col`/泳道；`ScreenFlow` 帧表写 `{ id, x, y, w, h }`，与 `Layer` 同一份 |
 | 编译 | `compileWorkflowLayout` / `compileWorkflowEdges` 不进 `pier/canvas` |
-| 失败 | `status === 1` 或测量后几何 error → `Empty`，文案 = 第一条诊断 + 第一条 `supportedFixes` |
+| 自愈 | 亚像素列距、起点旗抢带（不压邻帧）、标签沿折线让开：宿主让开，仍绘制。停车后仍互叠则 Empty |
+| 失败 | 结构错、缺帧、重叠、穿盒 → `status === 1` 或运行时 `Empty`。看图人看产品句；作者/AI 看第一条 `supportedFixes` |
 | 主线 | 1.8px 实线 |
 | 旁路 | 1.4px 实线（`branch` / `return` / `error`） |
 | 镖 | 10×7（半高 3.5）；尖贴端口 |
 | idle | 一律实线。虚线只出现在 exception 泳道框，或 hover 的 `pathLength=1` 短 token |
 | hover 流动 | `.pier-workflow-edge-flow`，3.35px，1.2s；不把 idle 描边加粗 |
 | hover 组 | 只抬高相关卡 / 边 / 对端；其余保持全可见。空白处或离开整图即清除 |
+| 图例 | `ScreenFlow` 由宿主画实际用到的 role（主路 / 旁路 / 返回 / 失败），不靠作者散文 |
 | 配方 | 审批 / 恢复 = `recipe=workflow` + `WorkflowDiagram`；多屏路径 = `recipe=design` + `ScreenFlow` |
 
 ## 硬规则
 
-1. **意图 IR。** 节点进度是 `col` 0..8，不是像素。边只有 `from` / `to` / `label` / 可选 `role`。未写 `role` 视为 `main`。
+1. **意图 IR。** `WorkflowDiagram` 节点进度是 `col` 0..8，不是像素。边只有 `from` / `to` / `label` / 可选 `role`。未写 `role` 视为 `main`。`ScreenFlow` 不引入第二套 `col` 求解器。
 2. **编译器不是作者 API。** SDK 与 `PIER_CANVAS_*_EXPORT_NAMES` 只暴露组件与 `validate*`。
-3. **过不了就停画。** `WorkflowDiagram` 挂载时跑 `validateWorkflowSpec`（含几何）。`ScreenFlow` 先跑结构校验，量齐 `[data-slot="artboard-frame"]` 后再跑质量门与穿盒；未量齐不画边。`ScreenFlow` 必须是某个 `WorldStage` 的直接子节点。
+3. **过不了就停画；能让开就让开。** `WorkflowDiagram` 挂载时跑 `validateWorkflowSpec`（含几何）。`ScreenFlow` 先跑结构校验，量齐 `[data-slot="artboard-frame"]` 后再跑质量门与穿盒；未量齐不画边。作者在摆 Layer 时必须跑 `validateScreenFlowPaint({ spec, frames })`（与 Layer **同一份**帧表）；`status === 1` 时只执行第一条 `supportedFixes` 再跑。同一 `code + subject` 连续两轮不下降则停手，把回执交出来，禁止继续发明布局。未过门不得交付。`ScreenFlow` 必须是某个 `WorldStage` 的直接子节点。
 4. **同一支笔。** 界面流程调用 `packages/ui/src/canvas-workflow/` 的路由 / 色 / 标签 / 质量门 / `WorkflowEdges`。禁止第二套贝塞尔面条、套管加粗、或单独的 `.pier-screen-flow-edge-flow` 动画。
 5. **修法可执行。** `supportedFixes` 是改 `col`、换泳道、补边、挪 Layer。禁止「删语义标签以过关」。界面流程把内部 `cap_*` 改写成真实画板 id。
-6. **不压暗。** 产品只有抬高热组。禁止把其余边降到 35% 作为默认。
+6. **不压暗。** 产品只有抬高热组。禁止把其余边降到 35% 作为默认。不抄「无关拓扑褪到几乎看不见」。
 7. **展示面。** 卡片、边、画板不进 Tab 序。禁止 `ring-primary`、禁止 `filter: blur()`。不得抢走 `WorldStage` 平移缩放。
-8. **官方模板必须先校验。** `templates/workflow.canvas.tsx` 与 `templates/design-mockup.canvas.tsx` 调用对应 `validate*`；设计稿模板禁止手写 `<svg` 连线。
+8. **官方模板必须先校验。** `templates/workflow.canvas.tsx` 走 `validateWorkflowSpec`；`templates/design-mockup.canvas.tsx` 走 `validateScreenFlowPaint` 且过不了 throw 第一条修法。设计稿模板禁止手写 `<svg` 连线。
+9. **Empty 分界。** Empty **只**用于：帧重叠、边穿过无关帧或 caption、缺 Artboard id、结构校验失败、标签停车后仍互叠。短尾段 / 标签离线 / 镖进盒等质量码**不** Empty。下列由宿主自愈、**不算失败**：适应窗口后四舍五入仍 ≥120 的列距；起点旗与其它 Layer 抢带（改到 caption 右侧，且不压邻帧；邻帧也挡则留在上方）；边标签互撞（沿折线法向停到段外侧，保留语义）。
+10. **失败双面。** 看图人：locale 产品句（例如「连线画不出，把这两屏再留开一格」）+ 小卡片，禁止大号空态铺满世界左上。作者/AI：同一张卡上保留第一条 `supportedFixes`。禁止业务代码内联英文空态。
+11. **色义归宿主。** 主路 `--status-info-fg`、旁路 `--muted-foreground`、返回 `--status-warning-fg`、失败 `--status-danger-fg`。图例只列出本图用到的 role。作者禁止 `edge.color`。
 
 ## 必须画对的闭集
 
@@ -46,10 +53,10 @@
 | `agentToolCallWorkflowSpec` | Archify gallery 金样：四泳道、阶段、组、闸门、回写 |
 | `reviewWorkflowSpec` | 主路径 + 恢复带 |
 | `sameColumnReturnSpec` | 同列失败下落 + C 形重试 |
-| `designMockupScreenFlowSpec` | Library → Done，失败掉到下一行再返回 |
+| `designMockupScreenFlowSpec` | Library → Done，失败掉到下一行再返回；`validateScreenFlowPaint` 为 0 |
 | 大画板帧（phone 393 宽 / desktop 1280 宽） | 与流程图同一路由器，侧向 error / return 不穿 caption |
 
-不保证任意拓扑都好看。过不了就 `Empty`，不调用通用自动布局。
+不保证任意拓扑都好看。真重叠或穿盒就 `Empty`，不调用通用自动布局。
 
 ## 禁止
 
@@ -59,12 +66,15 @@
 4. 复活 `FlowGraph` / `layoutFlowGraph` / `dag-viewer`。
 5. 默认 hover 压暗、点击钉住、关系目录、键盘选边、热区走查。
 6. 规格与代码两套线宽（已否决的「套管 + 5px 主线」不得回潮）。
+7. 为画布新增独立 `deliver` CLI，或把 Archify 的故事播放 / Share Card 搬进 `ScreenFlow`。
+8. 用 `col` 网格自动摊开真机画板。
 
 ## 不是缺陷
 
 - 智能体绕过 `/pier-canvas`、在 `.canvas.tsx` 里手写装饰 SVG：宿主只拦两个连线原语，不在整文件禁 SVG。
-- `recipe=design` 的 Layer 坐标仍由作者摆；重叠或间距不足 120px 时停画，不自动重排。
+- `recipe=design` 的 Layer 坐标仍由作者摆；不自动重排混尺寸画板。
 - 文案语义对不对、路径讲的是不是用户要的故事：技能与模板负责教，引擎不审。
+- 亚像素列距四舍五入后仍 ≥120、起点旗避让、标签停车：这是自愈成功，不是作者漏做。
 
 ## 检查点
 

@@ -1,6 +1,32 @@
-import { Artboard, Layer, Text, WorldStage } from "pier/canvas";
+import {
+  Artboard,
+  Layer,
+  ScreenFlow,
+  Text,
+  WorldStage,
+  validateScreenFlowPaint,
+} from "pier/canvas";
 import { type ReactNode, useReducer, useState } from "react";
-import { CaptionCard, cx } from "./chrome.tsx";
+import { cx } from "./chrome.tsx";
+import {
+  appendixOrigin,
+  APPENDIX_H,
+  APPENDIX_W,
+  CAPTION_H,
+  FRAME_W,
+  kitOrigin,
+  KIT_H,
+  KIT_W,
+  mobileWebShellFlowSpec,
+  mobileWebShellFrameBoxes,
+  NOTE_H,
+  NOTE_W,
+  NOTE_Y,
+  ORIGIN,
+  PATH_H,
+  PATH_RIGHT,
+  pathRow,
+} from "./flow.ts";
 import { MotionKitScreen, PressKitScreen, StateKitScreen } from "./kits.tsx";
 import {
   DEMO,
@@ -36,7 +62,7 @@ import { HostScreen } from "./screens-workbench.tsx";
  * 移动端 Web 壳视觉稿。信息架构仍以
  * docs/superpowers/specs/2026-08-26-mobile-companion-design.md §11 为准；
  * 本画板只定触控语言、密度、色、七面外观与页面过渡。
- * P0 是可点闭环原型，其余帧是每一面的关键状态。
+ * P0 是可点闭环；ScreenFlow 标出导航路径。附录态不连线。
  */
 export const canvas = {
   description:
@@ -45,22 +71,16 @@ export const canvas = {
   title: "移动端 Web 壳",
 };
 
-const FRAME_W = 393;
-const FRAME_H = 852;
-/** Artboard 标题 + 说明在帧上方占的高度。 */
-const CAPTION_H = 56;
-const GAP = 72;
-const ORIGIN = 40;
-const KIT_W = 340;
-const KIT_H = 680;
-const NOTE_W = 420;
-
-function col(index: number): number {
-  return ORIGIN + index * (FRAME_W + GAP);
-}
-
-function row(index: number): number {
-  return ORIGIN + index * (FRAME_H + CAPTION_H + GAP);
+const paint = validateScreenFlowPaint({
+  frames: mobileWebShellFrameBoxes,
+  spec: mobileWebShellFlowSpec,
+});
+if (paint.status === 1) {
+  throw new Error(
+    paint.diagnostics[0]?.supportedFixes[0] ??
+      paint.diagnostics[0]?.message ??
+      "ScreenFlow cannot be drawn"
+  );
 }
 
 const MINI: DemoHost = INITIAL_DEMO.hosts[0] ?? PAIRED_HOST;
@@ -178,26 +198,40 @@ function StaticInbox(props: { enablePush?: boolean; push?: PushState }): ReactNo
   );
 }
 
+type PathId = (typeof mobileWebShellFrameBoxes)[number]["id"];
+
+function pathBox(id: PathId): (typeof mobileWebShellFrameBoxes)[number] {
+  const box = mobileWebShellFrameBoxes.find((item) => item.id === id);
+  if (box === undefined) {
+    throw new Error(`missing path frame ${id}`);
+  }
+  return box;
+}
+
 function Phone(props: {
   children: ReactNode;
   commentId: string;
-  description: string;
+  description?: string;
+  height: number;
+  /** 路径和失败帧才写。附录帧不要 id，以免进连线障碍。 */
+  id?: string;
   label: string;
   /** 亮色主题帧：内容包一层 .light，令牌随之翻转。 */
   light?: boolean;
-  /** 窄屏帧：320×568 / 360×640（spec §10 自查窄宽度）。 */
-  narrow?: 320 | 360;
   title: string;
+  width?: number;
   x: number;
   y: number;
 }): ReactNode {
-  const w = props.narrow ?? FRAME_W;
-  const narrowH = props.narrow === 320 ? 568 : 640;
-  const board =
-    props.narrow !== undefined ? (
+  const w = props.width ?? FRAME_W;
+  return (
+    <Layer h={CAPTION_H + props.height} w={w} x={props.x} y={props.y}>
       <Artboard
-        description={props.description}
-        height={narrowH}
+        {...(props.description === undefined
+          ? {}
+          : { description: props.description })}
+        height={props.height}
+        {...(props.id === undefined ? {} : { id: props.id })}
         label={props.label}
         title={props.title}
         width={w}
@@ -209,149 +243,117 @@ function Phone(props: {
           {props.children}
         </div>
       </Artboard>
-    ) : (
-      <Artboard
-        description={props.description}
-        label={props.label}
-        preset="phone"
-        title={props.title}
-      >
-        <div
-          className={cx("h-full", props.light === true && "light")}
-          data-pier-comment-id={props.commentId}
-        >
-          {props.children}
-        </div>
-      </Artboard>
-    );
-  return (
-    <Layer w={w} x={props.x} y={props.y}>
-      {board}
     </Layer>
+  );
+}
+
+function PathPhone(
+  props: Omit<Parameters<typeof Phone>[0], "height" | "x" | "y"> & {
+    id: PathId;
+  }
+): ReactNode {
+  const box = pathBox(props.id);
+  return (
+    <Phone {...props} height={box.h} x={box.x} y={box.y - CAPTION_H} />
+  );
+}
+
+function AppendixPhone(
+  props: Omit<Parameters<typeof Phone>[0], "height" | "id" | "width" | "x" | "y"> & {
+    index: number;
+    width?: number;
+  }
+): ReactNode {
+  const origin = appendixOrigin(props.index);
+  return (
+    <Phone
+      {...props}
+      height={APPENDIX_H}
+      width={props.width ?? APPENDIX_W}
+      x={origin.x}
+      y={origin.y}
+    />
   );
 }
 
 function Note(): ReactNode {
   return (
-    <CaptionCard badge="视觉稿" title="怎么读这块板">
+    <div
+      className="flex h-full flex-col justify-center gap-1.5 rounded-md border border-border bg-muted/40 px-5 py-3"
+      data-slot="mobile-shell-note"
+    >
+      <div className="flex items-baseline gap-2">
+        <span className="rounded-md bg-secondary px-2 py-0.5 font-medium text-[11px] text-muted-foreground leading-4">
+          怎么读
+        </span>
+        <Text as="h3">怎么读这块板</Text>
+      </div>
       <Text tone="secondary">
-        P0 可点闭环：点「办公桌 Mac
-        mini」先连接再在线；点终端预览进会话，「按键」展开受限输入。
-        发送只确认投递，不自动修改终端或宣告完成；通知点开落回会话并标已读。
-        会话标题或底部「会话」打开切换面板（超过 5 个会话出现搜索）；「Aa
-        字号」调整阅读大小并记住。会话与收件箱从工作台进入时，返回写「这台电脑」，主机名留在工作台标题。
-        「添加主机」走扫码，粘贴配对内容是退路，完成后新电脑入列；离线机点按后可移除。
+        从左向右：选电脑 → 打开会话 → 查看变更 → 打开文件。下一行是配对、通知和文件；再下一行是失败恢复。会话正下方的空隙给折线，不是缺页。工作台「工作树变更」与会话里的「变更」是同一面，图上不另画一条线。从通知进会话时返回写「收件箱」。右侧是可点原型、规则卡和附录态，不连线。
       </Text>
-      <Text tone="secondary">
-        一条栈，没有全局底部导航：主机 → 这台电脑 → 会话 → 变更 /
-        文件；铃铛开的是这台电脑的收件箱。主机行右侧「需要你处理」是独立入口：不开推送也能分诊，只有 1 个等待时点它打开该会话，返回仍落到工作台。
-        工作台用两列当前屏幕缩略图定位会话，身份在预览下方；等待卡片带 11px 状态词，会话名保持中性色。变更按工作树单独列出，排在会话上方。文件与变更从会话头部文字动作进入；无新建、不同步桌面审查。
-      </Text>
-      <Text tone="secondary">
-        失败与边界各有帧：相机不可用 / 无法识别（H0b、H0c），读取中断（S1e），回应已失效（S1t），已发送回执（S1s），会话已结束（S1x），推送未开启与开启失败（N1b、N1c），主机状态未知（H1b）与空态（H1e），320px / 360px 窄屏（S1n、S1m）与亮色工作台 / 会话（H2l、S1l）自查帧在规则卡下方。信息架构真源是移动端方案
-        §11；本板只定触控（44px、自绘按下）、文字层级、语义令牌、七面外观与
-        220ms 推入 / 返回。K1–K3 是规则卡，不是产品页。
-      </Text>
-    </CaptionCard>
+    </div>
   );
 }
 
 export default function MobileWebShellCanvas(): ReactNode {
-  const kitY = row(5);
-  const kitX = ORIGIN + NOTE_W + GAP;
+  const kit0 = kitOrigin(0);
+  const kit1 = kitOrigin(1);
+  const kit2 = kitOrigin(2);
   return (
     <WorldStage background="var(--background)" padding={40}>
-      <Phone
-        commentId="mobile-web-prototype"
-        description="可点流程：配对入列、终端预览、受限按键、通知已读、文件与变更。"
-        label="P0"
-        title="可点原型"
-        x={col(0)}
-        y={row(1)}
-      >
-        <PrototypePhone />
-      </Phone>
-      <Phone
-        commentId="mobile-web-pair"
-        description="无令牌才出现。相机即页；角括号在玻璃上；44 停止键（识别中可取消）和粘贴退路。失败帧见 H0b/H0c。"
-        label="H0"
-        title="配对"
-        x={col(2)}
-        y={row(1)}
-      >
-        <PairScreen />
-      </Phone>
-      <Phone
+      <Layer h={NOTE_H} w={NOTE_W} x={ORIGIN} y={NOTE_Y}>
+        <Note />
+      </Layer>
+      <PathPhone
         commentId="mobile-web-hosts"
-        description="日常根面。设备行整行进入；状态点在图标上；离线点按给提示并可移除。添加入口只留顶栏扫码。"
+        id="hosts"
         label="H1"
-        title="主机"
-        x={col(1)}
-        y={row(1)}
+        title="选电脑"
       >
         <HostsScreen
-          hosts={STATIC_HOSTS}
+          hosts={INITIAL_DEMO.hosts}
           onAdd={() => undefined}
           onRemove={() => undefined}
           waitingByHost={waitingCountByHost(INITIAL_DEMO)}
         />
-      </Phone>
-      <Phone
+      </PathPhone>
+      <PathPhone
         commentId="mobile-web-host"
-        description="工作树变更提到会话网格上方，看 diff 不用滚到底；预览窗栏只留状态色点，等待卡片在身份行下用短状态词。"
+        id="workbench"
         label="H2"
-        title="工作台"
-        x={col(0)}
-        y={row(0)}
+        title="这台电脑"
       >
         <HostScreen
           host={MINI}
           sessions={sessionsOf(INITIAL_DEMO, HOST_MINI)}
           unread={unreadCount(notificationsOf(INITIAL_DEMO, HOST_MINI))}
         />
-      </Phone>
-
-      <Phone
+      </PathPhone>
+      <PathPhone
         commentId="mobile-web-session"
-        description="连续纯文本读屏。有效未决交互才提供「按键」，不把固定数字当作识别出的选项。"
+        id="session"
         label="S1"
-        title="会话 · 需要你处理"
-        x={col(1)}
-        y={row(0)}
+        title="打开会话"
       >
         <StaticSession sessionId={SESSION_WAITING} />
-      </Phone>
-      <Phone
-        commentId="mobile-web-session-running"
-        description="运行中保持连续阅读；底部 Aa 字号可见，会话入口随手可达。长输出滚动，不伪造历史。"
-        label="S1b"
-        title="会话 · 运行中"
-        x={col(2)}
-        y={row(3)}
-      >
-        <StaticSession sessionId={SESSION_RUNNING} />
-      </Phone>
-      <Phone
+      </PathPhone>
+      <PathPhone
         commentId="mobile-web-changes"
-        description="只读变更。作用域是该会话工作树的 git 根；状态字母 + 增删。电脑上不弹审查面板。"
+        id="changes"
         label="S2"
-        title="变更 · 文件列表"
-        x={col(0)}
-        y={row(2)}
+        title="查看变更"
       >
         <ChangesScreen
           backLabel={DEMO.waitingTitle}
           repo={FEAT_MOBILE}
           scope={DEMO.worktree}
         />
-      </Phone>
-      <Phone
+      </PathPhone>
+      <PathPhone
         commentId="mobile-web-changes-diff"
-        description="点开单文件：同页切换，「‹ 文件列表」回去；顶栏可直接上一 / 下一文件。统一 diff，增删只用状态色。"
+        id="diff"
         label="S2b"
-        title="变更 · 单文件"
-        x={col(1)}
-        y={row(2)}
+        title="打开文件"
       >
         <ChangesScreen
           backLabel={DEMO.waitingTitle}
@@ -359,29 +361,40 @@ export default function MobileWebShellCanvas(): ReactNode {
           repo={FEAT_MOBILE}
           scope={DEMO.worktree}
         />
-      </Phone>
-
-      <Phone
+      </PathPhone>
+      <PathPhone
+        commentId="mobile-web-pair"
+        id="pair"
+        label="H0"
+        title="添加电脑"
+      >
+        <PairScreen />
+      </PathPhone>
+      <PathPhone
+        commentId="mobile-web-notifications"
+        id="inbox"
+        label="N1"
+        title="查看通知"
+      >
+        <StaticInbox push="done" />
+      </PathPhone>
+      <PathPhone
         commentId="mobile-web-files"
-        description="只读工作树。目录和文件图标区分类型；保留路径身份。进入目录在同页更新。"
+        id="files"
         label="S3"
-        title="文件 · 目录"
-        x={col(2)}
-        y={row(2)}
+        title="浏览文件"
       >
         <FilesScreen
           backLabel={DEMO.waitingTitle}
           repo={FEAT_MOBILE}
           scope={DEMO.worktree}
         />
-      </Phone>
-      <Phone
+      </PathPhone>
+      <PathPhone
         commentId="mobile-web-files-preview"
-        description="源码折行、行号和语法色帮助阅读；导航与正文不重叠。「‹」回目录。"
+        id="preview"
         label="S3b"
-        title="文件 · 预览"
-        x={col(3)}
-        y={row(2)}
+        title="阅读文件"
       >
         <FilesScreen
           backLabel={DEMO.waitingTitle}
@@ -390,173 +403,130 @@ export default function MobileWebShellCanvas(): ReactNode {
           repo={FEAT_MOBILE}
           scope={DEMO.worktree}
         />
-      </Phone>
-      <Phone
-        commentId="mobile-web-notifications"
-        description="事件标题、详情、时间和未读状态。点击通知回到会话，保留消息发生时的内容。"
-        label="N1"
-        title="收件箱"
-        x={col(3)}
-        y={row(1)}
-      >
-        <StaticInbox push="done" />
-      </Phone>
-      <Phone
-        commentId="mobile-web-host-empty"
-        description="无会话空态：去电脑上开一个。不提供新建终端 / 智能体 / 工作树。"
-        label="H2e"
-        title="工作台 · 空态"
-        x={col(0)}
-        y={row(3)}
-      >
-        <HostScreen host={PAIRED_HOST} sessions={[]} unread={0} />
-      </Phone>
-
-      <Phone
-        commentId="mobile-web-session-switcher"
-        description="底部面板保留终端背景；当前会话明确标记，点选切换，关闭回到原处。超过 5 个会话出现搜索行。"
-        label="S1c"
-        title="会话 · 切换"
-        x={col(3)}
-        y={row(0)}
-      >
-        <StaticSession
-          initialSheet="sessions"
-          peers={SWITCHER_PEERS}
-          sessionId={SESSION_WAITING}
-        />
-      </Phone>
-      <Phone
-        commentId="mobile-web-session-disconnected"
-        description="保留最后内容并明示连接已断开；停止显示回应按键，阅读设置仍可用。"
-        label="S1d"
-        title="会话 · 断线"
-        x={col(1)}
-        y={row(3)}
-      >
-        <StaticSession disconnected sessionId={SESSION_WAITING} />
-      </Phone>
-
-      <Phone
-        commentId="mobile-web-session-keys"
-        description="按需展开的 13 键输入；数字键另行展开。投递成功只显示已发送，随后短暂等待终端响应再放开按键。"
-        label="S1k"
-        title="会话 · 终端按键"
-        x={col(2)}
-        y={row(0)}
-      >
-        <StaticSession initialKeysOpen sessionId={SESSION_WAITING} />
-      </Phone>
-      <Phone
-        commentId="mobile-web-session-unavailable"
-        description="虽在等待，但没有有效未决交互。保留原文，提示去电脑处理，不显示按键。"
-        label="S1u"
-        title="会话 · 暂不能回应"
-        x={col(3)}
-        y={row(3)}
-      >
-        <StaticSession inputUnavailable sessionId={SESSION_WAITING} />
-      </Phone>
-
-      <Phone
+      </PathPhone>
+      <PathPhone
         commentId="mobile-web-pair-no-camera"
-        description="相机被拒绝或不可用：说明原因，重试是主按钮，粘贴配对内容是退路。"
+        id="pairCamera"
         label="H0b"
-        title="配对 · 相机不可用"
-        x={col(0)}
-        y={row(4)}
+        title="相机不可用"
       >
         <PairScreen initialPhase="failed-camera" />
-      </Phone>
-      <Phone
-        commentId="mobile-web-pair-bad-code"
-        description="二维码过期或识别不完整：回电脑重新生成，或改走粘贴。"
-        label="H0c"
-        title="配对 · 无法识别"
-        x={col(1)}
-        y={row(4)}
-      >
-        <PairScreen initialPhase="failed-code" />
-      </Phone>
-      <Phone
-        commentId="mobile-web-session-feed-interrupted"
-        description="连接未断但读取滞后：读屏顶缘细条提示画面可能不是最新，恢复后自动更新。"
-        label="S1e"
-        title="会话 · 读取中断"
-        x={col(2)}
-        y={row(4)}
-      >
-        <StaticSession feedInterrupted sessionId={SESSION_WAITING} />
-      </Phone>
-      <Phone
+      </PathPhone>
+      <PathPhone
         commentId="mobile-web-session-ended"
-        description="通知指向的会话已在电脑上结束：不推空帧，给明确终态与去向。"
+        id="sessionEnded"
         label="S1x"
-        title="会话 · 已结束"
-        x={col(3)}
-        y={row(4)}
+        title="会话已结束"
       >
         <SessionEndedScreen
           backLabel="收件箱"
           onOpenWorkbench={() => undefined}
           title="docs-site"
         />
-      </Phone>
-      <Phone
-        commentId="mobile-web-notifications-push"
-        description="推送未开启时收件箱顶部给一次开启入口；顶栏有手动刷新。"
-        label="N1b"
-        title="收件箱 · 开启推送"
-        x={col(4)}
-        y={row(4)}
+      </PathPhone>
+      <PathPhone
+        commentId="mobile-web-session-disconnected"
+        id="disconnected"
+        label="S1d"
+        title="连接已断开"
       >
-        <StaticInbox enablePush push="idle" />
-      </Phone>
-
+        <StaticSession disconnected sessionId={SESSION_WAITING} />
+      </PathPhone>
       <Phone
-        commentId="mobile-web-session-narrow"
-        description="320px 最窄宽度自查：回应区与工具行仍完整，长标题截断。"
-        label="S1n"
-        narrow={320}
-        title="会话 · 窄屏 320"
-        x={col(0)}
-        y={row(6)}
+        commentId="mobile-web-prototype"
+        height={PATH_H}
+        label="P0"
+        title="可点原型"
+        x={PATH_RIGHT}
+        y={pathRow(0)}
       >
-        <StaticSession sessionId={SESSION_WAITING} />
+        <PrototypePhone />
       </Phone>
-      <Phone
-        commentId="mobile-web-host-light"
-        description="亮色主题自查：语义令牌整体翻转，状态色不变。"
-        label="H2l"
-        light
-        title="工作台 · 亮色"
-        x={col(1)}
-        y={row(6)}
+      <AppendixPhone
+        commentId="mobile-web-pair-bad-code"
+        index={0}
+        label="H0c"
+        title="配对 · 无法识别"
       >
-        <HostScreen
-          host={MINI}
-          sessions={sessionsOf(INITIAL_DEMO, HOST_MINI)}
-          unread={unreadCount(notificationsOf(INITIAL_DEMO, HOST_MINI))}
+        <PairScreen initialPhase="failed-code" />
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-session-running"
+        index={1}
+        label="S1b"
+        title="会话 · 运行中"
+      >
+        <StaticSession sessionId={SESSION_RUNNING} />
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-session-switcher"
+        index={2}
+        label="S1c"
+        title="会话 · 切换"
+      >
+        <StaticSession
+          initialSheet="sessions"
+          peers={SWITCHER_PEERS}
+          sessionId={SESSION_WAITING}
         />
-      </Phone>
-      <Phone
-        commentId="mobile-web-session-narrow-360"
-        description="360px 窄屏自查：回应区、工具行与导航在 Android 宽度下仍成立。"
-        label="S1m"
-        narrow={360}
-        title="会话 · 窄屏 360"
-        x={col(2)}
-        y={row(6)}
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-session-keys"
+        index={3}
+        label="S1k"
+        title="会话 · 终端按键"
       >
-        <StaticSession sessionId={SESSION_WAITING} />
-      </Phone>
-      <Phone
+        <StaticSession initialKeysOpen sessionId={SESSION_WAITING} />
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-session-unavailable"
+        index={4}
+        label="S1u"
+        title="会话 · 暂不能回应"
+      >
+        <StaticSession inputUnavailable sessionId={SESSION_WAITING} />
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-host-empty"
+        index={5}
+        label="H2e"
+        title="工作台 · 空态"
+      >
+        <HostScreen host={PAIRED_HOST} sessions={[]} unread={0} />
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-session-feed-interrupted"
+        index={6}
+        label="S1e"
+        title="会话 · 读取中断"
+      >
+        <StaticSession feedInterrupted sessionId={SESSION_WAITING} />
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-session-stale"
+        index={7}
+        label="S1t"
+        title="会话 · 回应已失效"
+      >
+        <StaticSession initialKeysOpen initialStale sessionId={SESSION_WAITING} />
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-session-sent"
+        index={8}
+        label="S1s"
+        title="会话 · 已发送"
+      >
+        <StaticSession
+          initialEchoKey="y"
+          initialKeysOpen
+          sessionId={SESSION_WAITING}
+        />
+      </AppendixPhone>
+      <AppendixPhone
         commentId="mobile-web-hosts-unknown"
-        description="状态未知的主机：点按后提示插在该行下方，不假装离线，也不滚到列表底部才看见。"
+        index={9}
         label="H1b"
         title="主机 · 状态未知"
-        x={col(3)}
-        y={row(6)}
       >
         <HostsScreen
           hosts={HOSTS_WITH_UNKNOWN}
@@ -565,67 +535,72 @@ export default function MobileWebShellCanvas(): ReactNode {
           onRemove={() => undefined}
           waitingByHost={waitingCountByHost(INITIAL_DEMO)}
         />
-      </Phone>
-      <Phone
-        commentId="mobile-web-session-stale"
-        description="回应已失效：按键面板先停住并锁键，说明这次不能再发；用户收起后回应区不再开放按键。"
-        label="S1t"
-        title="会话 · 回应已失效"
-        x={col(4)}
-        y={row(6)}
-      >
-        <StaticSession initialKeysOpen initialStale sessionId={SESSION_WAITING} />
-      </Phone>
-      <Phone
+      </AppendixPhone>
+      <AppendixPhone
         commentId="mobile-web-hosts-empty"
-        description="删掉最后一台电脑后的落点：回到「还没有配对的电脑」，扫码重新配对。"
+        index={10}
         label="H1e"
         title="主机 · 空态"
-        x={col(0)}
-        y={row(7)}
       >
         <HostsScreen hosts={[]} onAdd={() => undefined} />
-      </Phone>
-      <Phone
-        commentId="mobile-web-session-sent"
-        description="发送回执定格：「已发送 y，等待终端响应…」锁键防重复；回执保留到下一次发送。"
-        label="S1s"
-        title="会话 · 已发送"
-        x={col(1)}
-        y={row(7)}
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-notifications-push"
+        index={11}
+        label="N1b"
+        title="收件箱 · 开启推送"
       >
-        <StaticSession
-          initialEchoKey="y"
-          initialKeysOpen
-          sessionId={SESSION_WAITING}
-        />
-      </Phone>
-      <Phone
+        <StaticInbox enablePush push="idle" />
+      </AppendixPhone>
+      <AppendixPhone
         commentId="mobile-web-notifications-push-failed"
-        description="推送开启被拒：内联说明原因与下一步（系统设置 / 添加到主屏幕），可重试可暂不。"
+        index={12}
         label="N1c"
         title="收件箱 · 推送开启失败"
-        x={col(2)}
-        y={row(7)}
       >
         <StaticInbox enablePush push="failed" />
-      </Phone>
-      <Phone
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-session-narrow"
+        index={13}
+        label="S1n"
+        title="会话 · 窄屏 320"
+        width={320}
+      >
+        <StaticSession sessionId={SESSION_WAITING} />
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-session-narrow-360"
+        index={14}
+        label="S1m"
+        title="会话 · 窄屏 360"
+        width={360}
+      >
+        <StaticSession sessionId={SESSION_WAITING} />
+      </AppendixPhone>
+      <AppendixPhone
+        commentId="mobile-web-host-light"
+        index={15}
+        label="H2l"
+        light
+        title="工作台 · 亮色"
+      >
+        <HostScreen
+          host={MINI}
+          sessions={sessionsOf(INITIAL_DEMO, HOST_MINI)}
+          unread={unreadCount(notificationsOf(INITIAL_DEMO, HOST_MINI))}
+        />
+      </AppendixPhone>
+      <AppendixPhone
         commentId="mobile-web-session-light"
-        description="亮色主题下的会话读屏与按键面板：终端面走背景，键帽在亮色下用卡片底，不靠半透明叠层。"
+        index={16}
         label="S1l"
         light
         title="会话 · 亮色"
-        x={col(3)}
-        y={row(7)}
       >
         <StaticSession initialKeysOpen sessionId={SESSION_WAITING} />
-      </Phone>
-
-      <Layer w={NOTE_W} x={ORIGIN} y={kitY}>
-        <Note />
-      </Layer>
-      <Layer w={KIT_W} x={kitX} y={kitY}>
+      </AppendixPhone>
+      <Layer h={CAPTION_H + KIT_H} w={KIT_W} x={kit0.x} y={kit0.y}>
         <Artboard
           description="按下态、命中尺寸、芯片。规则卡，不是产品页。"
           height={KIT_H}
@@ -638,7 +613,7 @@ export default function MobileWebShellCanvas(): ReactNode {
           </div>
         </Artboard>
       </Layer>
-      <Layer w={KIT_W} x={kitX + KIT_W + GAP} y={kitY}>
+      <Layer h={CAPTION_H + KIT_H} w={KIT_W} x={kit1.x} y={kit1.y}>
         <Artboard
           description="父子用推入，返回反向；同页切换不做过渡。规则卡。"
           height={KIT_H}
@@ -651,7 +626,7 @@ export default function MobileWebShellCanvas(): ReactNode {
           </div>
         </Artboard>
       </Layer>
-      <Layer w={KIT_W} x={kitX + (KIT_W + GAP) * 2} y={kitY}>
+      <Layer h={CAPTION_H + KIT_H} w={KIT_W} x={kit2.x} y={kit2.y}>
         <Artboard
           description="连接态、会话态、变更字母、通知：状态词与令牌映射。规则卡。"
           height={KIT_H}
@@ -664,6 +639,7 @@ export default function MobileWebShellCanvas(): ReactNode {
           </div>
         </Artboard>
       </Layer>
+      <ScreenFlow spec={mobileWebShellFlowSpec} />
     </WorldStage>
   );
 }

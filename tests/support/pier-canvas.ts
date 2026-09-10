@@ -179,6 +179,7 @@ export const {
   useCostOverview,
   useSystemResources,
   useCanvasFile,
+  validateScreenFlowPaint,
   validateScreenFlowSpec,
   validateWorkflowSpec,
 } = pierCanvasExports;

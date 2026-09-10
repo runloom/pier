@@ -43,6 +43,12 @@ export function NotificationsScreen(props: {
       globalThis.localStorage?.setItem(PUSH_DISMISS_KEY, "1");
     }
   };
+  const reopenPush = () => {
+    setPushDismissed(false);
+    if (props.persistPushDismiss === true) {
+      globalThis.localStorage?.removeItem(PUSH_DISMISS_KEY);
+    }
+  };
   return (
     <PhoneShell
       nav={
@@ -70,6 +76,17 @@ export function NotificationsScreen(props: {
       }
     >
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pt-5 pb-8 [scrollbar-width:thin]">
+        {pushDismissed &&
+        props.onEnablePush !== undefined &&
+        props.push !== "done" ? (
+          <button
+            className="flex min-h-11 items-center self-start px-1 text-[13px] text-action-accent active:opacity-70"
+            onClick={reopenPush}
+            type="button"
+          >
+            开启通知提醒
+          </button>
+        ) : null}
         {props.onEnablePush === undefined ||
         props.push === "done" ||
         pushDismissed ? null : (
