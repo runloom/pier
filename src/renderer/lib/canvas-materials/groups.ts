@@ -27,6 +27,11 @@ export const CANVAS_MATERIAL_GROUPS: readonly CanvasMaterialGroup[] = [
     id: "Artboard",
     members: ["Artboard", "ArtboardStage", "Layer", "WorldStage"],
   },
+  {
+    family: "layout",
+    id: "ScreenFlow",
+    members: ["ScreenFlow", "validateScreenFlowSpec"],
+  },
   { family: "layout", id: "Separator", members: ["Separator"] },
   { family: "layout", id: "ScrollArea", members: ["ScrollArea", "ScrollBar"] },
   { family: "layout", id: "AspectRatio", members: ["AspectRatio"] },

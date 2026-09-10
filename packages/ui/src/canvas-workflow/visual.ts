@@ -5,6 +5,7 @@ import {
   WORKFLOW_ARROW_OVERLAP,
   WORKFLOW_ARROW_SIZE,
   WORKFLOW_STROKE,
+  WORKFLOW_STROKE_SIDE,
 } from "./metrics.ts";
 import { workflowEdgeStrokeVar, workflowPaintRole } from "./role.ts";
 import type {
@@ -25,7 +26,13 @@ function laneVariantAt(
   )?.variant;
 }
 
-export function edgeVisual(edge: WorkflowEdgeLayout, layout: WorkflowLayout) {
+export type EdgePaintKind = "diagram" | "screens";
+
+export function edgeVisual(
+  edge: WorkflowEdgeLayout,
+  layout: WorkflowLayout,
+  kind: EdgePaintKind = "diagram"
+) {
   const fromNode = layout.nodes.find((node) => node.id === edge.from);
   const toNode = layout.nodes.find((node) => node.id === edge.to);
   const paintRole = workflowPaintRole(
@@ -34,19 +41,22 @@ export function edgeVisual(edge: WorkflowEdgeLayout, layout: WorkflowLayout) {
     laneVariantAt(fromNode, layout.lanes) === "exception",
     laneVariantAt(toNode, layout.lanes) === "exception"
   );
-  const run = longestSegment(edge.points);
-  const sameRow =
-    fromNode !== undefined &&
-    toNode !== undefined &&
-    Math.abs(fromNode.y + fromNode.h / 2 - (toNode.y + toNode.h / 2)) < 8;
-  const between =
-    fromNode !== undefined && toNode !== undefined
-      ? toNode.x - (fromNode.x + fromNode.w)
-      : 0;
-  const sequential = sameRow && between > 0 && between < 240;
-  const onSpine = paintRole === "main" && run >= 72 && !sequential;
-  const localMain = paintRole === "main" && !onSpine;
-  const markRole = localMain ? "branch" : paintRole;
+  let markRole = paintRole;
+  if (kind !== "screens" && paintRole === "main" && !edge.onMainPath) {
+    const run = longestSegment(edge.points);
+    const sameRow =
+      fromNode !== undefined &&
+      toNode !== undefined &&
+      Math.abs(fromNode.y + fromNode.h / 2 - (toNode.y + toNode.h / 2)) < 8;
+    const between =
+      fromNode !== undefined && toNode !== undefined
+        ? toNode.x - (fromNode.x + fromNode.w)
+        : 0;
+    const sequential = sameRow && between > 0 && between < 240;
+    if (!(run >= 72 && !sequential)) {
+      markRole = "branch";
+    }
+  }
   return {
     arrow: layoutEdgeArrow(
       edge.points,
@@ -55,11 +65,8 @@ export function edgeVisual(edge: WorkflowEdgeLayout, layout: WorkflowLayout) {
       WORKFLOW_ARROW_GAP,
       WORKFLOW_ARROW_OVERLAP
     ),
-    localMain,
-    markRole,
-    onSpine,
     paintRole,
     stroke: workflowEdgeStrokeVar(markRole),
-    width: WORKFLOW_STROKE,
+    width: paintRole === "main" ? WORKFLOW_STROKE : WORKFLOW_STROKE_SIDE,
   };
 }

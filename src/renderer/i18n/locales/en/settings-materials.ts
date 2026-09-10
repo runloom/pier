@@ -108,6 +108,8 @@ export const settingsMaterials = {
       "Native mermaid text. Use this for sequence, state, class, ER, and mind map.",
     workflowSpec:
       "Lanes, steps, edges, and the happy path. Do not set pixels or colors.",
+    screenFlowSpec:
+      "Artboard ids, edges, and the happy path. Do not set pixels or colors.",
     renderNodeContent:
       "Display chrome under the title. That node must set contentHeight.",
     sortableItems: "Item ids in display order.",
@@ -200,6 +202,7 @@ export const settingsMaterials = {
     Mermaid:
       "Flowcharts from nodes, plus native mermaid sequence, state, class, ER, and mind maps.",
     WorkflowDiagram: "Interaction flows from lanes and steps",
+    ScreenFlow: "The user path between product screens",
     canvasFile: "Sibling-file sandbox next to the canvas, including conflicts",
     activityOverview: "Who is running, who needs you, right now",
     costOverview: "Cross-plugin token cost aggregate",

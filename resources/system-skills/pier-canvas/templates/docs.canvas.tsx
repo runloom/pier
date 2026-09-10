@@ -176,7 +176,8 @@ function WorldSection() {
       </Text>
       <Text>
         Two recipes share this stage. <code>recipe=design</code> places
-        product chrome on <code>Artboard</code> presets.
+        product chrome on <code>Artboard</code> presets and mounts
+        <code>ScreenFlow</code> so a user path is readable at fit zoom.
         <code>recipe=workflow</code> mounts a <code>WorkflowDiagram</code> from
         a typed spec — lanes, columns, and edges, not 393×852 phone frames.
         Architecture and sequence stay <code>Mermaid</code>.
@@ -251,8 +252,8 @@ function NextSection() {
       <SectionTitle anchorId="sec-next">Next steps</SectionTitle>
       <Text>
         The board-stage counterpart of this guide is the design-mockup
-        template: three device frames of one product surface, placed on a
-        world plane with a caption note beside them.
+        template: a user path across product frames on a world plane, with
+        <code>ScreenFlow</code> compiling the connectors.
       </Text>
       <Stack gap={4}>
         <Text>

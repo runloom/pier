@@ -5,12 +5,15 @@ import {
   Badge,
   DocsShell,
   Frame,
+  Layer,
   Row,
+  ScreenFlow,
   ScrollArea,
   ScrollBar,
   Separator,
   Stack,
   Text,
+  WorldStage,
 } from "pier/canvas";
 import { useState } from "react";
 import { KitGrid, KitSection, MaterialCard } from "./shared.tsx";
@@ -88,6 +91,32 @@ export function LayoutPage() {
           name="DocsShell"
         >
           <DocsShellSpecimen />
+        </MaterialCard>
+        <MaterialCard
+          install='import { Artboard, Layer, ScreenFlow, WorldStage } from "pier/canvas"'
+          lead="画板之间的用户路径"
+          name="ScreenFlow"
+        >
+          <WorldStage padding={8}>
+            <Layer x={8} y={8}>
+              <Artboard height={48} id="kitHome" title="A" width={72}>
+                <div className="h-full bg-muted/60" />
+              </Artboard>
+            </Layer>
+            <Layer x={200} y={8}>
+              <Artboard height={48} id="kitNext" title="B" width={72}>
+                <div className="h-full bg-muted/60" />
+              </Artboard>
+            </Layer>
+            <ScreenFlow
+              spec={{
+                edges: [
+                  { from: "kitHome", id: "eKit", label: "Next", to: "kitNext" },
+                ],
+                title: "Path",
+              }}
+            />
+          </WorldStage>
         </MaterialCard>
         <MaterialCard
           install='import { Artboard, ArtboardStage } from "pier/canvas"'

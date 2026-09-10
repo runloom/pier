@@ -37,5 +37,10 @@ export const canvas = {
   workflow: {
     invalidTitle: "이 흐름도를 그릴 수 없습니다",
     invalidHint: "{{message}} 다음: {{fix}}",
+    legend: "범례",
+  },
+  screenFlow: {
+    invalidTitle: "이 화면 경로는 그릴 수 없습니다",
+    invalidHint: "{{message}} 다음: {{fix}}",
   },
 } as const;

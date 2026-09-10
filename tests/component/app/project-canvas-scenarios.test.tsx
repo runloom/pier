@@ -31,10 +31,10 @@ function displayPath(path: string): string {
 
 const IN_REPO_REACT_CANVASES = [
   "canvas-kit/canvas-kit.canvas.tsx",
-  "mobile-web-flows/mobile-web-flows.canvas.tsx",
   "mobile-web-shell/mobile-web-shell.canvas.tsx",
   "pier-cli-user-manual/pier-cli-user-manual.canvas.tsx",
   "smoke/hello.canvas.tsx",
+  "workbench-sidebar-review/workbench-sidebar-review.canvas.tsx",
 ] as const;
 
 describe("project canvases render", () => {
@@ -44,7 +44,7 @@ describe("project canvases render", () => {
     );
   });
 
-  it("finds exactly the in-repo React canvases (kit + mobile shell + mobile flows + cli manual + smoke)", () => {
+  it("finds exactly the in-repo React canvases (kit + mobile shell + cli manual + smoke)", () => {
     const relative = Object.keys(CANVAS_MODULES)
       .filter((path) => !path.endsWith(".canvas.solid.tsx"))
       .map((path) => path.replace("../../../.pier/canvases/", ""))

@@ -327,6 +327,9 @@ describe("pier-canvas methodology packs", () => {
     expect(authoring).toContain("WorkflowDiagram");
     expect(authoring).toContain("validateWorkflowSpec");
     expect(authoring).toContain("## Workflow diagrams");
+    expect(authoring).toContain("ScreenFlow");
+    expect(authoring).toContain("validateScreenFlowSpec");
+    expect(authoring).toContain("## Screen flows");
   });
 
   it("keeps a closed starter set: one template per shell or recipe", () => {

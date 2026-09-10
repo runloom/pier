@@ -1,17 +1,17 @@
-import { WORKFLOW_STROKE } from "@pier/ui/canvas-workflow/metrics.ts";
 import {
-  workflowEdgeDash,
-  workflowPaintRole,
-} from "@pier/ui/canvas-workflow/role.ts";
+  isScreenFlowFrame,
+  WORKFLOW_STROKE,
+  WORKFLOW_STROKE_SIDE,
+} from "@pier/ui/canvas-workflow/metrics.ts";
+import { workflowPaintRole } from "@pier/ui/canvas-workflow/role.ts";
 import { describe, expect, it } from "vitest";
 
 describe("workflow edge marks", () => {
-  it("uses one stroke width and dashes side roles", () => {
-    expect(WORKFLOW_STROKE).toBe(1.5);
-    expect(workflowEdgeDash("main", true)).toBeUndefined();
-    expect(workflowEdgeDash("error", false)).toBe("5 4");
-    expect(workflowEdgeDash("return", false)).toBe("4 4");
-    expect(workflowEdgeDash("branch", false)).toBe("5 4");
+  it("uses a heavier main stroke than side roles", () => {
+    expect(WORKFLOW_STROKE).toBe(1.8);
+    expect(WORKFLOW_STROKE_SIDE).toBe(1.4);
+    expect(isScreenFlowFrame({ h: 120, w: 200 })).toBe(true);
+    expect(isScreenFlowFrame({ h: 52, w: 132 })).toBe(false);
   });
 
   it("paints a drop into the recovery band as a caution mark", () => {

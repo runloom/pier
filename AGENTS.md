@@ -164,6 +164,16 @@ Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 
 检查点在 `tests/unit/plugins/files/canvas-world-camera-memory-governance.test.ts`。
 
+### Canvas 流程图与界面流程
+
+权威规格：[`docs/superpowers/specs/2026-09-10-canvas-workflow-screen-flow-gold-standard.md`](docs/superpowers/specs/2026-09-10-canvas-workflow-screen-flow-gold-standard.md)。
+
+- 作者只写 IR；宿主编译正交折线。失败画 `Empty`，不画残缺图。
+- 主线 1.8、旁路 1.4、镖 10×7；idle 实线；hover 只抬高相关组。
+- `compile*` 不进 `pier/canvas`。审批走 `WorkflowDiagram`，多屏路径走 `ScreenFlow`。
+
+检查点在 `tests/unit/ui/canvas-workflow/governance.test.ts`。
+
 ### 交互控件密度规范
 
 Pier 桌面端的单行交互控件统一使用 28px 高度：

@@ -22,7 +22,19 @@ describe("WorkflowDiagram", () => {
       "[data-slot='workflow-lane'][data-variant='exception']"
     );
     expect(exception).toBeTruthy();
+    expect(
+      document.querySelector(
+        "[data-slot='workflow-lane'][data-variant='default'] rect"
+      )
+    ).not.toHaveAttribute("stroke-dasharray");
+    expect(exception?.querySelector("rect")).toHaveAttribute(
+      "stroke-dasharray",
+      "6 6"
+    );
     expect(document.querySelector("[data-slot='workflow-title']")).toBeTruthy();
+    expect(
+      document.querySelector("[data-slot='workflow-diagram']")
+    ).toHaveAttribute("aria-label", "Review a change");
     expect(
       document.querySelectorAll("[data-slot='workflow-edge']").length
     ).toBe(5);
@@ -45,14 +57,17 @@ describe("WorkflowDiagram", () => {
     ).toBeTruthy();
     expect(
       open?.querySelector("[data-slot='workflow-edge-stroke']")
-    ).toHaveAttribute("stroke-width", "1.5");
+    ).toHaveAttribute("stroke-width", "1.8");
     expect(
       document.querySelector("[data-slot='workflow-diagram'] svg")
     ).toBeTruthy();
     expect(reject).not.toHaveAttribute("data-main-path");
     expect(
       reject?.querySelector("[data-slot='workflow-edge-stroke']")
-    ).toHaveAttribute("stroke-dasharray", "5 4");
+    ).not.toHaveAttribute("stroke-dasharray");
+    expect(
+      reject?.querySelector("[data-slot='workflow-edge-stroke']")
+    ).toHaveAttribute("stroke-width", "1.4");
   });
 
   it("paints Empty and no edges when the spec cannot compile", () => {
@@ -87,7 +102,7 @@ describe("WorkflowDiagram", () => {
     );
     expect(document.querySelector("[data-node-id='pass']")).toHaveAttribute(
       "data-workflow-state",
-      "dim"
+      "idle"
     );
     expect(
       document.querySelector("[data-slot='workflow-edge-flow']")
@@ -98,11 +113,29 @@ describe("WorkflowDiagram", () => {
       /animate|pulse|ring-primary/
     );
     expect(submit).toHaveAttribute("data-workflow-state", "hot");
-    expect(pass).toHaveAttribute("data-workflow-state", "dim");
+    expect(pass).toHaveAttribute("data-workflow-state", "idle");
     fireEvent.pointerLeave(
       document.querySelector("[data-slot='workflow-diagram']") as HTMLElement
     );
     expect(document.querySelector("[data-node-id='pass']")).toHaveAttribute(
+      "data-workflow-state",
+      "idle"
+    );
+  });
+
+  it("clears hover when the pointer moves onto empty diagram space", () => {
+    render(<WorkflowDiagram spec={reviewWorkflowSpec} />);
+    fireEvent.pointerEnter(screen.getByText("Submit"));
+    expect(
+      document.querySelector("[data-slot='workflow-edge-flow']")
+    ).toBeTruthy();
+    fireEvent.pointerOver(
+      document.querySelector("[data-slot='workflow-diagram'] svg") as SVGElement
+    );
+    expect(
+      document.querySelector("[data-slot='workflow-edge-flow']")
+    ).toBeNull();
+    expect(document.querySelector("[data-node-id='submit']")).toHaveAttribute(
       "data-workflow-state",
       "idle"
     );
@@ -120,6 +153,8 @@ describe("WorkflowDiagram", () => {
     fireEvent.pointerEnter(screen.getByText("Open review"));
     const flow = container.querySelector("[data-slot='workflow-edge-flow']");
     expect(flow?.closest("[data-edge-id='e-open']")).toBeTruthy();
+    expect(flow).toHaveAttribute("stroke-width", "3.35");
+    expect(flow).toHaveAttribute("pathLength", "1");
     expect(
       container.querySelectorAll("[data-slot='workflow-edge-flow']")
     ).toHaveLength(1);
@@ -146,17 +181,22 @@ describe("WorkflowDiagram", () => {
       document.querySelector(
         "[data-edge-id='e-consent'] [data-slot='workflow-edge-stroke']"
       )
-    ).toHaveAttribute("stroke-width", "1.5");
+    ).toHaveAttribute("stroke-width", "1.4");
+    expect(
+      document.querySelector(
+        "[data-edge-id='e-deny'] [data-slot='workflow-edge-stroke']"
+      )
+    ).toHaveAttribute("stroke-width", "1.4");
     expect(
       document.querySelector(
         "[data-edge-id='e-consent'] [data-slot='workflow-edge-stroke']"
       )
-    ).toHaveAttribute("stroke-dasharray", "5 4");
+    ).not.toHaveAttribute("stroke-dasharray");
     expect(
       document.querySelector(
         "[data-edge-id='e-allow'] [data-slot='workflow-edge-stroke']"
       )
-    ).toHaveAttribute("stroke-width", "1.5");
+    ).toHaveAttribute("stroke-width", "1.8");
     expect(
       document.querySelector("[data-slot='workflow-legend']")
     ).toBeTruthy();

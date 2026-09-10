@@ -1,4 +1,8 @@
-import { WorkflowDiagram, type WorkflowSpec } from "pier/canvas";
+import {
+  WorkflowDiagram,
+  type WorkflowSpec,
+  validateWorkflowSpec,
+} from "pier/canvas";
 
 /**
  * recipe=workflow gold: lanes, phases, groups, two-line steps, host notes.
@@ -22,7 +26,7 @@ const spec: WorkflowSpec = {
     {
       from: "router",
       id: "e-consent",
-      label: "Needs consent?",
+      label: "Consent?",
       to: "approval",
     },
     { from: "approval", id: "e-allow", label: "", to: "tool" },
@@ -201,7 +205,7 @@ const spec: WorkflowSpec = {
     {
       items: [
         "Lanes and columns place every step.",
-        "Labels sit on the longest run; same-column retries take a C-shape.",
+        "Labels park off the ink; same-column returns use a C.",
       ],
       title: "Compiler contract",
     },
@@ -220,6 +224,8 @@ const spec: WorkflowSpec = {
   ],
   title: "Agent tool call",
 };
+
+validateWorkflowSpec(spec);
 
 export default function Canvas() {
   return <WorkflowDiagram spec={spec} />;
