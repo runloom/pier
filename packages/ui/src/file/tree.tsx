@@ -23,6 +23,10 @@ import { fileTreeScrollElementFromNode } from "./tree-scroll.ts";
 import { usePierFileTreeScrollController } from "./tree-scroll-controller.ts";
 import * as treeSearch from "./tree-search.ts";
 import {
+  bindFileTreeSelectionApi,
+  handleFileTreeHostKeyDown,
+} from "./tree-selection-model.ts";
+import {
   FILE_TREE_BRIDGE_CLASS,
   FILE_TREE_HOST_CLASS,
   pierFileTreeStyle,
@@ -105,6 +109,7 @@ export function PierFileTree({
   onSelectPaths,
   revealPath,
   scrollControllerRef,
+  searchOpen = false,
   stickyFolders,
   treeApiRef,
   className,
@@ -162,33 +167,12 @@ export function PierFileTree({
   const handleSelectionChange =
     React.useCallback<FileTreeSelectionChangeListener>(
       (selectedPaths) => {
-        const nextSelectedPaths = [...selectedPaths];
-        const selectedPath = nextSelectedPaths.at(-1);
         const refsSnapshot = readRefs();
-        // suppressOpenPathFromContextMenu 由菜单会话 end 清掉，selection 里不消费。
-        const suppressOpenPath =
-          (selectedPath != null &&
-            programmaticSelectionRef.current?.path === selectedPath) ||
-          refsSnapshot.suppressOpenPathFromContextMenu;
         programmaticSelectionRef.current = null;
-        const selectedItem =
-          selectedPath == null
-            ? undefined
-            : refsSnapshot.itemsByPath.get(selectedPath);
-        const outwardSelectedPaths = nextSelectedPaths.map(
+        const outwardSelectedPaths = [...selectedPaths].map(
           (path) => refsSnapshot.itemsByPath.get(path)?.path ?? path
         );
-
         refsSnapshot.onSelectPaths?.(outwardSelectedPaths);
-
-        if (selectedItem?.kind === "file") {
-          const alreadyOpen = lastOpenedPathRef.current === selectedItem.path;
-          lastOpenedPathRef.current = selectedItem.path;
-          // 投影噪音不是 open（items 替换 / git 状态 / resetPaths）。
-          if (!(suppressOpenPath || alreadyOpen)) {
-            refsSnapshot.onOpenPath?.(selectedItem.path);
-          }
-        }
       },
       [readRefs]
     );
@@ -237,15 +221,7 @@ export function PierFileTree({
   const modelRef = React.useRef(model);
   modelRef.current = model;
   const fileTreeModelApi = React.useMemo(
-    () => ({
-      focusPath: (path: string) => {
-        modelRef.current.focusPath(path);
-      },
-      getSelectedPaths: () => modelRef.current.getSelectedPaths(),
-      selectOnlyPath: (path: string) => {
-        modelRef.current.selectOnlyPath(path);
-      },
-    }),
+    () => bindFileTreeSelectionApi(modelRef),
     []
   );
   // FileTreeRefs.fileTreeModel is readonly; replace the whole bag (same pattern as useFileTreeRefs).
@@ -352,6 +328,10 @@ export function PierFileTree({
       },
       getExpansionIntent: () => expansionAuthority?.getIntent() ?? null,
       getSearchMatchCount: () => model.getSearchMatchingPaths().length,
+      getSelectedPaths: () => model.getSelectedPaths(),
+      replaceSelectedPaths: (paths) => {
+        model.replaceSelectedPaths(paths);
+      },
       setSearch: (searchValue) => {
         // 记录激活中的查询:resetPaths(store 重建)会让库内搜索派生投影
         // (#searchVisiblePathSet 等)与新 store 脱节,路径同步 effect 需要
@@ -464,10 +444,21 @@ export function PierFileTree({
   });
 
   return (
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: tree host captures salvage pointer/click and Escape.
+    // biome-ignore lint/a11y/noStaticElementInteractions: same host; role lives in the shadow tree.
     <div
       className={cn(FILE_TREE_BRIDGE_CLASS, className)}
       data-slot="pier-file-tree-bridge"
+      onClick={rowClickSalvage.onClick}
       onClickCapture={rowClickSalvage.onClickCapture}
+      onKeyDown={(event) => {
+        handleFileTreeHostKeyDown(event.nativeEvent, model, {
+          itemsByPath: readRefs().itemsByPath,
+          onOpenPath: readRefs().onOpenPath,
+          searchOpen,
+          suppressOpen: readRefs().suppressOpenPathFromContextMenu,
+        });
+      }}
       onPointerDownCapture={rowClickSalvage.onPointerDownCapture}
       onPointerUpCapture={rowClickSalvage.onPointerUpCapture}
       ref={containerRef}

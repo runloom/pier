@@ -6,6 +6,7 @@ import {
   stripTrailingSlash,
   toOfficialPath,
 } from "./tree-model.ts";
+import { selectionSetsEqual } from "./tree-selection-model.ts";
 import type {
   PierDirectoryLoadState,
   PierFileTreeItem,
@@ -16,7 +17,10 @@ import type {
 export interface FileTreeContextMenuModel {
   readonly focusPath: (path: string) => void;
   readonly getSelectedPaths: () => readonly string[];
+  readonly replaceSelectedPaths: (paths: readonly string[]) => void;
   readonly selectOnlyPath: (path: string) => void;
+  readonly selectPathRange: (path: string, unionSelection: boolean) => void;
+  readonly togglePathSelectionFromInput: (path: string) => void;
 }
 
 /**
@@ -26,6 +30,10 @@ export interface FileTreeContextMenuModel {
 export type FileTreeContextMenuSessionPhase = "begin" | "end";
 
 export interface FileTreeRefs {
+  /**
+   * Command 菜单 begin 时的 L-Select 快照。结束时长度 > 1 必须整集恢复。
+   */
+  commandSelectionSnapshot: readonly string[] | null;
   readonly decorationsByPath: ReadonlyMap<string, React.ReactNode>;
   readonly directoryLoadStatesByPath: ReadonlyMap<
     string,
@@ -77,7 +85,7 @@ export interface FileTreeRefs {
     | ((anchor: Element | null | undefined) => () => void)
     | undefined;
   /**
-   * Command / 菜单会话期间：禁止 selection→onOpenPath。
+   * Command / 菜单会话期间：禁止行点击激活。
    * 生命周期 = 菜单打开到 close settle，不是 one-shot consume。
    */
   suppressOpenPathFromContextMenu: boolean;
@@ -98,6 +106,7 @@ export const EMPTY_REFS: FileTreeRefs = {
   isActiveOpenPath: undefined,
   onRenamePath: undefined,
   onSelectPaths: undefined,
+  commandSelectionSnapshot: null,
   onContextMenuSession: undefined,
   pinContextMenuScroll: undefined,
   suppressOpenPathFromContextMenu: false,
@@ -171,9 +180,20 @@ function endContextMenuSession(
   unpinTree();
   refs.current.onContextMenuSession?.("end", detail);
   // 菜单关闭后：只保证 selected；不 focusPath（会 sticky scrollIntoView 带动布局）。
-  // 若 selected 被冲掉，在 suppress 下补选且不 open。
   const liveModel = refs.current.fileTreeModel;
+  const snapshot = refs.current.commandSelectionSnapshot;
+  refs.current.commandSelectionSnapshot = null;
   if (!liveModel) {
+    return;
+  }
+  if (detail.intent === "command" && snapshot != null && snapshot.length > 1) {
+    if (!selectionSetsEqual(liveModel.getSelectedPaths(), snapshot)) {
+      refs.current.suppressOpenPathFromContextMenu = true;
+      liveModel.replaceSelectedPaths(snapshot);
+      queueMicrotask(() => {
+        refs.current.suppressOpenPathFromContextMenu = false;
+      });
+    }
     return;
   }
   if (!isOfficialPathSelected(liveModel, detail.path)) {
@@ -221,8 +241,10 @@ function fileTreeContextMenuComposition(refs: {
       if (model) {
         if (intent === "command") {
           // Command：保持 L-Select；不 focusPath（避免 sticky 滚树/抖布局）。
+          refs.current.commandSelectionSnapshot = model.getSelectedPaths();
         } else {
           // Inspect：select；open 在下方显式调用。
+          refs.current.commandSelectionSnapshot = null;
           targetPath =
             selectContextMenuTarget(model, item.path, callerItem) ?? targetPath;
         }
@@ -386,6 +408,7 @@ export function buildFileTreeRefs(
     isActiveOpenPath: undefined,
     onRenamePath: undefined,
     onSelectPaths: undefined,
+    commandSelectionSnapshot: null,
     onContextMenuSession: undefined,
     pinContextMenuScroll: undefined,
     suppressOpenPathFromContextMenu: false,

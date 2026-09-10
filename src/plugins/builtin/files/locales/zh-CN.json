@@ -327,6 +327,7 @@
     "filePanel.tree.action.newFolder": "新建文件夹…",
     "filePanel.tree.action.rename": "重命名…",
     "filePanel.tree.action.delete": "删除",
+    "filePanel.tree.action.deleteN": "删除 ({{count}})",
     "filePanel.tree.action.copyPath": "复制路径",
     "filePanel.tree.action.copyRelativePath": "复制相对路径",
     "filePanel.tree.placeholder.newFile": "filename",

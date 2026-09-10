@@ -309,7 +309,11 @@ function applyProgrammaticSelectAndFocus(
   const programmaticSelection = { path: officialPath };
   programmaticSelectionRef.current = programmaticSelection;
   try {
-    model.selectOnlyPath(officialPath);
+    // 已在 L-Select 里（含多选）只聚焦，禁止 selectOnlyPath 把集合打成一行。
+    // 激活打开文件后的 active-file / 审查 explicit reveal 都会走到这里。
+    if (!isPathSelected(model, officialPath)) {
+      model.selectOnlyPath(officialPath);
+    }
     model.focusPath(officialPath);
   } finally {
     queueMicrotask(() => {

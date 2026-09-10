@@ -104,6 +104,28 @@ describe("revealFileTreePath", () => {
     expect(focusPath).toHaveBeenCalledWith("src/app.tsx");
   });
 
+  it("does not collapse a multi-select when revealing an already-selected file", () => {
+    const itemsByPath = new Map<string, PierFileTreeItem>([
+      ["src/app.tsx", { kind: "file", path: "src/app.tsx" }],
+      ["README.md", { kind: "file", path: "README.md" }],
+    ]);
+    const { focusPath, getItem, model, selectOnlyPath } = createModel();
+    getItem.mockReturnValue({ isDirectory: () => false, kind: "file" });
+    model.getSelectedPaths = () => ["src/app.tsx", "README.md"];
+
+    const ok = revealFileTreePath(
+      model,
+      () => ({ itemsByPath }),
+      { current: null },
+      "README.md",
+      { scroll: "center" }
+    );
+
+    expect(ok).toBe(true);
+    expect(selectOnlyPath).not.toHaveBeenCalled();
+    expect(focusPath).toHaveBeenCalledWith("README.md");
+  });
+
   it("expands a directory target and selects it", () => {
     const itemsByPath = new Map<string, PierFileTreeItem>([
       ["src", { kind: "directory", path: "src" }],

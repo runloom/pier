@@ -43,8 +43,8 @@
       "reason": "debt: provider files still flat; interactive-tool lifecycle helpers pending tools/ folder; evidence/transcript/hooks extracted"
     },
     "src/plugins/builtin/files/renderer/tree": {
-      "max": 41,
-      "reason": "debt: files panel tree feature grew flat (feat/files word-wrap & minimap round); domain split pending"
+      "max": 42,
+      "reason": "debt: files panel tree feature grew flat (multiselect hotkeys); domain split pending"
     },
 
     "tests/unit/renderer/terminal": {

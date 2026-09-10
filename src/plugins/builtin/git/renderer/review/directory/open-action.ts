@@ -12,6 +12,7 @@ import {
   parseGitReviewDiffOpenMetadata,
 } from "../diff-actions.ts";
 import {
+  isReviewTreeItemMultiSelection,
   parseGitReviewTreeItemMetadata,
   reviewTreeItemRepoPath,
 } from "../tree-item-model.ts";
@@ -159,7 +160,13 @@ export function registerGitReviewOpenDirectoryAction(
       categoryKey: "git",
       group: "5_open",
       iconComponent: Folder,
-      menuHidden: (invocation) => resolveTarget(invocation) == null,
+      menuHidden: (invocation) => {
+        const treeItem = parseGitReviewTreeItemMetadata(invocation);
+        if (treeItem && isReviewTreeItemMultiSelection(treeItem)) {
+          return true;
+        }
+        return resolveTarget(invocation) == null;
+      },
       // Hide-promotion: directory/group rows have no Open File sibling.
       sortOrder: 1,
     },

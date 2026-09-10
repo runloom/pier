@@ -1,5 +1,17 @@
+diff --git a/dist/model/FileTreeController.d.ts b/dist/model/FileTreeController.d.ts
+index e7e4f0d7695697c6df034b9b67b4a7ee12ca3068..d02dc007ed09f9187e8ae563c8266e047fc3458e 100644
+--- a/dist/model/FileTreeController.d.ts
++++ b/dist/model/FileTreeController.d.ts
+@@ -56,6 +56,7 @@ declare class FileTreeController implements FileTreeMutationHandle, FileTreeSear
+   toggleMountedDirectoryFromInput(path: string): void;
+   selectAllVisiblePaths(): void;
+   selectOnlyPath(path: string): void;
++  replaceSelectedPaths(paths: readonly string[]): void;
+   selectOnlyMountedPathFromInput(path: string): void;
+   selectPath(path: string): void;
+   deselectPath(path: string): void;
 diff --git a/dist/model/FileTreeController.js b/dist/model/FileTreeController.js
-index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..aaf3ae8243aefce61461368d68afd542528a0802 100644
+index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..ecbbbb2b2a7317d0a97ee10a84c65348b5d80b98 100644
 --- a/dist/model/FileTreeController.js
 +++ b/dist/model/FileTreeController.js
 @@ -200,6 +200,7 @@ var FileTreeController = class FileTreeController {
@@ -10,7 +22,22 @@ index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..aaf3ae8243aefce61461368d68afd542
  			visibleIndex: targetIndex
  		};
  		this.#emit();
-@@ -504,13 +505,15 @@ var FileTreeController = class FileTreeController {
+@@ -363,6 +364,14 @@ var FileTreeController = class FileTreeController {
+ 		if (resolvedPath == null) return;
+ 		this.#applySelection([resolvedPath], resolvedPath);
+ 	}
++	replaceSelectedPaths(paths) {
++		const nextSelectedPaths = [];
++		for (const path of paths) {
++			const resolvedPath = this.#resolveSelectionPath(path);
++			if (resolvedPath != null) nextSelectedPaths.push(resolvedPath);
++		}
++		this.#applySelection(nextSelectedPaths, nextSelectedPaths.at(-1) ?? this.#focusedPath);
++	}
+ 	selectOnlyMountedPathFromInput(path) {
+ 		this.#applySelection([path], path);
+ 	}
+@@ -504,13 +513,15 @@ var FileTreeController = class FileTreeController {
  			return false;
  		}
  		try {
@@ -33,7 +60,7 @@ index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..aaf3ae8243aefce61461368d68afd542
  			}
  		} catch (error) {
  			this.#emit();
-@@ -518,6 +521,7 @@ var FileTreeController = class FileTreeController {
+@@ -518,6 +529,7 @@ var FileTreeController = class FileTreeController {
  			return false;
  		}
  		this.#dragAndDropConfig?.onDropComplete?.(dropPlan.result);
@@ -41,7 +68,7 @@ index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..aaf3ae8243aefce61461368d68afd542
  		return true;
  	}
  	subscribe(listener) {
-@@ -943,7 +947,7 @@ var FileTreeController = class FileTreeController {
+@@ -943,7 +955,7 @@ var FileTreeController = class FileTreeController {
  		}
  		const currentVisiblePaths = this.#projectionPaths;
  		this.#searchMatchingPaths = currentVisiblePaths.filter((path) => this.#searchMatchPathSet.has(path));
@@ -50,7 +77,7 @@ index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..aaf3ae8243aefce61461368d68afd542
  			this.#searchVisibleIndices = null;
  			this.#searchVisiblePaths = null;
  			this.#searchVisibleIndexByPath = null;
-@@ -1042,7 +1046,7 @@ var FileTreeController = class FileTreeController {
+@@ -1042,7 +1054,7 @@ var FileTreeController = class FileTreeController {
  			focusCandidate ??= path;
  		}
  		this.#searchMatchPathSet = matchingPathSet;
@@ -60,7 +87,7 @@ index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..aaf3ae8243aefce61461368d68afd542
  		const expandedPaths = this.#searchMode === "expand-matches" ? new Set(this.#searchPreviousExpandedPaths ?? []) : /* @__PURE__ */ new Set();
  		for (const matchingPath of matchingPaths) {
 diff --git a/dist/model/internalTypes.d.ts b/dist/model/internalTypes.d.ts
-index 5b0fdd5a3b483439ae256795f3dad5a32182ab78..b5377378cd295bacf11150ee0a4bbecda21a3cd2 100644
+index 5b0fdd5a3b483439ae256795f3dad5a32182ab78..6fca1c7366d5888200d10d8a6194e4b9e9dc5447 100644
 --- a/dist/model/internalTypes.d.ts
 +++ b/dist/model/internalTypes.d.ts
 @@ -1,6 +1,6 @@
@@ -80,7 +107,7 @@ index 5b0fdd5a3b483439ae256795f3dad5a32182ab78..b5377378cd295bacf11150ee0a4bbecd
  }
  interface FileTreeSlotHost {
 diff --git a/dist/model/publicTypes.d.ts b/dist/model/publicTypes.d.ts
-index 0d75f14780eb033fdbc8fde76e6f4c080e1d096a..d822c8a8fffb5485ab3ead0611f43b06e586f06d 100644
+index 0d75f14780eb033fdbc8fde76e6f4c080e1d096a..5381ed77ee370acaecdeac405ec039c9b81703ed 100644
 --- a/dist/model/publicTypes.d.ts
 +++ b/dist/model/publicTypes.d.ts
 @@ -42,6 +42,12 @@ interface FileTreeGitStatusPatch {
@@ -200,33 +227,49 @@ index 92781bbe6f0c2ff49d5242a55dee736d3fff40b3..b41f1861047a2dc8d83a3bac8d52b664
  }): FileTreePreparedInput;
  declare function preparePresortedFileTreeInput(paths: readonly string[]): FileTreePreparedInput;
 diff --git a/dist/render/FileTree.d.ts b/dist/render/FileTree.d.ts
-index b86b9865272df83225a6b0330117ddb9c83a8ee0..bfe7ac319b9376f182bac45b354c894e1951903b 100644
+index b86b9865272df83225a6b0330117ddb9c83a8ee0..d57c39cc5051290bdc6a6d42992e63ac209b5b84 100644
 --- a/dist/render/FileTree.d.ts
 +++ b/dist/render/FileTree.d.ts
-@@ -20,6 +20,7 @@ declare class FileTree implements FileTreeMutationHandle, FileTreeSearchSessionH
+@@ -20,6 +20,11 @@ declare class FileTree implements FileTreeMutationHandle, FileTreeSearchSessionH
    focusPath(path: string): void;
    scrollToPath(path: FileTreePublicId, options?: FileTreeScrollToPathOptions): void;
    focusNearestPath(path: string | null): string | null;
 +  selectOnlyPath(path: string): void;
++  selectPath(path: string): void;
++  togglePathSelectionFromInput(path: string): void;
++  selectPathRange(path: string, unionSelection: boolean): void;
++  replaceSelectedPaths(paths: readonly string[]): void;
    add(path: string): void;
    batch(operations: readonly FileTreeBatchOperation[]): void;
    applyGitStatusPatch(patch: FileTreeGitStatusPatch): void;
 diff --git a/dist/render/FileTree.js b/dist/render/FileTree.js
-index a3acb5917de61ee8283f12fe5a73282437cfcfab..3b9a14bed67c25109e2303259e9911a6f0ea61ca 100644
+index a3acb5917de61ee8283f12fe5a73282437cfcfab..7cc8fc58820bd8142869b0ae957c245c7cda5511 100644
 --- a/dist/render/FileTree.js
 +++ b/dist/render/FileTree.js
-@@ -177,6 +177,9 @@ var FileTree = class {
+@@ -177,6 +177,21 @@ var FileTree = class {
  	focusNearestPath(path) {
  		return this.#controller.focusNearestPath(path);
  	}
 +	selectOnlyPath(path) {
 +		this.#controller.selectOnlyPath(path);
 +	}
++	selectPath(path) {
++		this.#controller.selectPath(path);
++	}
++	togglePathSelectionFromInput(path) {
++		this.#controller.togglePathSelectionFromInput(path);
++	}
++	selectPathRange(path, unionSelection) {
++		this.#controller.selectPathRange(path, unionSelection);
++	}
++	replaceSelectedPaths(paths) {
++		this.#controller.replaceSelectedPaths(paths);
++	}
  	add(path) {
  		this.#controller.add(path);
  	}
 diff --git a/dist/render/FileTreeView.js b/dist/render/FileTreeView.js
-index 3d02080ad553347e7fe95e261c993b607b4134c2..f88e06c6c6f868353ce3425d9cb611b181bfb8c3 100644
+index 3d02080ad553347e7fe95e261c993b607b4134c2..9e7ef3c03aa16fce37e2b646225d110c05da6730 100644
 --- a/dist/render/FileTreeView.js
 +++ b/dist/render/FileTreeView.js
 @@ -3,7 +3,7 @@ import { createFileTreeIconResolver } from "./iconResolver.js";
@@ -561,3 +604,11 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..f88e06c6c6f868353ce3425d9cb611b1
  		visualFocusPath
  	};
  	const stickyRowFrame = {
+@@ -1772,6 +1929,7 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+ 		onPointerLeave: contextMenuEnabled ? handleTreePointerLeave : void 0,
+ 		onPointerOver: contextMenuEnabled ? handleTreePointerOver : void 0,
+ 		role: "tree",
++		"aria-multiselectable": "true",
+ 		tabIndex: -1,
+ 		style: {
+ 			outline: "none",

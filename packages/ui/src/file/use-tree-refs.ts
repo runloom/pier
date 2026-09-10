@@ -75,8 +75,10 @@ export function useFileTreeRefs(options: FileTreeRefOptions): {
       refs.current.suppressOpenPathFromContextMenu;
     const fileTreeModel = refs.current.fileTreeModel;
     const pinContextMenuScroll = refs.current.pinContextMenuScroll;
+    const commandSelectionSnapshot = refs.current.commandSelectionSnapshot;
     refs.current = {
       ...nextRefs,
+      commandSelectionSnapshot,
       fileTreeModel,
       pinContextMenuScroll,
       suppressOpenPathFromContextMenu,

@@ -71,6 +71,7 @@ describe("review open-directory gold standard", () => {
     expect(action).toMatch(/group:\s*"5_open"/);
     expect(action).not.toMatch(/group:\s*"1_open"/);
     expect(action).not.toMatch(/group:\s*"6_path"/);
+    expect(action).toContain("isReviewTreeItemMultiSelection");
     const toolbar = readFileSync(TOOLBAR, "utf8");
     expect(toolbar).not.toContain("openProjectDirectory");
     expect(toolbar).not.toContain("reviewOpenDirectory");
@@ -104,6 +105,6 @@ describe("review open-directory gold standard", () => {
 
   it("keeps file-tree primary click on files only", () => {
     const source = readFileSync(TREE, "utf8");
-    expect(source).toMatch(/kind === "file"/);
+    expect(source).toMatch(/kind !== "file"/);
   });
 });

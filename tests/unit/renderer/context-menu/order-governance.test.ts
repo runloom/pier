@@ -16,6 +16,8 @@ const SPEC =
 const SKETCHES = "tests/unit/renderer/context-menu/order-sketches.test.ts";
 const COMPOSED =
   "tests/unit/renderer/context-menu/order-sketches-composed.test.ts";
+const MULTISELECT =
+  "tests/unit/renderer/context-menu/order-sketches-multiselect.test.ts";
 const SLOT_GROUPS = [
   "0_edit",
   "1_find",
@@ -75,6 +77,15 @@ describe("context-menu order gold standard", () => {
     expect(spec).toContain("只显示提示");
     expect(spec).toContain("拆分 → 聚焦 → 均分");
     expect(spec).toContain("新建终端或重跑 / 停止 → 重命名 → 增强输入");
+    expect(spec).toContain("多选（点在集内，文件）");
+    expect(spec).toContain("多选（点在集内，未暂存文件）");
+    expect(spec).toContain("无重命名、无副本、无打开目录");
+    expect(spec).toContain("多选（点在集内，仅冲突）");
+    expect(spec).toContain("给剪切 / 复制标题加 (N)");
+    expect(read(MULTISELECT)).toContain("keeps Files new-file first");
+    expect(read(MULTISELECT)).toContain("keeps review stage first");
+    expect(read(MULTISELECT)).toContain("Delete (2)");
+    expect(read(MULTISELECT)).toContain("Stage (2)");
     expect(spec).toContain("`2_view` / `2_appearance` / `2_split`");
     expect(spec).toContain("| 窗口 | `4_window`");
   });
@@ -193,6 +204,38 @@ describe("review tree hide-promotion", () => {
   afterEach(() => {
     dispose?.();
     actionRegistry.clearForTests();
+  });
+
+  it("keeps stage first on a multi-select and does not promote open directory", () => {
+    expect(
+      menuFirstActionId(GIT_REVIEW_TREE_ITEM_SURFACE, {
+        contextId: "ctx",
+        expectedIndexRevision: "index:1",
+        gitRootPath: "/repo",
+        hasUnstaged: true,
+        kind: "file",
+        path: "a.ts",
+        repoPath: "a.ts",
+        selectedPaths: ["a.ts", "b.ts"],
+        stagePaths: ["a.ts", "b.ts"],
+        discardTrackedPaths: ["a.ts", "b.ts"],
+        unstagedStatus: "modified",
+        uncommitted: true,
+      })
+    ).toBe("pier.git.review.stageFile");
+    expect(
+      menuFirstActionId(GIT_REVIEW_TREE_ITEM_SURFACE, {
+        contextId: "ctx",
+        expectedIndexRevision: "index:1",
+        gitRootPath: "/repo",
+        hasConflict: true,
+        kind: "file",
+        path: "c.ts",
+        repoPath: "c.ts",
+        selectedPaths: ["c.ts", "d.ts"],
+        uncommitted: true,
+      })
+    ).toBe("pier.git.review.openFile");
   });
 
   it("does not lead directory or group menus with open directory", () => {

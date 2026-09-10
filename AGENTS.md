@@ -280,7 +280,7 @@ tab short = OSC 0/2 → cwd basename → `"Terminal"`。用户钉名优先于后
 右键第一项必须是该表面该目标的主工作，且不把人带离当前工作。同组 `menuHidden` 之后禁止让「打开目录 / 在访达中显示」继承第一名（面包屑这种只有路径动作的表面除外）。按表面家族排：审查树 = 暂存优先；Files 树 = 新建优先；文档/终端 = 复制粘贴优先；标签关闭在最后。菜单位置稳定，不用 MRU。
 
 权威规格：[`docs/superpowers/specs/2026-08-31-context-menu-order-gold-standard.md`](docs/superpowers/specs/2026-08-31-context-menu-order-gold-standard.md)。  
-检查点：`tests/unit/renderer/context-menu/order-governance.test.ts`、`tests/unit/renderer/context-menu/order-sketches.test.ts`、`tests/unit/renderer/context-menu/order-sketches-composed.test.ts`。
+检查点：`tests/unit/renderer/context-menu/order-governance.test.ts`、`tests/unit/renderer/context-menu/order-sketches.test.ts`、`tests/unit/renderer/context-menu/order-sketches-composed.test.ts`、`tests/unit/renderer/context-menu/order-sketches-multiselect.test.ts`。
 
 ### 跨表面偏好分工
 
@@ -321,12 +321,19 @@ tab short = OSC 0/2 → cwd basename → `"Terminal"`。用户钉名优先于后
 权威规格：[`docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md`](docs/superpowers/specs/2026-08-30-review-open-project-directory-gold-standard.md)。  
 检查点：`tests/unit/renderer/git/review/open-directory-governance.test.ts`。
 
+### 目录树高亮多选
+
+Files 与审查侧栏共用高亮多选：选择是集合，激活是单点。禁止纳入勾选和 Stage All 顶栏。右键点在集内对整集操作。树快捷键只打在树焦点，不得抢走编辑器 Delete / ⌘C。
+
+权威规格：[`docs/superpowers/specs/2026-09-10-tree-multiselect-gold-standard.md`](docs/superpowers/specs/2026-09-10-tree-multiselect-gold-standard.md)。  
+检查点：`tests/unit/ui/file-tree-multiselect-governance.test.ts`、`tests/unit/renderer/context-menu/order-sketches-multiselect.test.ts`。
+
 ### MCP 跨智能体清单
 
 设置 → 项目 / 本机工作台 → MCP 是跨智能体**只读清单**：按服务器名聚合，标明从哪来、谁能用、已装智能体里谁还没有。Pier 不改这些文件，也不启动这些服务器。智能体识别必须带名称（Grok 的 X 徽标禁止单独出现）。`pier-memory` 在仓库项目跳到「项目记忆」Tab。禁止宿主 spawn / 启停 / 工具探测 / 连接绿点 / 统一写入 / 市场。
 
 权威规格：[`docs/superpowers/specs/2026-09-03-mcp-inventory-gold-standard.md`](docs/superpowers/specs/2026-09-03-mcp-inventory-gold-standard.md)。  
-检查点：`tests/unit/renderer/settings/mcp-inventory-governance.test.ts`、`tests/unit/main/agents/agent-mcp-catalog-parse.test.ts`、`tests/unit/main/agents/agent-mcp-catalog-service.test.ts`、`tests/unit/renderer/settings/mcp-panel.test.tsx`、`tests/unit/plugins/file-panel-breadcrumb-reveal.test.ts`。
+检查点：`tests/unit/renderer/settings/mcp-inventory-governance.test.ts`、`tests/unit/renderer/settings/mcp-panel.test.tsx`。
 
 ### LSP Gateway `src/main/services/lsp/session-broker.ts`
 

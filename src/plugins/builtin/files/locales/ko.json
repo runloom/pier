@@ -327,6 +327,7 @@
     "filePanel.tree.action.newFolder": "새 폴더...",
     "filePanel.tree.action.rename": "이름 바꾸기...",
     "filePanel.tree.action.delete": "삭제",
+    "filePanel.tree.action.deleteN": "삭제({{count}})",
     "filePanel.tree.action.copyPath": "경로 복사",
     "filePanel.tree.action.copyRelativePath": "상대 경로 복사",
     "filePanel.tree.placeholder.newFile": "filename",

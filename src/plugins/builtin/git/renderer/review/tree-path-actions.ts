@@ -153,6 +153,17 @@ export function registerGitReviewTreePathActions(options: {
     return liveCopyTargetProviders.get(panelId)?.() ?? null;
   };
 
+  const resolveCopyRepoPaths = (
+    invocation: RendererPluginActionInvocation | undefined
+  ): string[] => {
+    const treeItem = parseItem(invocation);
+    if (treeItem && treeItem.copyPaths.length > 0) {
+      return [...treeItem.copyPaths];
+    }
+    const item = resolvePathItem(invocation);
+    return item == null ? [] : [item.path];
+  };
+
   const noPathToCopyReason = () =>
     pluginText(
       context,
@@ -168,12 +179,15 @@ export function registerGitReviewTreePathActions(options: {
       enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
         const item = resolvePathItem(invocation);
-        if (!item) {
+        const paths = resolveCopyRepoPaths(invocation);
+        if (!item || paths.length === 0) {
           return;
         }
         try {
           await writeClipboardText(
-            joinAbsolutePath(item.gitRootPath, item.path)
+            paths
+              .map((path) => joinAbsolutePath(item.gitRootPath, path))
+              .join("\n")
           );
           context.notifications.success(
             pluginText(context, "reviewTreePathCopied", "Path copied")
@@ -205,12 +219,12 @@ export function registerGitReviewTreePathActions(options: {
         resolvePathItem(invocation) == null ? noPathToCopyReason() : null,
       enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
-        const item = resolvePathItem(invocation);
-        if (!item) {
+        const paths = resolveCopyRepoPaths(invocation);
+        if (paths.length === 0) {
           return;
         }
         try {
-          await writeClipboardText(item.path);
+          await writeClipboardText(paths.join("\n"));
           context.notifications.success(
             pluginText(context, "reviewTreePathCopied", "Path copied")
           );

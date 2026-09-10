@@ -12,7 +12,6 @@ import {
 } from "@pier/ui/file/tree.tsx";
 import { FILE_TREE_SEARCH_SHELL_CLASS } from "@pier/ui/file/tree-style.ts";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
@@ -32,12 +31,12 @@ import { cancelInlineCreate, commitInlineCreate } from "./create.ts";
 import { type DoubleClickTrack, detectDoubleClick } from "./double-click.ts";
 import { ExternalActiveFileEntry } from "./external-file-entry.tsx";
 import { ignoredStatusFor } from "./git-decorations.ts";
+import { handleFilesTreeSidebarKeyDown } from "./hotkeys.ts";
 import {
   hasPendingCreatePath,
   peekPendingCreate,
   rollbackFilesTreeModelMove,
 } from "./registry.ts";
-import { handleFilesTreeSearchKeyDown } from "./search-keydown.ts";
 import {
   extractItemPathFromEvent,
   type FileTreeSidebarProps,
@@ -392,6 +391,7 @@ export function FileTreeSidebar({
         onSearchMatchStateChange={treeSearch.updateMatchState}
         onSelectPaths={handleSelectPaths}
         revealPath={activeFilePath ?? null}
+        searchOpen={treeSearch.open}
         stickyFolders
         treeApiRef={treeApiRef}
       />
@@ -431,14 +431,21 @@ export function FileTreeSidebar({
       onContextMenu={handleTreeBackgroundContextMenu}
       onDoubleClick={handleTreeDoubleClick}
       onKeyDown={(event) => {
-        handleFilesTreeSearchKeyDown(event, {
-          closeSearch: treeSearch.closeSearch,
-          focusedMatchOpenable: treeSearch.focusedMatchOpenable,
-          navigateSearch: treeSearch.navigateSearch,
-          open: treeSearch.open,
-          openFocusedMatch: treeSearch.openFocusedMatch,
+        handleFilesTreeSidebarKeyDown(
+          event,
+          treeSearch,
           searchActionsDisabled,
-        });
+          {
+            context,
+            controller,
+            entriesByPath: snapshot.entriesByPath,
+            instanceId,
+            root,
+            selectedPaths: selectedPathsRef.current,
+            t,
+            ...(projectRoot ? { projectRoot } : {}),
+          }
+        );
       }}
     >
       {treeSearch.open ? (

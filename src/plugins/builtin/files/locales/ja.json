@@ -327,6 +327,7 @@
     "filePanel.tree.action.newFolder": "新規フォルダ...",
     "filePanel.tree.action.rename": "名前を変更...",
     "filePanel.tree.action.delete": "削除",
+    "filePanel.tree.action.deleteN": "削除（{{count}}）",
     "filePanel.tree.action.copyPath": "パスをコピー",
     "filePanel.tree.action.copyRelativePath": "相対パスをコピー",
     "filePanel.tree.placeholder.newFile": "filename",

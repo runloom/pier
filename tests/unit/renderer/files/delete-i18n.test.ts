@@ -46,4 +46,15 @@ describe("files delete translations", () => {
       expected
     );
   });
+
+  it.each([
+    [en.messages, "Delete (2)"],
+    [zhCn.messages, "删除 (2)"],
+  ])("uses a counted delete menu title", (messages, expected) => {
+    const t = translator(messages);
+
+    expect(t("filePanel.tree.action.deleteN", undefined, { count: 2 })).toBe(
+      expected
+    );
+  });
 });

@@ -25,6 +25,8 @@ import { ReviewTreeLoading } from "../feedback.tsx";
 import type { GitReviewTreeModel } from "../tree.tsx";
 import { useGitReviewTreeContextMenu } from "../tree-context-menu.ts";
 import { revealGitReviewTreeSelection } from "../tree-reveal-selection.ts";
+import { handleGitReviewTreeKeyDown } from "./hotkeys.ts";
+import { useReviewTreeSelectionRebind } from "./selection-rebind.ts";
 
 const REVIEW_TREE_EXPANSION_STORAGE_PREFIX =
   "pier.git.review.tree.expansion.v1:";
@@ -64,11 +66,16 @@ function GitReviewTreeSidebarComponent({
   treeSearch: FileTreeSearch;
   treeModel: GitReviewTreeModel;
 }) {
+  const { handleSelectPaths, selectedPathsRef } = useReviewTreeSelectionRebind(
+    treeModel,
+    treeSearch.treeApiRef
+  );
   const openItemContextMenu = useGitReviewTreeContextMenu({
     context,
     contextId,
     gitRootPath,
     mutationAuthorityBlocked,
+    selectedPathsRef,
     ...(sourcePanelId ? { sourcePanelId } : {}),
     treeModel,
   });
@@ -115,7 +122,21 @@ function GitReviewTreeSidebarComponent({
   );
 
   return (
-    <aside className="flex h-full min-h-0 w-full flex-col bg-sidebar">
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: aside captures Space/Delete for the tree.
+    <aside
+      className="flex h-full min-h-0 w-full flex-col bg-sidebar"
+      onKeyDown={(event) => {
+        handleGitReviewTreeKeyDown(event.nativeEvent, {
+          context,
+          contextId,
+          gitRootPath,
+          mutationBlocked: mutationAuthorityBlocked,
+          searchOpen: treeSearch.open,
+          selectedPaths: selectedPathsRef.current,
+          treeModel,
+        });
+      }}
+    >
       {sidebarHeader ?? null}
       {treeSearch.open ? (
         <div className={FILE_TREE_SEARCH_SHELL_CLASS}>
@@ -180,9 +201,11 @@ function GitReviewTreeSidebarComponent({
             label={pluginText(context, "reviewTreeLabel", "Changed files")}
             onOpenItemContextMenu={openItemContextMenu}
             onOpenPath={handleOpenPath}
+            onSelectPaths={handleSelectPaths}
             {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
             {...(onContextMenuSession ? { onContextMenuSession } : {})}
             onSearchMatchStateChange={treeSearch.updateMatchState}
+            searchOpen={treeSearch.open}
             stickyFolders
             treeApiRef={treeSearch.treeApiRef}
           />

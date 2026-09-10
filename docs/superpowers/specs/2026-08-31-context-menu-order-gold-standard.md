@@ -2,7 +2,8 @@
 
 日期：2026-08-31  
 修订：2026-09-04 — 布局并入 `2_split`；终端会话并入 `1_new`。  
-修订：2026-09-06 — 终端回到底部进入已有 `1_navigation`。
+修订：2026-09-06 — 终端回到底部进入已有 `1_navigation`。  
+修订：2026-09-10 — 多选只改 title 计数与 `menuHidden`，不改组名。
 状态：现行权威（顺序）  
 范围：所有已登记右键表面的分组与顺序。  
 不包含：命令语义、主点击、命令面板 MRU、原生菜单滚动钉住。
@@ -70,6 +71,9 @@
 - 文件（未暂存）：暂存 → 丢弃 | 打开文件 → 打开目录 | 复制路径 → 复制相对路径 → 在访达中显示
 - 目录：暂存 / 取消暂存 | 展开目录 → 折叠目录 | 打开目录 | 复制… → 访达
 - 分组根：暂存或取消暂存 | 展开 → 折叠 | 打开目录（无复制 / 访达）
+- 多选（点在集内，未暂存文件）：暂存 (N) → 丢弃 (N) | 打开文件 | 复制… → 访达。无打开目录。第一项仍是暂存。
+- 多选（点在集内，跨「更改 / 已暂存」）：暂存 (N) → 取消暂存 (N) → 丢弃… | 打开文件 | 复制…。无打开目录。
+- 多选（点在集内，仅冲突）：打开文件 | 复制… → 访达。无暂存、无打开目录。冲突不得把整项暂存藏掉；集内另有未暂存时仍显示暂存。
 
 `pier.git.review.openFile` 与 `pier.git.review.openDirectory` 同组 `5_open`（0 / 1）。`pier.git.review.openInEditor`（跳转到源码）留在 `1_open`，只挂 diff。
 
@@ -85,6 +89,8 @@
 - 文件（有树剪贴板）：同上，剪切 → 复制 → 粘贴
 - 目录：同上，`2_view` 另含展开 / 折叠
 - 空白：新建文件 → 新建文件夹 | 展开 → 折叠 → 在文件夹中查找 | 粘贴（有剪贴板时）
+- 多选（点在集内，文件）：新建文件 → 新建文件夹 | 在文件夹中查找 | 剪切 → 复制（有树剪贴板时另含粘贴） | 复制路径… → 访达 | 删除 (N)。无重命名、无副本、无打开目录。第一项仍是新建文件。剪切 / 复制 / 复制路径标题保持单数。
+- 多选（点在集内，目录）：同上，`2_view` 另含展开 / 折叠
 
 资源管理器家族，新建保持第一。删除已在 `7_danger`。
 
@@ -145,6 +151,7 @@
 7. 靠新增 `1_xxx` 组名抢第一名；把 `1_find` 改成字典序落到 `1_new` 之后的名字。
 8. 清屏与复制粘贴同一组、中间无分隔。
 9. 拆分 / 聚焦 / 均分拆成不同组，或给智能体会话项单独建组（会再出现单条一组的分隔线）。`4_window` 仍独立，不并进 `2_split`。
+10. 多选后重排组序、给剪切 / 复制标题加 (N)、或新增 Compare Selected。
 
 ---
 
@@ -153,6 +160,7 @@
 - `tests/unit/renderer/context-menu/order-governance.test.ts`
 - `tests/unit/renderer/context-menu/order-sketches.test.ts`
 - `tests/unit/renderer/context-menu/order-sketches-composed.test.ts`
+- `tests/unit/renderer/context-menu/order-sketches-multiselect.test.ts`
 - `tests/unit/renderer/git/review/tree/actions.test.ts`
 - `tests/unit/renderer/git/review/diff/actions.test.ts`
 - `tests/unit/renderer/terminal/context-menu-actions.test.ts`

@@ -46,6 +46,28 @@ export function parseTreeMetadata(
   return parsed.success ? parsed.data : null;
 }
 
+/** 点在 L-Select 集内的多选。点在集外不算，菜单按单行。 */
+export function isFilesTreeMultiSelection(
+  invocation: RendererPluginActionInvocation | undefined
+): boolean {
+  const target = parseTreeMetadata(invocation);
+  return Boolean(
+    target?.selectedPaths &&
+      target.selectedPaths.length > 1 &&
+      target.selectedPaths.includes(target.path)
+  );
+}
+
+export function filesTreeSelectionCount(
+  invocation: RendererPluginActionInvocation | undefined
+): number {
+  const target = parseTreeMetadata(invocation);
+  if (target && isFilesTreeMultiSelection(invocation) && target.selectedPaths) {
+    return target.selectedPaths.length;
+  }
+  return 1;
+}
+
 export function parseTreeBackgroundMetadata(
   invocation: RendererPluginActionInvocation | undefined
 ): FilesTreeBackgroundMetadata | null {

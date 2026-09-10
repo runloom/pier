@@ -78,6 +78,25 @@ function getFileTree(container: HTMLElement): HTMLElement {
   return tree as HTMLElement;
 }
 
+function getFileTreeBridge(container: HTMLElement): HTMLElement {
+  const bridge = container.querySelector('[data-slot="pier-file-tree-bridge"]');
+  expect(bridge).toBeInstanceOf(HTMLElement);
+  return bridge as HTMLElement;
+}
+
+function clickTreeRow(row: HTMLElement, init: MouseEventInit = {}): void {
+  fireEvent(
+    row,
+    new MouseEvent("click", {
+      bubbles: true,
+      button: 0,
+      cancelable: true,
+      composed: true,
+      ...init,
+    })
+  );
+}
+
 const items: PierFileTreeItem[] = [
   { kind: "directory", path: "src" },
   { kind: "file", path: "src/app.tsx", trailingDecoration: "M" },
@@ -213,7 +232,7 @@ describe("PierFileTree", () => {
     });
     expect(onOpenPath).not.toHaveBeenCalled();
 
-    fireEvent.click(
+    clickTreeRow(
       within(getFileTree(container)).getByRole("treeitem", {
         name: APP_TSX_NAME_PATTERN,
       })
@@ -232,7 +251,7 @@ describe("PierFileTree", () => {
       />
     );
 
-    fireEvent.click(
+    clickTreeRow(
       within(getFileTree(container)).getByRole("treeitem", {
         name: APP_TSX_NAME_PATTERN,
       })
@@ -312,11 +331,11 @@ describe("PierFileTree", () => {
     const appRow = within(getFileTree(container)).getByRole("treeitem", {
       name: APP_TSX_NAME_PATTERN,
     });
-    fireEvent.click(appRow);
+    clickTreeRow(appRow);
     expect(onOpenPath).toHaveBeenCalledOnce();
     expect(onOpenPath).toHaveBeenCalledWith("src/app.tsx");
     onOpenPath.mockClear();
-    fireEvent.click(appRow);
+    clickTreeRow(appRow);
     expect(onOpenPath).toHaveBeenCalledOnce();
     expect(onOpenPath).toHaveBeenCalledWith("src/app.tsx");
   });
@@ -843,7 +862,7 @@ describe("PierFileTree", () => {
       />
     );
 
-    fireEvent.click(
+    clickTreeRow(
       within(getFileTree(container)).getByRole("treeitem", { name: "app.tsx" })
     );
     expect(onSelectPaths).toHaveBeenLastCalledWith(["app.tsx"]);
@@ -880,7 +899,7 @@ describe("PierFileTree", () => {
     });
     expect(onOpenPath).toHaveBeenLastCalledWith("theme.CSS");
 
-    fireEvent.click(
+    clickTreeRow(
       within(getFileTree(container)).getByRole("treeitem", {
         name: "reset.css",
       })
@@ -967,7 +986,7 @@ describe("PierFileTree", () => {
     );
 
     // 用户已经展开 src；后续搜索与路径重建必须恢复这份显式状态。
-    fireEvent.click(
+    clickTreeRow(
       within(getFileTree(container)).getByRole("treeitem", {
         name: SRC_NAME_PATTERN,
       })
@@ -1022,14 +1041,20 @@ describe("PierFileTree", () => {
       name: README_NAME_PATTERN,
     });
 
-    fireEvent.click(appRow);
+    clickTreeRow(appRow);
+    expect(onOpenPath).toHaveBeenCalledWith("src/app.tsx");
+    onOpenPath.mockClear();
     expect(readmeRow).toBeInstanceOf(HTMLButtonElement);
-    readmeRow.focus();
-    expect(fireEvent.keyDown(readmeRow, { key: "Enter" })).toBe(true);
-    readmeRow.click();
-
-    expect(onOpenPath).toHaveBeenNthCalledWith(1, "src/app.tsx");
-    expect(onOpenPath).toHaveBeenNthCalledWith(2, "README.md");
+    fireEvent(
+      getFileTreeBridge(container),
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        key: "Enter",
+      })
+    );
+    expect(onOpenPath).toHaveBeenCalledWith("src/app.tsx");
   });
 
   it("selects a row by reporting its path", () => {
@@ -1044,9 +1069,138 @@ describe("PierFileTree", () => {
 
     const tree = within(getFileTree(container));
 
-    fireEvent.click(tree.getByRole("treeitem", { name: APP_TSX_NAME_PATTERN }));
+    clickTreeRow(tree.getByRole("treeitem", { name: APP_TSX_NAME_PATTERN }));
 
     expect(onSelectPaths).toHaveBeenCalledWith(["src/app.tsx"]);
+  });
+
+  it("cmd-clicks add a second file without dropping the first", () => {
+    const onOpenPath = vi.fn<(path: string) => void>();
+    const onSelectPaths = vi.fn<(paths: string[]) => void>();
+    const { container } = render(
+      <PierFileTree
+        items={items}
+        label="Project files"
+        onOpenPath={onOpenPath}
+        onSelectPaths={onSelectPaths}
+      />
+    );
+    const tree = within(getFileTree(container));
+    clickTreeRow(tree.getByRole("treeitem", { name: APP_TSX_NAME_PATTERN }));
+    fireEvent(
+      tree.getByRole("treeitem", { name: README_NAME_PATTERN }),
+      new MouseEvent("click", { bubbles: true, composed: true, metaKey: true })
+    );
+    const last = onSelectPaths.mock.calls.at(-1)?.[0] ?? [];
+    expect(last).toEqual(expect.arrayContaining(["src/app.tsx", "README.md"]));
+    expect(last).toHaveLength(2);
+    expect(onOpenPath).toHaveBeenLastCalledWith("README.md");
+  });
+
+  it("does not activate a cmd-clicked file that is leaving L-Select", () => {
+    const onOpenPath = vi.fn<(path: string) => void>();
+    const onSelectPaths = vi.fn<(paths: string[]) => void>();
+    const { container } = render(
+      <PierFileTree
+        items={items}
+        label="Project files"
+        onOpenPath={onOpenPath}
+        onSelectPaths={onSelectPaths}
+      />
+    );
+    const tree = within(getFileTree(container));
+    clickTreeRow(tree.getByRole("treeitem", { name: APP_TSX_NAME_PATTERN }));
+    clickTreeRow(tree.getByRole("treeitem", { name: README_NAME_PATTERN }), {
+      metaKey: true,
+    });
+    onOpenPath.mockClear();
+    clickTreeRow(tree.getByRole("treeitem", { name: APP_TSX_NAME_PATTERN }), {
+      metaKey: true,
+    });
+    expect(onOpenPath).not.toHaveBeenCalled();
+    const last = onSelectPaths.mock.calls.at(-1)?.[0] ?? [];
+    expect(last).toEqual(["README.md"]);
+  });
+
+  it("does not collapse a multi-select with Escape while product search is open", () => {
+    const onSelectPaths = vi.fn<(paths: string[]) => void>();
+    const { container } = render(
+      <PierFileTree
+        items={items}
+        label="Project files"
+        onSelectPaths={onSelectPaths}
+        searchOpen
+      />
+    );
+    const tree = within(getFileTree(container));
+    clickTreeRow(tree.getByRole("treeitem", { name: APP_TSX_NAME_PATTERN }));
+    clickTreeRow(tree.getByRole("treeitem", { name: README_NAME_PATTERN }), {
+      metaKey: true,
+    });
+    fireEvent(
+      getFileTreeBridge(container),
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        key: "Escape",
+      })
+    );
+    const last = onSelectPaths.mock.calls.at(-1)?.[0] ?? [];
+    expect(last).toEqual(expect.arrayContaining(["src/app.tsx", "README.md"]));
+    expect(last).toHaveLength(2);
+  });
+
+  it("keeps a multi-select after the opened file is revealed as active", () => {
+    const onSelectPaths = vi.fn<(paths: string[]) => void>();
+    const { container, rerender } = render(
+      <PierFileTree
+        items={items}
+        label="Project files"
+        onSelectPaths={onSelectPaths}
+        revealPath="src/app.tsx"
+      />
+    );
+    const tree = within(getFileTree(container));
+    clickTreeRow(tree.getByRole("treeitem", { name: APP_TSX_NAME_PATTERN }));
+    fireEvent(
+      tree.getByRole("treeitem", { name: README_NAME_PATTERN }),
+      new MouseEvent("click", { bubbles: true, composed: true, metaKey: true })
+    );
+    rerender(
+      <PierFileTree
+        items={items}
+        label="Project files"
+        onSelectPaths={onSelectPaths}
+        revealPath="README.md"
+      />
+    );
+    const last = onSelectPaths.mock.calls.at(-1)?.[0] ?? [];
+    expect(last).toEqual(expect.arrayContaining(["src/app.tsx", "README.md"]));
+    expect(last).toHaveLength(2);
+  });
+
+  it("does not open a file when selecting all visible rows", () => {
+    const onOpenPath = vi.fn<(path: string) => void>();
+    const onSelectPaths = vi.fn<(paths: string[]) => void>();
+    const { container } = render(
+      <PierFileTree
+        items={items}
+        label="Project files"
+        onOpenPath={onOpenPath}
+        onSelectPaths={onSelectPaths}
+      />
+    );
+    clickTreeRow(
+      within(getFileTree(container)).getByRole("treeitem", {
+        name: APP_TSX_NAME_PATTERN,
+      })
+    );
+    onOpenPath.mockClear();
+    fireEvent.keyDown(getFileTree(container), { key: "a", metaKey: true });
+    expect(onOpenPath).not.toHaveBeenCalled();
+    const last = onSelectPaths.mock.calls.at(-1)?.[0] ?? [];
+    expect(last.length).toBeGreaterThan(1);
   });
 
   it("reports directory selections using the caller's exact path", () => {
@@ -1061,7 +1215,7 @@ describe("PierFileTree", () => {
 
     const tree = within(getFileTree(container));
 
-    fireEvent.click(tree.getByRole("treeitem", { name: "src" }));
+    clickTreeRow(tree.getByRole("treeitem", { name: "src" }));
 
     expect(onSelectPaths).toHaveBeenCalledWith(["src"]);
   });
@@ -1195,10 +1349,10 @@ describe("PierFileTree", () => {
     expect(srcRow).toHaveAttribute("aria-expanded", "false");
     expect(tree.getAllByRole("treeitem")).toHaveLength(1);
 
-    fireEvent.click(srcRow);
+    clickTreeRow(srcRow);
     expect(srcRow).toHaveAttribute("aria-expanded", "true");
 
-    fireEvent.click(srcRow);
+    clickTreeRow(srcRow);
     expect(srcRow).toHaveAttribute("aria-expanded", "false");
     expect(tree.getAllByRole("treeitem")).toHaveLength(1);
   });
@@ -1221,7 +1375,7 @@ describe("PierFileTree", () => {
     );
 
     const tree = within(getFileTree(container));
-    fireEvent.click(tree.getByRole("treeitem", { name: SRC_NAME_PATTERN }));
+    clickTreeRow(tree.getByRole("treeitem", { name: SRC_NAME_PATTERN }));
 
     expect(onLoadDirectory).toHaveBeenCalledTimes(1);
     expect(onLoadDirectory).toHaveBeenCalledWith("src");
@@ -1286,14 +1440,14 @@ describe("PierFileTree", () => {
 
     const tree = within(getFileTree(container));
     const srcRow = tree.getByRole("treeitem", { name: SRC_NAME_PATTERN });
-    fireEvent.click(srcRow);
+    clickTreeRow(srcRow);
 
     expect(onLoadDirectory).toHaveBeenCalledTimes(1);
     expect(onLoadDirectory).toHaveBeenCalledWith("src");
 
     // Collapse → expand before props change must not spam the same refetch.
-    fireEvent.click(srcRow);
-    fireEvent.click(srcRow);
+    clickTreeRow(srcRow);
+    clickTreeRow(srcRow);
     expect(onLoadDirectory).toHaveBeenCalledTimes(1);
   });
 
@@ -1376,7 +1530,7 @@ describe("PierFileTree", () => {
     );
 
     const tree = within(getFileTree(container));
-    fireEvent.click(tree.getByRole("treeitem", { name: /blank\.canvas/ }));
+    clickTreeRow(tree.getByRole("treeitem", { name: /blank\.canvas/ }));
     expect(onOpenPath).toHaveBeenCalledWith(
       "\u0003Changes/templates/blank.canvas.tsx"
     );
@@ -1576,7 +1730,7 @@ describe("PierFileTree", () => {
         onLoadDirectory={onLoadDirectory}
       />
     );
-    fireEvent.click(
+    clickTreeRow(
       within(getFileTree(container)).getByRole("treeitem", {
         name: SRC_NAME_PATTERN,
       })
@@ -1633,7 +1787,7 @@ describe("PierFileTree", () => {
     const tree = within(getFileTree(container));
     const srcRow = tree.getByRole("treeitem", { name: SRC_NAME_PATTERN });
 
-    fireEvent.click(srcRow);
+    clickTreeRow(srcRow);
 
     expect(onLoadDirectory).not.toHaveBeenCalled();
     expect(tree.getAllByRole("treeitem")).toHaveLength(1);
@@ -1659,15 +1813,15 @@ describe("PierFileTree", () => {
     const tree = within(getFileTree(container));
     const srcRow = tree.getByRole("treeitem", { name: SRC_NAME_PATTERN });
 
-    fireEvent.click(srcRow);
+    clickTreeRow(srcRow);
     expect(onLoadDirectory).toHaveBeenCalledTimes(1);
     expect(onLoadDirectory).toHaveBeenCalledWith("src");
     expect(srcRow).toHaveAttribute("aria-expanded", "true");
 
-    fireEvent.click(srcRow);
+    clickTreeRow(srcRow);
     expect(srcRow).toHaveAttribute("aria-expanded", "false");
 
-    fireEvent.click(srcRow);
+    clickTreeRow(srcRow);
     expect(srcRow).toHaveAttribute("aria-expanded", "true");
     expect(onLoadDirectory).toHaveBeenCalledTimes(1);
   });

@@ -13,7 +13,12 @@ import {
 } from "../document/types.ts";
 import type { FileEditorController } from "../editor/controller.ts";
 import type { FilesTranslate } from "../i18n.ts";
-import { basename, parseTreeMetadata, pluginAction } from "./action-utils.ts";
+import {
+  basename,
+  filesTreeSelectionCount,
+  parseTreeMetadata,
+  pluginAction,
+} from "./action-utils.ts";
 import { removeFilesTreeEntry } from "./store.ts";
 
 function closeOpenFilePanelsForDeletedPaths(
@@ -127,7 +132,15 @@ export function createDeleteAction(
     category: "file",
     metadata: { group: "7_danger", sortOrder: 1 },
     surfaces: ["files/tree-item"],
-    title: () => t("filePanel.tree.action.delete", "Delete"),
+    title: (invocation) => {
+      const count = filesTreeSelectionCount(invocation);
+      if (count > 1) {
+        return t("filePanel.tree.action.deleteN", "Delete ({{count}})", {
+          count,
+        });
+      }
+      return t("filePanel.tree.action.delete", "Delete");
+    },
     handler: async (invocation) => {
       const target = parseTreeMetadata(invocation);
       if (!target) {

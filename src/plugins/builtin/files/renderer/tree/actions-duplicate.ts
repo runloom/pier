@@ -7,6 +7,7 @@ import type { FilesTranslate } from "../i18n.ts";
 import {
   basename,
   dirnameRelative,
+  isFilesTreeMultiSelection,
   parseTreeMetadata,
   pluginAction,
 } from "./action-utils.ts";
@@ -33,14 +34,7 @@ export function createDuplicateAction(
     category: "file",
     metadata: {
       group: "5_edit",
-      menuHidden: (invocation) => {
-        const target = parseTreeMetadata(invocation);
-        return Boolean(
-          target?.selectedPaths &&
-            target.selectedPaths.length > 1 &&
-            target.selectedPaths.includes(target.path)
-        );
-      },
+      menuHidden: (invocation) => isFilesTreeMultiSelection(invocation),
       sortOrder: 2,
     },
     surfaces: ["files/tree-item"],

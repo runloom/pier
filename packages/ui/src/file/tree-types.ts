@@ -76,8 +76,10 @@ export interface PierFileTreeApi {
   focusSearchMatch: (direction: "next" | "previous") => void;
   getExpansionIntent: () => TreeExpansionIntent | null;
   getSearchMatchCount: () => number;
+  getSelectedPaths: () => readonly string[];
   /** 从模型移除路径(新建落盘失败回滚幽灵节点用)。 */
   removePaths: (paths: readonly string[]) => void;
+  replaceSelectedPaths: (paths: readonly string[]) => void;
   /**
    * VS Code-like reveal: expand ancestors, expand folder targets, select+focus
    * (focus ring), then scroll. Does not open files.
@@ -297,6 +299,11 @@ export interface PierFileTreeProps
   /** 变化时把该路径滚动进视口并选中(auto-reveal 当前文件)。 */
   revealPath?: string | null;
   scrollControllerRef?: React.Ref<PierFileTreeScrollController>;
+  /**
+   * Product search bar is open (even with an empty query). Esc then closes
+   * search and must not collapse L-Select.
+   */
+  searchOpen?: boolean;
   stickyFolders?: boolean;
   treeApiRef?: React.Ref<PierFileTreeApi>;
 }

@@ -327,6 +327,7 @@
     "filePanel.tree.action.newFolder": "New Folder...",
     "filePanel.tree.action.rename": "Rename...",
     "filePanel.tree.action.delete": "Delete",
+    "filePanel.tree.action.deleteN": "Delete ({{count}})",
     "filePanel.tree.action.copyPath": "Copy Path",
     "filePanel.tree.action.copyRelativePath": "Copy Relative Path",
     "filePanel.tree.placeholder.newFile": "filename",
