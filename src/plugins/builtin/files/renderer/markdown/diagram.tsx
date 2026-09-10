@@ -1,6 +1,7 @@
 import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
 import { MediaFullscreenButton } from "@pier/ui/image-preview/media-fullscreen-button.tsx";
 import { isPlainSurfaceClick } from "@pier/ui/media/surface-open.ts";
+import { tuneNeoFlowchartMarkers } from "@pier/ui/mermaid/neo-markers.ts";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
@@ -137,6 +138,7 @@ export function MarkdownDiagram({
     }
     const display = computeNaturalCappedSize(intrinsic, slotWidth, 1);
     applySvgDisplaySize(svg, display);
+    tuneNeoFlowchartMarkers(svg);
     root.replaceChildren(svg);
     return () => root.replaceChildren();
   }, [displaySvg, containerWidth, shellEl, state.status]);

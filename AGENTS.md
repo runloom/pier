@@ -154,6 +154,14 @@ Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 
 检查点在 `tests/unit/plugins/markdown/markdown-open-restore-governance.test.ts`。
 
+### Markdown / Canvas Mermaid 纸面着色
+
+权威规格：[`docs/superpowers/specs/2026-09-10-mermaid-paper-tokens-gold-standard.md`](docs/superpowers/specs/2026-09-10-mermaid-paper-tokens-gold-standard.md)。
+
+- 单例 `theme: "base"` + `MERMAID_THEME_CSS`；禁止 `themeVariables` 写 CSS 变量。流程图 `look: neo` + rounded，其它图种 classic。
+- 闭集默认铬映射纸面令牌：分组 `--secondary`，节点 `--card`，连线 `--muted-foreground`；空心镖 `fill: none`。作者 `classDef` 仍赢。
+- 检查点在 `tests/unit/ui/mermaid-theme-governance.test.ts`。
+
 ### Files 已删除文档与打开标签
 
 权威规格：[`docs/superpowers/specs/2026-09-09-files-deleted-open-document-tab-gold-standard.md`](docs/superpowers/specs/2026-09-09-files-deleted-open-document-tab-gold-standard.md)。

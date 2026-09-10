@@ -1,3 +1,5 @@
+import { applyFlowchartLook } from "./flowchart-look.ts";
+
 /**
  * Mermaid source preparation shared by every render path (markdown inline,
  * fullscreen preview, canvas visualizations) so all of them render the same
@@ -13,10 +15,14 @@
  * - optimizeMermaidSource: opt-in LR/RL → TD rewrite for pure path
  *   flowcharts (`%%{pier: layout=auto-td}%%`). The directive comment is
  *   consumed here and stripped by the normalize pass before rendering.
+ * - applyFlowchartLook: flowchart/graph default to mermaid neo + rounded
+ *   curve unless the author already set `look` in `%%{init}%%` or YAML.
  */
 
 export function prepareMermaidSource(source: string): string {
-  return normalizeMermaidStatements(optimizeMermaidSource(source).source);
+  return applyFlowchartLook(
+    normalizeMermaidStatements(optimizeMermaidSource(source).source)
+  );
 }
 
 export function normalizeMermaidStatements(source: string): string {

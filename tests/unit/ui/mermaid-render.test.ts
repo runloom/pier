@@ -21,16 +21,16 @@ describe("Mermaid render", () => {
     );
   });
 
-  it("paints default flowchart nodes with card fill and info-fg connectors", async () => {
+  it("paints default flowchart nodes with card fill and muted connectors", async () => {
     const source = await readFile(
       join(import.meta.dirname, "../../../packages/ui/src/mermaid/theme.ts"),
       "utf8"
     );
     expect(MERMAID_THEME_CSS).toContain(
-      "stroke: var(--status-info-fg) !important;"
+      "stroke: var(--muted-foreground) !important;"
     );
     expect(MERMAID_THEME_CSS).toMatch(
-      /\.node rect, \.node polygon, \.node circle, \.node \.label-container, \.node \.basic \{\s*fill: var\(--card\) !important;\s*stroke: var\(--border\) !important;/
+      /\.node rect, \.node polygon, \.node circle, \.node ellipse, \.node path, \.node \.label-container, \.node \.basic \{\s*fill: var\(--card\) !important;\s*stroke: var\(--border\) !important;/
     );
     expect(MERMAID_THEME_CSS).not.toContain("max-width: 100%");
     expect(source).toContain("useMaxWidth: false");
@@ -84,7 +84,10 @@ describe("Mermaid render", () => {
 
   it("does not nest backticks inside the mermaid theme CSS template", async () => {
     const source = await readFile(
-      join(import.meta.dirname, "../../../packages/ui/src/mermaid/theme.ts"),
+      join(
+        import.meta.dirname,
+        "../../../packages/ui/src/mermaid/theme-css.ts"
+      ),
       "utf8"
     );
     const prefix = "export const MERMAID_THEME_CSS = `";
@@ -244,7 +247,13 @@ describe("Mermaid render", () => {
     // stylis nests themeCSS under the svg id and serializes `>` as `&gt;`.
     const css = result.svg.replaceAll("&gt;", ">");
     expect(css).toContain(".noteText>tspan");
-    expect(css).toContain("fill:var(--secondary)!important");
-    expect(css).toContain("fill:var(--foreground)!important");
+    expect(css).toMatch(/fill:\s*var\(--secondary\)/);
+    expect(css).toMatch(/fill:\s*var\(--foreground\)/);
+    expect(MERMAID_THEME_CSS).toMatch(
+      /\.note, \.labelBox, rect\.actor \{[\s\S]*fill: var\(--secondary\) !important/
+    );
+    expect(MERMAID_THEME_CSS).toMatch(
+      /\.messageText > tspan[\s\S]*fill: var\(--foreground\) !important/
+    );
   });
 });

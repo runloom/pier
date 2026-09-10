@@ -8,6 +8,7 @@ import { HtmlWorldCanvas } from "../image-preview/world-canvas.tsx";
 import { cn } from "../utils.ts";
 import { MermaidMark } from "./mark.tsx";
 import { SLOT_ATTR } from "./model.ts";
+import { tuneNeoFlowchartMarkers } from "./neo-markers.ts";
 import type { MermaidProps } from "./props.ts";
 import { MermaidEmpty, MermaidShell } from "./shell.tsx";
 import { prepareMermaidSource } from "./source-prepare.ts";
@@ -46,12 +47,9 @@ export function MermaidScene(props: MermaidProps) {
   } = props;
   const isStage = presentation === "stage";
   const keyboardSelectable = onSelectNode !== undefined;
-  // Author sources go through the same prepare pass as the markdown inline
-  // facade so fullscreen and inline render byte-identical mermaid input.
-  // mermaidFlowchart() output is already canonical.
-  const mermaidSource = source
-    ? prepareMermaidSource(source)
-    : mermaidFlowchart({ direction, edges, nodes });
+  const mermaidSource = prepareMermaidSource(
+    source ?? mermaidFlowchart({ direction, edges, nodes })
+  );
   const hostRef = useRef<HTMLDivElement>(null);
   const rootsRef = useRef(new Map<string, Root>());
   const paintRef = useRef<() => void>(() => undefined);
@@ -115,6 +113,10 @@ export function MermaidScene(props: MermaidProps) {
           return;
         }
         hostRef.current.innerHTML = result.svg;
+        const svg = hostRef.current.querySelector("svg");
+        if (svg) {
+          tuneNeoFlowchartMarkers(svg);
+        }
         // createRoot.render is async; flush so every slotted card is in the
         // DOM before tests / click handlers look for titles.
         flushSync(() => {
