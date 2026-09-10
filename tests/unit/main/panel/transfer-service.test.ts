@@ -311,12 +311,14 @@ describe("PanelTransferService", () => {
 
   it("copy relocate allocates a new targetPanelId and skips releaseSource", async () => {
     let releaseCalls = 0;
+    const prepareCommands: unknown[] = [];
     rendererExecute.mockImplementation(async (command: { type: string }) => {
       if (command.type === "panelTransfer.releaseSource") {
         releaseCalls += 1;
         return { data: null, ok: true, requestId: "r1" };
       }
       if (command.type === "panelTransfer.prepareSource") {
+        prepareCommands.push(command);
         return {
           data: {
             panel: {
@@ -362,6 +364,12 @@ describe("PanelTransferService", () => {
     expect(createForTransfer).toHaveBeenCalledTimes(1);
     expect(releaseCalls).toBe(0);
     expect(windows.closeAfterTransfer).not.toHaveBeenCalled();
+    expect(prepareCommands).toEqual([
+      expect.objectContaining({
+        mode: "copy",
+        type: "panelTransfer.prepareSource",
+      }),
+    ]);
   });
 
   it("relocate managed window resolves default placement when omitted", async () => {

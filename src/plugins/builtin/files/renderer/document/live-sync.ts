@@ -42,12 +42,22 @@ export function scheduleDocumentAutoSave(input: {
     input.suspending ||
     !(input.autoSaveEnabled && document.dirty) ||
     document.source.kind !== "disk" ||
+    document.deletedOnDisk ||
     document.saveState === "saving"
   ) {
     return;
   }
   const timer = setTimeout(() => {
     input.saveTimers.delete(document.id);
+    const latest = getDocument(document.id);
+    if (
+      !latest ||
+      latest.deletedOnDisk ||
+      latest.source.kind !== "disk" ||
+      !latest.dirty
+    ) {
+      return;
+    }
     input
       .saveDocument(document.id, input.panelId ?? undefined)
       .catch(() => undefined);
@@ -148,14 +158,16 @@ export function handleDocumentStoreChangeForLiveSync(input: {
     const wasDirty = input.lastDirty.get(document.id) === true;
     input.lastContents.set(document.id, document.currentContents);
     input.lastDirty.set(document.id, document.dirty);
-    if (!document.dirty) {
+    if (document.deletedOnDisk || !document.dirty) {
       clearDocumentAutoSaveTimer(input.saveTimers, document.id);
-      maybeAdoptDiskAfterDirtyCleared({
-        documentId: document.id,
-        loader: input.loader,
-        suspending: input.suspending,
-        wasDirty,
-      });
+      if (!document.deletedOnDisk) {
+        maybeAdoptDiskAfterDirtyCleared({
+          documentId: document.id,
+          loader: input.loader,
+          suspending: input.suspending,
+          wasDirty,
+        });
+      }
     } else if (previousContents !== document.currentContents) {
       scheduleDocumentAutoSave({
         autoSaveEnabled: input.autoSaveEnabled,

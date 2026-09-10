@@ -1,5 +1,6 @@
 import {
   clearDiskReplaceAuthorizationsForTests,
+  filesDocumentRequiresSaveOnClose,
   isDeletionOnlyDirty,
   protectsLocalBufferFromDisk,
 } from "@plugins/builtin/files/renderer/document/disk-protection.ts";
@@ -44,8 +45,11 @@ import {
   removeDocument,
   resetFilesDraftBackendForTests,
   restoreUntitledDocumentFromPanelSource,
+  revertDocumentToSaved,
   setDocumentConflictContents,
   setDocumentLanguage,
+  setDocumentSaveEol,
+  setDocumentSaveFormat,
   subscribeFilesDocumentStore,
   updateDocumentContents,
 } from "@plugins/builtin/files/renderer/document/store.ts";
@@ -734,7 +738,7 @@ describe("files-document-store", () => {
 
     expect(drafts.has(diskDraftKey(document.id))).toBe(true);
     const raw = drafts.get(diskDraftKey(document.id));
-    expect(raw).toContain('"diskConflict":true');
+    expect(raw).toContain('"diskConflict":false');
     expect(raw).toContain('"deletedOnDisk":true');
     expect(raw).not.toContain('"conflictDiskContents":"# conflict snapshot"');
     expect(raw).toContain('"revision":null');
@@ -747,7 +751,7 @@ describe("files-document-store", () => {
       currentContents: "# dirty recovery",
       deletedOnDisk: true,
       dirty: true,
-      diskConflict: true,
+      diskConflict: false,
       durabilityUnknown: true,
       hasBackingStore: false,
       revision: null,
@@ -1103,6 +1107,7 @@ describe("files-document-store", () => {
     };
     expect(isDeletionOnlyDirty(base)).toBe(true);
     expect(protectsLocalBufferFromDisk(base)).toBe(false);
+    expect(filesDocumentRequiresSaveOnClose(base)).toBe(false);
 
     expect(
       isDeletionOnlyDirty({
@@ -1112,6 +1117,12 @@ describe("files-document-store", () => {
     ).toBe(false);
     expect(
       protectsLocalBufferFromDisk({
+        ...base,
+        currentContents: "# edited\n",
+      })
+    ).toBe(true);
+    expect(
+      filesDocumentRequiresSaveOnClose({
         ...base,
         currentContents: "# edited\n",
       })
@@ -1627,9 +1638,84 @@ describe("files-document-store", () => {
       currentContents: "# still editing\n",
       deletedOnDisk: true,
       dirty: true,
+      diskConflict: false,
       hasBackingStore: false,
       revision: null,
       conflictDiskContents: null,
     });
+  });
+
+  it("reverts contents and format so discard-delete is deletion-only dirty", () => {
+    const root = "/repo";
+    const path = "notes.md";
+    const document = ensureDiskDocument({ path, root });
+    markDocumentReadResult(document.id, {
+      canonicalPath: path,
+      contents: "# saved\n",
+      eol: "lf",
+      format: { bom: false, encoding: "utf8" },
+      kind: "text",
+      mtimeMs: 1,
+      mode: 0o644,
+      path,
+      revision: "r1",
+      root,
+      size: 8,
+      writable: true,
+    });
+    updateDocumentContents(document.id, "# local edit\n");
+    setDocumentSaveEol(document.id, "crlf");
+    setDocumentSaveFormat(document.id, { bom: true, encoding: "utf8" });
+
+    revertDocumentToSaved(document.id);
+    expect(getDocument(document.id)).toMatchObject({
+      currentContents: "# saved\n",
+      eol: "lf",
+      format: { bom: false, encoding: "utf8" },
+    });
+    markDocumentDeletedOnDisk(document.id);
+    const deleted = getDocument(document.id);
+    expect(deleted).toBeTruthy();
+    expect(isDeletionOnlyDirty(deleted!)).toBe(true);
+    expect(filesDocumentRequiresSaveOnClose(deleted!)).toBe(false);
+  });
+
+  it("clears durabilityUnknown on revert so discard-delete is deletion-only dirty", () => {
+    const root = "/repo";
+    const path = "notes.md";
+    const document = ensureDiskDocument({ path, root });
+    markDocumentReadResult(document.id, {
+      canonicalPath: path,
+      contents: "# saved\n",
+      eol: "lf",
+      format: { bom: false, encoding: "utf8" },
+      kind: "text",
+      mtimeMs: 1,
+      mode: 0o644,
+      path,
+      revision: "r1",
+      root,
+      size: 8,
+      writable: true,
+    });
+    markDocumentWritten(document.id, "# saved\n", {
+      canonicalPath: path,
+      committed: true,
+      durability: "unknown",
+      kind: "written",
+      mode: 0o644,
+      mtimeMs: 2,
+      revision: "r-unknown",
+      size: 8,
+    });
+    expect(getDocument(document.id)?.durabilityUnknown).toBe(true);
+
+    revertDocumentToSaved(document.id);
+    expect(getDocument(document.id)?.durabilityUnknown).toBe(false);
+    markDocumentDeletedOnDisk(document.id);
+    const deleted = getDocument(document.id);
+    expect(deleted).toBeTruthy();
+    expect(isDeletionOnlyDirty(deleted!)).toBe(true);
+    expect(filesDocumentRequiresSaveOnClose(deleted!)).toBe(false);
   });
 });

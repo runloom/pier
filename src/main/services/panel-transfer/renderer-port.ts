@@ -1,4 +1,5 @@
 import type {
+  PanelTransferMode,
   PanelTransferPlacement,
   PanelTransferSourceSnapshot,
 } from "@shared/contracts/panel-transfer.ts";
@@ -12,6 +13,7 @@ export interface PanelTransferRendererPort {
     windowId: string;
   }): Promise<RendererCommandResult>;
   prepareSource(input: {
+    mode?: PanelTransferMode;
     sourcePanelId: string;
     transferId: string;
     windowId: string;

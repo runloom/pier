@@ -84,6 +84,20 @@ export function isDeletionOnlyDirty(document: DirtyDocument): boolean {
   );
 }
 
+export function filesDocumentRequiresSaveOnClose(
+  document: DirtyDocument & { needsSaveAs?: boolean }
+): boolean {
+  if (isDeletionOnlyDirty(document)) {
+    return false;
+  }
+  return (
+    document.currentContents !== document.savedContents ||
+    documentSaveFormatDirty(document) ||
+    document.durabilityUnknown ||
+    document.needsSaveAs === true
+  );
+}
+
 /**
  * True when external disk content must not replace the open buffer.
  *

@@ -2,15 +2,9 @@ import type {
   RendererPluginAction,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
-import {
-  FILES_DELETE_COMMAND_ID,
-  FILES_FILE_PANEL_ID,
-} from "../../manifest.ts";
+import { FILES_DELETE_COMMAND_ID } from "../../manifest.ts";
 import { isSamePathOrDescendant } from "../document/paths.ts";
-import {
-  type FilesDocument,
-  parseFilesDocumentPanelSource,
-} from "../document/types.ts";
+import type { FilesDocument } from "../document/types.ts";
 import type { FileEditorController } from "../editor/controller.ts";
 import type { FilesTranslate } from "../i18n.ts";
 import {
@@ -21,24 +15,17 @@ import {
 } from "./action-utils.ts";
 import { removeFilesTreeEntry } from "./store.ts";
 
-function closeOpenFilePanelsForDeletedPaths(
-  context: RendererPluginContext,
+function diskDocumentsUnderPath(
+  documents: readonly FilesDocument[],
   root: string,
-  paths: readonly string[]
-): void {
-  for (const instance of context.panels.listInstances(FILES_FILE_PANEL_ID)) {
-    const source = parseFilesDocumentPanelSource(instance.params);
-    if (
-      source?.kind === "disk" &&
-      source.root === root &&
-      paths.some((path) => isSamePathOrDescendant(source.path, path))
-    ) {
-      context.panels.closeInstance({
-        componentId: FILES_FILE_PANEL_ID,
-        instanceId: instance.id,
-      });
-    }
-  }
+  path: string
+): FilesDocument[] {
+  return documents.filter(
+    (document) =>
+      document.source.kind === "disk" &&
+      document.source.root === root &&
+      isSamePathOrDescendant(document.source.path, path)
+  );
 }
 
 function collapseDeletionPaths(paths: readonly string[]): string[] {
@@ -57,7 +44,7 @@ async function protectOpenDocumentsBeforeTrash(input: {
   controller: FileEditorController;
   currentDocuments: () => FilesDocument[];
   t: FilesTranslate;
-}): Promise<"cancel" | "discard" | "protected"> {
+}): Promise<"cancel" | "discard" | "untitled" | "protected"> {
   const { context, controller, currentDocuments, t } = input;
   const protectedDocuments = currentDocuments().filter(
     (document) =>
@@ -119,7 +106,7 @@ async function protectOpenDocumentsBeforeTrash(input: {
     return "discard";
   }
   await controller.preserveDocumentsAsUntitled(protectedDocuments);
-  return "discard";
+  return "untitled";
 }
 
 export function createDeleteAction(
@@ -164,8 +151,10 @@ export function createDeleteAction(
           document.dirty || document.durabilityUnknown || document.needsSaveAs
       );
       try {
+        let protection: "cancel" | "discard" | "untitled" | "protected" =
+          "protected";
         try {
-          const protection = await protectOpenDocumentsBeforeTrash({
+          protection = await protectOpenDocumentsBeforeTrash({
             context,
             controller,
             currentDocuments: pathGuard.currentDocuments,
@@ -205,17 +194,15 @@ export function createDeleteAction(
           try {
             await context.files.trash({ path, root: target.root });
             removeFilesTreeEntry(target.root, path);
-            controller.removeDocumentsAfterPathMutation(
-              pathGuard
-                .currentDocuments()
-                .filter(
-                  (document) =>
-                    document.source.kind === "disk" &&
-                    document.source.root === target.root &&
-                    isSamePathOrDescendant(document.source.path, path)
-                )
+            const affected = diskDocumentsUnderPath(
+              pathGuard.currentDocuments(),
+              target.root,
+              path
             );
-            closeOpenFilePanelsForDeletedPaths(context, target.root, [path]);
+            if (protection === "discard") {
+              controller.revertDocumentsToSaved(affected);
+            }
+            controller.markDocumentsDeletedOnDisk(affected);
           } catch (error) {
             failures.push({ error, path });
           }

@@ -207,6 +207,7 @@ export const {
   markDocumentSaveIdle,
   markDocumentSaving,
   normalizeDocumentEol,
+  revertDocumentToSaved,
   setDocumentConflictContents,
   setDocumentLanguage,
   setDocumentSaveEol,

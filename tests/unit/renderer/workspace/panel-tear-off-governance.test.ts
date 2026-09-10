@@ -21,6 +21,10 @@ describe("panel tear-off governance", () => {
     expect(spec).toContain("isDragReleaseOutsideThisWindow");
     expect(spec).toContain("分类与 HTML5 `drop` 都必须忽略这些 window id");
     expect(spec).toContain("含正在销毁的预创建窗");
+    expect(spec).toContain("Copy 不撕源 tab");
+    expect(spec).toContain('mode !== "copy"');
+    expect(spec).toContain("finalize");
+    expect(spec).toContain("clearPanelTransferTearOff");
 
     const tearOff = readFileSync(
       join(ROOT, "src/renderer/components/workspace/transfer/tear-off.ts"),
@@ -45,6 +49,17 @@ describe("panel tear-off governance", () => {
     );
     expect(dnd).toContain("hidePanelTransferTearOff");
     expect(dnd).toContain("isDragReleaseOutsideThisWindow");
+
+    const commands = readFileSync(
+      join(ROOT, "src/renderer/components/workspace/transfer/commands.ts"),
+      "utf8"
+    );
+    expect(commands).toContain('if (command.mode !== "copy")');
+    expect(commands).toContain("hidePanelTransferTearOff");
+    expect(commands).toContain("clearPanelTransferTearOff");
+    expect(commands).not.toMatch(
+      /if \(outcome === "abort"\) \{\s*clearPanelTransferTearOff\(\);/
+    );
 
     const commit = readFileSync(
       join(ROOT, "src/main/services/panel-transfer/commit.ts"),

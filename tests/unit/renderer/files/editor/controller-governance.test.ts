@@ -84,7 +84,8 @@ describe("FileEditorController governance", () => {
     expect(sidebar).toContain("controller.movePath");
     expect(treeActions).not.toContain("files-document-store");
     expect(deleteAction).not.toContain("files-document-store");
-    expect(deleteAction).toContain(
+    expect(deleteAction).toContain("controller.markDocumentsDeletedOnDisk");
+    expect(deleteAction).not.toContain(
       "controller.removeDocumentsAfterPathMutation"
     );
     expect(pluginEntry).toContain(

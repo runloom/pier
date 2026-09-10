@@ -3,9 +3,11 @@ import { isSamePathOrDescendant } from "../document/paths.ts";
 import {
   getDocument,
   listOpenDiskDocuments,
+  markDocumentDeletedOnDisk,
   moveDiskDocumentSource,
   removeDiskDocumentForPath,
   removeDocument,
+  revertDocumentToSaved,
 } from "../document/store.ts";
 import type { FilesDocument } from "../document/types.ts";
 
@@ -72,6 +74,23 @@ export class FileEditorPathMutations {
     this.#onRemoveDocuments(documentIds);
     for (const documentId of documentIds) {
       removeDocument(documentId);
+    }
+  }
+
+  markDeletedOnDisk(documents: readonly FilesDocument[]): void {
+    for (const document of documents) {
+      const current = getDocument(document.id);
+      if (current?.source.kind === "disk") {
+        markDocumentDeletedOnDisk(current.id);
+      }
+    }
+  }
+
+  revertToSaved(documents: readonly FilesDocument[]): void {
+    for (const document of documents) {
+      if (getDocument(document.id)) {
+        revertDocumentToSaved(document.id);
+      }
     }
   }
 

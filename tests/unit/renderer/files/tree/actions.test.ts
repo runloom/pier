@@ -73,8 +73,11 @@ function treeActions(
     overrides.documentsForPathMutation ?? vi.fn(async () => []);
   const moveDiskDocumentSource =
     overrides.moveDiskDocumentSource ?? vi.fn(async () => undefined);
+  const markDocumentsDeletedOnDisk =
+    overrides.markDocumentsDeletedOnDisk ?? vi.fn();
   const removeDocumentsAfterPathMutation =
     overrides.removeDocumentsAfterPathMutation ?? vi.fn();
+  const revertDocumentsToSaved = overrides.revertDocumentsToSaved ?? vi.fn();
   const controller = {
     beginPathMutation: vi.fn(async (root: string, paths: readonly string[]) => {
       const documents = await documentsForPathMutation(root, paths);
@@ -96,8 +99,10 @@ function treeActions(
       await moveDiskDocumentSource(root, oldPath, newPath);
     }),
     preserveDocumentsAsUntitled: vi.fn(async () => []),
+    markDocumentsDeletedOnDisk,
     removeDocumentsAfterPathMutation,
     removeDiskDocumentForPath: vi.fn(),
+    revertDocumentsToSaved,
     getPanelSource: vi.fn(() => null),
     saveDocument: vi.fn(async () => "saved" as const),
     settleDocument: vi.fn(async (documentId: string) => ({
@@ -785,12 +790,12 @@ describe("file-tree-actions", () => {
       } as never;
       return [document];
     });
-    const removeDocumentsAfterPathMutation = vi.fn();
+    const markDocumentsDeletedOnDisk = vi.fn();
     const action = actionById(
       treeActions(context, {
         documentsForPathMutation: vi.fn(async () => [document]),
+        markDocumentsDeletedOnDisk,
         preserveDocumentsAsUntitled,
-        removeDocumentsAfterPathMutation,
       } as unknown as Partial<FileEditorController>),
       FILES_DELETE_COMMAND_ID
     );
@@ -805,10 +810,10 @@ describe("file-tree-actions", () => {
     expect(
       preserveDocumentsAsUntitled.mock.invocationCallOrder[0]
     ).toBeLessThan(files.trash.mock.invocationCallOrder[0] ?? 0);
-    expect(removeDocumentsAfterPathMutation).toHaveBeenCalledWith([]);
+    expect(markDocumentsDeletedOnDisk).toHaveBeenCalledWith([]);
   });
 
-  it("removes documents discovered by the live path guard after it was acquired", async () => {
+  it("marks documents discovered by the live path guard after it was acquired", async () => {
     const { context } = makeContext();
     const discovered = {
       dirty: false,
@@ -817,7 +822,7 @@ describe("file-tree-actions", () => {
       needsSaveAs: false,
       source: { kind: "disk" as const, path: "src/late.ts", root: ROOT },
     };
-    const removeDocumentsAfterPathMutation = vi.fn();
+    const markDocumentsDeletedOnDisk = vi.fn();
     const action = actionById(
       treeActions(context, {
         beginPathMutation: vi.fn(async () => ({
@@ -825,18 +830,25 @@ describe("file-tree-actions", () => {
           documents: [],
           release: vi.fn(),
         })),
-        removeDocumentsAfterPathMutation,
+        markDocumentsDeletedOnDisk,
       } as unknown as Partial<FileEditorController>),
       FILES_DELETE_COMMAND_ID
     );
 
     await action.handler(treeInvocation(file("src/late.ts")));
 
-    expect(removeDocumentsAfterPathMutation).toHaveBeenCalledWith([discovered]);
+    expect(markDocumentsDeletedOnDisk).toHaveBeenCalledWith([discovered]);
   });
 
-  it("closes the open tab when the deleted file is currently displayed", async () => {
+  it("keeps the open tab and marks the document deleted on disk", async () => {
     const { closeInstance, context, listInstances } = makeContext();
+    const openDocument = {
+      dirty: false,
+      durabilityUnknown: false,
+      id: "open-document",
+      needsSaveAs: false,
+      source: { kind: "disk" as const, path: "src/open.ts", root: ROOT },
+    };
     listInstances.mockReturnValue([
       {
         componentId: FILES_FILE_PANEL_ID,
@@ -848,14 +860,50 @@ describe("file-tree-actions", () => {
         title: "open.ts",
       },
     ]);
-    const action = actionById(treeActions(context), FILES_DELETE_COMMAND_ID);
+    const markDocumentsDeletedOnDisk = vi.fn();
+    const action = actionById(
+      treeActions(context, {
+        documentsForPathMutation: vi.fn(async () => [openDocument]),
+        markDocumentsDeletedOnDisk,
+      } as unknown as Partial<FileEditorController>),
+      FILES_DELETE_COMMAND_ID
+    );
 
     await action.handler(treeInvocation(file("src/open.ts")));
 
-    expect(closeInstance).toHaveBeenCalledWith({
-      componentId: FILES_FILE_PANEL_ID,
-      instanceId: "panel-open",
-    });
+    expect(closeInstance).not.toHaveBeenCalled();
+    expect(markDocumentsDeletedOnDisk).toHaveBeenCalledWith([openDocument]);
+  });
+
+  it("reverts unsaved edits then marks the document deleted when discarding", async () => {
+    const { closeInstance, context, dialogs } = makeContext();
+    dialogs.choice.mockResolvedValueOnce("alt").mockResolvedValueOnce("alt");
+    const document = {
+      dirty: true,
+      durabilityUnknown: false,
+      id: "dirty-document",
+      needsSaveAs: false,
+      source: { kind: "disk" as const, path: "src/dirty.ts", root: ROOT },
+    };
+    const markDocumentsDeletedOnDisk = vi.fn();
+    const revertDocumentsToSaved = vi.fn();
+    const action = actionById(
+      treeActions(context, {
+        documentsForPathMutation: vi.fn(async () => [document]),
+        markDocumentsDeletedOnDisk,
+        revertDocumentsToSaved,
+      } as unknown as Partial<FileEditorController>),
+      FILES_DELETE_COMMAND_ID
+    );
+
+    await action.handler(treeInvocation(file("src/dirty.ts")));
+
+    expect(revertDocumentsToSaved).toHaveBeenCalledWith([document]);
+    expect(markDocumentsDeletedOnDisk).toHaveBeenCalledWith([document]);
+    expect(closeInstance).not.toHaveBeenCalled();
+    expect(revertDocumentsToSaved.mock.invocationCallOrder[0]).toBeLessThan(
+      markDocumentsDeletedOnDisk.mock.invocationCallOrder[0] ?? 0
+    );
   });
 
   it("keeps the tab when unsaved content was preserved as untitled", async () => {

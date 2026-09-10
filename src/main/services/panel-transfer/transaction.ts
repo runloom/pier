@@ -111,6 +111,7 @@ export async function runClaimedTransfer(
 
     throwIfAborted(abortSignal);
     const prepareResult = await deps.renderer.prepareSource({
+      mode,
       sourcePanelId: panelId,
       transferId,
       windowId: source.runtimeWindowId,

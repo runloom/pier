@@ -422,22 +422,50 @@ export function withDocumentDiskConflictDismissed(
   };
 }
 
+export function withDocumentRevertedToSaved(
+  document: FilesDocument
+): FilesDocument {
+  const next = {
+    ...document,
+    currentContents: document.savedContents,
+    durabilityUnknown: false,
+    eol: document.savedEol,
+    format: document.savedFormat,
+  };
+  const dirty = computeDocumentDirty(next);
+  if (
+    document.currentContents === next.currentContents &&
+    document.dirty === dirty &&
+    document.durabilityUnknown === next.durabilityUnknown &&
+    document.eol === next.eol &&
+    document.format === next.format
+  ) {
+    return document;
+  }
+  return {
+    ...next,
+    dirty,
+  };
+}
+
 export function withDocumentDeletedOnDisk(
   document: FilesDocument
 ): FilesDocument {
-  return {
+  // Null revision: Save must recreate with expected: absent.
+  const next = {
     ...document,
-    // Keep the in-memory buffer; clear revision so Save recreates with
-    // expected: absent instead of treating deletion as a revision conflict.
     conflictDiskContents: null,
     createdEmptyEol: null,
     deletedOnDisk: true,
-    dirty: true,
-    diskConflict: true,
+    diskConflict: false,
     error: null,
     hasBackingStore: false,
-    loadState: "loaded",
+    loadState: "loaded" as const,
     revision: null,
-    saveState: "idle",
+    saveState: "idle" as const,
+  };
+  return {
+    ...next,
+    dirty: computeDocumentDirty(next),
   };
 }

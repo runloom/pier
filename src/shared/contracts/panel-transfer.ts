@@ -399,6 +399,10 @@ export const panelTransferPrepareSourceCommandSchema = z
     type: z.literal("panelTransfer.prepareSource"),
     transferId: transferIdSchema,
     sourcePanelId: panelIdSchema,
+    /**
+     * Copy must not tear-off-hide the source tab. Omitted is treated as move.
+     */
+    mode: panelTransferModeSchema.optional(),
   })
   .strict();
 

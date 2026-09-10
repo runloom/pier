@@ -114,6 +114,7 @@ export function createPanelTransferRendererPort(
     async prepareSource(input) {
       return await rendererCommand.execute(
         {
+          ...(input.mode ? { mode: input.mode } : {}),
           sourcePanelId: input.sourcePanelId,
           transferId: input.transferId,
           type: "panelTransfer.prepareSource",

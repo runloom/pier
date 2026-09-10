@@ -795,7 +795,7 @@ describe("FileEditorController", () => {
         currentContents: "# Local content survives\n",
         deletedOnDisk: true,
         dirty: true,
-        diskConflict: true,
+        diskConflict: false,
         hasBackingStore: false,
         revision: null,
       })

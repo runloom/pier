@@ -172,8 +172,10 @@ async function handlePrepareSource(
   );
   setFrozenSourceSnapshot(transferId, snapshot, revision);
   setPanelRelocationSuppressed(true);
-  hidePanelTransferTearOff(sourcePanelId, api);
-  armPanelTransferTearOffClaim();
+  if (command.mode !== "copy") {
+    hidePanelTransferTearOff(sourcePanelId, api);
+    armPanelTransferTearOffClaim();
+  }
   return snapshot;
 }
 
@@ -361,9 +363,7 @@ async function handleFinalize(command: FinalizeCommand): Promise<void> {
   }
   clearFrozenSourceSnapshot(transferId);
   setPanelRelocationSuppressed(false);
-  if (outcome === "abort") {
-    clearPanelTransferTearOff();
-  }
+  clearPanelTransferTearOff();
   clearFinalizeRecord(transferId);
   // Guard the async transfer-startup boot path: a late gate set for this
   // transfer must not resurrect after release.

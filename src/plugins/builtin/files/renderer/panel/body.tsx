@@ -20,6 +20,10 @@ import {
 import { FileImagePreview } from "../preview/image.tsx";
 import { FilesFindUnavailableNotice } from "../search/use-find-unavailable.ts";
 import { isCanvasDiskDoc } from "./canvas-doc.ts";
+import {
+  FileDeletedOnDiskBar,
+  FileDeletedOnDiskChrome,
+} from "./deleted-on-disk/bar.tsx";
 import { FileDiskConflictState } from "./disk-conflict-banner.tsx";
 import {
   createFileEditorAdapterLabels,
@@ -312,23 +316,27 @@ export function ResolvedFilePanel({
     );
   }
 
+  const deletedChrome = { controller, document, panelId, t };
+
   if (document.preview && context) {
     return (
-      <FilesFindUnavailableNotice
-        context={context}
-        panelId={panelId}
-        searchRequest={searchRequest}
-        t={t}
-      >
-        <FileImagePreview context={context} document={document} t={t} />
-      </FilesFindUnavailableNotice>
+      <FileDeletedOnDiskChrome {...deletedChrome}>
+        <FilesFindUnavailableNotice
+          context={context}
+          panelId={panelId}
+          searchRequest={searchRequest}
+          t={t}
+        >
+          <FileImagePreview context={context} document={document} t={t} />
+        </FilesFindUnavailableNotice>
+      </FileDeletedOnDiskChrome>
     );
   }
 
-  // Full-panel Empty decision state (not a top banner). Diff mode keeps the
-  // editor so Compare can render; compact chrome stays available there.
+  // Full-panel Empty; diff mode keeps the editor and compact chrome.
   if (
     document.diskConflict &&
+    !document.deletedOnDisk &&
     document.source.kind === "disk" &&
     mode !== "diff"
   ) {
@@ -346,17 +354,19 @@ export function ResolvedFilePanel({
 
   if (document.readOnlyReason) {
     return (
-      <UnsupportedFilePanel
-        context={context}
-        controller={controller}
-        document={document}
-        onReveal={handleReveal}
-        t={t}
-      />
+      <FileDeletedOnDiskChrome {...deletedChrome}>
+        <UnsupportedFilePanel
+          context={context}
+          controller={controller}
+          document={document}
+          onReveal={handleReveal}
+          t={t}
+        />
+      </FileDeletedOnDiskChrome>
     );
   }
 
-  // Read failed: full Empty. Save failed: soft banner with body still visible.
+  // Read failed: full Empty. Save failed: banner with body still visible.
   if (document.loadState === "error") {
     return (
       <FileReadErrorEmpty
@@ -382,11 +392,13 @@ export function ResolvedFilePanel({
     <div className="flex min-h-0 flex-1 flex-col bg-background">
       {/* 保留 sr-only h1:测试用 role="heading" 拿文件名,同时无障碍读屏能定位当前文档标题。 */}
       <h1 className="sr-only">{document.name}</h1>
-
+      <FileDeletedOnDiskBar {...deletedChrome} />
       {document.error ? (
         <FileSaveErrorBanner message={document.error} t={t} />
       ) : null}
-      {document.diskConflict && document.source.kind === "disk" ? (
+      {document.diskConflict &&
+      !document.deletedOnDisk &&
+      document.source.kind === "disk" ? (
         <FileDiskConflictState
           canCompare={document.conflictDiskContents !== null}
           document={document}

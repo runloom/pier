@@ -3,7 +3,7 @@
 日期：2026-09-01
 状态：现行权威（拖出成新窗口的视觉交接）
 范围：把面板 tab 拖出所有 Pier 窗口、松手变成新窗口。
-不包含：拖入另一扇已有 Pier 窗口的落点 overlay（见面板落点浮层生命周期金标准）、菜单「移到新窗口」（无 HTML5 ghost，但仍走同一套 show-hold；新建窗在 materialize 时同样 `revealHost`）。
+不包含：拖入另一扇已有 Pier 窗口的落点 overlay（见面板落点浮层生命周期金标准）、菜单「移到新窗口」（无 HTML5 ghost，但仍走同一套 show-hold；新建窗在 materialize 时同样 `revealHost`）、菜单「复制到其他窗口 / 复制到新窗口」（源 tab 必须留下，不得套用撕窗隐藏，见原则 8）。
 
 相关：跨窗口 claim 仍是 Path B（`finishDrag` → `createForTransfer`）。落点预览寿命见 [`2026-09-04-panel-drop-overlay-lifecycle-gold-standard.md`](./2026-09-04-panel-drop-overlay-lifecycle-gold-standard.md)。
 
@@ -24,6 +24,7 @@
 5. **光标在外时预创建。** overlay `outside` 即 `ensure` 隐藏窗口并开始 boot；`source` / 落在**已有用户窗口**的 `target` 则 `discard`。光标落在自己的预创建窗上仍算 outside，不得 discard。mouseup 复用这扇窗。分类与 HTML5 `drop` 都必须忽略这些 window id（含正在销毁的预创建窗，直到 destroy 完成）：命中自己会当成 managed 而跳过 `revealHost`，源 tab 被摘掉、新窗仍透明。HTML5 打在预创建窗上时，若分类命中另一扇已有窗口，按该窗 placement claim，不得强制 root 撕窗。亮窗前先在透明态 `setBounds`，`revealHost` 后再设一次，避免跨屏 clamp 闪在源屏。
 6. **拖入已有窗口不抢焦点。** 光标已经在那扇窗上。只有 **新建窗口** 才 `focus` / `revealHost`（撕窗成为前台）。
 7. **禁止用假 overlay / 克隆 tab 冒充撕窗。** 源 tab 用 Dockview 自己的 `.dv-tab` 隐藏；新窗是真 `BaseWindow`。
+8. **Copy 不撕源 tab。** 菜单复制源 tab 必须一直可见。`prepareSource` 仅在 `mode` 不是 `copy` 时调用 `hidePanelTransferTearOff`。`finalize` 不论 `commit` / `abort` 都 `clearPanelTransferTearOff`：Copy 成功不走 `releaseSource`，不能把隐藏残留成「tab 没了、正文还在」。
 
 ---
 
@@ -46,4 +47,5 @@
 - 松手藏 tab：`dnd.ts` `onDragEnd` / `onWillDrop` + `isDragReleaseOutsideThisWindow`
 - 预创建 + 立刻亮窗：`src/main/services/panel-transfer/speculative-window.ts` `ensure` / `revealHost`
 - 面板就绪后的二次亮窗：`src/main/services/panel-transfer/commit.ts` `rollForwardAfterRuntimeMoved`
-- 测试：`tests/unit/renderer/workspace/panel-transfer-tear-off.test.ts`、`tests/unit/renderer/workspace/panel-tear-off-governance.test.ts`、`tests/unit/main/panel/transfer-speculative-window.test.ts`、`tests/unit/main/panel/transfer-service.test.ts`（outside 撕窗 revealHost）
+- Copy 不藏源 tab：`commands.ts` `prepareSource`（`mode !== "copy"` 才 hide）+ `finalize` 一律 `clearPanelTransferTearOff`
+- 测试：`tests/unit/renderer/workspace/panel-transfer-tear-off.test.ts`、`tests/unit/renderer/workspace/panel-tear-off-governance.test.ts`、`tests/unit/renderer/workspace/panel-transfer.test.ts`（copy 不 hide；finalize commit 拆残留）、`tests/unit/main/panel/transfer-speculative-window.test.ts`、`tests/unit/main/panel/transfer-service.test.ts`（outside 撕窗 revealHost；copy relocate 把 `mode: "copy"` 传给 prepareSource）
