@@ -11,7 +11,10 @@ import {
 } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { pickHostApplyEnv } from "./apply-host-env.ts";
-import { agentShellCommandFlags } from "./resolve-user-command-probe.ts";
+import {
+  agentShellCommandFlags,
+  shellFamily,
+} from "./resolve-user-command-probe.ts";
 import {
   extractBareCommandName,
   quoteShellArg,
@@ -102,6 +105,54 @@ export function looksLikeShebangScript(path: string): boolean {
   }
 }
 
+const HOST_COLOR_VALUE_DEPENDENT_KEYS = [
+  "CLICOLOR",
+  "CLICOLOR_FORCE",
+  "FORCE_COLOR",
+] as const;
+
+function posixHostColorPolicyUnset(): string {
+  const byValue = HOST_COLOR_VALUE_DEPENDENT_KEYS.map(
+    (key) =>
+      `case $(printf %s "\${${key}-}" | tr "[:upper:]" "[:lower:]") in 0|false|off|no|"") unset ${key};; esac`
+  ).join("; ");
+  return `unset NO_COLOR NODE_DISABLE_COLORS; ${byValue}`;
+}
+
+function fishHostColorPolicyUnset(): string {
+  const always = "set -e NO_COLOR; set -e NODE_DISABLE_COLORS";
+  const byValue = HOST_COLOR_VALUE_DEPENDENT_KEYS.map(
+    (key) =>
+      `set -l _pier_${key} (string lower -- $${key}); if test -z "$_pier_${key}"; or contains -- "$_pier_${key}" 0 false off no; set -e ${key}; end`
+  ).join("; ");
+  return `${always}; ${byValue}`;
+}
+
+function nuHostColorPolicyUnset(): string {
+  const always = "hide-env -i NO_COLOR; hide-env -i NODE_DISABLE_COLORS";
+  const byValue = HOST_COLOR_VALUE_DEPENDENT_KEYS.map(
+    (key) =>
+      `if ($env.${key}? | default "" | str downcase) in ["" "0" "false" "off" "no"] { hide-env -i ${key} }`
+  ).join("; ");
+  return `${always}; ${byValue}`;
+}
+
+export function hostColorPolicyUnsetPrelude(shellPath?: string): string {
+  const family = shellPath ? shellFamily(shellPath) : "posix";
+  if (family === "fish") {
+    return fishHostColorPolicyUnset();
+  }
+  if (family === "nu") {
+    return nuHostColorPolicyUnset();
+  }
+  return posixHostColorPolicyUnset();
+}
+
+function withHostColorPolicyUnset(body: string, shellPath?: string): string {
+  const prelude = hostColorPolicyUnsetPrelude(shellPath);
+  return body ? `${prelude}; ${body}` : prelude;
+}
+
 /**
  * Build Ghostty-safe surface command after resolve.
  * Native binary → `/bin/sh -c 'exec …'`. Shebang → `$SHELL -lic 'exec …'`.
@@ -129,13 +180,17 @@ export function buildResolvedAgentSurfaceCommand(input: {
     if (name) {
       const execution = `exec ${quoteShellArg(abs)}${trimmed.slice(name.length)}${extra}`;
       if (looksLikeShebangScript(abs)) {
-        const body = sticky ? `${sticky}; ${execution}` : execution;
-        return `${quoteShellArg(shell)} ${flags} ${quoteShellArg(body)}`;
+        const inner = sticky ? `${sticky}; ${execution}` : execution;
+        return `${quoteShellArg(shell)} ${flags} ${quoteShellArg(
+          withHostColorPolicyUnset(inner, shell)
+        )}`;
       }
-      return `/bin/sh -c ${quoteShellArg(execution)}`;
+      return `/bin/sh -c ${quoteShellArg(withHostColorPolicyUnset(execution))}`;
     }
   }
 
-  const body = sticky ? `${sticky}; ${trimmed}${extra}` : `${trimmed}${extra}`;
-  return `${quoteShellArg(shell)} ${flags} ${quoteShellArg(body)}`;
+  const inner = sticky ? `${sticky}; ${trimmed}${extra}` : `${trimmed}${extra}`;
+  return `${quoteShellArg(shell)} ${flags} ${quoteShellArg(
+    withHostColorPolicyUnset(inner, shell)
+  )}`;
 }

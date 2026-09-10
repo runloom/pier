@@ -8,6 +8,7 @@ import type {
   TerminalNativeWindowState,
   TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
+import { stripHostColorPolicyFromProcessEnv } from "../../services/process-environment/clean-env.ts";
 
 export interface NativeAddon {
   /**
@@ -316,6 +317,8 @@ export function loadNativeAddon(): {
     // 必须在 ghostty native 首次 init 前设，否则会 fallback 到禁用集成。
     process.env.GHOSTTY_RESOURCES_DIR ??=
       ghosttyResourcesDirFromAddonPath(addonPath);
+    // Ghostty snapshots process env at init; drop host NO_COLOR before that.
+    stripHostColorPolicyFromProcessEnv();
     const addon: NativeAddon = require(addonPath);
     return { addon, error: null };
   } catch (e) {

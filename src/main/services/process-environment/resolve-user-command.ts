@@ -38,6 +38,7 @@ export {
 export {
   buildResolvedAgentSurfaceCommand,
   buildStickyExportPrelude,
+  hostColorPolicyUnsetPrelude,
   looksLikeShebangScript,
   resolveAbsoluteOnPath,
   resolveManyAbsoluteOnPath,

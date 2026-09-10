@@ -1,7 +1,12 @@
 import { userInfo } from "node:os";
 import { createLogger } from "@shared/logger.ts";
 import { applyHostProcessEnv } from "./apply-host-env.ts";
-import { cleanEnv, mergeEnv } from "./clean-env.ts";
+import {
+  cleanEnv,
+  mergeEnv,
+  omitHostColorPolicyEnv,
+  stripHostColorPolicyFromProcessEnv,
+} from "./clean-env.ts";
 import { clearUserCommandResolveCache } from "./resolve-user-command.ts";
 import { isLaunchedFromCli } from "./shell-env-cli.ts";
 import {
@@ -119,7 +124,10 @@ export function createProcessEnvironmentService({
   shell = defaultShell(platform),
   timeoutMs = DEFAULT_SHELL_ENV_TIMEOUT_MS,
 }: CreateProcessEnvironmentServiceOptions = {}): ProcessEnvironmentService {
-  const baseEnv = cleanEnv(rawBaseEnv);
+  if (rawBaseEnv === process.env) {
+    stripHostColorPolicyFromProcessEnv();
+  }
+  const baseEnv = omitHostColorPolicyEnv(cleanEnv(rawBaseEnv));
   const resolveTimeoutMs = () => getTimeoutMs?.() ?? timeoutMs;
   const shellLoader =
     loadShellEnv ??

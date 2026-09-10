@@ -93,6 +93,43 @@ describe("withPanelStatusEnv", () => {
     expect(out.env?.PIER_WINDOW_ID).toBe("3");
   });
 
+  it("strips host NO_COLOR / FORCE_COLOR=0 so Ghostty TUIs keep color", () => {
+    const out = withPanelStatusEnv(
+      {
+        cwd: "/tmp/wt",
+        env: {
+          CLICOLOR: "0",
+          CLICOLOR_FORCE: "0",
+          FORCE_COLOR: "0",
+          NO_COLOR: "1",
+          NODE_DISABLE_COLORS: "1",
+          PATH: "/usr/bin",
+        },
+      },
+      "panel-color",
+      "4",
+      hookEnv
+    );
+    expect(out.env?.PATH).toBe("/usr/bin");
+    expect(out.env?.NO_COLOR).toBeUndefined();
+    expect(out.env?.NODE_DISABLE_COLORS).toBeUndefined();
+    expect(out.env?.FORCE_COLOR).toBeUndefined();
+    expect(out.env?.CLICOLOR).toBeUndefined();
+    expect(out.env?.CLICOLOR_FORCE).toBeUndefined();
+  });
+
+  it("keeps FORCE_COLOR=1 when the user explicitly wants color", () => {
+    const out = withPanelStatusEnv(
+      {
+        env: { FORCE_COLOR: "1", PATH: "/usr/bin" },
+      },
+      "panel-force",
+      "5",
+      hookEnv
+    );
+    expect(out.env?.FORCE_COLOR).toBe("1");
+  });
+
   it("writes PIER_CONTROL_SOCKET only when a path is provided", () => {
     const withSocket = withPanelStatusEnv(
       undefined,

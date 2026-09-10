@@ -8,7 +8,10 @@ import type {
   CreateTerminalArgs,
   TerminalAgentPanelMetadata,
 } from "@shared/contracts/terminal.ts";
-import { omitTerminalEmulatorEnv } from "../../services/process-environment/clean-env.ts";
+import {
+  omitHostColorPolicyEnv,
+  omitTerminalEmulatorEnv,
+} from "../../services/process-environment/clean-env.ts";
 import {
   agentShellCommandFlags,
   buildResolvedAgentSurfaceCommand,
@@ -322,7 +325,8 @@ export function consumeCreateLaunch(args: CreateTerminalArgs): void {
  * 路由 agent hook 事件到「窗口+面板」。
  *
  * 始终剥离历史 PIER_AGENT_CALLER_* 环境变量，避免子进程继承误身份。
- * 同时丢掉 dump/宿主的 TERM 等模拟器键，让 Ghostty 自己设置能力。
+ * 同时丢掉 dump/宿主的 TERM 等模拟器键，让 Ghostty 自己设置能力；
+ * 丢掉 NO_COLOR / FORCE_COLOR=0，避免宿主把 TUI 收成单色。
  */
 export function withPanelStatusEnv(
   nativeLaunch: ResolvedTerminalLaunchOptions | undefined,
@@ -340,12 +344,16 @@ export function withPanelStatusEnv(
   };
   return {
     ...(nativeLaunch ?? {}),
-    env: omitTerminalEmulatorEnv({
-      ...baseEnv,
-      ...hookEnv,
-      PIER_PANEL_ID: panelId,
-      PIER_WINDOW_ID: windowId,
-      ...(controlSocketPath ? { PIER_CONTROL_SOCKET: controlSocketPath } : {}),
-    }),
+    env: omitHostColorPolicyEnv(
+      omitTerminalEmulatorEnv({
+        ...baseEnv,
+        ...hookEnv,
+        PIER_PANEL_ID: panelId,
+        PIER_WINDOW_ID: windowId,
+        ...(controlSocketPath
+          ? { PIER_CONTROL_SOCKET: controlSocketPath }
+          : {}),
+      })
+    ),
   };
 }

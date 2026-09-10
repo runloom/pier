@@ -10,8 +10,11 @@ export {
 } from "./apply-host-env.ts";
 export {
   cleanEnv,
+  HOST_COLOR_POLICY_KEYS,
   mergeEnv,
+  omitHostColorPolicyEnv,
   omitTerminalEmulatorEnv,
+  stripHostColorPolicyFromProcessEnv,
   TERMINAL_EMULATOR_ENV_KEYS,
 } from "./clean-env.ts";
 export type { LoginShellSpawnSpec } from "./login-shell-spawn.ts";
@@ -50,6 +53,7 @@ export {
   DETECT_COMMAND_RESOLVE_TIMEOUT_MS,
   extractBareCommandName,
   extractProbeProtocolBody,
+  hostColorPolicyUnsetPrelude,
   isAlreadyShellWrappedCommand,
   PANEL_COMMAND_RESOLVE_TIMEOUT_MS,
   PIER_CMD_END,

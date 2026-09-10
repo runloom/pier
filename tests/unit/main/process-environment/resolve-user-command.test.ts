@@ -8,6 +8,7 @@ import {
   clearUserCommandResolveCache,
   extractBareCommandName,
   extractProbeProtocolBody,
+  hostColorPolicyUnsetPrelude,
   looksLikeShebangScript,
   PIER_CMD_END,
   PIER_CMD_START,
@@ -108,7 +109,18 @@ describe("resolve-user-command helpers", () => {
     expect(command).toEqual(expect.stringMatching(/^\/bin\/zsh -lic /));
     expect(command).toContain("omp");
     expect(command).toContain(`exec ${script}`);
+    expect(command).toContain(hostColorPolicyUnsetPrelude("/bin/zsh"));
     rmSync(dir, { force: true, recursive: true });
+  });
+
+  it("unsets NO_COLOR always and FORCE_COLOR only when disabled", () => {
+    const prelude = hostColorPolicyUnsetPrelude();
+    expect(prelude.startsWith("unset NO_COLOR NODE_DISABLE_COLORS;")).toBe(
+      true
+    );
+    expect(prelude).not.toMatch(/unset NO_COLOR NODE_DISABLE_COLORS CLICOLOR/);
+    expect(prelude).toContain("unset FORCE_COLOR");
+    expect(prelude).toContain('0|false|off|no|""');
   });
 
   it("builds absolute surface as thin sh -c exec", () => {
@@ -118,7 +130,9 @@ describe("resolve-user-command helpers", () => {
       resolved: { kind: "absolute", path: "/nvm/bin/codex" },
       shell: "/bin/zsh",
     });
-    expect(command).toBe("/bin/sh -c 'exec /nvm/bin/codex --yolo'");
+    expect(command).toBe(
+      `/bin/sh -c '${hostColorPolicyUnsetPrelude()}; exec /nvm/bin/codex --yolo'`
+    );
   });
 
   it("builds absolute surface for already-absolute command lines", () => {
@@ -128,7 +142,9 @@ describe("resolve-user-command helpers", () => {
       resolved: { kind: "absolute", path: "/opt/homebrew/bin/claude" },
       shell: "/bin/zsh",
     });
-    expect(command).toBe("/bin/sh -c 'exec /opt/homebrew/bin/claude --x'");
+    expect(command).toBe(
+      `/bin/sh -c '${hostColorPolicyUnsetPrelude()}; exec /opt/homebrew/bin/claude --x'`
+    );
   });
 
   it("builds via-shell surface with sticky exports after rc", () => {
@@ -141,6 +157,7 @@ describe("resolve-user-command helpers", () => {
     expect(command).toEqual(expect.stringMatching(/^\/bin\/zsh -lic /));
     expect(command).not.toEqual(expect.stringContaining("export PATH="));
     expect(command).toEqual(expect.stringContaining("codex"));
+    expect(command).toContain(hostColorPolicyUnsetPrelude("/bin/zsh"));
   });
 
   it("probe scripts are shell-family aware and include markers", () => {
