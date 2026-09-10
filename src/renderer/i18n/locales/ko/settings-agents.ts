@@ -117,7 +117,13 @@ export const settingsAgents = {
         "셸 환경을 준비하지 못했습니다. 새로고침한 뒤 다시 시도하세요.",
       package_manager_missing:
         "필요한 패키지 관리자(npm, Homebrew, pipx, uv)를 찾지 못했습니다. 설치한 뒤 다시 시도하세요.",
+      node_requirement_unmet:
+        "이 에이전트는 Node {{required}}이(가) 필요합니다(현재 {{current}}). 터미널에서 Node를 업그레이드한 뒤 다시 시도하세요.",
       still_detected: "제거는 끝났지만 에이전트가 아직 감지됩니다.",
+    },
+    facts: {
+      node: "현재 Node {{version}} ({{path}})",
+      installs: "{{count}}개 설치 감지:\n{{paths}}",
     },
   },
   row: {

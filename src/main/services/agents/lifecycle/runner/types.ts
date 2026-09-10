@@ -11,6 +11,8 @@ export interface LifecycleStepProgress {
 }
 
 export interface LifecycleRunOptions {
+  /** Project root; child spawn cwd (env parity with tasks/terminal). */
+  cwd?: string | undefined;
   env: NodeJS.ProcessEnv;
   /** Optional live progress (step + tool percent). */
   onProgress?: (progress: LifecycleStepProgress) => void;

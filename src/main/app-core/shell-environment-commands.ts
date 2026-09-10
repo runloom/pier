@@ -34,6 +34,10 @@ export function buildShellEnvironmentHostStatus(input: {
     ...(diagnostics.hostAppliedStatus
       ? { hostAppliedStatus: diagnostics.hostAppliedStatus }
       : {}),
+    ...(diagnostics.nodePath ? { nodePath: diagnostics.nodePath } : {}),
+    ...(diagnostics.nodeVersion
+      ? { nodeVersion: diagnostics.nodeVersion }
+      : {}),
     pathChanged: diagnostics.pathChanged,
     ...(diagnostics.shell ? { shell: diagnostics.shell } : {}),
     shellEnvStatus: diagnostics.shellEnvStatus,

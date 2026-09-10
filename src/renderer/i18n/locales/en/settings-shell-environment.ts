@@ -6,6 +6,7 @@ export const settingsShellEnvironment = {
   windowsNote:
     "On Windows, login shell loading is skipped. Commands come from the process environment.",
   statusLabel: "Status:",
+  nodeLabel: "Node:",
   status: {
     resolved: "Matched to terminal",
     failed: "Using basic environment",

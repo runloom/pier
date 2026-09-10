@@ -6,6 +6,7 @@ export const settingsShellEnvironment = {
   windowsNote:
     "Windows ではログインシェルの読み込みをスキップします。コマンドはプロセス環境から来ます。",
   statusLabel: "状態:",
+  nodeLabel: "Node:",
   status: {
     resolved: "ターミナルと一致",
     failed: "基本環境を使用中",

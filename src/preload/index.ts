@@ -231,12 +231,21 @@ const agentsApi: PierAgentsAPI = {
       ipcRenderer.invoke("pier:agents:lifecycle:cancel", { agentId }),
     onProgress: (cb) =>
       subscribeIpc(PIER_BROADCAST.AGENT_LIFECYCLE_PROGRESS, cb),
-    run: (agentId, action) =>
-      ipcRenderer.invoke("pier:agents:lifecycle:run", { agentId, action }),
-    runMany: (agentIds, action) =>
+    run: (agentId, action, options) =>
+      ipcRenderer.invoke("pier:agents:lifecycle:run", {
+        agentId,
+        action,
+        ...(options?.projectRootPath
+          ? { projectRootPath: options.projectRootPath }
+          : {}),
+      }),
+    runMany: (agentIds, action, options) =>
       ipcRenderer.invoke("pier:agents:lifecycle:runMany", {
         agentIds,
         action,
+        ...(options?.projectRootPath
+          ? { projectRootPath: options.projectRootPath }
+          : {}),
       }),
   },
   prepareLaunch: (agentId: AgentKind) =>

@@ -31,6 +31,7 @@ import { useT } from "@/i18n/use-t.ts";
 import {
   formatAgentVersionMeta,
   formatLifecycleError,
+  formatLifecycleErrorMessage,
   formatLifecycleRowFailure,
   isLifecycleSoftFailure,
   lifecycleBusyStatusText,
@@ -168,12 +169,25 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
         return;
       }
       if (!result.ok) {
-        if (isLifecycleSoftFailure(result)) {
-          toast.error(formatLifecycleError(t, result));
+        const detail = formatLifecycleError(t, result);
+        const hasFacts =
+          Boolean(result.hostNode) ||
+          Boolean(result.requiredNode) ||
+          (result.installPaths !== undefined && result.installPaths.length > 0);
+        if (isLifecycleSoftFailure(result) && !hasFacts) {
+          toast.error(detail);
           return;
         }
-        // Hard failure: red line on the row; details only when stderr/detail exists.
-        const detail = formatLifecycleError(t, result);
+        if (isLifecycleSoftFailure(result) && hasFacts) {
+          const facts = formatLifecycleError(t, result, {
+            includeMessage: false,
+          });
+          await showAppAlert({
+            title: formatLifecycleErrorMessage(t, result),
+            ...(facts ? { body: facts } : {}),
+          });
+          return;
+        }
         const short = formatLifecycleRowFailure(t, {
           name: displayName,
           failure: {
@@ -184,7 +198,11 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
           },
           reinstall,
         });
-        if (result.errorDetail?.trim() || result.commandPreview?.trim()) {
+        if (
+          hasFacts ||
+          result.errorDetail?.trim() ||
+          result.commandPreview?.trim()
+        ) {
           await showAppAlert({
             title: short,
             body: detail,

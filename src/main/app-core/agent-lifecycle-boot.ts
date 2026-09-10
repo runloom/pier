@@ -2,19 +2,27 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   type AgentLifecycleService,
   createAgentLifecycleService,
+  type LifecycleRunRequestOptions,
 } from "../services/agents/lifecycle/service.ts";
 import type { PreferencesService } from "../services/preferences-service.ts";
+import type { HostNodeRuntime } from "../services/process-environment/host-node-runtime.ts";
 import { broadcastAgentLifecycleProgress } from "./window-broadcasts.ts";
 
 export function createBootedAgentLifecycleService(options: {
-  waitForHostEnv: () => Promise<void>;
-  getEnv: () => Promise<NodeJS.ProcessEnv>;
+  getEnv: (
+    runOptions?: LifecycleRunRequestOptions
+  ) => Promise<NodeJS.ProcessEnv>;
+  getHostNodeRuntime: (
+    env?: NodeJS.ProcessEnv
+  ) => Promise<HostNodeRuntime | null>;
   preferences: PreferencesService;
   refreshDetection: () => Promise<void>;
+  waitForHostEnv: () => Promise<void>;
 }): AgentLifecycleService {
   return createAgentLifecycleService({
     waitForHostEnv: options.waitForHostEnv,
     getEnv: options.getEnv,
+    getHostNodeRuntime: options.getHostNodeRuntime,
     getLifecycleCommands: async () => {
       const prefs = await options.preferences.read();
       // Only update is user-overridable; install/uninstall always use project specs.

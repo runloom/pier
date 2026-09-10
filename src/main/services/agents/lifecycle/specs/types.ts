@@ -89,6 +89,12 @@ export interface AgentLifecycleSpec {
   readonly latestProbe?: AgentLatestProbe;
   /** npm package used for latest-version probe when install uses npm. */
   readonly npmPackageForLatest?: string;
+  /**
+   * Semver range the CLI officially requires (from its own install gate).
+   * Pier prechecks install/update with it and reports `node_requirement_unmet`.
+   * Undeclared → no check.
+   */
+  readonly requiresNode?: string;
   readonly support: AgentLifecycleSupport;
   /**
    * Reversible uninstall channels. Omit → derive from install[]; explicit [] →

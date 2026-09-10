@@ -5,6 +5,7 @@ export const settingsShellEnvironment = {
     "Pier 会加载你的登录 shell，使任务与智能体找到的命令与终端一致。",
   windowsNote: "Windows 上不加载登录 shell，命令来自当前进程环境。",
   statusLabel: "状态：",
+  nodeLabel: "Node：",
   status: {
     resolved: "已与终端对齐",
     failed: "使用基础环境",

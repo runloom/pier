@@ -11,7 +11,9 @@ import type {
   AgentLifecycleProgress,
 } from "@shared/contracts/agent/lifecycle.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import type { HostNodeRuntime } from "../../process-environment/host-node-runtime.ts";
 import { BusyError, LifecycleLocks } from "./locks.ts";
+import { findUnmetNodeRequirement } from "./node-requirement.ts";
 import type { PlannedPlan } from "./plan/types.ts";
 import { planLifecycle, previewPlan } from "./plan.ts";
 import { probeAgents, probeOneAgent } from "./probe.ts";
@@ -36,20 +38,30 @@ export interface AgentLifecycleService {
   probe(request?: AgentLifecycleProbeRequest): Promise<AgentLifecycleProbe[]>;
   run(
     agentId: AgentKind,
-    action: AgentLifecycleAction
+    action: AgentLifecycleAction,
+    options?: LifecycleRunRequestOptions
   ): Promise<AgentLifecycleActionResult>;
   runMany(
     agentIds: readonly AgentKind[],
-    action: AgentLifecycleAction
+    action: AgentLifecycleAction,
+    options?: LifecycleRunRequestOptions
   ): Promise<AgentLifecycleActionResult[]>;
+}
+
+/** Project context for env parity with tasks/terminal. */
+export interface LifecycleRunRequestOptions {
+  projectRootPath?: string | undefined;
 }
 
 export interface CreateAgentLifecycleServiceOptions {
   afterInstall?: (agentId: AgentKind) => Promise<void>;
   /** Best-effort hook cleanup + preference hygiene after successful uninstall. */
   afterUninstall?: (agentId: AgentKind) => Promise<void>;
-  /** Required in product; tests inject. No silent process.env for run. */
-  getEnv: () => NodeJS.ProcessEnv | Promise<NodeJS.ProcessEnv>;
+  /** Required in product; `projectRootPath` picks the PES dump dir (omit → HOME). */
+  getEnv: (options?: LifecycleRunRequestOptions) => Promise<NodeJS.ProcessEnv>;
+  getHostNodeRuntime?: (
+    env?: NodeJS.ProcessEnv
+  ) => Promise<HostNodeRuntime | null>;
   /** User-authored install/update/uninstall shell one-liners (empty = Pier default). */
   getLifecycleCommands?: () =>
     | LifecycleCommandOverrides
@@ -98,15 +110,27 @@ export function createAgentLifecycleService(
   const runIdByAgent = new Map<AgentKind, string>();
   const agentByRunId = new Map<string, AgentKind>();
 
-  async function resolveEnv(): Promise<NodeJS.ProcessEnv> {
+  async function resolveEnv(
+    runOptions?: LifecycleRunRequestOptions
+  ): Promise<NodeJS.ProcessEnv> {
     try {
       await waitForHostEnv();
-      return await options.getEnv();
+      return await options.getEnv(runOptions);
     } catch (err) {
       throw new EnvUnavailableError(
         err instanceof Error ? err.message : String(err)
       );
     }
+  }
+
+  /** Never throws: a missing Node fact degrades to today's behavior. */
+  function hostNodeRuntime(
+    env?: NodeJS.ProcessEnv
+  ): Promise<HostNodeRuntime | null> {
+    if (!options.getHostNodeRuntime) {
+      return Promise.resolve(null);
+    }
+    return options.getHostNodeRuntime(env).catch(() => null);
   }
 
   async function probeOne(
@@ -147,7 +171,8 @@ export function createAgentLifecycleService(
     agentId: AgentKind,
     action: AgentLifecycleAction,
     runId: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    runOptions?: LifecycleRunRequestOptions
   ): Promise<AgentLifecycleActionResult> {
     // Uninstall must never enter install/update post-success paths.
     if (action === "uninstall") {
@@ -156,7 +181,9 @@ export function createAgentLifecycleService(
         runId,
         signal,
         runner,
-        resolveEnv,
+        cwd: runOptions?.projectRootPath,
+        hostNodeRuntime,
+        resolveEnv: () => resolveEnv(runOptions),
         probeOne,
         ...(options.getLifecycleCommands
           ? { getLifecycleCommands: options.getLifecycleCommands }
@@ -182,7 +209,7 @@ export function createAgentLifecycleService(
 
     let env: NodeJS.ProcessEnv;
     try {
-      env = await resolveEnv();
+      env = await resolveEnv(runOptions);
     } catch {
       return fail(agentId, action, "env_unavailable", { runId });
     }
@@ -222,6 +249,21 @@ export function createAgentLifecycleService(
     const installSource = defaultInstall?.source ?? null;
     const wslDistro = defaultPath ? wslDistroFromPath(defaultPath) : null;
 
+    // Declared range only; missing Node fact does not gate.
+    if ((action === "install" || action === "update") && spec.requiresNode) {
+      const unmet = await findUnmetNodeRequirement({
+        getHostNodeRuntime: () => hostNodeRuntime(env),
+        requiredNode: spec.requiresNode,
+      });
+      if (unmet) {
+        return fail(agentId, action, "node_requirement_unmet", {
+          runId,
+          requiredNode: spec.requiresNode,
+          hostNode: unmet,
+        });
+      }
+    }
+
     let planned = planLifecycle(spec, action, {
       defaultBinPath: defaultPath,
       wslDistro,
@@ -258,9 +300,9 @@ export function createAgentLifecycleService(
     let stepOffset = 0;
     let activePlan: PlannedPlan = planned;
     let after = before;
-
     for (;;) {
       const result: LifecycleRunResult = await runner.run(activePlan, {
+        cwd: runOptions?.projectRootPath,
         env,
         signal,
         onProgress: (step) => {
@@ -292,6 +334,7 @@ export function createAgentLifecycleService(
           runId,
           commandPreview: planned.preview,
           errorDetail: result.stderr || undefined,
+          hostNode: await hostNodeRuntime(env),
         });
       }
       if (!result.ok) {
@@ -300,6 +343,7 @@ export function createAgentLifecycleService(
           runId,
           commandPreview: planned.preview,
           errorDetail: detail,
+          hostNode: await hostNodeRuntime(env),
         });
       }
 
@@ -345,6 +389,8 @@ export function createAgentLifecycleService(
           softFailure: "version_unchanged",
           version: after.version,
           commandPreview: planned.preview,
+          hostNode: await hostNodeRuntime(env),
+          installPaths: after.installs.map((install) => install.path),
         });
       }
 
@@ -357,6 +403,8 @@ export function createAgentLifecycleService(
         softFailure: "not_runnable",
         version: after.version,
         commandPreview: planned.preview,
+        hostNode: await hostNodeRuntime(env),
+        installPaths: after.installs.map((install) => install.path),
       });
     }
 
@@ -391,7 +439,8 @@ export function createAgentLifecycleService(
 
   async function run(
     agentId: AgentKind,
-    action: AgentLifecycleAction
+    action: AgentLifecycleAction,
+    runOptions?: LifecycleRunRequestOptions
   ): Promise<AgentLifecycleActionResult> {
     const runId = randomUUID();
     const controller = new AbortController();
@@ -401,7 +450,13 @@ export function createAgentLifecycleService(
         agentId,
         async () => {
           try {
-            return await runUnlocked(agentId, action, runId, controller.signal);
+            return await runUnlocked(
+              agentId,
+              action,
+              runId,
+              controller.signal,
+              runOptions
+            );
           } finally {
             abortByAgent.delete(agentId);
             runIdByAgent.delete(agentId);
@@ -425,11 +480,12 @@ export function createAgentLifecycleService(
 
   async function runMany(
     agentIds: readonly AgentKind[],
-    action: AgentLifecycleAction
+    action: AgentLifecycleAction,
+    runOptions?: LifecycleRunRequestOptions
   ): Promise<AgentLifecycleActionResult[]> {
     // Bounded parallel: different agents install at once; same agent still busy-locked.
     return mapPool(agentIds, AGENT_LIFECYCLE_BATCH_CONCURRENCY, (id) =>
-      run(id, action)
+      run(id, action, runOptions)
     );
   }
 

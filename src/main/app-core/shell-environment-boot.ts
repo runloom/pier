@@ -129,3 +129,18 @@ export async function resolvePathEnv(
   });
   return env;
 }
+
+/** Agent CLI env — same PES entry as tasks/terminal. Omit path → HOME dump. */
+export function createAgentEnvResolver(
+  processEnvironment: ProcessEnvironmentService
+): (options?: {
+  projectRootPath?: string | undefined;
+}) => Promise<NodeJS.ProcessEnv> {
+  return async (options) => {
+    const { env } = await processEnvironment.resolve({
+      projectRootPath: options?.projectRootPath,
+      source: "agent",
+    });
+    return env;
+  };
+}

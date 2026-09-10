@@ -1,3 +1,8 @@
+import type {
+  HostNodeRuntime,
+  HostNodeRuntimeProbe,
+} from "./host-node-runtime.ts";
+
 export type ProcessEnvironmentSource = "agent" | "plugin" | "task" | "terminal";
 
 export type Environment = Record<string, string>;
@@ -35,6 +40,10 @@ export interface ProcessEnvironmentDiagnostics {
   durationMs?: number | undefined;
   error?: string | undefined;
   hostAppliedStatus?: HostAppliedStatus | undefined;
+  /** Host Node runtime resolved through the merged spawn env. */
+  nodePath?: string | undefined;
+  /** e.g. "v24.15.0". */
+  nodeVersion?: string | undefined;
   pathChanged: boolean;
   shell?: string | undefined;
   shellEnvStatus: "cached" | "failed" | "resolved" | "skipped";
@@ -74,6 +83,8 @@ export type ShellEnvironmentLoader = (
 export interface CreateProcessEnvironmentServiceOptions {
   baseEnv?: RawEnvironment;
   getTimeoutMs?: () => number;
+  /** Sole producer of the host Node version/path pair. */
+  hostNodeRuntime?: HostNodeRuntimeProbe;
   /** Read on each resolve; true → shell dump skipped. */
   isDisabled?: () => boolean;
   loadShellEnv?: ShellEnvironmentLoader;
@@ -90,6 +101,11 @@ export interface CreateProcessEnvironmentServiceOptions {
 
 export interface ProcessEnvironmentService {
   getHostDiagnostics(): ProcessEnvironmentDiagnostics | undefined;
+  /**
+   * Host Node for `env` (lifecycle spawn env). Omit env → last `resolve`
+   * merge; no merge yet → `null` (never the construction snapshot).
+   */
+  hostNodeRuntime(env?: NodeJS.ProcessEnv): Promise<HostNodeRuntime | null>;
   /**
    * Clear success + negative caches. When `reapplyHost`, re-resolve home cwd
    * and apply whitelist keys to `process.env` (serial with other apply ops).

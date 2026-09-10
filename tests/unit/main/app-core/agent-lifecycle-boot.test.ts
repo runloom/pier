@@ -61,6 +61,7 @@ describe("createBootedAgentLifecycleService", () => {
     createBootedAgentLifecycleService({
       waitForHostEnv: async () => undefined,
       getEnv: async () => ({}),
+      getHostNodeRuntime: async () => null,
       preferences,
       refreshDetection: async () => undefined,
     });

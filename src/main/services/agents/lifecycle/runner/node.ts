@@ -16,6 +16,24 @@ const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
 /** Package managers we spawn by bare name; ENOENT → try next channel. */
 const PACKAGE_MANAGER_BINS = new Set(["npm", "brew", "pipx", "uv"]);
 
+function spawnOptions(
+  options: LifecycleRunOptions,
+  extra: {
+    onPercent?: (percent: number) => void;
+    shell?: boolean;
+    timeoutMs: number;
+  }
+) {
+  return {
+    ...(options.cwd ? { cwd: options.cwd } : {}),
+    env: options.env,
+    timeoutMs: extra.timeoutMs,
+    signal: options.signal,
+    ...(extra.shell === true ? { shell: true } : {}),
+    ...(extra.onPercent ? { onPercent: extra.onPercent } : {}),
+  };
+}
+
 function stepFailureLabel(step: PlannedInvocation): string {
   if (step.kind === "argv") {
     return step.file;
@@ -66,12 +84,7 @@ async function runOfficialScript(
         "-Command",
         `irm '${step.url}' | iex`,
       ],
-      {
-        env: options.env,
-        timeoutMs,
-        signal: options.signal,
-        onPercent: reportPercent,
-      }
+      spawnOptions(options, { timeoutMs, onPercent: reportPercent })
     );
   }
 
@@ -81,22 +94,17 @@ async function runOfficialScript(
     const download = await runProcess(
       "curl",
       ["-fsSL", step.url, "-o", scriptPath],
-      {
-        env: options.env,
-        timeoutMs: Math.min(timeoutMs, 120_000),
-        signal: options.signal,
-      }
+      spawnOptions(options, { timeoutMs: Math.min(timeoutMs, 120_000) })
     );
     if (download.cancelled || download.code !== 0) {
       return download;
     }
     await readFile(scriptPath);
-    return await runProcess("bash", [scriptPath], {
-      env: options.env,
-      timeoutMs,
-      signal: options.signal,
-      onPercent: reportPercent,
-    });
+    return await runProcess(
+      "bash",
+      [scriptPath],
+      spawnOptions(options, { timeoutMs, onPercent: reportPercent })
+    );
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
@@ -122,24 +130,25 @@ async function runArgv(
     !step.file.includes("\\") &&
     !step.file.includes("/") &&
     !step.file.endsWith(".exe");
-
-  const result = await runProcess(step.file, step.args, {
-    env: options.env,
-    timeoutMs,
-    signal: options.signal,
-    shell: useShell,
-    onPercent: (percent) => {
-      if (!progressContext) {
-        return;
-      }
-      options.onProgress?.({
-        stepIndex: progressContext.stepIndex,
-        stepCount: progressContext.stepCount,
-        label: step.file,
-        percent,
-      });
-    },
-  });
+  const result = await runProcess(
+    step.file,
+    step.args,
+    spawnOptions(options, {
+      timeoutMs,
+      shell: useShell,
+      onPercent: (percent) => {
+        if (!progressContext) {
+          return;
+        }
+        options.onProgress?.({
+          stepIndex: progressContext.stepIndex,
+          stepCount: progressContext.stepCount,
+          label: step.file,
+          percent,
+        });
+      },
+    })
+  );
 
   if (
     result.code !== 0 &&
@@ -185,10 +194,8 @@ async function runInvocation(
             "-Command",
             step.command,
           ],
-          {
-            env: options.env,
+          spawnOptions(options, {
             timeoutMs,
-            signal: options.signal,
             onPercent: (percent) => {
               if (!progressContext) {
                 return;
@@ -200,25 +207,27 @@ async function runInvocation(
                 percent,
               });
             },
-          }
+          })
         );
       }
-      return runProcess("sh", ["-lc", step.command], {
-        env: options.env,
-        timeoutMs,
-        signal: options.signal,
-        onPercent: (percent) => {
-          if (!progressContext) {
-            return;
-          }
-          options.onProgress?.({
-            stepIndex: progressContext.stepIndex,
-            stepCount: progressContext.stepCount,
-            label: "shell",
-            percent,
-          });
-        },
-      });
+      return runProcess(
+        "sh",
+        ["-lc", step.command],
+        spawnOptions(options, {
+          timeoutMs,
+          onPercent: (percent) => {
+            if (!progressContext) {
+              return;
+            }
+            options.onProgress?.({
+              stepIndex: progressContext.stepIndex,
+              stepCount: progressContext.stepCount,
+              label: "shell",
+              percent,
+            });
+          },
+        })
+      );
     }
     case "wsl": {
       const parts = step.inner.map((inner) => {
@@ -237,6 +246,7 @@ async function runInvocation(
         return "false";
       });
       const script = parts.join(" || ");
+      // Host cwd is not the Linux cwd; do not pass options.cwd.
       return runProcess(
         "wsl.exe",
         ["-d", step.distro, "--", "sh", "-lc", script],

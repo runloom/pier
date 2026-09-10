@@ -241,7 +241,7 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
 
 #### 智能体 CLI 版本检测与更新 — 金标准
 
-权威规格：[`docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md`](docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md)。检查点：`tests/unit/main/agents/lifecycle/latest-governance.test.ts`。
+权威规格：[`docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md`](docs/superpowers/specs/2026-08-29-agent-latest-version-gold-standard.md)。检查点：`tests/unit/main/agents/lifecycle/latest-governance.test.ts`。运行环境一致性与失败友好提示另见 [`docs/superpowers/specs/2026-09-09-agent-cli-runtime-parity-gold-standard.md`](docs/superpowers/specs/2026-09-09-agent-cli-runtime-parity-gold-standard.md)：宿主发起的 CLI 命令与任务 / 终端同走 `ProcessEnvironmentService.resolve`（带 `projectRootPath`，子进程 `cwd` 同该路径），宿主 Node 事实只在设置页与失败弹窗展示，禁止解析第三方 stderr 归因。检查点：`tests/unit/main/agents/lifecycle/runtime-parity-governance.test.ts`。
 
 #### 宿主发布候选版 — 金标准
 

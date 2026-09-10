@@ -20,6 +20,7 @@ const KNOWN_ERROR_CODES = new Set([
   "timeout",
   "env_unavailable",
   "package_manager_missing",
+  "node_requirement_unmet",
   /** Uninstall PM exited 0 but post-probe still detects the agent. */
   "still_detected",
 ]);
@@ -43,38 +44,113 @@ function cleanErrorDetail(rawDetail: string): string {
   return sanitizeProcessOutput(rawDetail);
 }
 
-export function formatLifecycleError(
+/** Codes whose alert may include sanitized stderr / command preview. */
+const DETAIL_CODES = new Set([
+  "command_failed",
+  "env_unavailable",
+  "not_found_after_install",
+  "package_manager_missing",
+  "still_detected",
+]);
+
+interface LifecycleErrorInput {
+  commandPreview?: string | undefined;
+  errorCode?: string | undefined;
+  errorDetail?: string | undefined;
+  hostNode?: { path: string; version: string } | null | undefined;
+  installPaths?: readonly string[] | undefined;
+  requiredNode?: string | undefined;
+}
+
+function formatInstallPathsFact(
   t: TFunction,
-  result: {
-    errorCode?: string | undefined;
-    errorDetail?: string | undefined;
-    commandPreview?: string | undefined;
-  }
+  installPaths: readonly string[]
+): string {
+  return t("settings.agents.lifecycle.facts.installs", {
+    count: installPaths.length,
+    paths: installPaths.join("\n"),
+  });
+}
+
+function formatHostNodeFact(
+  t: TFunction,
+  hostNode: { path: string; version: string }
+): string {
+  return t("settings.agents.lifecycle.facts.node", {
+    path: hostNode.path,
+    version: hostNode.version,
+  });
+}
+
+export function formatLifecycleErrorMessage(
+  t: TFunction,
+  result: LifecycleErrorInput
 ): string {
   const code = result.errorCode;
   const key =
     code && KNOWN_ERROR_CODES.has(code)
       ? `settings.agents.lifecycle.errors.${code}`
       : "settings.agents.lifecycle.errors.command_failed";
-  const message = t(key);
+  const params = {
+    ...(result.requiredNode ? { required: result.requiredNode } : {}),
+    ...(result.hostNode ? { current: result.hostNode.version } : {}),
+  };
+  return Object.keys(params).length > 0 ? t(key, params) : t(key);
+}
+
+export function formatLifecycleError(
+  t: TFunction,
+  result: LifecycleErrorInput,
+  options?: { appendHostNodeFact?: boolean; includeMessage?: boolean }
+): string {
+  const message = formatLifecycleErrorMessage(t, result);
+  const code = result.errorCode;
   if (code === "timeout" || code === "cancelled") {
     return message;
   }
-  const cleaned = cleanErrorDetail(result.errorDetail?.trim() ?? "");
-  const detail = cleaned || result.commandPreview?.trim() || "";
-  return detail ? `${message}\n\n${detail}` : message;
+  const lines: string[] = [];
+  if (options?.includeMessage !== false) {
+    lines.push(message);
+  }
+  if (!code || DETAIL_CODES.has(code)) {
+    const cleaned = cleanErrorDetail(result.errorDetail?.trim() ?? "");
+    const detail = cleaned || result.commandPreview?.trim() || "";
+    if (detail) {
+      lines.push(detail);
+    }
+  }
+  if (options?.appendHostNodeFact !== false && result.hostNode) {
+    lines.push(formatHostNodeFact(t, result.hostNode));
+  }
+  if (result.installPaths && result.installPaths.length > 0) {
+    lines.push(formatInstallPathsFact(t, result.installPaths));
+  }
+  return lines.join("\n\n");
 }
 
 export function formatLifecycleBatchFailureLine(
   t: TFunction,
-  options: {
-    agentLabel: string;
-    errorCode?: string | undefined;
-    errorDetail?: string | undefined;
-    commandPreview?: string | undefined;
-  }
+  options: LifecycleErrorInput & { agentLabel: string }
 ): string {
   return `${options.agentLabel}: ${formatLifecycleError(t, options)}`;
+}
+
+/** Batch alert: one block per agent; host Node fact once at the bottom. */
+export function formatLifecycleBatchFailureBody(
+  t: TFunction,
+  failures: ReadonlyArray<LifecycleErrorInput & { agentLabel: string }>
+): string {
+  const blocks = failures.map(
+    (failure) =>
+      `${failure.agentLabel}: ${formatLifecycleError(t, failure, {
+        appendHostNodeFact: false,
+      })}`
+  );
+  const hostNode = failures.find((failure) => failure.hostNode)?.hostNode;
+  if (hostNode) {
+    blocks.push(formatHostNodeFact(t, hostNode));
+  }
+  return blocks.join("\n\n");
 }
 
 /**
