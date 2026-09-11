@@ -71,20 +71,26 @@ const PATCH_MACHINE_ARGS = [
   "-z",
 ] as const;
 
+/**
+ * 读取 fact 对应的 patch 正文。返回 `null` 只出现在派生面：该面没有单一可表达记录，
+ * 文档不产出这一段（槽背书分组的空输出/错配在选择器内按 stale 或协议错误抛出）。
+ */
 export async function readGitReviewPatch(
   options: ReadGitReviewPatchOptions
-): Promise<GitReviewPatchMaterial> {
+): Promise<GitReviewPatchMaterial | null> {
   const collected = await collectGitReviewPatch(options);
-  return withGitReviewDiffSides(
-    options,
-    collected.material,
-    collected.worktreeFence
-  );
+  return collected === null
+    ? null
+    : withGitReviewDiffSides(
+        options,
+        collected.material,
+        collected.worktreeFence
+      );
 }
 
 async function collectGitReviewPatch(
   options: ReadGitReviewPatchOptions
-): Promise<GitReviewPatchCollection> {
+): Promise<GitReviewPatchCollection | null> {
   if (options.fact.origin === "untracked") {
     if (options.group !== "unstaged" && options.group !== "working") {
       throw new GitReviewDocumentProtocolError(
@@ -98,11 +104,18 @@ async function collectGitReviewPatch(
       "conflict fact 不能生成 patch section"
     );
   }
+  const backing = options.backing;
+  // 派生面没有工作区槽：工作区侧不存在时没有可 fence 的正文（文件不在工作区不是陈旧）。
+  const derivedWorktreeSide =
+    backing !== undefined && backing.kind === "derived"
+      ? backing.worktreeSide
+      : "present";
   let before: GitReviewFileFingerprint | null = null;
   if (
     (options.group === "unstaged" || options.group === "working") &&
     options.fact.status !== "deleted" &&
-    options.fact.statsExpected
+    options.fact.statsExpected &&
+    derivedWorktreeSide === "present"
   ) {
     const snapshot = await tryReadFingerprint(options);
     if (snapshot.kind === "state") {
@@ -111,6 +124,9 @@ async function collectGitReviewPatch(
     before = snapshot.snapshot;
   }
   const envelope = await collectSelectedPatch(options);
+  if (envelope === null) {
+    return null;
+  }
   const material = materialFromGitReviewPatchEnvelope(envelope, options);
   if (before !== null) {
     const after = await tryReadFingerprint(options);
@@ -140,8 +156,11 @@ async function collectGitReviewPatch(
 
 async function collectSelectedPatch(
   options: ReadGitReviewPatchOptions
-): Promise<GitReviewPatchEnvelope> {
-  const selector = new GitReviewPatchEnvelopeSelector(options.fact);
+): Promise<GitReviewPatchEnvelope | null> {
+  const selector = new GitReviewPatchEnvelopeSelector(
+    options.fact,
+    options.backing
+  );
   let selectorError: unknown;
   let result: GitExecRawResult;
   try {

@@ -252,6 +252,57 @@ describe("GitReviewService document", () => {
     ).toEqual(["partial"]);
   });
 
+  it("暂存新增后在磁盘删除的文件没有 Head 段，文档与批摘录仍可读", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "store.rs"), "fn main() {}\n", "utf8");
+    await execGit(["add", "--", "store.rs"], { cwd: root });
+    await rm(join(root, "store.rs"));
+    const service = new GitReviewService();
+    const documentSource = source(root, "store.rs");
+
+    const result = await service.getFileDocument(request(documentSource));
+
+    expectOk(result);
+    expect(contents(result)).toHaveLength(2);
+    expect(result.surfaceSections.head).toBeNull();
+    expect(result.surfaceSections.index).not.toBeNull();
+    expect(result.surfaceSections.staged).not.toBeNull();
+
+    const batch = await service.getExcerptBatch({
+      files: [{ oldPaths: [], path: "store.rs" }],
+      operationId: randomUUID(),
+      source: {
+        contextId: documentSource.contextId,
+        gitRootPath: documentSource.gitRootPath,
+        target: documentSource.target,
+      },
+    });
+
+    expect(batch.kind === "ok" ? batch.items[0]?.result.kind : batch.kind).toBe(
+      "ok"
+    );
+  });
+
+  it("暂存改写后工作区回滚到 HEAD 的文件没有 Head 段", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "file.ts"), "base\n", "utf8");
+    await commitAll(root, "base");
+    await writeFile(join(root, "file.ts"), "staged\n", "utf8");
+    await execGit(["add", "--", "file.ts"], { cwd: root });
+    await execGit(["restore", "--source=HEAD", "--worktree", "--", "file.ts"], {
+      cwd: root,
+    });
+
+    const result = await new GitReviewService().getFileDocument(
+      request(source(root, "file.ts"))
+    );
+
+    expectOk(result);
+    expect(result.surfaceSections.head).toBeNull();
+    expect(result.surfaceSections.index).not.toBeNull();
+    expect(result.surfaceSections.staged).not.toBeNull();
+  });
+
   it("commit 目标返回该提交的 committed patch section", async () => {
     const root = await createRepository();
     await writeFile(join(root, "file.ts"), "base\n", "utf8");

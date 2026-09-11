@@ -5,9 +5,11 @@ import {
   type GitReviewIndexGroupFact,
 } from "../index/contract.ts";
 import {
+  GIT_REVIEW_INDEX_SLOT_BACKING,
   GIT_REVIEW_PATCH_MAX_BYTES,
   GitReviewDocumentProtocolError,
   GitReviewDocumentStaleError,
+  type GitReviewPatchBacking,
 } from "./patch-contract.ts";
 
 const DIFF_SECTION_MARKER = Buffer.from("\ndiff --git ", "ascii");
@@ -29,6 +31,8 @@ type GitReviewPatchEnvelopeMetadata = Omit<GitReviewPatchEnvelope, "patch">;
 
 /** 只保留目标 patch；全部 stdout 仍由 Git 执行预算计费。 */
 export class GitReviewPatchEnvelopeSelector {
+  #absent = false;
+  readonly #backing: GitReviewPatchBacking;
   readonly #fact: GitReviewIndexGroupFact;
   #failure: unknown;
   #metadata: readonly GitReviewPatchEnvelopeMetadata[] | null = null;
@@ -40,11 +44,18 @@ export class GitReviewPatchEnvelopeSelector {
   #selectedPatchBytes = 0;
   readonly #selectedPatchChunks: Buffer[] = [];
 
-  constructor(fact: GitReviewIndexGroupFact) {
+  constructor(
+    fact: GitReviewIndexGroupFact,
+    backing: GitReviewPatchBacking = GIT_REVIEW_INDEX_SLOT_BACKING
+  ) {
+    this.#backing = backing;
     this.#fact = fact;
   }
 
   push(chunk: Buffer): void {
+    if (this.#absent) {
+      return;
+    }
     if (this.#failure !== undefined) {
       throw this.#failure;
     }
@@ -56,15 +67,23 @@ export class GitReviewPatchEnvelopeSelector {
     }
   }
 
-  finish(): GitReviewPatchEnvelope {
+  finish(): GitReviewPatchEnvelope | null {
     if (this.#failure !== undefined) {
       throw this.#failure;
     }
+    if (this.#absent) {
+      return null;
+    }
     const metadata = this.#metadata;
     if (metadata === null) {
-      // git 对目标 pathspec 输出为空：索引扫描与 patch 读取之间文件状态已
-      // 变化（还原 / 改名 / 取消暂存等）。这是陈旧事实竞态，走 stale 重试
-      // 重新解析索引，而不是当作不可恢复的协议错误。
+      // git 对目标 pathspec 输出为空：索引扫描与 patch 读取之间文件状态已变化
+      //（还原 / 改名 / 取消暂存等）。槽背书分组是陈旧事实竞态，走 stale 重试，
+      // 而不是当作不可恢复的协议错误打断用户；派生组合面没有自己的事实，不存在
+      // 可重试的对象，该面直接缺席。
+      if (this.#backing.kind === "derived") {
+        this.#markAbsent();
+        return null;
+      }
       throw new GitReviewDocumentStaleError(
         "Git Review 文件在 patch 生成期间发生变化（无 diff 输出）"
       );
@@ -94,6 +113,12 @@ export class GitReviewPatchEnvelopeSelector {
     return Object.freeze({ ...selected, patch });
   }
 
+  /** 派生面给不出单一 section：本面缺席，并停止消费后续 chunk。 */
+  #markAbsent(): void {
+    this.#absent = true;
+    this.#raw = Buffer.alloc(0);
+  }
+
   #push(chunk: Buffer): void {
     if (this.#metadata === null) {
       const combined = Buffer.concat([this.#raw, chunk]);
@@ -119,11 +144,19 @@ export class GitReviewPatchEnvelopeSelector {
         envelopeMatchesFact(item, this.#fact) ? [index] : []
       );
       if (matches.length === 0) {
+        if (this.#backing.kind === "derived") {
+          this.#markAbsent();
+          return;
+        }
         throw new GitReviewDocumentStaleError(
           "Git Review patch 与索引路径或状态不一致"
         );
       }
       if (matches.length !== 1) {
+        if (this.#backing.kind === "derived") {
+          this.#markAbsent();
+          return;
+        }
         throw new GitReviewDocumentProtocolError(
           "Git Review patch 包含重复目标文件"
         );

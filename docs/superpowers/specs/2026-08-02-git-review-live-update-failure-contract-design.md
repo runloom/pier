@@ -12,6 +12,7 @@
 | `2026-07-25-git-review-codeview-endstate-design.md` | soft-retain、stage 零 toast、settled-only | **§7–§8 失败面由本文 supersede 为可执行规则** |
 | `2026-07-27-git-review-stable-ledger-design.md` | content 槽几何 / LRU | 不改；失败态仍用 `error` / `ready-notice` 槽 |
 | `2026-07-27-diff-view-lifecycle-design.md` | remount / apply 生命周期 | 渲染回滚规则与本文 §6 对齐 |
+| `2026-09-11-git-review-derived-section-absence-gold-standard.md` | 派生组合面（working）缺席语义 | §7.2 的瞬态集合**不含**派生面缺席；派生段读不到内容一律缺席，不进重试 |
 | **本文** | **背景刷新零打断 + 失败分级 + 反馈通道** | live-update / failure UX 的契约源 |
 
 **实现禁令：** 未对照本文时，禁止再合「扩 transient 名单挡 toast」「同 mode 只 toast 一次」类症状补丁充当结案。
@@ -260,6 +261,8 @@ failure 发生：
 | **仓库级** | notRepository, invalidSource，且无任何 last-good | 整页 Empty |
 
 **注意：** 「扩 transient 集合挡 toast」**不够**；背景路径应 **整通道关闭**，与 reason 列表解耦。reason 列表只服务 **行内文案 / 是否 retryable**。
+
+**派生组合面（working）缺席不进本表。** 该面没有索引槽背书，读不到内容 = 这一段不存在（`surfaceSections.head = null`），既不重试也不产生 `staleRevision` / `internal`。规则与检查点见 `2026-09-11-git-review-derived-section-absence-gold-standard.md`。
 
 ### 7.3 Stage / watch reconcile
 
