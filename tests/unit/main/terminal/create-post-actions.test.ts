@@ -10,8 +10,9 @@ import {
 import { signalPromptReady } from "@main/ipc/terminal/initial-input-gate.ts";
 import type { NativeAddon } from "@main/ipc/terminal/native-addon.ts";
 import { SUBMIT_ENTER_SETTLE_MS } from "@main/ipc/terminal/operations.ts";
+import { nativeTerminalProcesses } from "@main/ipc/terminal/process/registry.ts";
 import { APPKIT_KEYCODE } from "@shared/terminal-appkit-keys.ts";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { workspace as workspaceEn } from "../../../../src/renderer/i18n/locales/en/workspace.ts";
 import { workspace as workspaceJa } from "../../../../src/renderer/i18n/locales/ja/workspace.ts";
 import { workspace as workspaceKo } from "../../../../src/renderer/i18n/locales/ko/workspace.ts";
@@ -36,6 +37,10 @@ async function flushSubmitEnter(): Promise<void> {
 }
 
 describe("terminal create post actions", () => {
+  beforeEach(() => {
+    const process = nativeTerminalProcesses.begin("7::terminal-1");
+    nativeTerminalProcesses.created(process);
+  });
   afterEach(() => {
     // 清掉可能残留的 fallback timer，防止跨用例污染。
     cancelInitialTerminalInput("terminal-1");

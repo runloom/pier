@@ -62,6 +62,18 @@ export const terminal = {
     waiting: "確認待ち",
   },
   composer: {
+    draftSaveFailed: "未送信の内容を保存できませんでした",
+    unconfirmedHint:
+      "この内容はすでにターミナルに届いている可能性があります。再送する前に確認してください。",
+    restartToSend:
+      "下書きを保存しました。送信する前にエージェントを再起動してください。",
+    unconfirmedTitle: "この内容を再送しますか？",
+    unconfirmedBody:
+      "前回の送信完了を確認できませんでした。重複送信を避けるため、先にターミナルを確認してください。",
+    sendAgain: "再送する",
+    needsInput:
+      "ターミナルで確認または質問への回答を済ませてから、タスクを送信してください。",
+
     attachFailed: "ファイルを追加できませんでした。もう一度お試しください",
     attachFile: "ファイルを追加",
     // Only warn for verified TUIs; cursor risk never disables sending by itself.
@@ -388,6 +400,7 @@ export const terminal = {
    * Prefer product wording over Ghostty brand for user-facing copy.
    */
   ghosttyHost: {
+    processStopped: "プロセスを停止しました。出力は引き続き確認できます。",
     processExited: "プロセスが終了しました",
     processExitedFailed: "プロセスが終了コード {{code}} で終了しました",
     processExitedAbnormal:

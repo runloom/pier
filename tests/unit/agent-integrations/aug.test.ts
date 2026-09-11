@@ -313,7 +313,7 @@ describe("augIntegration", () => {
       "processing",
       "tool",
       "processing",
-      undefined,
+      "processing",
     ]);
   }, 30_000);
 

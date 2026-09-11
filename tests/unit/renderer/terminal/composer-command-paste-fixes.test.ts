@@ -286,6 +286,7 @@ describe("handleComposerPaste file+plain", () => {
       insertPlainTextAtCursor,
       mergeAttachments: () => true,
       reportError: vi.fn(),
+      signal: new AbortController().signal,
     });
 
     await vi.waitFor(() => {

@@ -1,6 +1,6 @@
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const closeCurrentWindowMock = vi.hoisted(() => vi.fn(async () => undefined));
 const TERMINAL_PANEL_ID_PREFIX = /^terminal-/;
@@ -14,6 +14,13 @@ import {
   clearPanelCloseGuards,
   registerPanelCloseGuard,
 } from "@/lib/workspace/panel-close-guards.ts";
+import {
+  getOrCreateTerminalComposerSession,
+  getTerminalComposerSession,
+  readComposerDraft,
+  resetTerminalComposerSessionsForTests,
+  writeComposerDraft,
+} from "@/panel-kits/terminal/composer/session.ts";
 import { useTaskRunSelectionStore } from "@/stores/task-run-selection.store.ts";
 import {
   requestTerminalRelaunch,
@@ -88,6 +95,7 @@ function lastInvocationOrder(fn: { mock: { invocationCallOrder: number[] } }) {
 }
 
 describe("workspace terminal close lifecycle", () => {
+  afterEach(resetTerminalComposerSessionsForTests);
   beforeEach(() => {
     vi.restoreAllMocks();
     clearPanelCloseGuards();
@@ -118,6 +126,8 @@ describe("workspace terminal close lifecycle", () => {
   it("closes the native terminal when a terminal panel is explicitly closed", async () => {
     const panel = terminalPanel("terminal-1");
     const api = createApi([panel, webPanel("welcome-1")]);
+    const session = getOrCreateTerminalComposerSession(panel.id);
+    writeComposerDraft(session, "unsent");
 
     useWorkspaceStore.getState().setApi(api as never);
 
@@ -125,6 +135,26 @@ describe("workspace terminal close lifecycle", () => {
 
     expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
     expect(api.removePanel).toHaveBeenCalledWith(panel);
+    expect(session.signal.aborted).toBe(true);
+    expect(getTerminalComposerSession(panel.id)).toBeNull();
+    expect(readComposerDraft(session)).toBe("");
+  });
+
+  it("keeps unsent input when a terminal close guard rejects, then releases it on acceptance", async () => {
+    const panel = terminalPanel("terminal-guard");
+    const api = createApi([panel, webPanel("welcome")]);
+    useWorkspaceStore.getState().setApi(api as never);
+    const session = getOrCreateTerminalComposerSession(panel.id);
+    writeComposerDraft(session, "keep until accepted");
+    const guard = vi.fn(async () => true).mockResolvedValueOnce(false);
+    registerPanelCloseGuard("terminal", guard);
+    await useWorkspaceStore.getState().closePanel(panel.id);
+    expect(getTerminalComposerSession(panel.id)).toBe(session);
+    expect(readComposerDraft(session)).toBe("keep until accepted");
+    expect(session.signal.aborted).toBe(false);
+    await useWorkspaceStore.getState().closePanel(panel.id);
+    expect(getTerminalComposerSession(panel.id)).toBeNull();
+    expect(session.signal.aborted).toBe(true);
   });
 
   it("clears a pending terminal relaunch request when that terminal panel is explicitly closed", async () => {
@@ -234,6 +264,9 @@ describe("workspace terminal close lifecycle", () => {
 
     expect(right.api.setActive).toHaveBeenCalledOnce();
     expect(left.api.setActive).not.toHaveBeenCalled();
+    expect(
+      firstInvocationOrder(vi.mocked(window.pier.terminal.close))
+    ).toBeLessThan(firstInvocationOrder(right.api.setActive));
     expect(firstInvocationOrder(right.api.setActive)).toBeLessThan(
       firstInvocationOrder(api.removePanel)
     );
@@ -681,6 +714,8 @@ describe("workspace terminal close lifecycle", () => {
     const api = createApi([web, terminal]);
     const guard = vi.fn(async () => false);
 
+    const session = getOrCreateTerminalComposerSession(terminal.id);
+    writeComposerDraft(session, "keep all");
     registerPanelCloseGuard("welcome", guard);
     useWorkspaceStore.getState().setApi(api as never);
 
@@ -696,6 +731,8 @@ describe("workspace terminal close lifecycle", () => {
     expect(window.pier.terminal.close).not.toHaveBeenCalled();
     expect(api.removePanel).not.toHaveBeenCalled();
     expect(closeCurrentWindowMock).not.toHaveBeenCalled();
+    expect(getTerminalComposerSession(terminal.id)).toBe(session);
+    expect(readComposerDraft(session)).toBe("keep all");
   });
 
   it("keeps closeAll cancellation consistent after earlier panels were closed", async () => {
@@ -703,6 +740,7 @@ describe("workspace terminal close lifecycle", () => {
     const web = webPanel("welcome-1");
     const api = createApi([terminal, web]);
     const guard = vi.fn(async () => false);
+    const closedSession = getOrCreateTerminalComposerSession(terminal.id);
 
     registerPanelCloseGuard("welcome", guard);
     useWorkspaceStore.getState().setApi(api as never);
@@ -714,12 +752,16 @@ describe("workspace terminal close lifecycle", () => {
     expect(api.removePanel).not.toHaveBeenCalledWith(web);
     expect(window.pier.workspace.clearLayout).not.toHaveBeenCalled();
     expect(closeCurrentWindowMock).not.toHaveBeenCalled();
+    expect(closedSession.signal.aborted).toBe(true);
+    expect(getTerminalComposerSession(terminal.id)).toBeNull();
   });
 
   it("clears layout, closes old terminals, and rebuilds default terminal during resetLayout", async () => {
     const oldTerminal = terminalPanel("terminal-old");
     const web = webPanel("welcome-old");
     const api = createApi([oldTerminal, web]);
+    const oldSession = getOrCreateTerminalComposerSession(oldTerminal.id);
+    writeComposerDraft(oldSession, "unsent");
 
     useWorkspaceStore.getState().setApi(api as never);
 
@@ -732,6 +774,9 @@ describe("workspace terminal close lifecycle", () => {
     expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-old");
     expect(api.removePanel).toHaveBeenCalledWith(oldTerminal);
     expect(api.removePanel).toHaveBeenCalledWith(web);
+    expect(oldSession.signal.aborted).toBe(true);
+    expect(readComposerDraft(oldSession)).toBe("");
+    expect(getTerminalComposerSession(oldTerminal.id)).toBeNull();
     expect(api.addPanel).toHaveBeenCalledWith({
       component: "terminal",
       id: "terminal-1",

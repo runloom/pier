@@ -81,7 +81,14 @@ describe("agent-attention → NCS ingest", () => {
     };
     await service.observe(null, processing);
     await service.observe(processing, {
-      activities: [agent({ panelId: "p1", status: "ready", windowId: "11" })],
+      activities: [
+        agent({
+          panelId: "p1",
+          status: "ready",
+          windowId: "11",
+          turnResult: "completed",
+        }),
+      ],
       ts: 2,
     });
 
@@ -134,7 +141,14 @@ describe("agent-attention → NCS ingest", () => {
     };
     await service.observe(null, processing);
     await service.observe(processing, {
-      activities: [agent({ panelId: "p1", status: "ready", windowId: "11" })],
+      activities: [
+        agent({
+          panelId: "p1",
+          status: "ready",
+          windowId: "11",
+          turnResult: "completed",
+        }),
+      ],
       ts: 2,
     });
     expect(ingestNotification).not.toHaveBeenCalled();

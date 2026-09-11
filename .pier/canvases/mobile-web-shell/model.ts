@@ -52,6 +52,8 @@ export interface DemoNotification {
   when: string;
   read: boolean;
   sessionId: string | null;
+  /** 通知保留事件发生时的会话标题快照：会话结束后仍能说出「是谁」结束了。 */
+  sessionTitle?: string | undefined;
 }
 
 export type ChangeLetter = "M" | "A" | "D" | "?";
@@ -80,7 +82,7 @@ export interface DemoFileEntry {
   size?: string;
 }
 
-export type PushState = "idle" | "busy" | "done";
+export type PushState = "idle" | "busy" | "done" | "failed";
 
 export interface DemoState {
   hosts: DemoHost[];
@@ -107,6 +109,8 @@ export const HOST_STUDIO = "host-studio";
 export const SESSION_WAITING = "s-feat-mobile";
 export const SESSION_RUNNING = "s-xyz";
 export const SESSION_TERMINAL = "s-ghostty";
+/** 只在通知里出现、会话列表里已不存在：演示悬空通知落点。 */
+export const SESSION_ENDED = "s-ended";
 
 const WAITING_SCREEN: ScreenLine[] = [
   { text: "❯ claude", tone: "prompt" },
@@ -120,10 +124,8 @@ const WAITING_SCREEN: ScreenLine[] = [
   { text: "● Bash(git diff --staged)" },
   { text: "  ⎿  Waiting for permission…", tone: "dim" },
   { text: "" },
-  { text: "Do you want to proceed?" },
-  { text: "❯ 1. Yes", tone: "accent" },
-  { text: "  2. Yes, don't ask again", tone: "dim" },
-  { text: "  3. No", tone: "dim" },
+  { text: "Do you want to run git diff --staged? (y/n)" },
+  { text: "❯ ", tone: "dim" },
 ];
 
 const RUNNING_SCREEN: ScreenLine[] = [
@@ -204,6 +206,16 @@ export const INITIAL_DEMO: DemoState = {
       sessionId: SESSION_RUNNING,
       title: "回合已完成",
       when: "12 分钟前",
+    },
+    {
+      body: "智能体曾等待回应，但该会话已在电脑上结束。",
+      hostId: HOST_MINI,
+      id: "n-ended",
+      read: false,
+      sessionId: SESSION_ENDED,
+      sessionTitle: "docs-site",
+      title: "需要你处理",
+      when: "半小时前",
     },
     {
       body: "这台电脑现在可以从外网连接",
@@ -302,6 +314,7 @@ export function reduceDemo(state: DemoState, action: DemoAction): DemoState {
   }
 }
 
+/** 收件箱顺序 = 事件时间倒序；示范数据按此排好，宿主投递侧也按同一契约给。 */
 export function notificationsOf(
   state: DemoState,
   hostId: string
@@ -322,6 +335,20 @@ export function sessionsOf(state: DemoState, hostId: string): DemoSession[] {
     ...list.filter((session) => session.status === "waiting"),
     ...list.filter((session) => session.status !== "waiting"),
   ];
+}
+
+/** 根面分诊：每台在线主机上「需要你处理」的会话数，不依赖推送。离线/未知主机进不去，不计数。 */
+export function waitingCountByHost(state: DemoState): Record<string, number> {
+  const online = new Set(
+    state.hosts.filter((host) => host.status === "online").map((h) => h.id)
+  );
+  const counts: Record<string, number> = {};
+  for (const session of state.sessions) {
+    if (session.status === "waiting" && online.has(session.hostId)) {
+      counts[session.hostId] = (counts[session.hostId] ?? 0) + 1;
+    }
+  }
+  return counts;
 }
 
 /** 与现有 agent.attention.respond 的 13 个键一致；没有选项或语义动作。 */

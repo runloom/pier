@@ -334,6 +334,7 @@ describe("withPierCopilotHooks", () => {
   }, 15_000);
 
   it("官方子智能体形状只保留父会话作用域，匿名并发可由首次出现的 agentId 逐一关闭", async () => {
+    const promptAt = Date.now();
     const root = await mkdtemp(join(tmpdir(), "pier-copilot-subagent-v3-"));
     const userData = join(root, "userData");
     const hooksHome = join(root, "hooks");
@@ -428,6 +429,7 @@ describe("withPierCopilotHooks", () => {
         nativeEvent: "userPromptSubmitted",
         panelId: "p1",
         sessionId: "parent-session",
+        ts: promptAt,
         v: 3,
         windowId: "w1",
       },

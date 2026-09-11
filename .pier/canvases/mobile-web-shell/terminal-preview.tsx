@@ -1,13 +1,7 @@
 import type { ReactNode } from "react";
-import { cx } from "./chrome.tsx";
+import { cx, SESSION_STATE_LABEL } from "./chrome.tsx";
 import { Icon } from "./icons.tsx";
 import { type DemoSession, screenText } from "./model.ts";
-
-const STATE_LABEL = {
-  waiting: "需要你处理",
-  processing: "运行中",
-  ready: "就绪",
-} as const;
 
 export function SessionState({ session }: { session: DemoSession }): ReactNode {
   return (
@@ -31,12 +25,12 @@ export function SessionState({ session }: { session: DemoSession }): ReactNode {
               : "bg-muted-foreground"
         )}
       />
-      {STATE_LABEL[session.status]}
+      {SESSION_STATE_LABEL[session.status]}
     </span>
   );
 }
 
-/** 保留屏幕原始行形；溢出时优先露出末尾输出。 */
+/** 保留屏幕原始行形；溢出时优先露出末尾输出。窗栏只留色点，等待的文字状态在卡片身份行。 */
 export function TerminalPreview(props: {
   session: DemoSession;
   compact?: boolean;
@@ -53,7 +47,16 @@ export function TerminalPreview(props: {
       {props.compact ? null : (
         <span className="absolute inset-x-0 top-0 flex h-7 items-center justify-between gap-2 px-2.5">
           <Icon className="size-3 text-muted-foreground" name="terminal" />
-          <SessionState session={props.session} />
+          <span
+            className={cx(
+              "size-2 shrink-0 rounded-full",
+              props.session.status === "waiting"
+                ? "bg-warning"
+                : props.session.status === "processing"
+                  ? "bg-info"
+                  : "bg-muted-foreground/60"
+            )}
+          />
         </span>
       )}
       <span
@@ -69,7 +72,7 @@ export function TerminalPreview(props: {
           data-slot="terminal-preview-content"
         >
           <span
-            className="block min-h-full shrink-0 whitespace-pre font-mono text-[3.6cqw] text-foreground/85 leading-[1.55]"
+            className="block min-h-full shrink-0 whitespace-pre font-mono text-[11px] text-foreground/85 leading-4"
             data-slot="terminal-preview-text"
           >
             {screenText(props.session.screen)}

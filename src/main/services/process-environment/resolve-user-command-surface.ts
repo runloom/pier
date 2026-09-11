@@ -11,7 +11,10 @@ import {
 } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { pickHostApplyEnv } from "./apply-host-env.ts";
-import { agentShellCommandFlags } from "./resolve-user-command-probe.ts";
+import {
+  agentShellCommandFlags,
+  shellFamily,
+} from "./resolve-user-command-probe.ts";
 import {
   extractBareCommandName,
   quoteShellArg,
@@ -83,7 +86,7 @@ export function buildStickyExportPrelude(env: Record<string, string>): string {
 }
 
 /**
- * Shebang scripts cannot be the PTY leader; spawn `$SHELL -lic` instead.
+ * Detect scripts that require the user's login-shell environment before exec.
  */
 export function looksLikeShebangScript(path: string): boolean {
   try {
@@ -102,12 +105,63 @@ export function looksLikeShebangScript(path: string): boolean {
   }
 }
 
+const HOST_COLOR_VALUE_DEPENDENT_KEYS = [
+  "CLICOLOR",
+  "CLICOLOR_FORCE",
+  "FORCE_COLOR",
+] as const;
+
+function posixHostColorPolicyUnset(): string {
+  const byValue = HOST_COLOR_VALUE_DEPENDENT_KEYS.map(
+    (key) =>
+      `case $(printf %s "\${${key}-}" | tr "[:upper:]" "[:lower:]") in 0|false|off|no|"") unset ${key};; esac`
+  ).join("; ");
+  return `unset NO_COLOR NODE_DISABLE_COLORS; ${byValue}`;
+}
+
+function fishHostColorPolicyUnset(): string {
+  const always = "set -e NO_COLOR; set -e NODE_DISABLE_COLORS";
+  const byValue = HOST_COLOR_VALUE_DEPENDENT_KEYS.map(
+    (key) =>
+      `set -l _pier_${key} (string lower -- $${key}); if test -z "$_pier_${key}"; or contains -- "$_pier_${key}" 0 false off no; set -e ${key}; end`
+  ).join("; ");
+  return `${always}; ${byValue}`;
+}
+
+function nuHostColorPolicyUnset(): string {
+  const always = "hide-env -i NO_COLOR; hide-env -i NODE_DISABLE_COLORS";
+  const byValue = HOST_COLOR_VALUE_DEPENDENT_KEYS.map(
+    (key) =>
+      `if ($env.${key}? | default "" | str downcase) in ["" "0" "false" "off" "no"] { hide-env -i ${key} }`
+  ).join("; ");
+  return `${always}; ${byValue}`;
+}
+
+export function hostColorPolicyUnsetPrelude(shellPath?: string): string {
+  const family = shellPath ? shellFamily(shellPath) : "posix";
+  if (family === "fish") {
+    return fishHostColorPolicyUnset();
+  }
+  if (family === "nu") {
+    return nuHostColorPolicyUnset();
+  }
+  return posixHostColorPolicyUnset();
+}
+
+function withHostColorPolicyUnset(body: string, shellPath?: string): string {
+  const prelude = hostColorPolicyUnsetPrelude(shellPath);
+  return body ? `${prelude}; ${body}` : prelude;
+}
+
 /**
  * Build Ghostty-safe surface command after resolve.
- * Native binary → `/bin/sh -c 'exec …'`. Shebang and via-shell → `$SHELL -lic`.
+ * Native binary → `/bin/sh -c 'exec …'`. Shebang → `$SHELL -lic 'exec …'`.
+ * Resolved agents replace the wrapper, keeping their children in the owned group.
  */
 export function buildResolvedAgentSurfaceCommand(input: {
   commandLine: string;
+  /** Verified literal arguments, appended only at this final spawn boundary. */
+  literalArgs?: readonly string[];
   env: Record<string, string>;
   resolved: ResolvedUserCommand;
   shell: string;
@@ -116,22 +170,27 @@ export function buildResolvedAgentSurfaceCommand(input: {
   const shell = input.shell;
   const flags = agentShellCommandFlags(shell);
   const sticky = buildStickyExportPrelude(input.env);
+  const extra = input.literalArgs?.length
+    ? ` ${input.literalArgs.map(quoteShellArg).join(" ")}`
+    : "";
 
   if (input.resolved.kind === "absolute") {
     const abs = input.resolved.path;
     const name = extractBareCommandName(trimmed);
     if (name) {
+      const execution = `exec ${quoteShellArg(abs)}${trimmed.slice(name.length)}${extra}`;
       if (looksLikeShebangScript(abs)) {
-        const body = sticky ? `${sticky}; ${trimmed}` : trimmed;
-        return `${quoteShellArg(shell)} ${flags} ${quoteShellArg(body)}`;
+        const inner = sticky ? `${sticky}; ${execution}` : execution;
+        return `${quoteShellArg(shell)} ${flags} ${quoteShellArg(
+          withHostColorPolicyUnset(inner, shell)
+        )}`;
       }
-      const rest = name.startsWith("/")
-        ? trimmed.slice(name.length)
-        : trimmed.slice(name.length);
-      return `/bin/sh -c ${quoteShellArg(`exec ${quoteShellArg(abs)}${rest}`)}`;
+      return `/bin/sh -c ${quoteShellArg(withHostColorPolicyUnset(execution))}`;
     }
   }
 
-  const body = sticky ? `${sticky}; ${trimmed}` : trimmed;
-  return `${quoteShellArg(shell)} ${flags} ${quoteShellArg(body)}`;
+  const inner = sticky ? `${sticky}; ${trimmed}${extra}` : `${trimmed}${extra}`;
+  return `${quoteShellArg(shell)} ${flags} ${quoteShellArg(
+    withHostColorPolicyUnset(inner, shell)
+  )}`;
 }

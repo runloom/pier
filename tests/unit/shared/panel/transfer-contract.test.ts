@@ -524,6 +524,17 @@ describe("panel transfer commands", () => {
     ).toMatchObject({ type: "panelTransfer.prepareSource" });
     expect(
       rendererCommandSchema.parse({
+        mode: "copy",
+        sourcePanelId: "panel-files-1",
+        transferId: TRANSFER_ID,
+        type: "panelTransfer.prepareSource",
+      })
+    ).toMatchObject({
+      mode: "copy",
+      type: "panelTransfer.prepareSource",
+    });
+    expect(
+      rendererCommandSchema.parse({
         type: "panelTransfer.stageTarget",
         transferId: TRANSFER_ID,
         targetPanelId: "panel-files-1",
@@ -567,6 +578,14 @@ describe("panel transfer commands", () => {
         type: "panelTransfer.prepareSource",
         transferId: "bad",
         sourcePanelId: "panel-files-1",
+      }).success
+    ).toBe(false);
+    expect(
+      rendererCommandSchema.safeParse({
+        mode: "clone",
+        sourcePanelId: "panel-files-1",
+        transferId: TRANSFER_ID,
+        type: "panelTransfer.prepareSource",
       }).success
     ).toBe(false);
     expect(

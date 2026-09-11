@@ -30,6 +30,62 @@ export function omitTerminalEmulatorEnv(env: Environment): Environment {
   return changed ? next : env;
 }
 
+/** Host/dump disable keys must not reach a real PTY; Grok treats any `NO_COLOR` as monochrome. */
+export const HOST_COLOR_POLICY_KEYS = [
+  "CLICOLOR",
+  "CLICOLOR_FORCE",
+  "FORCE_COLOR",
+  "NO_COLOR",
+  "NODE_DISABLE_COLORS",
+] as const;
+
+const HOST_COLOR_DISABLE_ALWAYS = new Set(["NO_COLOR", "NODE_DISABLE_COLORS"]);
+
+function isColorDisabledValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "" ||
+    normalized === "0" ||
+    normalized === "false" ||
+    normalized === "off" ||
+    normalized === "no"
+  );
+}
+
+export function omitHostColorPolicyEnv(env: Environment): Environment {
+  let changed = false;
+  const next: Environment = { ...env };
+  for (const key of HOST_COLOR_POLICY_KEYS) {
+    const value = next[key];
+    if (value === undefined) {
+      continue;
+    }
+    if (HOST_COLOR_DISABLE_ALWAYS.has(key) || isColorDisabledValue(value)) {
+      Reflect.deleteProperty(next, key);
+      changed = true;
+    }
+  }
+  return changed ? next : env;
+}
+
+/** Drop host color-disable keys from `process.env` before Ghostty snapshots it. */
+export function stripHostColorPolicyFromProcessEnv(
+  target: NodeJS.ProcessEnv = process.env
+): string[] {
+  const removed: string[] = [];
+  for (const key of HOST_COLOR_POLICY_KEYS) {
+    const value = target[key];
+    if (value === undefined) {
+      continue;
+    }
+    if (HOST_COLOR_DISABLE_ALWAYS.has(key) || isColorDisabledValue(value)) {
+      Reflect.deleteProperty(target, key);
+      removed.push(key);
+    }
+  }
+  return removed;
+}
+
 function isPierInternalEsbuildBinaryPath(value: string): boolean {
   const normalized = value.replaceAll("\\", "/");
   return (

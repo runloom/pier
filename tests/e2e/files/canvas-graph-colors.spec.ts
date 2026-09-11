@@ -248,7 +248,10 @@ async function readGraphNodes(page: Page): Promise<GraphNodeChrome[]> {
         borderRgb: sample(style.borderTopColor),
         borderWidth: Number.parseFloat(style.borderTopWidth),
         kind: el.getAttribute("data-kind"),
-        title: el.querySelector("span.font-medium")?.textContent?.trim() ?? "",
+        title:
+          el
+            .querySelector('[data-slot="mermaid-node-title"]')
+            ?.textContent?.trim() ?? "",
         tone: el.getAttribute("data-tone"),
       };
     })
@@ -276,7 +279,8 @@ function expectPainted(
     }
     expect(node.kind).toBe(want.kind);
     expect(node.tone).toBe(want.tone);
-    // Hue hairline (Ant soft border token) vs the neutral border token.
+    // Hue hairline (status-fg, same recipe as WorkflowDiagram) vs the
+    // neutral border token.
     expect(
       node.borderWidth,
       `${want.title} border width ${node.borderWidth}`

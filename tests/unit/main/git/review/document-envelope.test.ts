@@ -84,8 +84,12 @@ describe("Git Review patch envelope", () => {
       selector.push(input.subarray(offset, offset + 7));
     }
 
+    const envelopeResult = selector.finish();
+    if (envelopeResult === null) {
+      throw new Error("expected selected envelope");
+    }
     const selected = materialFromGitReviewPatchEnvelope(
-      selector.finish(),
+      envelopeResult,
       options()
     );
 
@@ -115,6 +119,65 @@ describe("Git Review patch envelope", () => {
       Buffer.from("diff --git a/file.ts b/file.ts\n@@ -1 +1 @@\n", "utf8")
     );
     expect(() => patchOnly.finish()).toThrow(GitReviewDocumentStaleError);
+  });
+
+  it("派生面读不到单一目标记录时缺席，不产生陈旧事实或协议错误", () => {
+    const derived = options({
+      backing: { kind: "derived", worktreeSide: "present" },
+      group: "working",
+    });
+    const absent = new GitReviewPatchEnvelopeSelector(
+      derived.fact,
+      derived.backing
+    );
+    expect(absent.finish()).toBeNull();
+    // 缺席后不再消费 chunk：超过 raw 上限的后续 chunk 不得再抛协议错误。
+    absent.push(Buffer.alloc(64 * 1024 + 1, 0x61));
+    expect(absent.finish()).toBeNull();
+
+    const mismatch = new GitReviewPatchEnvelopeSelector(
+      derived.fact,
+      derived.backing
+    );
+    mismatch.push(
+      envelope(
+        [`:100644 100644 ${oid} ${oid} M`, "other.ts"],
+        "diff --git a/other.ts b/other.ts\n@@ -1 +1 @@\n-old\n+new\n"
+      )
+    );
+    expect(mismatch.finish()).toBeNull();
+
+    const duplicate = new GitReviewPatchEnvelopeSelector(
+      derived.fact,
+      derived.backing
+    );
+    duplicate.push(
+      envelope(
+        [
+          `:100644 100644 ${oid} ${oid} M`,
+          "file.ts",
+          `:100644 100644 ${oid} ${oid} M`,
+          "file.ts",
+        ],
+        [
+          "diff --git a/file.ts b/file.ts\n@@ -1 +1 @@\n-old\n+new\n",
+          "diff --git a/file.ts b/file.ts\n@@ -1 +1 @@\n-old\n+newer\n",
+        ].join("")
+      )
+    );
+    expect(duplicate.finish()).toBeNull();
+
+    // 同样的输入对槽背书分组仍是陈旧事实或协议错误。
+    const slot = new GitReviewPatchEnvelopeSelector(options().fact);
+    expect(() =>
+      slot.push(
+        envelope(
+          [`:100644 100644 ${oid} ${oid} M`, "other.ts"],
+          "diff --git a/other.ts b/other.ts\n@@ -1 +1 @@\n-old\n+new\n"
+        )
+      )
+    ).toThrow(GitReviewDocumentStaleError);
+    expect(() => slot.finish()).toThrow(GitReviewDocumentStaleError);
   });
 
   it("流式解析拒绝非法的全局正文起始段", () => {

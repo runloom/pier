@@ -1,4 +1,8 @@
-import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
+import type {
+  ActivityStatus,
+  AgentTurnResult,
+} from "@shared/contracts/foreground-activity.ts";
+import { statusWithNativeIdle } from "./activity-idle.ts";
 import {
   HOOK_FRESH_TTL_MS,
   type HookLayer,
@@ -16,31 +20,39 @@ const STATUS_PRIORITY: Record<ActivityStatus, number> = {
 };
 
 function statusPriority(status: ActivityStatus | undefined): number {
-  // “已观察到完成但尚无可信终态”不能覆盖 error，也不能被旧 ready 掩盖。
+  // 尚无状态证据的会话不能覆盖已知活动或 error，也不能被旧 ready 掩盖。
   return status === undefined ? 1.5 : STATUS_PRIORITY[status];
 }
 
 function projectedScopeStatus(scope: HookScope): ActivityStatus | undefined {
-  return scope.stale ? undefined : scope.status;
+  return scope.stale ? undefined : statusWithNativeIdle(scope, scope.status);
+}
+
+function projectedTurnResult(scope: HookScope): AgentTurnResult | undefined {
+  if (!scope.turnEnded || scope.stale) return;
+  switch (scope.terminalEvidence) {
+    case "error":
+      return "failed";
+    case "interrupted":
+      return "interrupted";
+    case "ready":
+      return "completed";
+    default:
+      return;
+  }
 }
 
 function isPanelFallbackScope(scope: HookScope): boolean {
   return scope.key === PANEL_HOOK_SCOPE_KEY;
 }
 
-/**
- * 已结算时刻：可信终态（turnEnded）或 advisory 完成候选（completionObserved
- * 且无具体 status）。供「settled session vs panel 噪声」判定。
- */
+/** 只有可信终态才有权让已结算 session 压过 panel 兜底工作。 */
 function scopeSettledAt(scope: HookScope): number | undefined {
   if (scope.stale) {
     return;
   }
   if (scope.turnEnded) {
     return scope.turnEndedAt;
-  }
-  if (scope.completionObserved && scope.status === undefined) {
-    return scope.completionObservedAt;
   }
   return;
 }
@@ -50,8 +62,8 @@ function scopeSettledAt(scope: HookScope): number | undefined {
  * 等 provider 在主会话 TurnCompleted 后，仍有无 sessionId 的迟到
  * preToolUse/postToolUse 把投影粘在 tool/processing 的假忙碌。
  * 同 turnId、不同 sessionId 的分裂（工具 hook 与 stop 会话号不一致），以及
- * 从未见过 PromptSubmit 的衍生 conversation，由 `sealMatchingTurnPeers`
- * 在可信终态时一并封账。
+ * 工具事件先到另一 conversation 的同回合工作，由 `sealMatchingTurnPeers`
+ * 在可信终态时按全局唯一 turnId 一并封账。
  * panel 若在结算之后收到 PromptSubmit 等回合重置，则仍可覆盖（新回合开始）。
  */
 function preferredScope(current: HookScope, candidate: HookScope): HookScope {
@@ -96,6 +108,7 @@ export function refreshHookProjection(hook: HookLayer, at?: number): void {
   }
   hook.identity = { ...selected.identity };
   const selectedStatus = projectedScopeStatus(selected);
+  hook.turnResult = projectedTurnResult(selected);
   const previousStatus = hook.status;
   hook.status = selectedStatus;
   if (selectedStatus === undefined) {
@@ -136,7 +149,7 @@ export function armHookTtlTimer(key: string, ctx: TimerCtx): void {
     (scope) =>
       !(scope.turnEnded || scope.stale) &&
       scope.status !== undefined &&
-      scope.status !== "ready" &&
+      projectedScopeStatus(scope) !== "ready" &&
       scope.status !== "error"
   );
   if (expiringScopes.length === 0) {
@@ -158,7 +171,7 @@ export function armHookTtlTimer(key: string, ctx: TimerCtx): void {
         if (
           !(scope.turnEnded || scope.stale) &&
           scope.status !== undefined &&
-          scope.status !== "ready" &&
+          projectedScopeStatus(scope) !== "ready" &&
           scope.status !== "error" &&
           at - scope.updatedAt >= HOOK_FRESH_TTL_MS
         ) {

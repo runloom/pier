@@ -406,10 +406,6 @@ export function repoScope(worktree: string): RepoScope {
   return SCOPES[worktree] ?? EMPTY_SCOPE;
 }
 
-export function worktreeIsDirty(worktree: string): boolean {
-  return changesSummary(repoScope(worktree).changes).files > 0;
-}
-
 export function changesSummary(changes: readonly DemoChange[]): {
   added: number;
   files: number;

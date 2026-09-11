@@ -43,6 +43,7 @@ function stubProject(
 function processEnvironment(): ProcessEnvironmentService {
   return {
     getHostDiagnostics: () => undefined,
+    hostNodeRuntime: async () => null,
     invalidate: async () => undefined,
     recordHostDiagnostics: () => undefined,
     resolve: vi.fn(async ({ cwd, explicitEnv, projectEnv, source }) => ({

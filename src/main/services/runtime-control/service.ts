@@ -2,125 +2,28 @@
  * RuntimeControlService：持久 agent 运行控制门面（W3）。
  * 不持有任务台账；不产生工作完成结论。
  */
-import {
-  AGENTS_START_ASSEMBLED_MAX_BYTES,
-  type AgentsScreenResult,
-  type AgentsStartResult,
-  type AgentsTurnResult,
-  type AgentsWaitResult,
-  type AgentsWatchResult,
+import type {
+  AgentsScreenResult,
+  AgentsStartResult,
+  AgentsTurnResult,
 } from "@shared/contracts/local-control/agents-runtime.ts";
 import type { RuntimeRef } from "@shared/contracts/local-control/runtime-ref.ts";
 import { matchRuntimeRef } from "@shared/contracts/local-control/runtime-ref.ts";
 import { clampScreenText } from "./screen-text.ts";
+import { assembleStartPrompt } from "./start-prompt.ts";
 import type {
-  RuntimeControlErr,
+  CreateRuntimeControlServiceOptions,
   RuntimeControlResult,
-  RuntimeControlScreenInput,
-  RuntimeControlStartInput,
+  RuntimeControlService,
   RuntimeControlTargetInput,
-  RuntimeControlTurnInput,
-  RuntimeControlWaitInput,
-  RuntimeControlWatchInput,
   RuntimeRecord,
-  TerminalBackend,
 } from "./types.ts";
 import { runWaitLoop, runWatchLoop } from "./wait-watch.ts";
 
-export interface RuntimeControlService {
-  focus(input: RuntimeControlTargetInput): Promise<
-    RuntimeControlResult<{
-      panelId: string;
-      windowId: string;
-      runtime: RuntimeRef;
-    }>
-  >;
-  interrupt(
-    input: RuntimeControlTargetInput
-  ): Promise<RuntimeControlResult<{ interrupted: true; runtime: RuntimeRef }>>;
-  /** 测试/诊断：当前 boot 内登记数。 */
-  listRuntimeIds(): string[];
-  /** E11：snapshot.runtimes 投影（摘要，无 screen 全文）。 */
-  listRuntimeSummaries(): Array<{
-    bootId: string;
-    runtimeId: string;
-    generation: number;
-    agentId: string;
-    panelId: string;
-    windowId: string;
-    fact: string;
-    closed: boolean;
-    worktreeKey?: string | undefined;
-    cwd?: string | undefined;
-  }>;
-  /**
-   * UI 关面板 → 释放：按 panelId 标记 closed 并释放子额占位。
-   * 未登记 / 已 closed 的 panelId 静默忽略。
-   */
-  releaseForPanel(panelId: string): void;
-  screen(
-    input: RuntimeControlScreenInput
-  ): Promise<RuntimeControlResult<AgentsScreenResult>>;
-  start(
-    input: RuntimeControlStartInput
-  ): Promise<RuntimeControlResult<AgentsStartResult>>;
-  terminate(
-    input: RuntimeControlTargetInput
-  ): Promise<RuntimeControlResult<{ terminated: true; runtime: RuntimeRef }>>;
-  turn(
-    input: RuntimeControlTurnInput
-  ): Promise<RuntimeControlResult<AgentsTurnResult>>;
-  wait(
-    input: RuntimeControlWaitInput
-  ): Promise<RuntimeControlResult<AgentsWaitResult>>;
-  watch(
-    input: RuntimeControlWatchInput
-  ): Promise<RuntimeControlResult<AgentsWatchResult>>;
-}
-
-export interface CreateRuntimeControlServiceOptions {
-  backend: TerminalBackend;
-  bootId: string;
-  nowMs?: (() => number) | undefined;
-  /** UI 关面板释放占额时的回调（ops 层注入 capability-hot-path）。 */
-  releaseReservation?: ((runtimeId: string) => void) | undefined;
-  /**
-   * 解析 wait 谓词。默认：closed → exited；否则 fact 字符串匹配。
-   */
-  resolveFact?: ((record: RuntimeRecord) => string | undefined) | undefined;
-}
-
-type AssembledStartPrompt =
-  | { ok: false; error: RuntimeControlErr }
-  | { ok: true; text: string | undefined };
-
-/**
- * 组装委派 marker + promptText（create 之前做，超限不建面）。
- * text 为 undefined 表示普通 start（无委派 prompt）。
- */
-function assembleStartPrompt(
-  input: RuntimeControlStartInput
-): AssembledStartPrompt {
-  if (input.promptText === undefined) {
-    return { ok: true, text: undefined };
-  }
-  const kind = input.originAgentKind ?? "unknown";
-  const panel = input.originPanelId ?? "unknown";
-  const marker = `[Delegated by parent ${kind} panel ${panel}]\n\n`;
-  const assembled = `${marker}${input.promptText}`;
-  if (Buffer.byteLength(assembled, "utf8") > AGENTS_START_ASSEMBLED_MAX_BYTES) {
-    return {
-      ok: false,
-      error: {
-        ok: false,
-        code: "prompt_too_long",
-        message: `assembled agents.start prompt exceeds ${AGENTS_START_ASSEMBLED_MAX_BYTES} bytes`,
-      },
-    };
-  }
-  return { ok: true, text: assembled };
-}
-
+export type {
+  CreateRuntimeControlServiceOptions,
+  RuntimeControlService,
+} from "./types.ts";
 export function createRuntimeControlService(
   options: CreateRuntimeControlServiceOptions
 ): RuntimeControlService {
@@ -131,6 +34,13 @@ export function createRuntimeControlService(
   const generationByRuntimeId = new Map<string, number>();
   /** 同 runtime 变更类 op 串行，避免 turn∥terminate 竞态 */
   const runtimeQueues = new Map<string, Promise<unknown>>();
+  const released = new Set<string>();
+  function release(record: RuntimeRecord): void {
+    const key = `${record.runtime.runtimeId}:${record.runtime.generation}`;
+    if (released.has(key)) return;
+    released.add(key);
+    options.releaseReservation?.(record.runtime.runtimeId);
+  }
 
   function enqueueRuntime<T>(
     runtimeId: string,
@@ -182,7 +92,10 @@ export function createRuntimeControlService(
         message: "runtime not found",
       };
     }
-    if (record.closed && !lookupOpts?.allowClosed) {
+    if (
+      (record.closed || record.fact === "exited") &&
+      !lookupOpts?.allowClosed
+    ) {
       return {
         ok: false,
         code: "runtime_gone",
@@ -212,7 +125,10 @@ export function createRuntimeControlService(
         agentId: record.agentId,
         panelId: record.panelId,
         windowId: record.windowId,
-        fact: record.fact,
+        fact:
+          record.fact === "exited"
+            ? "exited"
+            : (options.resolveFact?.(record) ?? record.fact),
         closed: record.closed,
         ...(record.worktreeKey ? { worktreeKey: record.worktreeKey } : {}),
         ...(record.cwd ? { cwd: record.cwd } : {}),
@@ -234,6 +150,7 @@ export function createRuntimeControlService(
       try {
         const created = await backend.create({
           agentId: input.agentId,
+          promptText: assembled.text,
           cwd: input.cwd,
           windowId: input.windowId,
           ...(input.originPanelId && input.windowId
@@ -247,7 +164,16 @@ export function createRuntimeControlService(
           ...(input.placement ? { placement: input.placement } : {}),
         });
         const prevGen = generationByRuntimeId.get(created.runtimeId) ?? 0;
-        const generation = prevGen + 1;
+        // Native create receipts carry generation. Backends that never spawn
+        // (fake) omit it and use a control-plane counter. Do not invent a
+        // number that later fails process matching against a live PTY.
+        if (created.generation === undefined && created.lifecycleId)
+          return {
+            ok: false,
+            code: "provider_unavailable",
+            message: "native terminal generation was not confirmed",
+          };
+        const generation = created.generation ?? prevGen + 1;
         generationByRuntimeId.set(created.runtimeId, generation);
         const runtime: RuntimeRef = {
           bootId,
@@ -262,12 +188,18 @@ export function createRuntimeControlService(
           cwd: created.cwd ?? input.cwd,
           worktreeKey: input.worktreeKey,
           incarnationId: input.incarnationId,
-          fact: "running",
+          lifecycleId: created.lifecycleId,
+          fact: created.fact ?? "running",
           closed: false,
         };
         byRuntimeId.set(runtime.runtimeId, record);
         const data: AgentsStartResult = {
           runtime,
+          creationStatus:
+            created.fact === "unavailable" ? "unconfirmed" : "created",
+          ...(created.inputDisposition
+            ? { inputDisposition: created.inputDisposition }
+            : {}),
           agentId: input.agentId,
           panelId: created.panelId,
           windowId: created.windowId,
@@ -277,23 +209,7 @@ export function createRuntimeControlService(
             ? { incarnationId: record.incarnationId }
             : {}),
         };
-        if (assembled.text !== undefined) {
-          // R17 投递补偿：create 成功但 prompt 送不到 → terminate 回滚清场。
-          const delivered = await backend.deliverInitialPrompt(
-            record.panelId,
-            assembled.text
-          );
-          if (!delivered) {
-            record.closed = true;
-            await backend.terminate(record.panelId);
-            return {
-              ok: false,
-              code: "prompt_undeliverable",
-              message:
-                "initial prompt could not be delivered; the spawned panel was terminated",
-            };
-          }
-        }
+        if (record.fact === "exited") release(record);
         return { ok: true, data };
       } catch (error) {
         return {
@@ -313,7 +229,25 @@ export function createRuntimeControlService(
         return;
       }
       record.closed = true;
-      options.releaseReservation?.(record.runtime.runtimeId);
+      release(record);
+    },
+
+    observeProcess(input) {
+      const record = byRuntimeId.get(input.panelId);
+      if (!record || input.generation < record.runtime.generation) return;
+      if (input.generation > record.runtime.generation) {
+        record.runtime = { ...record.runtime, generation: input.generation };
+        generationByRuntimeId.set(input.panelId, input.generation);
+        record.fact = input.created === false ? "unavailable" : "running";
+      } else if (record.lifecycleId && input.lifecycleId !== record.lifecycleId)
+        return;
+      record.lifecycleId = input.lifecycleId;
+      record.windowId = input.windowId;
+      record.closed = input.closed;
+      if (input.exited || input.closed) {
+        record.fact = "exited";
+        release(record);
+      } else if (input.created) record.fact = "running";
     },
 
     async turn(input) {
@@ -330,7 +264,21 @@ export function createRuntimeControlService(
             message: "agents.turn requires non-empty text",
           };
         }
-        const ok = await backend.sendText(record.panelId, input.text);
+        let ok: boolean;
+        try {
+          ok = await backend.sendText(
+            record.panelId,
+            input.text,
+            input.submit,
+            record
+          );
+        } catch (error) {
+          return {
+            ok: false,
+            code: "prompt_undeliverable",
+            message: error instanceof Error ? error.message : String(error),
+          };
+        }
         if (!ok) {
           return {
             ok: false,
@@ -338,7 +286,6 @@ export function createRuntimeControlService(
             message: "terminal rejected input",
           };
         }
-        record.fact = "running";
         const data: AgentsTurnResult = {
           accepted: true,
           runtime: record.runtime,
@@ -348,12 +295,12 @@ export function createRuntimeControlService(
     },
 
     async screen(input) {
-      const found = lookup(input);
+      const found = lookup(input, { allowClosed: true });
       if (!found.ok) {
         return found;
       }
       const record = found.data;
-      const viewport = await backend.readViewport(record.panelId);
+      const viewport = await backend.readViewport(record.panelId, record);
       if (!viewport) {
         return {
           ok: false,
@@ -421,7 +368,7 @@ export function createRuntimeControlService(
           return found;
         }
         const record = found.data;
-        const ok = await backend.interrupt(record.panelId);
+        const ok = await backend.interrupt(record.panelId, record);
         if (!ok) {
           return {
             ok: false,
@@ -429,7 +376,6 @@ export function createRuntimeControlService(
             message: "interrupt failed",
           };
         }
-        record.fact = "interrupted";
         return {
           ok: true,
           data: { interrupted: true as const, runtime: record.runtime },
@@ -439,12 +385,23 @@ export function createRuntimeControlService(
 
     async terminate(input) {
       return enqueueRuntime(input.runtimeId, async () => {
-        const found = lookup(input);
+        const found = lookup(input, { allowClosed: true });
         if (!found.ok) {
           return found;
         }
         const record = found.data;
-        const ok = await backend.terminate(record.panelId);
+        let ok: boolean;
+        try {
+          ok =
+            record.fact === "exited" ||
+            (await backend.terminate(record.panelId, record));
+        } catch (error) {
+          return {
+            ok: false,
+            code: "provider_unavailable",
+            message: error instanceof Error ? error.message : String(error),
+          };
+        }
         if (!ok) {
           return {
             ok: false,
@@ -452,8 +409,8 @@ export function createRuntimeControlService(
             message: "terminate failed",
           };
         }
-        record.closed = true;
         record.fact = "exited";
+        release(record);
         return {
           ok: true,
           data: { terminated: true as const, runtime: record.runtime },
@@ -463,13 +420,17 @@ export function createRuntimeControlService(
 
     async focus(input) {
       return enqueueRuntime(input.runtimeId, async () => {
-        const found = lookup(input);
+        const found = lookup(input, { allowClosed: true });
         if (!found.ok) {
           return found;
         }
         const record = found.data;
         if (backend.focus) {
-          const ok = await backend.focus(record.panelId, record.windowId);
+          const ok = await backend.focus(
+            record.panelId,
+            record.windowId,
+            record
+          );
           if (!ok) {
             return {
               ok: false,

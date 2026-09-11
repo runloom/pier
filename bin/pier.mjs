@@ -491,7 +491,7 @@ try {
       if (!text || text.length === 0) {
         throw new Error("agents turn text is empty");
       }
-      params = { ...params, text };
+      params = { ...params, text, submit: true };
     }
     if (parsed.op === "agents.start" && parsed.textSource) {
       const text = await readTextSource({

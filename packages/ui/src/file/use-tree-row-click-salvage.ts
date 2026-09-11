@@ -2,6 +2,11 @@ import type { useFileTree } from "@pierre/trees/react";
 import * as React from "react";
 import type { FileTreeRefs } from "./tree-internal.ts";
 import { isDirectoryHandle } from "./tree-model.ts";
+import {
+  applyFileTreeRowSelection,
+  eventComposedThroughEditingTarget,
+  type FileTreeSelectionModifiers,
+} from "./tree-selection-model.ts";
 
 type FileTreeModel = ReturnType<typeof useFileTree>["model"];
 
@@ -27,6 +32,7 @@ export function useFileTreeRowClickSalvage({
   readonly model: FileTreeModel;
   readonly readRefs: () => FileTreeRefs;
 }): {
+  onClick: (event: React.MouseEvent<HTMLDivElement>) => void;
   onClickCapture: (event: React.MouseEvent<HTMLDivElement>) => void;
   onPointerDownCapture: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerUpCapture: (event: React.PointerEvent<HTMLDivElement>) => void;
@@ -63,7 +69,10 @@ export function useFileTreeRowClickSalvage({
     [containerRef]
   );
   const pendingRowPointerRef = React.useRef<{
+    ctrlKey: boolean;
+    metaKey: boolean;
     path: string;
+    shiftKey: boolean;
     time: number;
     x: number;
     y: number;
@@ -104,7 +113,10 @@ export function useFileTreeRowClickSalvage({
       const path = rowPathFromEvent(event, event);
       if (path && readRefs().itemsByPath.get(path)) {
         pendingRowPointerRef.current = {
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
           path,
+          shiftKey: event.shiftKey,
           time: event.timeStamp,
           x: event.clientX,
           y: event.clientY,
@@ -132,7 +144,11 @@ export function useFileTreeRowClickSalvage({
       clearPendingRowOpen();
       pendingRowOpenTimerRef.current = setTimeout(() => {
         pendingRowOpenTimerRef.current = null;
-        applyLostRowClick(model, readRefs(), lastOpenedPathRef, pending.path);
+        applyLostRowClick(model, readRefs(), lastOpenedPathRef, pending.path, {
+          ctrlKey: pending.ctrlKey,
+          metaKey: pending.metaKey,
+          shiftKey: pending.shiftKey,
+        });
       }, 0);
     },
     [clearPendingRowOpen, lastOpenedPathRef, model, readRefs, rowPathFromEvent]
@@ -149,26 +165,43 @@ export function useFileTreeRowClickSalvage({
         // click 正常合成:库的 onClick 链路会处理,撤销兜底。
         clearPendingRowOpen();
       }
-      // Pierre trees 对已选中行再点不会 bump selectionVersion，
-      // selectionChange 不会重跑：这里对已选中文件行补一次 onOpenPath，
-      // 覆盖 re-click 重新定位。
-      if (!row || row.dataset.itemType === "folder") {
+    },
+    [clearPendingRowOpen]
+  );
+  const onClick = React.useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 0) {
         return;
       }
-      const officialPath = row.dataset.itemPath;
-      if (!(officialPath && model.getSelectedPaths().includes(officialPath))) {
+      const refsSnapshot = readRefs();
+      if (refsSnapshot.suppressOpenPathFromContextMenu) {
         return;
       }
-      const item = readRefs().itemsByPath.get(officialPath);
+      if (eventComposedThroughEditingTarget(event.nativeEvent)) {
+        return;
+      }
+      const officialPath = rowPathFromEvent(event, event);
+      if (!officialPath) {
+        return;
+      }
+      if (!model.getSelectedPaths().includes(officialPath)) {
+        return;
+      }
+      const item = refsSnapshot.itemsByPath.get(officialPath);
       if (item?.kind !== "file") {
         return;
       }
       lastOpenedPathRef.current = item.path;
-      readRefs().onOpenPath?.(item.path);
+      refsSnapshot.onOpenPath?.(item.path);
     },
-    [clearPendingRowOpen, lastOpenedPathRef, model, readRefs]
+    [lastOpenedPathRef, model, readRefs, rowPathFromEvent]
   );
-  return { onClickCapture, onPointerDownCapture, onPointerUpCapture };
+  return {
+    onClick,
+    onClickCapture,
+    onPointerDownCapture,
+    onPointerUpCapture,
+  };
 }
 
 /**
@@ -186,14 +219,17 @@ function applyLostRowClick(
     readonly onOpenPath?: ((path: string) => void) | undefined;
   },
   lastOpenedPathRef: React.MutableRefObject<string | null>,
-  officialPath: string
+  officialPath: string,
+  modifiers: FileTreeSelectionModifiers
 ): void {
   const item = refs.itemsByPath.get(officialPath);
   if (!item) {
     return;
   }
   try {
-    if (item.kind === "directory") {
+    const hasModifier =
+      modifiers.shiftKey || modifiers.ctrlKey || modifiers.metaKey;
+    if (item.kind === "directory" && !hasModifier) {
       const handle = model.getItem(officialPath);
       if (isDirectoryHandle(handle)) {
         if (handle.isExpanded()) {
@@ -202,15 +238,13 @@ function applyLostRowClick(
           handle.expand();
         }
       }
-      model.selectOnlyPath(officialPath);
-      model.focusPath(officialPath);
-      return;
     }
-    const alreadySelected = model.getSelectedPaths().includes(officialPath);
-    // 未选中:selectOnlyPath 触发 selectionChange,openPath 由既有链路发出。
-    model.selectOnlyPath(officialPath);
-    model.focusPath(officialPath);
-    if (alreadySelected) {
+    applyFileTreeRowSelection(model, officialPath, modifiers);
+    // 选择变更不再打开文件；兜底这次点击本身才是激活写入方。
+    if (
+      item.kind === "file" &&
+      model.getSelectedPaths().includes(officialPath)
+    ) {
       lastOpenedPathRef.current = item.path;
       refs.onOpenPath?.(item.path);
     }

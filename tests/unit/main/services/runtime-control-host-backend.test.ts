@@ -18,6 +18,7 @@ describe("createHostTerminalBackend", () => {
       windowId: "win_1",
       runtimeId: "panel_1",
       cwd: "/tmp/repo",
+      fact: "unavailable",
     });
     expect(executeCommand).toHaveBeenCalledWith(
       expect.objectContaining({

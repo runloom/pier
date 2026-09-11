@@ -10,7 +10,7 @@ export interface FakeTerminalBackend extends TerminalBackend {
       viewport: string;
       closed: boolean;
       sent: string[];
-      /** deliverInitialPrompt 投递记录（测试断言用）。 */
+      /** Native launch prompt arguments (test assertions). */
       delivered: string[];
     }
   >;
@@ -55,7 +55,7 @@ export function createFakeTerminalBackend(options?: {
         viewport: "",
         closed: false,
         sent: [],
-        delivered: [],
+        delivered: args.promptText === undefined ? [] : [args.promptText],
       });
       return {
         panelId,
@@ -74,14 +74,6 @@ export function createFakeTerminalBackend(options?: {
       return true;
     },
 
-    async deliverInitialPrompt(panelId, text) {
-      const panel = panels.get(panelId);
-      if (!panel || panel.closed) {
-        return false;
-      }
-      panel.delivered.push(text);
-      return true;
-    },
     async readViewport(panelId) {
       const panel = panels.get(panelId);
       if (!panel || panel.closed) {
@@ -107,7 +99,6 @@ export function createFakeTerminalBackend(options?: {
       if (!panel) {
         return false;
       }
-      panel.closed = true;
       return true;
     },
     async focus(panelId, _windowId) {

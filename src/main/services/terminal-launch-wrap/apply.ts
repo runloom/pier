@@ -17,10 +17,7 @@ import {
 import { isForbiddenLaunchWrapEnvKey } from "../process-environment/apply-host-env.ts";
 import { mergeSystemSkillExtraRootEnv } from "../project-skills/system-skills/extra-root.ts";
 import { isHostPanelIdentityEnvKey } from "./ephemeral.ts";
-import {
-  listLaunchWrapHandlers,
-  rememberDecorateSpawnFlag,
-} from "./registry.ts";
+import { listLaunchWrapHandlers } from "./registry.ts";
 
 const log = createLogger("terminal-launch-wrap");
 
@@ -139,10 +136,9 @@ export async function wrapAndRegisterLaunch(
   launch: ResolvedTerminalLaunchOptions,
   register: (next: ResolvedTerminalLaunchOptions) => Promise<string> | string
 ): Promise<string> {
-  const wrapped = await applyWrapT1(launch);
-  const launchId = await register(wrapped.launch);
-  rememberDecorateSpawnFlag(launchId, wrapped.decorateSpawn);
-  return launchId;
+  // Keep logical restore commands pristine. T1 runs once, immediately before
+  // preparing native initial argv and the final shell command in create.
+  return await register(launch);
 }
 
 async function firstDecorateSpawnEnv(
@@ -247,6 +243,7 @@ export function readUserDataControlSocketPath(
 
 export async function applyLaunchWrapForCreate(input: {
   agentId: AgentKind | undefined;
+  decorateSpawn?: boolean | undefined;
   controlSocketPath?: string | undefined;
   hookEnv: Record<string, string>;
   launch: ResolvedTerminalLaunchOptions | undefined;
@@ -255,8 +252,8 @@ export async function applyLaunchWrapForCreate(input: {
   windowId: string;
 }): Promise<ResolvedTerminalLaunchOptions> {
   let launch = input.launch;
-  let decorateSpawn = false;
-  if (input.agentId) {
+  let decorateSpawn = input.decorateSpawn ?? false;
+  if (input.agentId && input.decorateSpawn === undefined) {
     const t1 = await applyWrapT1({
       ...(launch ?? {}),
       agentId: input.agentId,

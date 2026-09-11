@@ -2,7 +2,11 @@ import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
+import { hookEventTimeMs } from "../../../foreground-activity/turn-unseal.ts";
 import { kimiCodeHomeDir } from "../kimi.ts";
+import { kimiNativeTurnId, readKimiMainTurnId } from "./kimi-turn-identity.ts";
+import { matchesEndedSession } from "./observation-scope.ts";
+import { resolveTranscriptPath } from "./tail-path.ts";
 import {
   createTranscriptTailReconciler,
   type TranscriptTailReconciler,
@@ -12,20 +16,45 @@ import {
 export type KimiTranscriptReconciler = TranscriptTailReconciler;
 
 /**
- * Kimi wire.jsonl：`message.type === "TurnEnd"` 表示回合结束。
- * 语料中 payload 为空，无法区分完成与取消——一律 `TurnCompleted`（UI → ready），
- * 足以消除 advisory Stop 漏报导致的「思考中」悬挂。
- * 无独立 interrupt 标记，故 interrupted 维仍 unsupported。
+ * v2 main turn.ended preserves native turnId and distinguishes cancellation.
+ * Legacy message.TurnEnd has no identity or outcome and only indicates ready.
  */
 export const KIMI_TRANSCRIPT_TERMINAL_EVIDENCE = [
   {
     nativeEvent: "kimi.wire.TurnEnd",
     pierEvent: "TurnCompleted" as const,
   },
+  {
+    nativeEvent: "kimi.wire.turn.ended.completed",
+    pierEvent: "TurnCompleted" as const,
+  },
+  {
+    nativeEvent: "kimi.wire.turn.ended.cancelled",
+    pierEvent: "TurnInterrupted" as const,
+  },
+  {
+    nativeEvent: "kimi.wire.turn.ended.failed",
+    pierEvent: "error" as const,
+  },
 ] as const;
 
 /** Kimi Code v2 会话布局的主 agent 目录名（binary：MAIN_AGENT_ID="main"）。 */
 export const KIMI_MAIN_AGENT_DIR = "main";
+
+interface KimiObservationScope {
+  boundaryAt: number;
+  event: AgentHookEventPayload;
+  pending: boolean;
+  prompt: AgentHookEventPayload | undefined;
+  queued: AgentHookEventPayload | undefined;
+  retiredTurnIds: Set<string>;
+  token: object;
+  transcriptPath: string | undefined;
+  turnId: string | undefined;
+}
+
+const scopeKey = (event: AgentHookEventPayload): string =>
+  `${event.windowId}\0${event.panelId}`;
 
 interface KimiTranscriptReconcilerOpts {
   onTerminalEvent: Parameters<
@@ -59,88 +88,278 @@ export function createKimiTranscriptReconciler(
     (root) => resolve(root)
   );
   const pathCache = new Map<string, string>();
+  const scopes = new Map<string, KimiObservationScope>();
+  let disposed = false;
+  const emit = (event: AgentHookEventPayload): void => {
+    const scope = scopes.get(scopeKey(event));
+    if (!(scope && matchesEndedSession(scope.event, event))) return;
+    if (scope.pending) {
+      scope.queued = event;
+    } else if (!event.turnId || event.turnId === scope.turnId) {
+      opts.onTerminalEvent(event);
+    }
+  };
   const inners = sessionsRoots.map((root) =>
     createTranscriptTailReconciler({
       agent: "kimi",
-      classifyLine: classifyKimiWireLine,
-      onTerminalEvent: opts.onTerminalEvent,
+      createLineClassifier: (path) => (line) => {
+        const record = classifyKimiWireLine(line);
+        if (record?.nativeEvent === "kimi.wire.turn.ended.cancelled") {
+          // Native Interrupt can reach Pier before the durable end is flushed.
+          // Reuse the existing tail watcher to retry identity reconciliation;
+          // the record itself still needs a verified main-turn owner.
+          queueMicrotask(() => {
+            for (const scope of scopes.values()) {
+              if (
+                scope.transcriptPath === path &&
+                scope.event.v !== 1 &&
+                scope.event.nativeEvent === "Interrupt" &&
+                scope.turnId !== record.turnId &&
+                !scope.retiredTurnIds.has(record.turnId ?? "")
+              ) {
+                reconciler.observe(scope.event).catch(() => {
+                  // Private compatibility input; native hook delivery continues.
+                });
+              }
+            }
+          });
+        }
+        return record;
+      },
+      onTerminalEvent: emit,
       transcriptRoot: root,
     })
   );
-  const innerFor = (path: string): TranscriptTailReconciler | undefined => {
+  const innerFor = (path: string) => {
     const index = sessionsRoots.findIndex((root) =>
       path.startsWith(`${root}/`)
     );
-    return index >= 0 ? inners[index] : undefined;
+    const inner = inners[index];
+    const root = sessionsRoots[index];
+    return inner && root ? { inner, root } : undefined;
+  };
+  const dropScopes = (
+    predicate: (panelId: string, windowId: string) => boolean
+  ): void => {
+    for (const [key, scope] of scopes) {
+      if (predicate(scope.event.panelId, scope.event.windowId))
+        scopes.delete(key);
+    }
   };
 
-  return {
+  const reconciler: KimiTranscriptReconciler = {
     dispose: () => {
+      disposed = true;
+      scopes.clear();
       pathCache.clear();
       for (const inner of inners) {
         inner.dispose();
       }
     },
     observe: async (event) => {
-      if (event.agent !== "kimi") {
+      if (disposed || event.agent !== "kimi") {
         return;
       }
       if (event.event === "SessionEnd") {
+        const current = scopes.get(scopeKey(event));
+        if (current && matchesEndedSession(current.event, event))
+          scopes.delete(scopeKey(event));
         await Promise.all(inners.map((inner) => inner.observe(event)));
         return;
       }
-      const resolved = await resolveKimiWirePath(
-        event,
-        sessionsRoots,
-        pathCache
-      );
-      if (!resolved) {
-        return;
+      let scope = scopes.get(scopeKey(event));
+      if (
+        !scope ||
+        event.event === "PromptSubmit" ||
+        event.event === "SessionStart" ||
+        !matchesEndedSession(scope.event, event)
+      ) {
+        const previousScope =
+          scope &&
+          matchesEndedSession(scope.event, event) &&
+          event.event !== "SessionStart"
+            ? scope
+            : undefined;
+        const retiredTurnIds =
+          previousScope?.retiredTurnIds ?? new Set<string>();
+        if (previousScope?.turnId !== undefined)
+          retiredTurnIds.add(previousScope.turnId);
+        for (const inner of inners)
+          inner.releasePanel(event.panelId, event.windowId);
+        scope = {
+          event,
+          pending: false,
+          prompt: event.event === "PromptSubmit" ? event : undefined,
+          boundaryAt: hookEventTimeMs(event, Date.now()),
+          queued: undefined,
+          retiredTurnIds,
+          token: {},
+          transcriptPath: undefined,
+          turnId: undefined,
+        };
+        scopes.set(scopeKey(event), scope);
       }
-      const inner = innerFor(resolved);
-      if (!inner) {
-        return;
+      scope.event = event;
+      const token = {};
+      scope.token = token;
+      scope.pending = true;
+      try {
+        const resolved = await resolveKimiWirePath(
+          event,
+          sessionsRoots,
+          pathCache
+        );
+        if (!resolved) {
+          return;
+        }
+        const target = innerFor(resolved);
+        if (!target) {
+          return;
+        }
+        const [nativeTurnId, resolution] = await Promise.all([
+          readKimiMainTurnId(resolved, target.root, event, scope.boundaryAt),
+          resolveTranscriptPath(resolved, target.root, true),
+        ]);
+        if (
+          disposed ||
+          scopes.get(scopeKey(scope.event)) !== scope ||
+          scope.token !== token
+        )
+          return;
+        scope.transcriptPath = resolution?.path;
+        const turnId =
+          nativeTurnId !== undefined &&
+          !scope.retiredTurnIds.has(nativeTurnId) &&
+          hookEventTimeMs(event, Date.now()) >= scope.boundaryAt
+            ? nativeTurnId
+            : undefined;
+        // A newer tool observation may supersede the asynchronous path lookup,
+        // but must still establish the pending legacy PromptSubmit watermark.
+        if (scope.prompt) {
+          const prompt = scope.prompt;
+          await target.inner.observe({
+            ...prompt,
+            windowId: scope.event.windowId,
+            transcriptPath: resolved,
+          });
+          if (
+            scopes.get(scopeKey(scope.event)) !== scope ||
+            scope.token !== token
+          )
+            return;
+          scope.prompt = undefined;
+        }
+        if (turnId !== undefined && turnId !== scope.turnId) {
+          if (scope.turnId !== undefined)
+            scope.retiredTurnIds.add(scope.turnId);
+          if (scope.retiredTurnIds.size > 64)
+            scope.retiredTurnIds.delete(
+              scope.retiredTurnIds.values().next().value ?? ""
+            );
+          for (const inner of inners)
+            inner.releasePanel(scope.event.panelId, scope.event.windowId);
+          scope.turnId = turnId;
+        }
+        if (event.event !== "PromptSubmit") {
+          // Hook IDs can belong to children sharing the main session_id.
+          // Only a main-wire association may enter transcript owner contexts.
+          const { turnId: _unverifiedTurnId, ...context } = scope.event;
+          await target.inner.observe({
+            ...context,
+            transcriptPath: resolved,
+            ...(scope.turnId === undefined ? {} : { turnId: scope.turnId }),
+          });
+        }
+      } finally {
+        if (
+          scopes.get(scopeKey(scope.event)) === scope &&
+          scope.token === token
+        ) {
+          scope.pending = false;
+          const queued = scope.queued;
+          scope.queued = undefined;
+          if (queued) emit(queued);
+        }
       }
-      await inner.observe({ ...event, transcriptPath: resolved });
     },
     releasePanel: (panelId, windowId) => {
+      dropScopes(
+        (panel, window) =>
+          panel === panelId && (windowId === undefined || window === windowId)
+      );
       for (const inner of inners) {
         inner.releasePanel(panelId, windowId);
       }
     },
     releasePanelsWhere: (predicate) => {
+      dropScopes(predicate);
       for (const inner of inners) {
         inner.releasePanelsWhere(predicate);
       }
     },
     releaseWindow: (windowId) => {
+      dropScopes((_panel, window) => window === windowId);
       for (const inner of inners) {
         inner.releaseWindow(windowId);
       }
     },
     transferPanelOwnership: (input) => {
+      const { panelId, sourceWindowId, targetWindowId } = input;
+      if (
+        panelId.trim() &&
+        sourceWindowId.trim() &&
+        targetWindowId.trim() &&
+        sourceWindowId !== targetWindowId
+      ) {
+        const key = `${sourceWindowId}\0${panelId}`;
+        const scope = scopes.get(key);
+        if (scope) {
+          scopes.delete(key);
+          scope.event = { ...scope.event, windowId: targetWindowId };
+          if (scope.queued)
+            scope.queued = { ...scope.queued, windowId: targetWindowId };
+          scopes.set(`${targetWindowId}\0${panelId}`, scope);
+        }
+      }
       for (const inner of inners) {
         inner.transferPanelOwnership(input);
       }
     },
   };
+  return reconciler;
 }
 
 export function classifyKimiWireLine(
   line: string
 ): TranscriptTerminalRecord | null {
-  if (!line.includes("TurnEnd")) {
+  if (!(line.includes("TurnEnd") || line.includes("turn.ended"))) {
     return null;
   }
   let parsed: {
+    agentId?: unknown;
     message?: { type?: unknown };
+    reason?: unknown;
+    turnId?: unknown;
+    type?: unknown;
   };
   try {
     parsed = JSON.parse(line) as typeof parsed;
   } catch {
     return null;
   }
-  if (parsed.message?.type !== "TurnEnd") {
+  if (parsed?.type === "turn.ended") {
+    const turnId = kimiNativeTurnId(parsed.turnId);
+    if (parsed.agentId !== KIMI_MAIN_AGENT_DIR || turnId === undefined)
+      return null;
+    if (parsed.reason === "completed")
+      return { ...KIMI_TRANSCRIPT_TERMINAL_EVIDENCE[1], turnId };
+    if (parsed.reason === "cancelled")
+      return { ...KIMI_TRANSCRIPT_TERMINAL_EVIDENCE[2], turnId };
+    if (parsed.reason === "failed")
+      return { ...KIMI_TRANSCRIPT_TERMINAL_EVIDENCE[3], turnId };
+    return null;
+  }
+  if (parsed?.message?.type !== "TurnEnd") {
     return null;
   }
   return {

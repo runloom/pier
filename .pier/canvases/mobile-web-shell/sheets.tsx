@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   cx,
   IconButton,
@@ -98,6 +98,17 @@ export function SessionSwitcher(props: {
   sessions: readonly DemoSession[];
 }): ReactNode {
   const waiting = props.sessions.filter((s) => s.status === "waiting").length;
+  const [query, setQuery] = useState("");
+  const searchable = props.sessions.length > 5;
+  const needle = query.trim().toLowerCase();
+  const shown =
+    searchable && needle.length > 0
+      ? props.sessions.filter((session) =>
+          `${session.title} ${session.agent ?? "终端"} ${session.worktree}`
+            .toLowerCase()
+            .includes(needle)
+        )
+      : props.sessions;
   return (
     <PhoneSheet
       autoFocus={props.autoFocus}
@@ -105,7 +116,25 @@ export function SessionSwitcher(props: {
       subtitle={`${props.sessions.length} 个会话${waiting > 0 ? ` · ${waiting} 个需要你处理` : ""}`}
       title="切换会话"
     >
-      {props.sessions.map((session) => {
+      {searchable ? (
+        <label className="mb-2 flex min-h-11 items-center gap-2 rounded-xl bg-background px-3 text-muted-foreground focus-within:ring-2 focus-within:ring-ring/40">
+          <Icon className="size-4 shrink-0" name="search" />
+          <input
+            aria-label="搜索会话"
+            className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索会话"
+            type="search"
+            value={query}
+          />
+        </label>
+      ) : null}
+      {shown.length === 0 ? (
+        <p className="px-3 py-6 text-[13px] text-muted-foreground">
+          没有匹配「{query.trim()}」的会话。
+        </p>
+      ) : null}
+      {shown.map((session) => {
         const current = session.id === props.currentId;
         return (
           <button

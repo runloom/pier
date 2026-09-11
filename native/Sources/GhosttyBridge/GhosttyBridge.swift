@@ -653,7 +653,11 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
         self.panelId = panelId
         self.browserWindowId = browserWindowId
         self.lifecycleId = lifecycleId
+        self.retainSurfaceAfterChildExit =
+            !lifecycleId.isEmpty && !lifecycleId.hasPrefix("shell:")
     }
+
+    var retainSurfaceAfterChildExit: Bool
 
     func terminalDidChangeWorkingDirectory(_ path: String) {
         TerminalEventDelegate.forwardPwdCallback?(browserWindowId, panelId, path)
@@ -707,6 +711,9 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     }
 
     func terminalDidExitChild(exitCode: UInt32, runtimeMilliseconds: UInt64) {
+        if retainSurfaceAfterChildExit {
+            GhosttyBridgeImpl.shared.retainProcessResult(panelId: panelId, lifecycleId: lifecycleId)
+        }
         // Action callback already returned true → Ghostty skips English printString.
         // Renderer resolves final copy and calls injectDisplayText (single path).
         TerminalEventDelegate.forwardChildExitedCallback?(
@@ -1978,6 +1985,26 @@ final class GhosttyBridgeImpl {
         return term.terminalView.readViewportText()
     }
 
+    func retainProcessResult(panelId: String, lifecycleId: String) {
+        guard let term = terminals[panelId], term.eventDelegate.lifecycleId == lifecycleId else { return }
+        term.terminalView.retainAfterExit()
+    }
+
+    func setRetainAfterExit(panelId: String, lifecycleId: String, retain: Bool) -> Bool {
+        guard let term = terminals[panelId], term.eventDelegate.lifecycleId == lifecycleId else {
+            return false
+        }
+        term.eventDelegate.retainSurfaceAfterChildExit = retain
+        term.terminalView.setRetainAfterExit(retain)
+        return true
+    }
+
+    func signalProcess(panelId: String, lifecycleId: String, force: Bool) -> Bool {
+        guard let term = terminals[panelId], term.outputSession == nil,
+              term.eventDelegate.lifecycleId == lifecycleId else { return false }
+        return term.terminalView.signalProcess(force: force)
+    }
+
     /// TUI 输入聚焦探针：1=visible，0=hidden，-1=surface 不存在。
     func readCursorVisible(panelId: String) -> Int32 {
         guard let term = terminals[panelId],
@@ -2637,6 +2664,36 @@ public func ghosttyBridgeRequestTerminalPresentation(
 public func ghosttyBridgeClose(_ panelId: UnsafePointer<CChar>) -> Bool {
     MainActor.assumeIsolated {
         return GhosttyBridgeImpl.shared.close(panelId: String(cString: panelId))
+    }
+}
+
+@_cdecl("ghostty_bridge_signal_process")
+public func ghosttyBridgeSignalProcess(
+    _ panelId: UnsafePointer<CChar>,
+    _ lifecycleId: UnsafePointer<CChar>,
+    _ force: Bool
+) -> Bool {
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.signalProcess(
+            panelId: String(cString: panelId),
+            lifecycleId: String(cString: lifecycleId),
+            force: force
+        )
+    }
+}
+
+@_cdecl("ghostty_bridge_set_retain_after_exit")
+public func ghosttyBridgeSetRetainAfterExit(
+    _ panelId: UnsafePointer<CChar>,
+    _ lifecycleId: UnsafePointer<CChar>,
+    _ retain: Bool
+) -> Bool {
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.setRetainAfterExit(
+            panelId: String(cString: panelId),
+            lifecycleId: String(cString: lifecycleId),
+            retain: retain
+        )
     }
 }
 

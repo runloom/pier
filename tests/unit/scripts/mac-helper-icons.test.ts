@@ -6,7 +6,9 @@ import {
   installMacHelperIcons,
   MAC_HELPER_SUFFIXES,
   rootPlistStringValue,
+  stripUnusedMacUsageDescriptionsFromApp,
 } from "../../../scripts/mac-helper-icons.mjs";
+import { MAC_UNUSED_USAGE_DESCRIPTION_KEYS } from "../../../scripts/mac-privacy-descriptions.mjs";
 
 const tempDirectories: string[] = [];
 
@@ -43,6 +45,8 @@ async function makeFixture(options: { omitSuffix?: string } = {}) {
         "</dict>",
         "<key>CFBundleIconFile</key><string>electron.icns</string>",
         "<key>CFBundleIconName</key><string>stale-layered-icon</string>",
+        "<key>NSCameraUsageDescription</key><string>This app needs access to the camera</string>",
+        "<key>NSAudioCaptureUsageDescription</key><string>This app needs access to audio capture</string>",
         "</dict></plist>",
       ].join("\n")
     );
@@ -89,6 +93,8 @@ describe("production macOS Helper branding", () => {
         /<key>\s*CFBundleIconFile\s*<\/key>\s*<string>\s*icon\.icns\s*<\/string>/
       );
       expect(plist).not.toContain("CFBundleIconName");
+      expect(plist).not.toContain("NSCameraUsageDescription");
+      expect(plist).not.toContain("NSAudioCaptureUsageDescription");
       const environment =
         /<key>\s*LSEnvironment\s*<\/key>\s*<dict>([\s\S]*?)<\/dict>/.exec(
           plist
@@ -125,5 +131,30 @@ describe("production macOS Helper branding", () => {
     await expect(readFile(untouched, "utf8")).resolves.toBe(
       "stale-electron.icns"
     );
+  });
+
+  it("strips unused Electron usage descriptions from the main app", async () => {
+    const { app, icon } = await makeFixture();
+    const mainContents = join(app, "Contents");
+    await mkdir(join(mainContents, "Resources"), { recursive: true });
+    await writeFile(
+      join(mainContents, "Info.plist"),
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<plist version="1.0"><dict>',
+        "<key>CFBundleIdentifier</key><string>io.pier.app</string>",
+        "<key>NSMicrophoneUsageDescription</key><string>This app needs access to the microphone</string>",
+        "<key>NSBluetoothAlwaysUsageDescription</key><string>This app needs access to Bluetooth</string>",
+        "</dict></plist>",
+      ].join("\n")
+    );
+    await installMacHelperIcons(app, { iconPath: icon });
+    await stripUnusedMacUsageDescriptionsFromApp(app);
+
+    const mainPlist = await readFile(join(mainContents, "Info.plist"), "utf8");
+    expect(mainPlist).toContain("io.pier.app");
+    for (const key of MAC_UNUSED_USAGE_DESCRIPTION_KEYS) {
+      expect(mainPlist).not.toContain(key);
+    }
   });
 });

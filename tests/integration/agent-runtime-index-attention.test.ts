@@ -126,7 +126,12 @@ describe("agent runtime index + attention integration", () => {
       },
       {
         activities: [
-          agent({ panelId: "r", status: "ready", windowId: "1" }),
+          agent({
+            panelId: "r",
+            status: "ready",
+            windowId: "1",
+            turnResult: "completed",
+          }),
           agent({ panelId: "e", status: "error", windowId: "1" }),
         ],
         ts: 3,

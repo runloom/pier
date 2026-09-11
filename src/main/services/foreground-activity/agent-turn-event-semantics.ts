@@ -10,6 +10,8 @@ export type AgentTurnEventCategory =
   | "session-end"
   | "turn-start"
   | "progress"
+  | "activity-idle"
+  | "maintenance"
   | "work"
   | "terminal-candidate"
   | "terminal-trusted"
@@ -166,6 +168,25 @@ export function classifyAgentTurnEvent(
 ): AgentTurnEventSemantics {
   if (event.event === "SessionStart") return sessionStartSemantics;
   if (event.event === "SessionEnd") return sessionEndSemantics;
+  if (
+    event.event === "MaintenanceStarted" ||
+    event.event === "MaintenanceCompleted"
+  ) {
+    return {
+      ...sessionStartSemantics,
+      category: "maintenance",
+      createsSession: false,
+    };
+  }
+  if (event.event === "ActivityIdle") {
+    return {
+      cancelsTerminalCandidate: false,
+      category: "activity-idle",
+      createsSession: false,
+      mappedStatus: "ready",
+      resetEvidence: "none",
+    };
+  }
   if (event.event === "Stop") return stopSemantics(options.stopAuthority);
   if (event.event === "TurnCompleted") {
     return trustedTerminal("ready", "ready");

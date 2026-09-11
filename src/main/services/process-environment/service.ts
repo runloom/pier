@@ -1,7 +1,14 @@
 import { userInfo } from "node:os";
 import { createLogger } from "@shared/logger.ts";
 import { applyHostProcessEnv } from "./apply-host-env.ts";
-import { cleanEnv, mergeEnv } from "./clean-env.ts";
+import {
+  cleanEnv,
+  mergeEnv,
+  omitHostColorPolicyEnv,
+  stripHostColorPolicyFromProcessEnv,
+} from "./clean-env.ts";
+import type { HostNodeRuntime } from "./host-node-runtime.ts";
+import { createHostNodeRuntimeProbe } from "./host-node-runtime.ts";
 import { clearUserCommandResolveCache } from "./resolve-user-command.ts";
 import { isLaunchedFromCli } from "./shell-env-cli.ts";
 import {
@@ -112,6 +119,7 @@ function warnDiagnostics(diagnostics: ProcessEnvironmentDiagnostics): void {
 export function createProcessEnvironmentService({
   baseEnv: rawBaseEnv = process.env,
   getTimeoutMs,
+  hostNodeRuntime: injectedNodeRuntime,
   isDisabled,
   loadShellEnv,
   onShellEnvFailed,
@@ -119,7 +127,12 @@ export function createProcessEnvironmentService({
   shell = defaultShell(platform),
   timeoutMs = DEFAULT_SHELL_ENV_TIMEOUT_MS,
 }: CreateProcessEnvironmentServiceOptions = {}): ProcessEnvironmentService {
-  const baseEnv = cleanEnv(rawBaseEnv);
+  if (rawBaseEnv === process.env) {
+    stripHostColorPolicyFromProcessEnv();
+  }
+  const baseEnv = omitHostColorPolicyEnv(cleanEnv(rawBaseEnv));
+  const hostNodeRuntime =
+    injectedNodeRuntime ?? createHostNodeRuntimeProbe({ env: () => baseEnv });
   const resolveTimeoutMs = () => getTimeoutMs?.() ?? timeoutMs;
   const shellLoader =
     loadShellEnv ??
@@ -132,6 +145,7 @@ export function createProcessEnvironmentService({
   const negativeCache = new Map<string, NegativeCacheEntry>();
   const inFlight = new Map<string, Promise<ResolvedShellLayer>>();
   let hostDiagnostics: ProcessEnvironmentDiagnostics | undefined;
+  let lastResolvedEnv: Environment | undefined;
   let lastAppliedKeys = new Set<string>();
   let applyChain: Promise<void> = Promise.resolve();
   /** Bumped on invalidate so in-flight dumps cannot repopulate caches/notify. */
@@ -208,7 +222,8 @@ export function createProcessEnvironmentService({
             request.profileEnv,
             request.projectEnv,
             request.explicitEnv
-          )
+          ),
+          null
         );
         onShellEnvFailed(provisional);
       }
@@ -291,11 +306,11 @@ export function createProcessEnvironmentService({
 
     return await pending;
   }
-
   function buildDiagnostics(
     request: ProcessEnvironmentResolveRequest,
     shellEnv: ResolvedShellLayer,
-    env: Environment
+    env: Environment,
+    node: HostNodeRuntime | null
   ): ProcessEnvironmentDiagnostics {
     const hostAppliedStatus =
       shellEnv.shellEnvStatus === "failed" &&
@@ -312,6 +327,7 @@ export function createProcessEnvironmentService({
       ...(shellEnv.dumpMode ? { dumpMode: shellEnv.dumpMode } : {}),
       ...(shellEnv.error ? { error: shellEnv.error } : {}),
       ...(hostAppliedStatus ? { hostAppliedStatus } : {}),
+      ...(node ? { nodePath: node.path, nodeVersion: node.version } : {}),
       pathChanged: baseEnv.PATH !== env.PATH,
       ...(shell ? { shell } : {}),
       shellEnvStatus: shellEnv.shellEnvStatus,
@@ -333,7 +349,13 @@ export function createProcessEnvironmentService({
       request.projectEnv,
       request.explicitEnv
     );
-    const diagnostics = buildDiagnostics(request, shellLayer, env);
+    lastResolvedEnv = env;
+    const diagnostics = buildDiagnostics(
+      request,
+      shellLayer,
+      env,
+      await hostNodeRuntime.probe(env)
+    );
     warnDiagnostics(diagnostics);
     return {
       diagnostics,
@@ -347,12 +369,21 @@ export function createProcessEnvironmentService({
       return hostDiagnostics;
     },
 
+    hostNodeRuntime(env?: NodeJS.ProcessEnv) {
+      const next = env ?? lastResolvedEnv;
+      if (!next) {
+        return Promise.resolve(null);
+      }
+      return hostNodeRuntime.probe(next);
+    },
+
     async invalidate(opts) {
       generation += 1;
       successCache.clear();
       negativeCache.clear();
       inFlight.clear();
       clearUserCommandResolveCache();
+      hostNodeRuntime.clear();
       if (!(opts?.reapplyHost && shell) || platform === "win32") {
         return hostDiagnostics;
       }
@@ -395,6 +426,7 @@ export function stubProcessEnvironmentService(
 ): ProcessEnvironmentService {
   return {
     getHostDiagnostics: () => undefined,
+    hostNodeRuntime: async () => null,
     invalidate: async () => undefined,
     recordHostDiagnostics: () => undefined,
     resolve,

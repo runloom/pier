@@ -128,11 +128,14 @@ export function Row({
   );
 }
 
-/** Reading column (max-width). Product mockups use Artboard, not Frame. */
+/**
+ * Flow column. Omit `maxWidth` so the files preview shell owns comfortable
+ * (`max-w-5xl`) / wide (full bleed) measure. Product mockups use Artboard.
+ */
 export function Frame({
   children,
   className,
-  maxWidth = 880,
+  maxWidth,
 }: {
   children?: ReactNode;
   className?: string;
@@ -149,10 +152,10 @@ export function Frame({
         flexDirection: "column",
         gap: 24,
         marginInline: "auto",
-        maxWidth,
         minWidth: 0,
         paddingBlock: 8,
         width: "100%",
+        ...(maxWidth === undefined ? {} : { maxWidth }),
       },
     },
     children

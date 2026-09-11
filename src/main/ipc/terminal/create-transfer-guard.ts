@@ -21,6 +21,9 @@ export function resolveTerminalTransferCreateAction(
   if (transfer.shouldAdoptMovedSurface(runtimeWindowId, panelId)) {
     return "adopt";
   }
+  if (transfer.acknowledgeSourceCloseIdempotent(runtimeWindowId, panelId)) {
+    throw new Error("terminal is moving to another window");
+  }
   return "proceed";
 }
 

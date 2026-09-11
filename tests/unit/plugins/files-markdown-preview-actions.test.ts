@@ -94,6 +94,24 @@ describe("createFilesMarkdownPreviewActions", () => {
     expect(auto?.metadata?.menuHidden?.()).toBe(true);
     expect(light?.metadata?.menuHidden?.()).toBe(false);
     expect(dark?.metadata?.menuHidden?.()).toBe(false);
+    expect(
+      comfortable?.metadata?.menuHidden?.({
+        metadata: { flowMeasure: false },
+        surface: FILES_CANVAS_PREVIEW_SURFACE,
+      })
+    ).toBe(true);
+    expect(
+      wide?.metadata?.menuHidden?.({
+        metadata: { flowMeasure: false },
+        surface: FILES_CANVAS_PREVIEW_SURFACE,
+      })
+    ).toBe(true);
+    expect(
+      wide?.metadata?.menuHidden?.({
+        metadata: { flowMeasure: true },
+        surface: FILES_CANVAS_PREVIEW_SURFACE,
+      })
+    ).toBe(false);
     expect(comfortable?.title()).toBe("Comfortable reading");
     expect(wide?.title()).toBe("Wide reading");
     expect(auto?.title()).toBe("Match app appearance");

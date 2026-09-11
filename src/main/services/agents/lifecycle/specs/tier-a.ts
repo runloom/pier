@@ -138,6 +138,8 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
     agentId: "openclaw",
     expectedBins: ["openclaw"],
     npmPackageForLatest: "openclaw",
+    // Official npm engine range; undeclared agents are not prechecked.
+    requiresNode: ">=24.16.0 <25 || >=26.1.0",
     support: "full",
     // https://docs.openclaw.ai/install — script recommended, npm alternate
     install: [

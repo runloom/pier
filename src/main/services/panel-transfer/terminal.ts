@@ -1,9 +1,13 @@
+import { refreshTerminalDraft } from "../../ipc/terminal/drafts/broadcast.ts";
+import { terminalDraftStore } from "../../state/terminal-drafts/index.ts";
+
 /**
  * Production PanelTransferTerminalPort: lease + journaled Ghostty/session/task
  * ownership move across Pier windows without killing the PTY.
  */
 
 import { toNativePanelKey } from "../../ipc/terminal/panel-id.ts";
+import { nativeTerminalProcesses } from "../../ipc/terminal/process/registry.ts";
 import { ensureTerminalPanelSession } from "../../state/terminal-session-state.ts";
 import {
   getTransferSession,
@@ -133,7 +137,11 @@ export function createTerminalPanelTransfer(
         source.recordId,
         input.panelId
       );
-      if (sourceSession && sourceSession.lifecycleId !== input.lifecycleId) {
+      if (
+        sourceSession &&
+        sourceSession.lifecycleId !==
+          (input.lifecycleId.startsWith("shell:") ? "" : input.lifecycleId)
+      ) {
         throw new Error(
           `session lifecycle mismatch: expected ${input.lifecycleId}, got ${sourceSession.lifecycleId}`
         );
@@ -205,6 +213,8 @@ export function createTerminalPanelTransfer(
       const toNativePanelId = toNativePanelKey(target.win, staged.panelId);
 
       try {
+        const process = nativeTerminalProcesses.get(fromNativePanelId);
+        if (process) nativeTerminalProcesses.setTransferring(process, true);
         const moved = addon.moveTerminal({
           fromNativePanelId,
           toNativePanelId,
@@ -214,15 +224,8 @@ export function createTerminalPanelTransfer(
         if (!moved) {
           throw new Error("moveTerminal returned false");
         }
+        nativeTerminalProcesses.move(fromNativePanelId, toNativePanelId);
         staged.completed.push("native");
-
-        staged.sessionToken = await transferSessionPanelOwnership({
-          expectedLifecycleId: staged.lifecycleId,
-          panelId: staged.panelId,
-          sourceRecordId: staged.sourceRecordId,
-          targetRecordId: staged.targetRecordId,
-        });
-        staged.completed.push("session");
 
         const taskOutputBindings = deps.getTaskOutputBindings();
         if (taskOutputBindings) {
@@ -251,6 +254,23 @@ export function createTerminalPanelTransfer(
           sourceWindowId: staged.sourceRuntimeWindowId,
           targetWindowId: staged.targetRuntimeWindowId,
         });
+
+        staged.sessionToken = await transferSessionPanelOwnership({
+          expectedLifecycleId: staged.lifecycleId.startsWith("shell:")
+            ? ""
+            : staged.lifecycleId,
+          panelId: staged.panelId,
+          sourceRecordId: staged.sourceRecordId,
+          targetRecordId: staged.targetRecordId,
+        });
+        staged.completed.push("session");
+        await terminalDraftStore().move(
+          staged.sourceRecordId,
+          staged.targetRecordId,
+          staged.panelId
+        );
+        staged.completed.push("draft");
+        await refreshTerminalDraft(target.win, staged.panelId);
 
         await deps.foreground.runSerial(() => {
           deps.foreground.transferScopes({
@@ -308,6 +328,7 @@ export function createTerminalPanelTransfer(
           throw new Error("moved terminal presentation request failed");
         }
         staged.phase = "moved";
+        if (process) nativeTerminalProcesses.setTransferring(process, false);
       } catch (error) {
         await reverseCompleted(staged);
         staged.phase = "rolled-back";

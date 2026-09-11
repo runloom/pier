@@ -178,6 +178,7 @@ describe("withPierCursorHooks", () => {
   }, 15_000);
 
   it("Cursor 子智能体重复的父 conversation/generation 不冒充独立子会话身份", async () => {
+    const promptAt = Date.now();
     const root = await mkdtemp(join(tmpdir(), "pier-cursor-subagent-v3-"));
     const userData = join(root, "userData");
     const hooksHome = join(root, "hooks");
@@ -238,6 +239,7 @@ describe("withPierCursorHooks", () => {
         nativeEvent: "beforeSubmitPrompt",
         panelId: "p1",
         sessionId: "parent-conversation-1",
+        ts: promptAt,
         turnId: "parent-generation-1",
         v: 3,
         windowId: "w1",
@@ -260,6 +262,7 @@ describe("withPierCursorHooks", () => {
   }, 15_000);
 
   it("Task 派发按 Subagent 生命周期上报：抑制子智能体 generation、会话转挂父级", async () => {
+    const promptAt = Date.now();
     // 2026-08-29 实证：Task preToolUse 带主 conversation_id + 子智能体
     // generation_id 且从不发 postToolUse；按 ToolStart 记账会抢占主回合，
     // 让真回合的 stop 被 settled-turn 拒收（面板钉死「执行工具中」）。
@@ -340,6 +343,7 @@ describe("withPierCursorHooks", () => {
         nativeEvent: "beforeSubmitPrompt",
         panelId: "p1",
         sessionId: "main-conversation-1",
+        ts: promptAt,
         turnId: "5eb99524-9ef4-48a3-af34-f549d81b70ad",
         v: 3,
         windowId: "w1",

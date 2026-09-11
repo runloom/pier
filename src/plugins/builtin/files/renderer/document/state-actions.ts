@@ -19,6 +19,7 @@ import {
   withDocumentNormalizedEol,
   withDocumentPathReconciled,
   withDocumentReadResult,
+  withDocumentRevertedToSaved,
   withDocumentSaved,
   withDocumentSaveEol,
   withDocumentSaveError,
@@ -128,6 +129,9 @@ export function createFilesDocumentStateActions(replace: ReplaceDocument) {
       replace(documentId, (document) =>
         withDocumentNormalizedEol(document, eol)
       );
+    },
+    revertDocumentToSaved(documentId: string): void {
+      replace(documentId, withDocumentRevertedToSaved);
     },
     setDocumentLanguage(
       documentId: string,

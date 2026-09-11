@@ -39,7 +39,37 @@ export type GitReviewPatchMaterial =
       readonly targetOid: string | null;
     };
 
+/** 可渲染分组的 fact：conflicted 状态只属于 conflict section。 */
+export type GitReviewRenderableFact = GitReviewIndexGroupFact & {
+  readonly status: Exclude<GitReviewIndexGroupFact["status"], "conflicted">;
+};
+
+/** 派生面没有工作区槽：工作区侧是否存在决定要不要 fence 正文。 */
+export type GitReviewPatchWorktreeSide = "absent" | "present";
+
+/**
+ * fact 的背书来源，决定「读不到内容」的语义：
+ *
+ * - `index-slot`：由 index 槽背书（staged / unstaged / committed / conflict）。
+ *   读不到 = 索引事实已过期，走 stale 重试；patch 必须与槽的路径、状态、对象一致。
+ * - `derived`：由槽派生的组合阅读面（working）。没有自己的事实：工作区侧不存在就没有可
+ *   fence 的正文，git 给不出单一目标记录时该面不存在。派生面禁止产生失败或重试。
+ */
+export type GitReviewPatchBacking =
+  | { readonly kind: "index-slot" }
+  | {
+      readonly kind: "derived";
+      readonly worktreeSide: GitReviewPatchWorktreeSide;
+    };
+
+/** 省略 {@link ReadGitReviewPatchOptions.backing} 即槽背书。 */
+export const GIT_REVIEW_INDEX_SLOT_BACKING: GitReviewPatchBacking =
+  Object.freeze({
+    kind: "index-slot",
+  });
+
 export interface ReadGitReviewPatchOptions {
+  readonly backing?: GitReviewPatchBacking;
   readonly budget: GitReviewIndexExecutionBudget;
   readonly execGitRaw: ExecGitRaw;
   readonly fact: GitReviewIndexGroupFact;

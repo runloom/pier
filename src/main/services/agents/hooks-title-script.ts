@@ -29,5 +29,11 @@
  *     只发 Notification），pierEvent `Stop→TurnCompleted`——advisory
  *     候选让 droid 永远到不了 ready，turn-finished 通知与 Index ready
  *     桶失效。
+ * 18 = Kimi AskUserQuestion 的 Pre/Post 映射具名 Interaction，防止旧客户端
+ *     覆盖回只上报工具的命令，导致问答期间缺少 waiting。
+ * 19 = Kimi 子智能体 session_id 明确为父会话号；StopFailure 只触发对账，
+ *     不以无主/子身份的 hook 清空主会话工作。
  */
-export const PIER_HOOK_COMMAND_GENERATION = 17;
+// v20：原生空闲与回合结果分离，Claude 压缩使用独立维护事实。
+// v21：Claude compact SessionStart 保留来源；Kimi Interrupt 对账与数字身份保留。
+export const PIER_HOOK_COMMAND_GENERATION = 21;

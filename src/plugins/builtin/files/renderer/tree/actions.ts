@@ -16,6 +16,7 @@ import { showFilesNamePrompt } from "../panel/name-prompt.tsx";
 import {
   basename,
   dirnameRelative,
+  isFilesTreeMultiSelection,
   notifyMoveWithUndo,
   parseEditorMetadata,
   parseTreeBackgroundMetadata,
@@ -175,14 +176,7 @@ function createRenameAction(
     metadata: {
       group: "5_edit",
       // 多选不支持批量重命名。
-      menuHidden: (invocation) => {
-        const target = parseTreeMetadata(invocation);
-        return Boolean(
-          target?.selectedPaths &&
-            target.selectedPaths.length > 1 &&
-            target.selectedPaths.includes(target.path)
-        );
-      },
+      menuHidden: (invocation) => isFilesTreeMultiSelection(invocation),
       sortOrder: 1,
     },
     surfaces: ["files/tree-item"],

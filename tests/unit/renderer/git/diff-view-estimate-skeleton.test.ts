@@ -7,6 +7,7 @@ import {
 import { diffMetrics } from "@pier/ui/diff-view/geometry.ts";
 import {
   applyDiffVirtualHeights,
+  installDiffVirtualHeightReconciler,
   isEstimateCacheKey,
   pinCodeViewScrollHeight,
   resolveItemVirtualHeight,
@@ -423,5 +424,223 @@ describe("applyDiffVirtualHeights", () => {
     expect(codeView.scrollHeight).toBe(expected);
     expect(container.style.height).toBe(`${expected}px`);
     expect(700 / codeView.scrollHeight).toBeGreaterThan(0.4);
+  });
+
+  it("pin 总值未变时不标脏", () => {
+    const gap = METRICS.gap;
+    const items = [
+      {
+        height: 40,
+        instance: { height: 40, top: 0 },
+        item: { id: "a", fileDiff: { cacheKey: "loaded:a" } },
+        top: 0,
+      },
+      {
+        height: 60,
+        instance: { height: 60, top: 41 },
+        item: { id: "b", fileDiff: { cacheKey: "estimate:b" } },
+        top: 41,
+      },
+    ];
+    const total = 40 + gap + 60;
+    const container = document.createElement("div");
+    container.style.height = `${total}px`;
+    const codeView = {
+      container,
+      containerHeight: total,
+      getLayout: () => ({ gap, paddingTop: 0 }),
+      items,
+      scrollDirty: false,
+      scrollHeight: total,
+    };
+    expect(pinCodeViewScrollHeight(codeView, gap)).toBe(false);
+    expect(codeView.scrollDirty).toBe(false);
+  });
+
+  it("普通滚动 emit 在总高被收成可见窗时 pin 回 Σ", () => {
+    const gap = METRICS.gap;
+    const items = [
+      {
+        height: 100,
+        instance: { height: 100, top: 0 },
+        item: { fileDiff: { cacheKey: "loaded:a" }, id: "a" },
+        top: 0,
+      },
+      {
+        height: 80,
+        instance: { height: 80, top: 101 },
+        item: { fileDiff: { cacheKey: "loaded:b" }, id: "b" },
+        top: 101,
+      },
+    ];
+    const total = 100 + gap + 80;
+    const container = document.createElement("div");
+    const codeView = {
+      computeRenderRangeAndEmit: () => {
+        codeView.containerHeight = 100;
+        codeView.scrollHeight = 100;
+        container.style.height = "100px";
+      },
+      container,
+      containerHeight: total,
+      getLayout: () => ({ gap, paddingTop: 0 }),
+      items,
+      recomputeLayout: () => undefined,
+      scrollDirty: false,
+      scrollHeight: total,
+    };
+    installDiffVirtualHeightReconciler(codeView, {
+      current: {
+        isCollapseAllIntent: () => false,
+        isUserCollapsed: () => false,
+        metrics: METRICS,
+      },
+    });
+    codeView.computeRenderRangeAndEmit?.();
+    expect(codeView.scrollHeight).toBe(total);
+    expect(container.style.height).toBe(`${total}px`);
+  });
+
+  it("普通滚动 emit 在 syncContainerHeight 前 pin，scrollTop 不被同一拍 clamp", () => {
+    const gap = METRICS.gap;
+    const items = [
+      {
+        height: 100,
+        instance: { height: 100, top: 0 },
+        item: { fileDiff: { cacheKey: "loaded:a" }, id: "a" },
+        top: 0,
+      },
+      {
+        height: 80,
+        instance: { height: 80, top: 101 },
+        item: { fileDiff: { cacheKey: "loaded:b" }, id: "b" },
+        top: 101,
+      },
+    ];
+    const total = 100 + gap + 80;
+    const container = document.createElement("div");
+    const scroller = document.createElement("div");
+    scroller.scrollTop = 120;
+    const codeView = {
+      computeRenderRangeAndEmit: () => {
+        codeView.scrollHeight = 100;
+        codeView.syncContainerHeight?.();
+        const maxScrollTop = Math.max(codeView.scrollHeight - 50, 0);
+        if (scroller.scrollTop > maxScrollTop) {
+          scroller.scrollTop = 0;
+        }
+      },
+      container,
+      containerHeight: total,
+      getLayout: () => ({ gap, paddingTop: 0 }),
+      getPagedScrollHeight: () => codeView.scrollHeight,
+      items,
+      recomputeLayout: () => undefined,
+      scrollDirty: false,
+      scrollHeight: total,
+      syncContainerHeight: () => {
+        container.style.height = `${codeView.scrollHeight}px`;
+        codeView.containerHeight = codeView.scrollHeight;
+      },
+    };
+    installDiffVirtualHeightReconciler(codeView, {
+      current: {
+        isCollapseAllIntent: () => false,
+        isUserCollapsed: () => false,
+        metrics: METRICS,
+      },
+    });
+    scroller.scrollTop = 120;
+    codeView.computeRenderRangeAndEmit?.();
+    expect(codeView.scrollHeight).toBe(total);
+    expect(container.style.height).toBe(`${total}px`);
+    expect(scroller.scrollTop).toBe(120);
+  });
+
+  it("pin 逻辑总高已是 Σ 且容器已是分页值时不标脏", () => {
+    const gap = METRICS.gap;
+    const total = 20_000_000;
+    const paged = 12_000_000;
+    const items = [
+      {
+        height: total,
+        instance: { height: total, top: 0 },
+        item: { fileDiff: { cacheKey: "loaded:a" }, id: "a" },
+        top: 0,
+      },
+    ];
+    const container = document.createElement("div");
+    container.style.height = `${paged}px`;
+    const codeView = {
+      container,
+      containerHeight: paged,
+      getLayout: () => ({ gap, paddingTop: 0 }),
+      getPagedScrollHeight: () => paged,
+      items,
+      scrollDirty: false,
+      scrollHeight: total,
+    };
+    expect(pinCodeViewScrollHeight(codeView, gap)).toBe(false);
+    expect(codeView.scrollDirty).toBe(false);
+    expect(codeView.scrollHeight).toBe(total);
+    expect(container.style.height).toBe(`${paged}px`);
+  });
+
+  it("pin 只改分页容器高时不标脏", () => {
+    const gap = METRICS.gap;
+    const total = 20_000_000;
+    const paged = 12_000_000;
+    const items = [
+      {
+        height: total,
+        instance: { height: total, top: 0 },
+        item: { fileDiff: { cacheKey: "loaded:a" }, id: "a" },
+        top: 0,
+      },
+    ];
+    const container = document.createElement("div");
+    container.style.height = `${total}px`;
+    const codeView = {
+      container,
+      containerHeight: total,
+      getLayout: () => ({ gap, paddingTop: 0 }),
+      getPagedScrollHeight: () => paged,
+      items,
+      scrollDirty: false,
+      scrollHeight: total,
+    };
+    expect(pinCodeViewScrollHeight(codeView, gap)).toBe(true);
+    expect(codeView.scrollDirty).toBe(false);
+    expect(codeView.scrollHeight).toBe(total);
+    expect(codeView.containerHeight).toBe(paged);
+    expect(container.style.height).toBe(`${paged}px`);
+  });
+
+  it("无 getPagedScrollHeight 时超分页阈值的容器用 12e6", () => {
+    const gap = METRICS.gap;
+    const total = 20_000_000;
+    const items = [
+      {
+        height: total,
+        instance: { height: total, top: 0 },
+        item: { fileDiff: { cacheKey: "loaded:a" }, id: "a" },
+        top: 0,
+      },
+    ];
+    const container = document.createElement("div");
+    container.style.height = `${total}px`;
+    const codeView = {
+      container,
+      containerHeight: total,
+      getHeight: () => 0,
+      getLayout: () => ({ gap, paddingBottom: 0, paddingTop: 0 }),
+      items,
+      scrollDirty: false,
+      scrollHeight: total,
+    };
+    expect(pinCodeViewScrollHeight(codeView, gap)).toBe(true);
+    expect(codeView.scrollDirty).toBe(false);
+    expect(codeView.scrollHeight).toBe(total);
+    expect(codeView.containerHeight).toBe(12_000_000);
   });
 });

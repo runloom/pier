@@ -2,6 +2,7 @@ import type { IpcMain } from "electron";
 import type { AppWindow } from "../../windows/app-window.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import { toNativePanelKey } from "./panel-id.ts";
+import { nativeTerminalProcesses } from "./process/registry.ts";
 
 /**
  * Host-copy catalog / injectDisplayText IPC (Ghostty end-state + paste confirm).
@@ -56,7 +57,7 @@ export function registerTerminalHostCopyIpc(args: {
 
   ipcMain.handle(
     "pier:terminal:inject-display-text",
-    (event, panelId: unknown, text: unknown) => {
+    (event, panelId: unknown, text: unknown, lifecycleId?: unknown) => {
       if (typeof panelId !== "string" || panelId.length === 0) {
         return { ok: false as const, error: "panelId required" };
       }
@@ -72,6 +73,11 @@ export function registerTerminalHostCopyIpc(args: {
       }
       try {
         const nativePanelId = toNativePanelKey(win, panelId);
+        const process = nativeTerminalProcesses.get(nativePanelId);
+        if (process?.closing || process?.closed)
+          return { ok: false as const, error: "terminal closing" };
+        if (lifecycleId !== undefined && process?.lifecycleId !== lifecycleId)
+          return { ok: false, error: "terminal process changed" };
         const ok = addon.injectDisplayText(nativePanelId, text);
         return ok
           ? { ok: true as const }

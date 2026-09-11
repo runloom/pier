@@ -47,8 +47,16 @@ import {
 } from "@/components/workspace/transfer/runtime.ts";
 import {
   PANEL_TRANSFER_IN_TRANSIT_ATTR,
+  panelTransferTearOffHoldForTests,
   resetPanelTransferTearOffForTests,
 } from "@/components/workspace/transfer/tear-off.ts";
+import {
+  getOrCreateTerminalComposerSession,
+  getTerminalComposerSession,
+  readComposerDraft,
+  resetTerminalComposerSessionsForTests,
+  writeComposerDraft,
+} from "@/panel-kits/terminal/composer/session.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const TRANSFER_ID = "9af45a46-24f2-4ac0-9371-fbe78ca295dc";
@@ -144,6 +152,16 @@ function createApi(panels: ReturnType<typeof panel>[]) {
   };
 }
 
+function mountTransferTab(panelId: string): HTMLElement {
+  const tab = document.createElement("div");
+  tab.className = "dv-tab";
+  const inner = document.createElement("div");
+  inner.dataset.panelTabId = panelId;
+  tab.append(inner);
+  document.body.append(tab);
+  return tab;
+}
+
 function installPier(overrides: Record<string, unknown> = {}) {
   const offer = vi.fn(async () => undefined);
   const drop = vi.fn(async () => undefined);
@@ -171,6 +189,7 @@ describe("workspace panel transfer", () => {
     flushWorkspaceLayoutMock.mockClear();
     clearCurrentWindowLayoutMock.mockClear();
     resetPanelTransferRuntimeForTests();
+    resetTerminalComposerSessionsForTests();
     clearCorePanelTransferForTests();
     __panelTransferInternals.setActiveDrag(null);
     __panelTransferInternals.clearFrozenOfferParamsForTests();
@@ -179,6 +198,7 @@ describe("workspace panel transfer", () => {
   });
 
   afterEach(() => {
+    resetTerminalComposerSessionsForTests();
     resetPanelTransferRuntimeForTests();
     clearCorePanelTransferForTests();
     __panelTransferInternals.setActiveDrag(null);
@@ -718,6 +738,81 @@ describe("workspace panel transfer", () => {
       });
     });
 
+    it("prepareSource hides the source tab for move but not copy", async () => {
+      installPier();
+      const tab = mountTransferTab("welcome-1");
+      const welcome = panel({
+        component: "welcome",
+        id: "welcome-1",
+        params: { note: "hi" },
+      });
+      useWorkspaceStore.getState().setApi(createApi([welcome]) as never);
+
+      await runPanelTransferRendererCommand({
+        command: {
+          sourcePanelId: "welcome-1",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.prepareSource",
+        },
+        requestId: "prepare-move-tear-off",
+      });
+      expect(tab.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)).toBe(true);
+      expect(
+        document.documentElement.getAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)
+      ).toBe("welcome-1");
+      expect(panelTransferTearOffHoldForTests()).toBe(true);
+
+      resetPanelTransferTearOffForTests();
+      resetPanelTransferRuntimeForTests();
+
+      await runPanelTransferRendererCommand({
+        command: {
+          mode: "copy",
+          sourcePanelId: "welcome-1",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.prepareSource",
+        },
+        requestId: "prepare-copy-tear-off",
+      });
+      expect(tab.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)).toBe(false);
+      expect(
+        document.documentElement.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)
+      ).toBe(false);
+      expect(panelTransferTearOffHoldForTests()).toBe(false);
+    });
+
+    it("finalize commit clears tear-off when copy skips releaseSource", async () => {
+      installPier();
+      const tab = mountTransferTab("welcome-1");
+      const welcome = panel({ component: "welcome", id: "welcome-1" });
+      useWorkspaceStore.getState().setApi(createApi([welcome]) as never);
+
+      await runPanelTransferRendererCommand({
+        command: {
+          sourcePanelId: "welcome-1",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.prepareSource",
+        },
+        requestId: "prepare-hidden",
+      });
+      expect(tab.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)).toBe(true);
+
+      await runPanelTransferRendererCommand({
+        command: {
+          outcome: "commit",
+          role: "source",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.finalize",
+        },
+        requestId: "finalize-copy-commit",
+      });
+      expect(tab.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)).toBe(false);
+      expect(
+        document.documentElement.hasAttribute(PANEL_TRANSFER_IN_TRANSIT_ATTR)
+      ).toBe(false);
+      expect(panelTransferTearOffHoldForTests()).toBe(false);
+    });
+
     it("stageTarget adds an inert panel with nested position.index for tabs", async () => {
       const pier = installPier();
       const existing = panel({ component: "welcome", id: "welcome-keep" });
@@ -854,6 +949,40 @@ describe("workspace panel transfer", () => {
       expect(api.removePanel).toHaveBeenCalledWith(moving);
       expect(clearCurrentWindowLayoutMock).not.toHaveBeenCalled();
       expect(flushWorkspaceLayoutMock).toHaveBeenCalled();
+    });
+
+    it("releases only transferred terminal input after source removal succeeds", async () => {
+      installPier();
+      const keep = panel({ component: "terminal", id: "terminal-keep" });
+      const moving = panel({ component: "terminal", id: "terminal-moving" });
+      const api = createApi([keep, moving]);
+      useWorkspaceStore.getState().setApi(api as never);
+      const kept = getOrCreateTerminalComposerSession(keep.id);
+      const source = getOrCreateTerminalComposerSession(moving.id);
+      writeComposerDraft(kept, "keep this draft");
+      writeComposerDraft(source, "moving draft");
+      const request: RendererCommandEnvelope = {
+        command: {
+          sourcePanelId: moving.id,
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.releaseSource",
+        },
+        requestId: "release-terminal",
+      };
+
+      api.removePanel.mockImplementationOnce(() => {
+        throw new Error("panel removal failed");
+      });
+      await runPanelTransferRendererCommand(request);
+      expect(getTerminalComposerSession(moving.id)).toBe(source);
+      expect(readComposerDraft(source)).toBe("moving draft");
+      expect(source.signal.aborted).toBe(false);
+
+      await runPanelTransferRendererCommand(request);
+      expect(getTerminalComposerSession(moving.id)).toBeNull();
+      expect(source.signal.aborted).toBe(true);
+      expect(readComposerDraft(kept)).toBe("keep this draft");
+      expect(getTerminalComposerSession(keep.id)).toBe(kept);
     });
 
     it("finalize is idempotent for the same key and rejects conflicting outcomes", async () => {

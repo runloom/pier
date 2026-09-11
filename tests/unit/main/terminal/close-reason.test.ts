@@ -6,7 +6,10 @@ describe("terminal close IPC reason semantics", () => {
     vi.clearAllMocks();
   });
 
-  async function setupHarness(options?: { transferSourceClose?: boolean }) {
+  async function setupHarness(options?: {
+    transferSourceClose?: boolean;
+    signalTerminalProcess?: ((...args: unknown[]) => boolean) | undefined;
+  }) {
     const invokeHandlers = new Map<
       string,
       (...args: unknown[]) => unknown | Promise<unknown>
@@ -47,6 +50,9 @@ describe("terminal close IPC reason semantics", () => {
       setTitleForwardCallback: vi.fn(),
       setOpenUrlForwardCallback: vi.fn(),
       setupWindow: vi.fn(),
+      ...(options?.signalTerminalProcess
+        ? { signalTerminalProcess: options.signalTerminalProcess }
+        : {}),
     };
     const win = {
       focus: vi.fn(),
@@ -165,6 +171,8 @@ describe("terminal close IPC reason semantics", () => {
           };
         }
       );
+    } else {
+      vi.doUnmock("@main/services/panel-transfer/terminal.ts");
     }
 
     const closeTerminal = fakeAddon.closeTerminal;
@@ -232,10 +240,10 @@ describe("terminal close IPC reason semantics", () => {
       | undefined;
 
     expect(controller?.forceStop("terminal-1", "window-main")).toEqual({
-      message: "terminal process was not found",
+      message: "stop-and-retain is unavailable; update Pier",
       ok: false,
     });
-    expect(closeTerminal).toHaveBeenCalledWith("7::terminal-1");
+    expect(closeTerminal).not.toHaveBeenCalled();
   });
 
   it("ignores the native process-close callback caused by a relaunch close", async () => {
@@ -391,5 +399,46 @@ describe("terminal close IPC reason semantics", () => {
 
     expect(releaseTerminalCwdForwarding).toHaveBeenCalledTimes(1);
     expect(closeTerminal).not.toHaveBeenCalled();
+  });
+
+  it("releases the surface when stop cannot confirm exit", async () => {
+    const { closeTerminal, invokeHandlers, win } = await setupHarness();
+    const { nativeTerminalProcesses } = await import(
+      "@main/ipc/terminal/process/registry.ts"
+    );
+    const process = nativeTerminalProcesses.begin("7::terminal-1");
+    nativeTerminalProcesses.created(process);
+    await invokeHandlers.get("pier:terminal:close")?.(
+      { sender: win.webContents },
+      "terminal-1"
+    );
+    expect(closeTerminal).toHaveBeenCalledWith("7::terminal-1");
+    expect(process.closing).toBe(true);
+    expect(process.closed).toBe(true);
+  });
+
+  it("does not keep the tab waiting for process exit before releasing the view", async () => {
+    const signalTerminalProcess = vi.fn(() => true);
+    const { closeTerminal, invokeHandlers, win } = await setupHarness({
+      signalTerminalProcess,
+    });
+    const { nativeTerminalProcesses } = await import(
+      "@main/ipc/terminal/process/registry.ts"
+    );
+    const process = nativeTerminalProcesses.begin("7::terminal-1");
+    nativeTerminalProcesses.created(process);
+    await invokeHandlers.get("pier:terminal:close")?.(
+      { sender: win.webContents },
+      "terminal-1"
+    );
+    expect(signalTerminalProcess).toHaveBeenCalledWith(
+      "7::terminal-1",
+      process.lifecycleId,
+      true
+    );
+    expect(closeTerminal).toHaveBeenCalledWith("7::terminal-1");
+    expect(process.closing).toBe(true);
+    expect(process.closed).toBe(true);
+    expect(process.exited).toBe(false);
   });
 });

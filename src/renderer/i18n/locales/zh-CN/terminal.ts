@@ -51,6 +51,15 @@ export const terminal = {
     waiting: "等待确认",
   },
   composer: {
+    draftSaveFailed: "无法保存未发送的内容",
+    unconfirmedHint: "这段内容可能已进入终端，请先检查，再决定是否重发。",
+    restartToSend: "草稿已保存。请先重新启动智能体，再发送。",
+    unconfirmedTitle: "再次发送这段内容？",
+    unconfirmedBody:
+      "无法确认上次是否发送完成。请先检查终端，避免重复发送同一任务。",
+    sendAgain: "再次发送",
+    needsInput: "请先在终端中完成确认或回答问题，再发送任务。",
+
     attachFailed: "无法添加文件，请重试",
     attachFile: "添加文件",
     // 仅对已核实的 TUI 提示输入聚焦风险；不会直接禁用发送。
@@ -362,6 +371,7 @@ export const terminal = {
    * 面向用户时避免直出 Ghostty 品牌与实现词。
    */
   ghosttyHost: {
+    processStopped: "进程已停止，可以继续查看输出。",
     processExited: "进程已退出",
     processExitedFailed: "进程已退出，退出码 {{code}}",
     processExitedAbnormal:

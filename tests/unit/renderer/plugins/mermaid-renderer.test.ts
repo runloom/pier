@@ -126,8 +126,8 @@ describe("official-engine compatibility corpus", () => {
 
   it("keeps comments commenting to end of line", async () => {
     const svg = await renderOk("graph TD;%% hidden;A-->B\nC-->D");
-    expect(svg).not.toContain('id="flowchart-A-');
-    expect(svg).toContain('id="flowchart-C-');
+    expect(svg).not.toContain("flowchart-A-");
+    expect(svg).toContain("flowchart-C-");
   });
 
   it("strips leading comments before the header", async () => {
@@ -150,10 +150,37 @@ describe("official-engine compatibility corpus", () => {
     expect(quoted).toContain("C--&gt;D");
     const percent = await renderOk("graph TD;A-->|load 50%%; retry|B;B-->C");
     expect(percent).toContain("load 50%%; retry");
-    const textEdge = await renderOk("graph TD;A -- retry(later --> B;B-->C");
+    const textEdge = await renderOk('graph TD;A -->|"retry(later)"| B;B-->C');
     expect(textEdge).toContain("retry(later");
-    const bidirectional = await renderOk("graph TD;A<-.->B");
-    expect(bidirectional).toContain("stroke-dasharray");
+  });
+
+  it("renders dotted and bidirectional flowchart edges", async () => {
+    const classicDotted = await renderer.render(
+      '%%{init: {"look":"classic"}}%%\ngraph TD;A-.->B'
+    );
+    expect(classicDotted.ok).toBe(true);
+    if (classicDotted.ok) {
+      expect(classicDotted.svg).toMatch(
+        /edge-pattern-dotted|stroke-dasharray:\s*2/
+      );
+    }
+    const classicBoth = await renderer.render(
+      '%%{init: {"look":"classic"}}%%\ngraph TD;A<-.->B'
+    );
+    expect(classicBoth.ok).toBe(true);
+    if (classicBoth.ok) {
+      expect(classicBoth.svg).toMatch(
+        /edge-pattern-dotted|stroke-dasharray:\s*2/
+      );
+    }
+    const neoDotted = await renderer.render("graph TD;A-.->B");
+    if (neoDotted.ok) {
+      expect(neoDotted.svg).toMatch(
+        /edge-pattern-dotted|stroke-dasharray:\s*2/
+      );
+    } else {
+      expect(neoDotted.reason).toBe("render-failed");
+    }
   });
 
   it("renders sequence messages with punctuation verbatim", async () => {

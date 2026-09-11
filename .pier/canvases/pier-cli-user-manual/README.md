@@ -138,6 +138,13 @@ pier agents wait \
 
 `accepted: true` 只表示输入已送达，不表示工作已经完成。`agents wait` 用于等待 `ready`、`waiting`、`exited` 或 `attention`，`agents watch` 用于观察状态变化；最终结果仍以智能体输出为准。
 
+
+首条任务只经已验证的原生交互式启动参数传入；不支持或无法确认版本时，保存在增强输入框，等待手动发送。`inputDisposition` 返回 `native-launch`、`draft` 或 `unconfirmed`；`creationStatus: unconfirmed` 表示尚未收到原生创建确认，请先查看面板，避免重复启动。原生授权请在终端中手动完成。
+
+未发送草稿（含附件与编辑格式）会保存并在重启后恢复；发送中断后标为待核对，不会自动重发。`agents turn` 保留原文及末尾换行，发送前保存检查点；接受输入不代表智能体已处理。
+
+`agents interrupt` 发送原生 Ctrl+C。`agents terminate` 先发 TERM，2 秒后升级 KILL，最多等待 10 秒确认宿主启动的进程退出；超时返回错误。停止后面板与当前应用内的历史输出仍可查看、复制；单独关闭面板请用 `terminal close`。此操作不保证回收主动脱离终端的后台服务，也不表示智能体任务成功。
+
 ## Git 工作树
 
 ```bash

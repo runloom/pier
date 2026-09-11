@@ -12,7 +12,7 @@ read `../sdk/index.d.ts` and `../sdk/host.d.ts`. Then read the focused
 declaration for each API you plan to use:
 
 - `core.d.ts` for `Frame`, `Artboard`, `ArtboardStage`, `WorldStage`, `Layer`,
-  `Stack`, `Row`, and `Text`.
+  `Stack`, `Row`, `Text`, `WorkflowDiagram`, and `validateWorkflowSpec`.
 - API (canvas-kit → API, plus `sdk/host.d.ts` and `sdk/files.d.ts`) for
   `import { host, useHostSnapshot } from "pier/host"` and
   `import { useCanvasFile } from "pier/canvas"`. Bind
@@ -104,14 +104,13 @@ stay there. Put complex calculations in pure adjacent modules.
   utilities that already exist in the product; for **docs two-pane layout**,
   always use **`DocsShell`** (inline flex columns) instead of inventing
   arbitrary `grid-cols-[…]` shells.
-- `Frame` is a **reading column** (max-width + padding), not a full-height app
-  chrome. Do not nest dual `ScrollArea` + `70vh` fake viewports inside it.
-- **Stage:** you infer from intent when the invoke does not pin `mode` /
-  `recipe` / `content` (SKILL.md **Auto-resolve**). The host does not infer.
-  Flow `Frame` for docs and overviews; `<Stack fill>` for a one-screen board
-  that owns scroll; `WorldStage` for multi-device mockups and live DAGs. See
-  SKILL.md **Stage selection**. Do not put a UI mockup inside a methodology
-  Design tab.
+- `Frame` is a **flow column**. Omit `maxWidth` so the files preview shell owns
+  comfortable / wide measure. Do not nest dual `ScrollArea` + `70vh` fake
+  viewports inside it.
+- **Stage:** SKILL.md **Auto-resolve** and **Stage selection** choose the
+  root. This file owns geometry: omit `Frame` `maxWidth`; `Artboard` presets;
+  `WorldStage` floor vs product ink; `WorkflowDiagram` IR; `ScreenFlow` IR.
+  Do not put a UI mockup inside a methodology Design tab.
 - Product UI mockups (settings, panels, chrome) go on **`Artboard`**
   (`preset="desktop" | "laptop" | "phone" | "tablet"`). In **world** they sit
   on `WorldStage` with `Layer` (`x` / `y`). Flow children always wrap; omit
@@ -170,13 +169,13 @@ diagram; there is no `type` prop and Pier does not sniff the source header.
 | `tone` | State machine, error exit, delivery status | `info` `success` `warning` `danger` `done` `muted` |
 | neither | Only if the graph has no roles and no status | Default `bg-card` |
 
-| `kind` | Chrome (status hue, not `--primary` / `--muted`) |
+| `kind` | Chrome (same `color-mix` recipe as `WorkflowDiagram`) |
 |---|---|
-| `actor` | info blue · User |
-| `agent` | done purple · Bot |
-| `tool` | success green · Terminal |
-| `artifact` | info blue, **dashed** · AppWindow |
-| `external` | warning amber, **dashed** · ExternalLink |
+| `actor` | info 10% into `--card` · User |
+| `agent` | done 18% · Bot |
+| `tool` | success 18% · Terminal |
+| `artifact` | info 10%, **dashed** · AppWindow |
+| `external` | muted 12%, **dashed** · ExternalLink (same as workflow `external`) |
 
 Rules:
 
@@ -186,18 +185,97 @@ Rules:
   Stop nodes.
 - Set **one** field per node. If both are set, fill follows `tone`;
   `kind` still shows the role glyph.
-- Chrome is the soft status pairing: pale tint + same-hue hairline
-  border + a title-row glyph. Kind glyphs use foreground (readable at
-  20px); hue lives in the card surface. Run-status marks stay chromatic.
-  **No left color rail.** **No one-color-per-node rainbow.**
+- Chrome matches `WorkflowDiagram`: mix `--status-*-fg` into `--card`
+  (info 10%, success/warning/danger/done 18%, muted 12%) plus the
+  same-hue hairline. Text uses theme `--foreground`. Kind glyphs use
+  the hairline stroke. Run-status marks stay chromatic. **No light
+  pastel island.** **No `status-*-bg` chips.** **No left color rail.**
+  **No one-color-per-node rainbow.**
 - Do not use `bg-muted` / `bg-primary/10` for roles: light `--muted` is
-  near `--card`, light `--primary` is near-black.
+  near `--card`, light `--primary` is near-black. External uses the
+  muted mix, not a warning chip.
 - One-shot / out-of-product nodes are `external` (example: 原生 agent CLI).
   Their edges dash too.
 - Short predicates on edges; long copy belongs on node `meta` or a caption.
 - Do not infer `kind` from the title string.
 - `Mermaid` `status` / `renderNodeContent` stays for static architecture
   diagrams that need a run glyph, not for a polling viewer.
+
+## Workflow diagrams
+
+Interaction / approval / recover flows use `WorkflowDiagram`, not `Mermaid`
+and not `recipe=design` Artboards.
+
+1. Write a `WorkflowSpec`: `title`, `lanes`, `nodes` (`lane` + `col` 0..8),
+   `edges`, optional `mainPath`, `phases`, `groups`, `notes`, and node
+   `detail` / `tag` / `kind` (`step` | `gate` | `system` | `store` |
+   `external`).
+2. Call `validateWorkflowSpec(spec)`. If `status` is `1`, apply **only the
+   first** `supportedFixes` entry, then validate again. Do not mount a
+   diagram that failed validation — the host would paint Empty.
+3. Mount `<WorkflowDiagram spec={spec} />`. The host compiles lane frames,
+   phase headers, group frames, orthogonal elbows, a kind legend, and
+   caption notes. `mainPath` is the heavier idle walk. The exception lane
+   is the recovery band; a gate may also sit on `mainPath`. The host owns
+   retry routing. Do not export or call `compileWorkflowLayout`.
+
+Allowed intent (not coordinates): `role: "main" | "branch" | "return" |
+"error"`; `lane.variant: "exception"`; `kind` and `tag` on nodes; `phases`
+and `groups` as column ranges; `notes` as caption facts. Omit `role` for
+the happy path. Do not write `x` / `y` / `via` / `labelAt` / `fromSide` /
+`edge.color`. Do not use `Layer` or `Artboard` as graph nodes. Architecture
+and sequence stay `Mermaid`.
+
+Keep edge labels to one or two words. The host parks each pill beside
+the longest run, not on the ink. Default lane frames are solid; only
+the exception band is dashed. Idle strokes are always solid — dash
+exists only on the hover flow overlay.
+
+Hover lifts the related cards and edges. The rest stay fully visible.
+Related edges flow dashes from source to target. Cards stay still.
+There is no click-to-pin, no edge catalog, and no keyboard edge focus.
+
+## Screen flows
+
+Multi-screen product paths use `ScreenFlow` on `WorldStage`, not
+`WorkflowDiagram` and not hand-drawn SVG. Approval / recover stays
+`WorkflowDiagram`. Architecture / sequence stay `Mermaid`.
+
+1. Give each step `Artboard` a stable `id`. Place frames with `Layer`
+   `x` / `y`. Width variants of the same step do not get ids on the path.
+2. Write a `ScreenFlowSpec`: `title`, `edges` (`from` / `to` are artboard
+   ids), optional `mainPath` and `start`. Edge `role` is
+   `"main" | "branch" | "return" | "error"`.
+3. Keep one table of **frame** boxes `{ id, x, y, w, h }` for
+   `[data-slot="artboard-frame"]` (Layer.x, Layer.y plus the caption
+   stack ≈ 40px). Place every path `Layer` from that table.
+4. Call `validateScreenFlowPaint({ spec, frames })`. If `status` is `1`,
+   apply **only the first** `supportedFixes` entry, update the table,
+   and call again. Do not mount while it fails — throw the first fix so
+   the live module surfaces it. Repeat until `status` is `0` or the same
+   diagnostic repeats (then stop and report). Mount
+   `<ScreenFlow spec={spec} />` as a **direct** child of `WorldStage`.
+
+The host measures `[data-slot="artboard-frame"]` and compiles connectors
+with the same orthogonal engine as `WorkflowDiagram`. Captions above
+the frame are obstacles — a downward error attaches at a side port so
+it cannot run through the title. A same-column return takes the
+opposite side. Idle edges are solid; the happy path is heavier;
+error/return use role color and a thinner stroke — do not draw dashes.
+Labels sit beside the stroke; colliding pills park on the other side of
+the shaft, then along it, and keep their wording. Hover lifts the related group and does not fade the rest.
+Frames on the path must not overlap and need ≥120px gutters (prefer
+140). True overlap or a connector through another frame paints Empty
+with a Layer move, not a partial graph. Fit-zoom sub-pixel gutters and
+a note in the start-chip band are healed by the host. `spec.title` is a
+chip above the start caption — keep that band empty, or the host slides
+the chip beside the caption. The host draws a role key (main / branch /
+return / failure) for roles actually used. If the same paint diagnostic
+repeats for two rounds, stop and report it; do not invent a third
+layout. Do not set `x` / `y` / `via` / `labelAt` / `fromSide` /
+`edge.color`. Do not put device variants on `edges`. For a path, set
+`Artboard` `height` to the content (not the full phone 852) so the
+journey fits at glance.
 
 ## Data and state
 

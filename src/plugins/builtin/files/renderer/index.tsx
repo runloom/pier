@@ -11,6 +11,7 @@ import {
   FILES_SAVE_COMMAND_ID,
   FILES_SEARCH_PANEL_ID,
 } from "../manifest.ts";
+import { filesDocumentRequiresSaveOnClose } from "./document/disk-protection.ts";
 import {
   abortFilesDraftSuspend,
   commitFilesDraftSuspend,
@@ -150,12 +151,7 @@ function registerDirtyCloseGuard(
         return true;
       }
       const document = getDocumentForPanelSource(source);
-      if (
-        !(
-          document &&
-          (document.dirty || document.needsSaveAs || document.durabilityUnknown)
-        )
-      ) {
+      if (!(document && filesDocumentRequiresSaveOnClose(document))) {
         return true;
       }
       if (
@@ -220,9 +216,7 @@ function registerDirtyCloseGuard(
       }
       const latest = getDocumentForPanelSource(source);
       // 保存失败(冲突取消/IO 错误)时保持面板打开。
-      return latest
-        ? !(latest.dirty || latest.needsSaveAs || latest.durabilityUnknown)
-        : true;
+      return latest ? !filesDocumentRequiresSaveOnClose(latest) : true;
     }
   );
 }

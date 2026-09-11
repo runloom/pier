@@ -144,6 +144,14 @@
   --pier-file-icon-purple: #d568ea;
   --pier-file-icon-pink: #ff678d;
   --pier-file-icon-mauve: #79697b;
+  /* Worktree identity swatches (spec 2026-09-07 §7.2). Classification only;
+     hue kept off status bands. Dark = default :root. */
+  --identity-1: oklch(0.72 0.09 205);
+  --identity-2: oklch(0.72 0.1 285);
+  --identity-3: oklch(0.74 0.1 345);
+  --identity-4: oklch(0.74 0.08 100);
+  --identity-5: oklch(0.72 0.09 180);
+  --identity-6: oklch(0.72 0.1 315);
   --chart-1: var(--info);
   --chart-2: var(--success);
   --chart-3: var(--warning);
@@ -428,6 +436,12 @@
   --pier-file-icon-purple: #a631be;
   --pier-file-icon-pink: #d32a61;
   --pier-file-icon-mauve: #594c5b;
+  --identity-1: oklch(0.6 0.09 205);
+  --identity-2: oklch(0.58 0.1 285);
+  --identity-3: oklch(0.6 0.1 345);
+  --identity-4: oklch(0.58 0.08 100);
+  --identity-5: oklch(0.6 0.09 180);
+  --identity-6: oklch(0.58 0.1 315);
   /* shadcn neutral LIGHT (opt-in 由 ThemeProvider apply class="light") */
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -740,35 +754,6 @@
   --status-done-bg: color-mix(in oklab, var(--done) 14%, transparent);
   --status-done-fg: color-mix(in oklab, var(--done) 82%, var(--foreground));
   --status-done-border: color-mix(in oklab, var(--done) 24%, transparent);
-}
-
-/*
- * Mermaid kind/tone cards: always the light pastel status wash + dark ink,
- * even when app chrome is dark. Ant dark solids (#162312) make meta
- * (muted-foreground) fail contrast; bright chips on the canvas match
- * light-theme kind color. Neutral `bg-card` nodes are not tagged and keep
- * theme foreground. Hex literals are the :root.light status map tokens.
- */
-[data-slot="mermaid-node"][data-mermaid-wash="pastel"] {
-  --foreground: oklch(0.145 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --muted-foreground: oklch(0.42 0 0);
-  --done: #7e22ce;
-  --status-info-bg: #e6f4ff;
-  --status-info-fg: #0958d9;
-  --status-info-border: #91caff;
-  --status-success-bg: #f6ffed;
-  --status-success-fg: #237804;
-  --status-success-border: #b7eb8f;
-  --status-warning-bg: #fffbe6;
-  --status-warning-fg: #874d00;
-  --status-warning-border: #ffe58f;
-  --status-danger-bg: #fff2f0;
-  --status-danger-fg: #cf1322;
-  --status-danger-border: #ffccc7;
-  --status-done-bg: color-mix(in oklab, var(--done) 14%, white);
-  --status-done-fg: color-mix(in oklab, var(--done) 82%, var(--foreground));
-  --status-done-border: color-mix(in oklab, var(--done) 24%, white);
 }
 
 :root:not(.light) {
@@ -1489,6 +1474,71 @@ body {
 .dockview-theme-pier .dv-tab-ghost-drag::after,
 .dv-tab-ghost-drag::after {
   outline: none !important;
+}
+
+/* WorkflowDiagram: Archify paint recipe — glow the hot card, flow the hot edge. */
+@keyframes pier-workflow-flow {
+  0% {
+    opacity: 0.18;
+    stroke-dashoffset: 0;
+  }
+  10%,
+  76% {
+    opacity: 0.98;
+  }
+  100% {
+    opacity: 0;
+    stroke-dashoffset: -1;
+  }
+}
+
+.pier-workflow-edge-flow {
+  animation: pier-workflow-flow 1.2s linear infinite;
+  stroke-dasharray: 0.085 0.915;
+}
+
+[data-slot="workflow-node"],
+[data-slot="workflow-edge"],
+[data-slot="workflow-edge-label"] {
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+
+[data-slot="workflow-node"][data-workflow-state="hot"] {
+  filter: drop-shadow(
+    0 0 7px color-mix(in srgb, var(--status-info-fg) 70%, transparent)
+  );
+}
+
+[data-slot="artboard"][data-screen-flow-state="hot"] [data-slot="artboard-frame"] {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--status-info-fg) 55%, transparent),
+    0 0 8px color-mix(in srgb, var(--status-info-fg) 22%, transparent);
+}
+
+[data-slot="screen-flow-start"] {
+  background: var(--background);
+  border: 1px solid var(--status-info-fg);
+  border-radius: 6px;
+  color: var(--status-info-fg);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  pointer-events: none;
+  position: absolute;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pier-workflow-edge-flow {
+    animation: none;
+    stroke-dasharray: none;
+  }
+
+  [data-slot="workflow-node"],
+  [data-slot="workflow-edge"],
+  [data-slot="workflow-edge-label"] {
+    transition: none;
+  }
 }
 
 /*

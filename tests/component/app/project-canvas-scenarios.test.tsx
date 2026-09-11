@@ -1,6 +1,12 @@
 import { parsePierCanvasMeta } from "@shared/contracts/pier-canvas.ts";
 import { PIER_CANVAS_EXPORT_NAMES } from "@shared/pier-canvas-export-names.ts";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import type { ComponentType } from "react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -34,6 +40,7 @@ const IN_REPO_REACT_CANVASES = [
   "mobile-web-shell/mobile-web-shell.canvas.tsx",
   "pier-cli-user-manual/pier-cli-user-manual.canvas.tsx",
   "smoke/hello.canvas.tsx",
+  "workbench-sidebar-review/workbench-sidebar-review.canvas.tsx",
 ] as const;
 
 describe("project canvases render", () => {
@@ -86,7 +93,7 @@ describe("project canvases render", () => {
     render(<Canvas />);
     expect(screen.getByText("对准二维码")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "停止扫码" }));
-    expect(screen.getByText("取景框")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "开始扫码" })).not.toBeNull();
   });
 
   it("pushes the session overlay from the mobile-web-shell prototype", () => {
@@ -103,15 +110,21 @@ describe("project canvases render", () => {
       );
     }
     render(<Canvas />);
-    const desk = screen.getAllByRole("button", { name: /办公桌 Mac mini/ })[0];
-    const tree = screen.getAllByRole("button", { name: /feat-mobile/ })[0];
-    if (!(desk && tree)) {
+    const prototype = document.querySelector(
+      "[data-pier-comment-id='mobile-web-prototype']"
+    );
+    if (!(prototype instanceof HTMLElement)) {
+      throw new Error("mobile-web-shell prototype phone is missing");
+    }
+    const desk = within(prototype).getAllByRole("button", {
+      name: /办公桌 Mac mini/,
+    })[0];
+    if (!desk) {
       throw new Error("mobile-web-shell host buttons are missing");
     }
     fireEvent.click(desk);
-    fireEvent.click(tree);
     expect(
-      document.querySelector("[data-slot='mobile-slide-overlay']")
+      prototype.querySelector("[data-slot='mobile-slide-overlay']")
     ).not.toBeNull();
   });
 

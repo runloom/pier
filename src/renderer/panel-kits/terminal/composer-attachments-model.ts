@@ -7,7 +7,7 @@ export type ComposerAttachmentPasteTier = "medium" | "large";
 export interface ComposerAttachment {
   id: string;
   /** Directory attachment (folder). */
-  isDirectory?: boolean;
+  isDirectory?: boolean | undefined;
   kind: "image" | "file" | "paste";
   name: string;
   /**
@@ -15,8 +15,8 @@ export interface ComposerAttachment {
    * Source of truth for medium expand + edit dialog; disk is kept in sync on save
    * (large path semantics for agents still use `path`).
    */
-  pasteContent?: string;
-  pasteTier?: ComposerAttachmentPasteTier;
+  pasteContent?: string | undefined;
+  pasteTier?: ComposerAttachmentPasteTier | undefined;
   path: string;
   /** Image thumbnail data URL from main; file attachments omit this. */
   previewDataUrl?: string | undefined;

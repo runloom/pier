@@ -52,6 +52,8 @@ const reviewTreeItemMetadataSchema = z.object({
   discardTrackedPaths: z.array(z.string().min(1)).default([]),
   discardUntrackedPaths: z.array(z.string().min(1)).default([]),
   stagePaths: z.array(z.string().min(1)).default([]),
+  copyPaths: z.array(z.string().min(1)).default([]),
+  selectedPaths: z.array(z.string().min(1)).default([]),
   unstagePaths: z.array(z.string().min(1)).default([]),
   unstagedStatus: z
     .enum(["added", "conflicted", "deleted", "modified", "renamed"])
@@ -85,6 +87,15 @@ export function parseGitReviewTreeItemMetadata(
   return parsed.success ? parsed.data : null;
 }
 
+/** Command 多选：点在 L-Select 集内。点在集外是 Inspect，按单行。 */
+export function isReviewTreeItemMultiSelection(
+  item: Pick<GitReviewTreeItemMetadata, "path" | "selectedPaths">
+): boolean {
+  return (
+    item.selectedPaths.length > 1 && item.selectedPaths.includes(item.path)
+  );
+}
+
 export function basename(path: string): string {
   const segments = path.split("/").filter(Boolean);
   return segments.at(-1) ?? path;
@@ -104,6 +115,7 @@ export function panelContextFromReviewItem(
 export function canStage(item: GitReviewTreeItemMetadata | null): boolean {
   if (!isMutableReviewItem(item)) return false;
   if (item.stagePaths.length > 0) return true;
+  if (isReviewTreeItemMultiSelection(item)) return false;
   return (
     item.kind === "file" && (item.hasUnstaged || item.hasConflict === true)
   );
@@ -112,6 +124,7 @@ export function canStage(item: GitReviewTreeItemMetadata | null): boolean {
 export function canUnstage(item: GitReviewTreeItemMetadata | null): boolean {
   if (!isMutableReviewItem(item)) return false;
   if (item.unstagePaths.length > 0) return true;
+  if (isReviewTreeItemMultiSelection(item)) return false;
   return item.kind === "file" && item.hasStaged;
 }
 
@@ -125,6 +138,7 @@ export function canDiscard(item: GitReviewTreeItemMetadata | null): boolean {
   ) {
     return true;
   }
+  if (isReviewTreeItemMultiSelection(item)) return false;
   return (
     item.kind === "file" &&
     item.hasUnstaged &&

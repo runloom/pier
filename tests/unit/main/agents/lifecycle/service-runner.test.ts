@@ -88,6 +88,7 @@ describe("agent lifecycle service + runner", () => {
     const second = await service.run("codex", "install");
     expect(second.ok).toBe(false);
     expect(second.errorCode).toBe("busy");
+    expect(second.hostNode).toBeUndefined();
     release();
     const firstResult = await first;
     expect(firstResult.errorCode).not.toBe("busy");
@@ -163,6 +164,7 @@ describe("agent lifecycle service + runner", () => {
     const result = await service.run("gemini", "install");
     expect(result.errorCode).toBe("timeout");
     expect(result.errorDetail).toBeUndefined();
+    expect(result.hostNode).toBeUndefined();
   });
 
   it("maps package_manager_missing from runner", async () => {
@@ -180,6 +182,49 @@ describe("agent lifecycle service + runner", () => {
     const result = await service.run("gemini", "install");
     expect(result.skipped).not.toBe(true);
     expect(result.errorCode).toBe("package_manager_missing");
+  });
+
+  it("attaches host Node to runtime-shaped failures", async () => {
+    const spawnEnv = { PATH: "/nvm/bin", Path: "/nvm/bin" };
+    const seen: Array<NodeJS.ProcessEnv | undefined> = [];
+    const service = createAgentLifecycleService({
+      getEnv: async () => spawnEnv,
+      getHostNodeRuntime: async (env) => {
+        seen.push(env);
+        return {
+          path: "/nvm/bin/node",
+          version: "v24.16.0",
+        };
+      },
+      runner: fakeRunner({
+        ok: false,
+        code: 1,
+        stderr: "npm error EBADPLATFORM",
+      }),
+    });
+    const result = await service.run("gemini", "install");
+    expect(result.errorCode).toBe("command_failed");
+    expect(result.hostNode).toEqual({
+      path: "/nvm/bin/node",
+      version: "v24.16.0",
+    });
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((env) => env?.PATH === "/nvm/bin")).toBe(true);
+  });
+
+  it("resolves env and runs children in the request project root", async () => {
+    const getEnv = vi.fn(async () => ({
+      PATH: "/no-such-bin",
+      Path: "/no-such-bin",
+    }));
+    const runner = fakeRunner();
+    const service = createAgentLifecycleService({ getEnv, runner });
+    await service.run("gemini", "install", { projectRootPath: "/repo" });
+    expect(getEnv).toHaveBeenCalledWith({ projectRootPath: "/repo" });
+    expect(runner.run).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ cwd: "/repo" })
+    );
   });
 
   it("returns env_unavailable when getEnv throws", async () => {

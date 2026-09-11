@@ -18,7 +18,6 @@ import {
   type FakeTerminalBackend,
 } from "@main/services/runtime-control/fake-backend.ts";
 import { createRuntimeControlService } from "@main/services/runtime-control/service.ts";
-import { agentsStartRetryDetailsSchema } from "@shared/contracts/local-control/agents-runtime.ts";
 import { LOCAL_CONTROL_API_VERSION } from "@shared/contracts/local-control/errors.ts";
 import { describe, expect, it } from "vitest";
 
@@ -303,26 +302,20 @@ describe("local-control agents runtime ops", () => {
     );
   });
 
-  it("undeliverable prompt rolls back with retry details", async () => {
+  it("preserves the native panel when no initial paste transport is available", async () => {
     const backend = createFakeTerminalBackend();
-    backend.deliverInitialPrompt = async () => false;
+    backend.sendText = async () => {
+      throw new Error("no startup paste allowed");
+    };
     const { created, frames } = makeSession({ backend });
-    const res = (await startOnce(created, frames, "r1", "s1", {
+    const result = await startOnce(created, frames, "r1", "s1", {
       agentId: "codex",
       origin: { panelId: "panel_parent", windowId: "win_parent" },
       promptText: "hi",
-    })) as {
-      ok?: boolean;
-      error?: { code?: string; details?: unknown };
-      data?: { panelId?: string };
-    };
-    expect(res?.ok).toBe(false);
-    expect(res?.error?.code).toBe("prompt_undeliverable");
-    expect(
-      agentsStartRetryDetailsSchema.safeParse(res?.error?.details).success
-    ).toBe(true);
-    const panels = [...backend.panels.values()];
-    expect(panels.every((p) => p.closed)).toBe(true);
+    });
+    expect(result?.ok).toBe(true);
+    expect([...backend.panels.values()]).toHaveLength(1);
+    expect([...backend.panels.values()][0]?.closed).toBe(false);
   });
 
   it("fifth concurrent child start hits quota_exceeded", async () => {

@@ -74,7 +74,7 @@ export function ChangesScreen(props: {
     }
     const timer = setTimeout(() => {
       setRefreshing(false);
-      setFreshAt("刚刚");
+      setFreshAt("刚刚刷新");
     }, REFRESH_MS);
     return () => {
       clearTimeout(timer);
@@ -82,10 +82,18 @@ export function ChangesScreen(props: {
   }, [refreshing]);
 
   const summary = changesSummary(props.repo.changes);
-  const current =
+  const currentIndex =
     selected === null
-      ? null
-      : (props.repo.changes.find((change) => change.path === selected) ?? null);
+      ? -1
+      : props.repo.changes.findIndex((change) => change.path === selected);
+  const current =
+    currentIndex < 0 ? null : (props.repo.changes[currentIndex] ?? null);
+  const prevChange =
+    currentIndex > 0 ? (props.repo.changes[currentIndex - 1] ?? null) : null;
+  const nextChange =
+    currentIndex >= 0
+      ? (props.repo.changes[currentIndex + 1] ?? null)
+      : null;
 
   const viewing = current !== null;
   return (
@@ -96,13 +104,12 @@ export function ChangesScreen(props: {
             current === null
               ? { label: props.backLabel, onClick: props.onBack }
               : {
-                  label: "变更",
+                  label: "文件列表",
                   onClick: () => {
                     setSelected(null);
                   },
                 }
           }
-          backIconOnly
           ghost={viewing}
           layout="split"
           subtitle={
@@ -124,6 +131,9 @@ export function ChangesScreen(props: {
                 </span>
                 {" · "}
                 <Delta added={current.added} removed={current.removed} />
+                {parentPath(current.path) === ""
+                  ? null
+                  : ` · ${parentPath(current.path)}`}
               </span>
             )
           }
@@ -138,7 +148,26 @@ export function ChangesScreen(props: {
                 }}
                 spinning={refreshing}
               />
-            ) : undefined
+            ) : (
+              <span className="flex items-center">
+                <IconButton
+                  disabled={prevChange === null}
+                  icon="chevron-left"
+                  label="上一文件"
+                  onClick={() => {
+                    if (prevChange !== null) setSelected(prevChange.path);
+                  }}
+                />
+                <IconButton
+                  disabled={nextChange === null}
+                  icon="chevron-right"
+                  label="下一文件"
+                  onClick={() => {
+                    if (nextChange !== null) setSelected(nextChange.path);
+                  }}
+                />
+              </span>
+            )
           }
         />
       }
@@ -267,7 +296,6 @@ export function FilesScreen(props: {
       nav={
         <NavBar
           back={back}
-          backIconOnly
           ghost
           layout="split"
           title={file === null && atRoot ? "文件" : title}
@@ -310,11 +338,11 @@ export function FilesScreen(props: {
                     className="size-4 shrink-0 text-muted-foreground"
                     name="chevron-right"
                   />
-                ) : (
+                ) : entry.name.includes(".") ? (
                   <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
                     {entry.name.split(".").pop()?.toUpperCase()}
                   </span>
-                )}
+                ) : null}
               </button>
             );
           })}
@@ -323,13 +351,15 @@ export function FilesScreen(props: {
           ) : null}
         </div>
       ) : (
-        <FilePreview text={fileText(props.repo, file)} />
+        <FilePreview name={file} text={fileText(props.repo, file)} />
       )}
     </PhoneShell>
   );
 }
 
-function FilePreview(props: { text: string }): ReactNode {
+function FilePreview(props: { name: string; text: string }): ReactNode {
+  // Markdown 不是代码：# 是标题不是注释，整份文档按纯文本排版。
+  const plain = /\.(md|markdown|mdx)$/i.test(props.name);
   const lines = props.text.replace(/\n$/, "").split("\n");
   return (
     <div className="min-h-0 flex-1 overflow-auto px-3 pt-4 pb-8 font-mono text-[13px] leading-5 [scrollbar-width:thin]">
@@ -342,7 +372,7 @@ function FilePreview(props: { text: string }): ReactNode {
             {index + 1}
           </span>
           <span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
-            {line.length === 0 ? " " : tintCodeLine(line)}
+            {line.length === 0 ? " " : plain ? line : tintCodeLine(line)}
           </span>
         </div>
       ))}

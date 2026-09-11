@@ -290,6 +290,7 @@ function services(
     },
     processEnvironment: {
       getHostDiagnostics: () => undefined,
+      hostNodeRuntime: async () => null,
       invalidate: async () => undefined,
       recordHostDiagnostics: () => undefined,
       resolve: resolveEnvironment,
@@ -381,6 +382,7 @@ function services(
     tasks: createTaskService({
       processEnvironment: {
         getHostDiagnostics: () => undefined,
+        hostNodeRuntime: async () => null,
         invalidate: async () => undefined,
         recordHostDiagnostics: () => undefined,
         resolve: resolveEnvironment,

@@ -139,6 +139,8 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("terminal.open"),
+      /** Initial task, handed to native interactive launch or saved as a draft. */
+      initialInput: z.string().max(69_632).optional(),
       focus: z.boolean().optional(),
       launch: terminalLaunchOptionsSchema.optional(),
       /** 后台创建：跳过可见性门控，挂载即建面（agents.start 委派路径）。 */

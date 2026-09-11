@@ -50,7 +50,7 @@ describe("useTerminalEndStateTab EndState lifecycle", () => {
     resetTerminalEndStateStoreForTests();
   });
 
-  it("clears EndState on non-agent → agent rising edge (agent revive)", () => {
+  it("preserves physical exit when delayed activity rises back to agent", () => {
     const panelId = "terminal-revive-end";
     act(() => {
       useTerminalEndStateStore.getState().upsertAgentEnd({
@@ -68,7 +68,7 @@ describe("useTerminalEndStateTab EndState lifecycle", () => {
       rerender({ activity: agentActivity(panelId) });
     });
 
-    expect(terminalEndStateForPanel(panelId)).toBeUndefined();
+    expect(terminalEndStateForPanel(panelId)).toBeDefined();
   });
 
   it("does not clear EndState while FA stays agent during exit race", () => {
@@ -97,7 +97,7 @@ describe("useTerminalEndStateTab EndState lifecycle", () => {
     expect(terminalEndStateForPanel(panelId)).toBeDefined();
   });
 
-  it("clears EndState on mount when already live agent (stale result)", () => {
+  it("preserves physical exit on remount despite stale agent activity", () => {
     const panelId = "terminal-mount-live";
     act(() => {
       useTerminalEndStateStore.getState().upsertAgentEnd({
@@ -109,6 +109,6 @@ describe("useTerminalEndStateTab EndState lifecycle", () => {
 
     renderEndStateTab(panelId, agentActivity(panelId));
 
-    expect(terminalEndStateForPanel(panelId)).toBeUndefined();
+    expect(terminalEndStateForPanel(panelId)).toBeDefined();
   });
 });

@@ -108,6 +108,8 @@ export const settingsMaterials = {
     edges: "フロー／構成の辺。",
     mermaidSource:
       "ネイティブ mermaid テキスト。シーケンス、状態、クラス、ER、マインドマップに使います。",
+    workflowSpec: "レーン、手順、線、主経路。ピクセルや色は書きません。",
+    screenFlowSpec: "アートボード id、線、主経路。ピクセルや色は書きません。",
     renderNodeContent:
       "タイトルの下の表示。そのノードは contentHeight を設定する必要があります。",
     sortableItems: "表示順の項目 id。",
@@ -200,6 +202,8 @@ export const settingsMaterials = {
     DataChart: "推移と比較",
     Mermaid:
       "ノードからフローを描き、ネイティブ mermaid のシーケンス、状態、クラス、ER、マインドマップも使えます。",
+    WorkflowDiagram: "レーンと手順で操作の流れを描く",
+    ScreenFlow: "画面間のユーザー経路",
     canvasFile: "キャンバス隣のファイル用サンドボックス。競合も含みます",
     activityOverview: "誰が動き、誰に助けが必要か、ひと目でわかる",
     costOverview: "プラグイン横断のトークンコスト集計",

@@ -273,7 +273,10 @@ export function defaultDismissModeForExitRole(
 
 /** Ghostty child-exited → renderer（仅元数据；文案在 renderer 拼） */
 export interface TerminalChildExitedEvent {
+  endReason?: "exited" | "stopped" | undefined;
   exitCode: number;
+  generation?: number | undefined;
+  lifecycleId?: string | undefined;
   panelId: string;
   runtimeMs: number;
 }

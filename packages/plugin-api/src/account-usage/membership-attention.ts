@@ -4,6 +4,17 @@ const MEMBERSHIP_ATTENTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type AccountMetadataBadgeMode = "all" | "attention" | "hidden" | "tier";
 
+/** Paid access has already ended, even if the vendor still labels the SKU. */
+export function membershipIsExpired(
+  membership: AccountMembershipSnapshot | undefined,
+  now = Date.now()
+): boolean {
+  if (!membership) return false;
+  if (membership.status === "expired") return true;
+  if (membership.status === "free") return false;
+  return membership.expiresAt !== undefined && membership.expiresAt <= now;
+}
+
 /**
  * True when the *period* (expiry / trial end) itself needs visual emphasis.
  *
@@ -18,7 +29,10 @@ export function membershipPeriodNeedsAttention(
   now = Date.now()
 ): boolean {
   if (!membership) return false;
-  if (membership.status === "expired" || membership.status === "canceled") {
+  if (
+    membershipIsExpired(membership, now) ||
+    membership.status === "canceled"
+  ) {
     return true;
   }
   const attentionBefore = now + MEMBERSHIP_ATTENTION_WINDOW_MS;

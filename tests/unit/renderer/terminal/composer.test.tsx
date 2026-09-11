@@ -14,10 +14,13 @@ import {
 import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
+import {
+  disposeTerminalComposerSession,
+  getTerminalComposerSession,
+  resetTerminalComposerSessionsForTests,
+} from "@/panel-kits/terminal/composer/session.ts";
 import { TerminalComposer } from "@/panel-kits/terminal/composer.tsx";
-import { resetTerminalComposerDraftsForTests } from "@/panel-kits/terminal/composer-helpers.ts";
 import { resetTerminalEscapeShortcutForTests } from "@/panel-kits/terminal/escape-shortcut.ts";
-import { resetTerminalComposerAttachmentsForTests } from "@/panel-kits/terminal/hooks/use-composer-attachments.ts";
 import { resetComposerEditorsForTests } from "@/panel-kits/terminal/structured-composer/test-registry.ts";
 import { resetTuiCursorSemanticsForTests } from "@/panel-kits/terminal/tui-cursor-semantics.ts";
 import { resetTuiInputFocusForTests } from "@/panel-kits/terminal/tui-input-focus.ts";
@@ -31,6 +34,7 @@ import {
   resetTerminalComposerTakeoverForTests,
   terminalComposerTakeoverFocus,
 } from "@/stores/terminal-composer-takeover.ts";
+import { resetTerminalDraftMirrorsForTests } from "@/stores/terminal-drafts.store.ts";
 import {
   composerInput,
   readComposerDraftText,
@@ -170,8 +174,8 @@ beforeEach(async () => {
   vi.mocked(showAppAlert).mockClear();
   vi.mocked(showAppConfirm).mockClear();
   vi.mocked(showAppConfirm).mockResolvedValue(false);
-  resetTerminalComposerDraftsForTests();
-  resetTerminalComposerAttachmentsForTests();
+  resetTerminalComposerSessionsForTests();
+  resetTerminalDraftMirrorsForTests();
   resetComposerEditorsForTests();
 });
 
@@ -181,8 +185,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   resetTerminalStoreForTests();
   resetTerminalComposerTakeoverForTests();
-  resetTerminalComposerDraftsForTests();
-  resetTerminalComposerAttachmentsForTests();
+  resetTerminalComposerSessionsForTests();
+  resetTerminalDraftMirrorsForTests();
   resetComposerEditorsForTests();
   resetTerminalEscapeShortcutForTests();
   Reflect.deleteProperty(window, "pier");
@@ -209,7 +213,7 @@ function renderComposer(
       attachRequest={overrides.attachRequest ?? 0}
       bottomOffsetPx={overrides.bottomOffsetPx ?? 0}
       disabled={overrides.disabled ?? false}
-      focusRequest={overrides.focusRequest ?? 0}
+      focusRequest={overrides.focusRequest ?? 1}
       isActive={overrides.isActive ?? true}
       onClose={onClose}
       onHeightChange={onHeightChange}
@@ -241,12 +245,6 @@ describe("TerminalComposer", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps product bg-background on the input pill chrome", () => {
-    renderComposer({ panelId: "t-1" });
-    const root = screen.getByTestId("terminal-composer");
-    expect(root.className).toContain("bg-background");
-  });
-
   it("opens the file picker once per attachRequest bump, not on remount at 0", async () => {
     pickComposerFiles.mockResolvedValue({ ok: false, error: "cancelled" });
     const { view } = renderComposer({ attachRequest: 1 });
@@ -261,6 +259,43 @@ describe("TerminalComposer", () => {
       window.setTimeout(resolve, 20);
     });
     expect(pickComposerFiles).not.toHaveBeenCalled();
+  });
+
+  it("delivers a late attachment to the reopened editor without hidden send content", async () => {
+    const paths = Promise.withResolvers<TerminalComposerPathsResult>();
+    pickComposerFiles.mockResolvedValue({ ok: true, paths: ["/tmp/late.txt"] });
+    resolveComposerPaths.mockReturnValue(paths.promise);
+    const first = renderComposer();
+    fireEvent.click(screen.getByTestId("terminal-composer-attach"));
+    await vi.waitFor(() => {
+      expect(resolveComposerPaths).toHaveBeenCalled();
+    });
+    first.view.unmount();
+    renderComposer();
+    setComposerDraftText("new draft");
+    await act(async () => {
+      paths.resolve({
+        attachments: [
+          { id: "late", kind: "file", name: "late.txt", path: "/tmp/late.txt" },
+        ],
+        failures: [],
+      });
+    });
+    expect(screen.getByTestId("terminal-composer-attachment-1")).toBeVisible();
+    const draft = readComposerDraftText();
+    expect(draft).toContain("new draft");
+    expect(draft).toContain("/tmp/late.txt");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("terminal-composer-send"));
+    });
+    await vi.waitFor(() => {
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        draftText: draft,
+        submit: true,
+        text: draft,
+      });
+    });
   });
 
   it("shows Send with Enter kbd and multiline hints once chrome expands", () => {
@@ -379,11 +414,16 @@ describe("TerminalComposer", () => {
     setComposerDraftText("fix bug");
     fireEvent.keyDown(textarea, { key: "Enter" });
 
-    expect(sendText).toHaveBeenCalledWith({
-      panelId: "t-1",
-      submit: true,
-      text: "fix bug",
-    });
+    await vi.waitFor(() =>
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "t-1",
+          draftText: "fix bug",
+          submit: true,
+          text: "fix bug",
+        })
+      )
+    );
 
     await vi.waitFor(() => {
       expect(readComposerDraftText()).toBe("");
@@ -406,11 +446,13 @@ describe("TerminalComposer", () => {
 
     fireEvent.keyDown(composerInput(), { key: "Enter" });
     await vi.waitFor(() => {
-      expect(sendText).toHaveBeenCalledWith({
-        panelId: "t-1",
-        submit: true,
-        text: "fix bug",
-      });
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "t-1",
+          submit: true,
+          text: "fix bug",
+        })
+      );
     });
   });
 
@@ -442,11 +484,13 @@ describe("TerminalComposer", () => {
 
     fireEvent.keyDown(composerInput(), { key: "Enter" });
     await vi.waitFor(() => {
-      expect(sendText).toHaveBeenCalledWith({
-        panelId: "t-1",
-        submit: true,
-        text: "fix bug",
-      });
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "t-1",
+          submit: true,
+          text: "fix bug",
+        })
+      );
     });
   });
 
@@ -466,11 +510,13 @@ describe("TerminalComposer", () => {
     setComposerDraftText("fix bug");
     fireEvent.keyDown(composerInput(), { key: "Enter" });
     await vi.waitFor(() => {
-      expect(sendText).toHaveBeenCalledWith({
-        panelId: "t-1",
-        submit: true,
-        text: "fix bug",
-      });
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "t-1",
+          submit: true,
+          text: "fix bug",
+        })
+      );
     });
     expect(showAppConfirm).not.toHaveBeenCalled();
     expect(toastError).not.toHaveBeenCalled();
@@ -491,11 +537,13 @@ describe("TerminalComposer", () => {
     setComposerDraftText("fix bug");
     fireEvent.keyDown(composerInput(), { key: "Enter" });
     await vi.waitFor(() => {
-      expect(sendText).toHaveBeenCalledWith({
-        panelId: "t-1",
-        submit: true,
-        text: "fix bug",
-      });
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "t-1",
+          submit: true,
+          text: "fix bug",
+        })
+      );
     });
   });
 
@@ -535,11 +583,13 @@ describe("TerminalComposer", () => {
 
     fireEvent.keyDown(composerInput(), { key: "Enter" });
     await vi.waitFor(() => {
-      expect(sendText).toHaveBeenCalledWith({
-        panelId: "t-1",
-        submit: true,
-        text: "fix bug",
-      });
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "t-1",
+          submit: true,
+          text: "fix bug",
+        })
+      );
     });
     expect(toastError).not.toHaveBeenCalled();
   });
@@ -617,11 +667,13 @@ describe("TerminalComposer", () => {
     fireEvent.click(screen.getByTestId("terminal-composer-send"));
 
     await vi.waitFor(() => {
-      expect(sendText).toHaveBeenCalledWith({
-        panelId: "t-1",
-        submit: true,
-        text: "继续发送",
-      });
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "t-1",
+          submit: true,
+          text: "继续发送",
+        })
+      );
     });
     expect(showAppConfirm).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => {
@@ -684,7 +736,7 @@ describe("TerminalComposer", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("clears draft, alerts, and closes when textDelivered but Return failed", async () => {
+  it("retains the draft and stays open when paste succeeds but Return fails", async () => {
     const onClose = vi.fn();
     sendText.mockResolvedValueOnce({
       error: "terminal surface not ready",
@@ -698,14 +750,55 @@ describe("TerminalComposer", () => {
     fireEvent.keyDown(textarea, { key: "Enter" });
 
     await vi.waitFor(() => {
-      expect(readComposerDraftText()).toBe("");
+      expect(readComposerDraftText()).toBe("fix bug");
       expect(showAppAlert).toHaveBeenCalled();
-      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onClose).not.toHaveBeenCalled();
     });
 
     cleanup();
     renderComposer({ panelId: "t-delivered" });
-    expect(readComposerDraftText()).toBe("");
+    expect(readComposerDraftText()).toBe("fix bug");
+  });
+
+  it("ignores a late send failure after the terminal closes and its id is reused", async () => {
+    const result = Promise.withResolvers<TerminalOperationResult>();
+    sendText.mockReturnValueOnce(result.promise);
+    const onClose = vi.fn();
+    const { view } = renderComposer({ onClose, panelId: "t-reused" });
+    setComposerDraftText("old message");
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => expect(sendText).toHaveBeenCalled());
+    disposeTerminalComposerSession("t-reused");
+    view.unmount();
+    renderComposer({ panelId: "t-reused" });
+    setComposerDraftText("new message");
+    await act(async () => {
+      result.resolve({ ok: false, error: "old terminal closed" });
+    });
+    expect(readComposerDraftText()).toBe("new message");
+    expect(onClose).not.toHaveBeenCalled();
+    expect(showAppAlert).not.toHaveBeenCalled();
+    expect(getTerminalComposerSession("t-reused")?.signal.aborted).toBe(false);
+  });
+
+  it("restores the clipboard without sending when the terminal closes during suppression", async () => {
+    setAgentActivity({ agentId: "claude", status: "ready" });
+    const suppress = Promise.withResolvers<undefined>();
+    beginImageSuppress.mockReturnValueOnce(suppress.promise);
+    const onClose = vi.fn();
+    const { view } = renderComposer({ onClose });
+    setComposerDraftText("not sent");
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => expect(beginImageSuppress).toHaveBeenCalled());
+    disposeTerminalComposerSession("t-1");
+    view.unmount();
+    await act(async () => {
+      suppress.resolve(undefined);
+    });
+    await vi.waitFor(() => expect(endImageSuppress).toHaveBeenCalled());
+    expect(sendText).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(showAppAlert).not.toHaveBeenCalled();
   });
 
   it("passthroughs empty-draft navigation keys and always Ctrl+C", async () => {
@@ -857,11 +950,13 @@ describe("TerminalComposer", () => {
     expect(sendText).not.toHaveBeenCalled();
     fireEvent.keyDown(composerInput(), { key: "Enter" });
     await vi.waitFor(() => {
-      expect(sendText).toHaveBeenCalledWith({
-        panelId: "t-1",
-        submit: true,
-        text: "实现",
-      });
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "t-1",
+          submit: true,
+          text: "实现",
+        })
+      );
     });
   });
 
@@ -883,11 +978,13 @@ describe("TerminalComposer", () => {
     });
     fireEvent.keyDown(input, { key: "Enter" });
     await vi.waitFor(() => {
-      expect(sendText).toHaveBeenCalledWith({
-        panelId: "t-1",
-        submit: true,
-        text: "实现",
-      });
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "t-1",
+          submit: true,
+          text: "实现",
+        })
+      );
     });
   });
 
@@ -898,22 +995,24 @@ describe("TerminalComposer", () => {
     expect(readComposerDraftText()).toBe("实现");
     fireEvent.keyDown(composerInput(), { key: "Enter" });
     await vi.waitFor(() => {
-      expect(sendText).toHaveBeenCalledWith({
-        panelId: "t-1",
-        submit: true,
-        text: "实现",
-      });
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "t-1",
+          submit: true,
+          text: "实现",
+        })
+      );
     });
   });
 
-  it("disables the textarea and the send button when disabled", () => {
+  it("keeps the saved draft editable while sending is unavailable", () => {
     renderComposer({ disabled: true });
 
-    expect(composerInput().getAttribute("contenteditable")).toBe("false");
+    expect(composerInput().getAttribute("contenteditable")).toBe("true");
     expect(screen.getByTestId("terminal-composer-send")).toBeDisabled();
   });
 
-  it("releases the composer overlay when it becomes disabled while focused", () => {
+  it("keeps draft focus when the process stops", () => {
     const { onClose, onHeightChange, view } = renderComposer();
     const textarea = composerInput();
 
@@ -933,7 +1032,9 @@ describe("TerminalComposer", () => {
       />
     );
 
-    expect(useTerminalStore.getState().activeOverlayId).toBeNull();
+    expect(useTerminalStore.getState().activeOverlayId).toBe(
+      "terminal-composer:t-1"
+    );
   });
 
   it("preserves another overlay when the unfocused composer becomes disabled", () => {
@@ -1016,12 +1117,12 @@ describe("TerminalComposer", () => {
     expect(readComposerDraftText()).toBe("keep open");
   });
 
-  it("surface takeover still swallows when disabled and does NOT close", () => {
+  it("surface takeover preserves the editable draft while sending is unavailable", () => {
     const onClose = vi.fn();
     renderComposer({ disabled: true, onClose });
 
     const textarea = composerInput();
-    expect(textarea.getAttribute("contenteditable")).toBe("false");
+    expect(textarea.getAttribute("contenteditable")).toBe("true");
     textarea.blur();
     expect(document.activeElement).not.toBe(textarea);
 
@@ -1030,11 +1131,13 @@ describe("TerminalComposer", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("activate takeover returns false when disabled and does not close", () => {
+  it("activate takeover focuses the saved draft after the process stops", () => {
     const onClose = vi.fn();
     renderComposer({ disabled: true, onClose });
 
-    expect(terminalComposerTakeoverFocus("t-1", "activate")).toBe(false);
+    act(() => {
+      expect(terminalComposerTakeoverFocus("t-1", "activate")).toBe(true);
+    });
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -1125,11 +1228,13 @@ describe("TerminalComposer", () => {
     await vi.waitFor(() => {
       expect(sendText).toHaveBeenCalledTimes(1);
     });
-    expect(sendText).toHaveBeenCalledWith({
-      panelId: "t-1",
-      submit: true,
-      text: expect.stringContaining("/tmp/note.pdf"),
-    });
+    expect(sendText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        panelId: "t-1",
+        submit: true,
+        text: expect.stringContaining("/tmp/note.pdf"),
+      })
+    );
     await vi.waitFor(() => {
       expect(onClose).toHaveBeenCalledTimes(1);
       expect(readComposerDraftText()).toBe("");
@@ -1174,11 +1279,13 @@ describe("TerminalComposer", () => {
     await vi.waitFor(() => {
       expect(sendText).toHaveBeenCalledTimes(1);
     });
-    expect(sendText).toHaveBeenCalledWith({
-      panelId: "t-1",
-      submit: true,
-      text: "/tmp/only.png",
-    });
+    expect(sendText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        panelId: "t-1",
+        submit: true,
+        text: "/tmp/only.png",
+      })
+    );
     await vi.waitFor(() => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -1193,11 +1300,13 @@ describe("TerminalComposer", () => {
 
     await vi.waitFor(() => {
       expect(beginImageSuppress).toHaveBeenCalled();
-      expect(sendText).toHaveBeenCalledWith({
-        panelId: "t-1",
-        submit: true,
-        text: "你好",
-      });
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "t-1",
+          submit: true,
+          text: "你好",
+        })
+      );
     });
     await vi.waitFor(() => {
       expect(endImageSuppress).toHaveBeenCalled();

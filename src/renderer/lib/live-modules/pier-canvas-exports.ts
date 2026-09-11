@@ -190,7 +190,16 @@ import {
   WorldStage,
 } from "./pier-canvas-artboard.tsx";
 import { DocsShell, Frame, Row, Stack, Text } from "./pier-canvas-layout.ts";
+import {
+  ScreenFlow,
+  validateScreenFlowPaint,
+  validateScreenFlowSpec,
+} from "./pier-canvas-screen-flow.tsx";
 import { pierCanvasVisualizationExports } from "./pier-canvas-visualization-exports.ts";
+import {
+  validateWorkflowSpec,
+  WorkflowDiagram,
+} from "./pier-canvas-workflow.tsx";
 
 /** Host primitives and curated UI exports; keys match `PIER_CANVAS_EXPORT_NAMES`. */
 
@@ -315,6 +324,7 @@ export const pierCanvasExports = {
   RadioGroup,
   RadioGroupItem,
   Row,
+  ScreenFlow,
   ScrollArea,
   ScrollBar,
   Select,
@@ -360,6 +370,10 @@ export const pierCanvasExports = {
   useCanvasFile,
   useCostOverview,
   useSystemResources,
+  validateScreenFlowPaint,
+  validateScreenFlowSpec,
+  validateWorkflowSpec,
+  WorkflowDiagram,
   WorldStage,
 } as const satisfies Record<PierCanvasExportName, unknown>;
 

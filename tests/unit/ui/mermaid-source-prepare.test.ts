@@ -1,3 +1,4 @@
+import { applyFlowchartLook } from "@pier/ui/mermaid/flowchart-look.ts";
 import {
   extractFlowchartEdges,
   isDirectedPath,
@@ -220,9 +221,102 @@ describe("prepareMermaidSource", () => {
     expect(prepared).not.toContain("pier");
     expect(prepared).toContain("flowchart TD");
     expect(prepared).toContain("A --> B");
+    expect(prepared).toContain('"look":"neo"');
   });
 
-  it("keeps sources without directives byte-stable apart from spacing", () => {
-    expect(prepareMermaidSource("graph TD;A-->B")).toBe("graph TD\nA --> B");
+  it("defaults flowcharts to neo look and rounded curve", () => {
+    const prepared = prepareMermaidSource("graph TD;A-->B");
+    expect(prepared).toContain(
+      '%%{init: {"look":"neo","flowchart":{"curve":"rounded"}}}%%'
+    );
+    expect(prepared).toContain("graph TD\nA --> B");
+  });
+
+  it("does not neo-ify sequence diagrams", () => {
+    const prepared = prepareMermaidSource("sequenceDiagram\n  Alice->>Bob: hi");
+    expect(prepared).toContain('"look":"classic"');
+    expect(prepared).not.toContain('"look":"neo"');
+    expect(prepared).toContain("sequenceDiagram");
+  });
+
+  it("merges neo into an existing ELK init without dropping it", () => {
+    const prepared = prepareMermaidSource(
+      '%%{init: {"flowchart": {"defaultRenderer": "elk"}}}%%\nflowchart LR\nA-->B'
+    );
+    expect(prepared).toContain('"defaultRenderer":"elk"');
+    expect(prepared).toContain('"look":"neo"');
+    expect(prepared).toContain('"curve":"rounded"');
+    expect(prepared.match(/%%\{init:/g)?.length).toBe(1);
+  });
+
+  it("does not override an author look", () => {
+    const prepared = prepareMermaidSource(
+      '%%{init: {"look":"handDrawn"}}%%\nflowchart TD\nA-->B'
+    );
+    expect(prepared).toContain('"look":"handDrawn"');
+    expect(prepared).not.toContain('"look":"neo"');
+    expect(prepared).toContain('"curve":"rounded"');
+  });
+
+  it("leaves malformed init alone instead of stacking a second directive", () => {
+    const prepared = prepareMermaidSource(
+      "%%{init: {look: neo,}}%%\nflowchart TD\nA-->B"
+    );
+    expect(prepared.match(/%%\{init:/g)?.length).toBe(1);
+    expect(prepared).toContain("{look: neo,}");
+    expect(prepared).not.toContain('"look":"neo"');
+  });
+
+  it("still defaults a YAML-titled flowchart to neo", () => {
+    const prepared = applyFlowchartLook(
+      "---\ntitle: DAG\n---\nflowchart TD\nA-->B"
+    );
+    expect(prepared.startsWith("---\n")).toBe(true);
+    expect(prepared).toContain('"look":"neo"');
+    expect(prepared).toContain('"curve":"rounded"');
+    expect(prepared.indexOf("%%{init:")).toBeGreaterThan(
+      prepared.indexOf("\n---\n")
+    );
+  });
+
+  it("does not override YAML config.look on a flowchart", () => {
+    const source = [
+      "---",
+      "config:",
+      "  look: handDrawn",
+      "---",
+      "flowchart TD",
+      "A-->B",
+    ].join("\n");
+    const prepared = prepareMermaidSource(source);
+    expect(prepared.startsWith("---\n")).toBe(true);
+    expect(prepared).toContain("look: handDrawn");
+    expect(prepared).not.toContain('"look":"neo"');
+    expect(prepared).toContain('"curve":"rounded"');
+    const fence = prepared.indexOf("\n---\n");
+    const initAt = prepared.indexOf("%%{init:");
+    expect(fence).toBeGreaterThan(0);
+    expect(initAt).toBeGreaterThan(fence);
+    expect(initAt).toBeLessThan(prepared.indexOf("flowchart TD"));
+  });
+
+  it("does not treat YAML flowchart config as the diagram kind", () => {
+    const source = [
+      "---",
+      "config:",
+      "  flowchart:",
+      "    curve: linear",
+      "---",
+      "sequenceDiagram",
+      "  Alice->>Bob: hi",
+    ].join("\n");
+    const prepared = applyFlowchartLook(source);
+    expect(prepared).not.toContain('"look":"neo"');
+    expect(prepared).toContain('"look":"classic"');
+    expect(prepared).toContain("sequenceDiagram");
+    expect(prepared.startsWith("---\n")).toBe(true);
+    expect(prepared).toContain("curve: linear");
+    const fence = prepared.indexOf("\n---\n");
+    expect(prepared.indexOf("%%{init:")).toBeGreaterThan(fence);
   });
 });

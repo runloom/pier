@@ -35,10 +35,12 @@ export function runProcess(
   file: string,
   args: readonly string[],
   options: {
+    /** Project root; omitted → inherit host cwd (unchanged behavior). */
+    cwd?: string | undefined;
     env: NodeJS.ProcessEnv;
-    timeoutMs: number;
     signal?: AbortSignal | undefined;
     shell?: boolean | undefined;
+    timeoutMs: number;
     onPercent?: ((percent: number) => void) | undefined;
   }
 ): Promise<{
@@ -89,6 +91,7 @@ export function runProcess(
       // Class A: caller supplies PES-resolved env; mergeLifecycleChildEnv only
       // forces non-interactive installer flags (does not invent PATH/shell).
       child = spawn(file, [...args], {
+        ...(options.cwd ? { cwd: options.cwd } : {}),
         env: mergeLifecycleChildEnv(options.env),
         windowsHide: true,
         shell: options.shell === true,

@@ -203,7 +203,12 @@ describe("withPierAntigravityHooks", () => {
       const activity = aggregator.snapshot().activities[0];
       statuses.push(activity?.kind === "agent" ? activity.status : undefined);
     }
-    expect(statuses).toEqual(["processing", "processing", undefined, "error"]);
+    expect(statuses).toEqual([
+      "processing",
+      "processing",
+      "processing",
+      "error",
+    ]);
   }, 15_000);
 
   it("幂等：重复安装不产生重复条目", () => {

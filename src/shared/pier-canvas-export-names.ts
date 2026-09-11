@@ -126,6 +126,7 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "RadioGroup",
   "RadioGroupItem",
   "Row",
+  "ScreenFlow",
   "ScrollArea",
   "ScrollBar",
   "Select",
@@ -167,11 +168,12 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "TooltipContent",
   "TooltipProvider",
   "TooltipTrigger",
+  "WorkflowDiagram",
   "WorldStage",
 ] as const;
 
 /**
- * Non-component exports: hooks and format helpers.
+ * Non-component exports: hooks, format helpers, and validate helpers.
  *
  * `useCanvasFile` is the sibling-file sandbox (not the global `file.*` API).
  * Global commands, events, and snapshots live on `pier/host`.
@@ -189,6 +191,9 @@ export const PIER_CANVAS_VALUE_EXPORT_NAMES = [
   "useCanvasFile",
   "useCostOverview",
   "useSystemResources",
+  "validateScreenFlowPaint",
+  "validateScreenFlowSpec",
+  "validateWorkflowSpec",
 ] as const;
 
 export const PIER_CANVAS_EXPORT_NAMES = [

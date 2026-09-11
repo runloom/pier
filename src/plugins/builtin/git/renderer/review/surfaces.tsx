@@ -1,4 +1,3 @@
-import type { GitReviewGroup } from "@shared/contracts/git/review.ts";
 import {
   memo,
   useCallback,
@@ -24,7 +23,6 @@ import {
   GIT_REVIEW_UNCOMMITTED_READING_SURFACES,
   preferredUncommittedReadingSurface,
   reviewGroupForSurface,
-  reviewSurfaceForGroup,
 } from "./surface-group.ts";
 import { GitReviewSurfaceSwitcher } from "./surface-switcher.tsx";
 import type {
@@ -32,11 +30,10 @@ import type {
   ReviewDocumentsProps,
   ReviewSurfaceNavigationRequest,
   ReviewTreeFocus,
-  ReviewTreeOpenReveal,
 } from "./surface-types.ts";
-import { buildActivateNavigationRequest } from "./surface-types.ts";
 import { GitReviewToolbar } from "./toolbar.tsx";
 import { useReviewResponsiveViewOptions } from "./use-responsive-view-options.ts";
+import { useSharedTreeOpen } from "./use-shared-tree-open.ts";
 
 type PendingMutationTransition = GitReviewMutationTransition;
 function ReviewDocumentsComponent(
@@ -106,6 +103,19 @@ function ReviewDocumentsComponent(
   const [selectedTreeSectionKey, setSelectedTreeSectionKey] = useState<
     string | null
   >(null);
+  const { releaseReadingPin, requestTreeOpen } = useSharedTreeOpen({
+    activeSurfaceRef,
+    entries: props.entries,
+    lastNavigationPathRef,
+    navigationNonceRef,
+    navigationRequestRef,
+    setActiveSurface,
+    setMountedSurfaces,
+    setNavigationRequest,
+    setNavigationSeq,
+    setSelectedTreeSectionKey,
+    userPickedSurfaceRef,
+  });
   const [treeFocus, setTreeFocus] = useState<ReviewTreeFocus | null>(null);
   const [activeChrome, setActiveChrome] = useState<ReviewActiveChrome | null>(
     null
@@ -124,6 +134,7 @@ function ReviewDocumentsComponent(
       setMountedSurfaces((current) => addReviewSurface(current, surface));
       setActiveSurface(surface);
       activeSurfaceRef.current = surface;
+      releaseReadingPin();
       if (surface === "committed") {
         return;
       }
@@ -134,42 +145,7 @@ function ReviewDocumentsComponent(
         setTreeFocus((current) => ({ nonce: (current?.nonce ?? 0) + 1, path }));
       }
     },
-    [props.treeModel]
-  );
-  const requestTreeOpen = useCallback(
-    (
-      entryKey: string,
-      sectionKey: string,
-      group: GitReviewGroup,
-      reveal?: ReviewTreeOpenReveal
-    ) => {
-      userPickedSurfaceRef.current = true;
-      setSelectedTreeSectionKey(sectionKey);
-      const surface = reviewSurfaceForGroup(group);
-      lastNavigationPathRef.current =
-        props.entries.find((entry) => entry.entryKey === entryKey)?.path ??
-        lastNavigationPathRef.current;
-      setMountedSurfaces((current) => addReviewSurface(current, surface));
-      // 树跨面点击：立即切面 + 立即可见新面（无旧面 handoff 叠层）。
-      // 切面后由目标面 beginNavigation 做 demand/scroll。
-      if (activeSurfaceRef.current !== surface) {
-        setActiveSurface(surface);
-        activeSurfaceRef.current = surface;
-      }
-      navigationNonceRef.current += 1;
-      const nonce = navigationNonceRef.current;
-      setNavigationSeq(nonce);
-      const request = buildActivateNavigationRequest(
-        nonce,
-        entryKey,
-        sectionKey,
-        surface,
-        reveal
-      );
-      navigationRequestRef.current = request;
-      setNavigationRequest(request);
-    },
-    [props.entries]
+    [props.treeModel, releaseReadingPin]
   );
   const openSharedTreePath = useCallback(
     (path: string) => {
@@ -302,12 +278,6 @@ function ReviewDocumentsComponent(
     setNavigationRequest(request);
     setMutationTransition(null);
   }, [mutationTransition, props.entries, props.indexGeneration]);
-  const handleMutationTransition = useCallback(
-    (transition: GitReviewMutationTransition) => {
-      setMutationTransition(transition);
-    },
-    []
-  );
   const acquireMutationAuthority = useCallback(() => {
     if (!props.onAcquireMutationAuthority()) {
       return null;
@@ -478,11 +448,12 @@ function ReviewDocumentsComponent(
                 navigationRequest={navigationRequest}
                 onAcquireMutationAuthority={acquireMutationAuthority}
                 onActiveChromeChange={setActiveChrome}
-                onMutationTransition={handleMutationTransition}
+                onMutationTransition={setMutationTransition}
                 onNavigationMaterialized={handleNavigationMaterialized}
                 onRequestTreeOpen={requestTreeOpen}
                 onSelectSurface={selectSurface}
                 onSurfaceNavigationSettled={handleNavigationSettled}
+                onUserReleasedReadingPin={releaseReadingPin}
                 viewOptions={responsiveViewOptions.effectiveOptions}
               />
             </div>

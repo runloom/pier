@@ -71,6 +71,7 @@ function ReviewSurfaceComponent({
   onActiveChromeChange,
   onRequestTreeOpen,
   onRetryIndex,
+  onUserReleasedReadingPin,
   panelId,
   scope,
   setSidebarCollapsed,
@@ -428,7 +429,6 @@ function ReviewSurfaceComponent({
         activeSurface={activeSurface}
         appearance={appearance}
         authoritativeEmpty={
-          surfaceEntries.length === 0 ||
           !surfaceEntries.some((entry) =>
             reviewEntryHasBodyContent(entry, diffBase)
           )
@@ -451,14 +451,13 @@ function ReviewSurfaceComponent({
         mutationAuthorityBlocked={mutationAuthorityBlocked}
         navigationPending={navigationPending}
         noteUserScrollReading={noteUserScrollReading}
-        {...(onActiveChromeChange === undefined
-          ? {}
-          : { onActiveChromeChange })}
         onAcquireMutationAuthority={onAcquireMutationAuthority}
+        onActiveChromeChange={onActiveChromeChange}
         onContextMenuSession={onContextMenuSession}
         onDriftCommentActivate={comments.openDriftThread}
         onGutterReviewActivate={comments.handleGutterReviewActivate}
         onRetryIndex={onRetryIndex}
+        onUserReleasedReadingPin={onUserReleasedReadingPin}
         openTreeNode={openTreeNode}
         panelId={panelId}
         projection={projection}

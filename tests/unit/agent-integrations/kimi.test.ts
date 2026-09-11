@@ -45,6 +45,7 @@ const NATIVE_EVENTS = [
   "PostCompact",
   "Stop",
   "StopFailure",
+  "Interrupt",
   "SubagentStart",
   "SubagentStop",
   "SessionEnd",
@@ -90,7 +91,7 @@ describe("withPierKimiHooks (TOML 注入)", () => {
     expect(next).toContain('\\"agentEventV3\\"');
   });
 
-  it("固定 Python 协议真实载荷保留 tool_call_id，StopFailure fatal，子智能体匿名计数", async () => {
+  it("固定 Python 协议真实载荷保留 tool_call_id，StopFailure 不结算主回合，子智能体匿名计数", async () => {
     const root = await mkdtemp(join(tmpdir(), "pier-kimi-v3-"));
     const userData = join(root, "userData");
     const hooksHome = join(root, "hooks");
@@ -198,7 +199,7 @@ describe("withPierKimiHooks (TOML 注入)", () => {
     });
     expect(rows[4]).not.toHaveProperty("agentInstanceId");
     expect(rows.at(-1)).toMatchObject({
-      event: "error",
+      event: "Stop",
       nativeEvent: "StopFailure",
       v: 3,
     });
@@ -208,7 +209,7 @@ describe("withPierKimiHooks (TOML 注入)", () => {
       if (row.kind !== "agentEvent") continue;
       aggregator.ingestAgentEvent(row, {
         evidenceSource: "hook",
-        stopAuthority: "advisory",
+        stopAuthority: "none",
         turnStartAuthority: "none",
       });
       const activity = aggregator.snapshot().activities[0];
@@ -218,7 +219,7 @@ describe("withPierKimiHooks (TOML 注入)", () => {
     expect(counts).toEqual([0, 0, 0, 1, 0, 0]);
     expect(aggregator.snapshot().activities[0]).toMatchObject({
       kind: "agent",
-      status: "error",
+      status: "processing",
     });
   }, 15_000);
 
@@ -322,7 +323,7 @@ describe("withPierKimiHooks (TOML 注入)", () => {
     expect(statuses).toEqual(["processing", "tool", "waiting", "tool"]);
   }, 15_000);
 
-  it("空 turnId 的 StopFailure 后 PreToolUse 解封，不再钉死错误", () => {
+  it("旧版已写出的空 turnId StopFailure error 仍允许后续工具恢复", () => {
     const aggregator = createForegroundActivityAggregator();
     const options = {
       evidenceSource: "hook",

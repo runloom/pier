@@ -1,6 +1,9 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import { isGloballyUniqueTurnId } from "../../../foreground-activity/agent-turn-event-semantics.ts";
-import type { TranscriptTerminalRecord } from "./tail-contracts.ts";
+import {
+  isTranscriptTerminal,
+  type TranscriptTerminalRecord,
+} from "./tail-contracts.ts";
 
 const MAX_SEEN_TERMINALS = 256;
 const MAX_SEEN_TRANSCRIPT_EVENTS = 512;
@@ -27,9 +30,7 @@ export function emitTranscriptEvent(
   const inheritedTurnId =
     contextTurnId && isGloballyUniqueTurnId(contextTurnId) ? contextTurnId : "";
   const emittedTurnId = nativeTurnId || inheritedTurnId;
-  const isTerminal =
-    record.pierEvent === "TurnCompleted" ||
-    record.pierEvent === "TurnInterrupted";
+  const isTerminal = isTranscriptTerminal(record);
   if (isTerminal && nativeTurnId) {
     if (state.seenTerminalEvents.has(nativeTurnId)) {
       return;

@@ -23,7 +23,7 @@ export function statusTextForDocument(
     );
   }
   if (document.deletedOnDisk) {
-    return t("filePanel.status.deletedOnDisk", "Deleted on disk");
+    return t("filePanel.status.deletedOnDisk", "Deleted");
   }
   if (document.diskConflict) {
     return t(
@@ -84,7 +84,7 @@ export function statusToneForDocument(
   }
   if (document.deletedOnDisk) {
     return {
-      label: t("filePanel.status.deletedOnDisk", "Deleted on disk"),
+      label: t("filePanel.status.deletedOnDisk", "Deleted"),
       tone: "bg-warning",
     };
   }

@@ -18,6 +18,7 @@ import {
 import { useAgentPreferencesStore } from "./agent-preferences.store.ts";
 import { probesFromAgentSnapshot } from "./host-catalog/agent-mirror.ts";
 import { useHostCatalogStore } from "./host-catalog/store.ts";
+import { usePanelDescriptorStore } from "./panel-descriptor.store.ts";
 
 export {
   countLifecycleUpdateCandidates,
@@ -72,6 +73,18 @@ interface AgentLifecycleState {
 
 /** Non-silent open-path depth so overlapping SWR does not clear spinner early. */
 let probingBusyDepth = 0;
+
+/**
+ * Lifecycle commands resolve env through the same PES entry as tasks/terminal.
+ * No focused project (Pier Home) → HOME dump, i.e. today's behavior.
+ */
+function activeProjectOptions(): { projectRootPath?: string } {
+  const { activeId, descriptors } = usePanelDescriptorStore.getState();
+  const projectRootPath = activeId
+    ? descriptors[activeId]?.context?.projectRootPath
+    : undefined;
+  return projectRootPath ? { projectRootPath } : {};
+}
 
 function failureFromResult(
   result: AgentLifecycleActionResult,
@@ -262,7 +275,7 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
         };
       });
       try {
-        const result = await api.run(agentId, action);
+        const result = await api.run(agentId, action, activeProjectOptions());
         const stepLabel = get().jobById[agentId]?.progress?.label;
         const failure = failureFromResult(result, stepLabel);
         set((state) => {
@@ -295,6 +308,8 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
         }));
       }
       const batchSnapshot = [...agentIds];
+      /** One project context for the whole batch. */
+      const batchOptions = activeProjectOptions();
       // All start queued; workers promote to running when claimed.
       set((state) => {
         const nextFailures = { ...state.failureById };
@@ -324,7 +339,7 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
               },
             }));
             try {
-              const result = await api.run(agentId, action);
+              const result = await api.run(agentId, action, batchOptions);
               const stepLabel = get().jobById[agentId]?.progress?.label;
               const failure = failureFromResult(result, stepLabel);
               set((state) => {

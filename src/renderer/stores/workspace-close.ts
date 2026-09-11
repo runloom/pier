@@ -109,14 +109,16 @@ async function filterCloseablePanels(
   return allowed;
 }
 
-function removeCloseablePanels(
+async function removeCloseablePanels(
   api: DockviewApi,
   panels: readonly CloseablePanel[]
-): void {
+): Promise<void> {
   for (const panel of panels) {
-    if (panel.view.contentComponent === "terminal") {
-      closeNativeTerminalPanel(panel.id);
-    }
+    if (
+      panel.view.contentComponent === "terminal" &&
+      !(await closeNativeTerminalPanel(panel.id))
+    )
+      continue;
     api.removePanel(panel);
   }
 }
@@ -189,9 +191,11 @@ export async function closeActivePanel(
   }
   // 全局仅剩最后一个 panel → 关窗口 (而非删 panel 留空 group).
   if (api.totalPanels <= 1) {
-    if (componentId === "terminal") {
-      closeNativeTerminalPanel(panel.id);
-    }
+    if (
+      componentId === "terminal" &&
+      !(await closeNativeTerminalPanel(panel.id))
+    )
+      return false;
     closeCurrentWindow().catch((err) => {
       console.error("[workspace] closeCurrentWindow failed:", err);
     });
@@ -206,18 +210,16 @@ export async function closeActivePanel(
     });
     return true;
   }
-  // adjacent：关 active 时先切邻接 tab；recent：交给 dockview 组内 MRU。
-  // 组内最后一项：卸之前激活组级下一手，避免 dockview groups[0]。
   const preservePanelId = api.activePanel?.id;
   const closedActive = preservePanelId === panel.id;
+  // Native close while this tab is still active, then removePanel.
+  // 不把 React unmount 当显式关闭.
+  // 用 contentComponent 而非 params?.component: 前者是 dockview stable key.
+  if (componentId === "terminal" && !(await closeNativeTerminalPanel(panel.id)))
+    return false;
   const preferredPanelId = closedActive
     ? (prepareFocusedPanelClose(api, panel.id) ?? undefined)
     : preservePanelId;
-  // 主动先发 native close IPC, 再 removePanel；不把 React unmount 当显式关闭.
-  // 用 contentComponent 而非 params?.component: 前者是 dockview stable key.
-  if (componentId === "terminal") {
-    closeNativeTerminalPanel(panel.id);
-  }
   api.removePanel(panel);
   finishPanelCloseFocus(api, closedActive, preferredPanelId);
   noteHangBreadcrumb({
@@ -278,9 +280,11 @@ export async function closePanel(
   }
   // 同 closeActivePanel: 全局仅剩最后一个 panel → 关窗口 (而非留空 group).
   if (api.totalPanels <= 1) {
-    if (componentId === "terminal") {
-      closeNativeTerminalPanel(panel.id);
-    }
+    if (
+      componentId === "terminal" &&
+      !(await closeNativeTerminalPanel(panel.id))
+    )
+      return false;
     closeCurrentWindow().catch((err) => {
       console.error("[workspace] closeCurrentWindow failed:", err);
     });
@@ -295,15 +299,13 @@ export async function closePanel(
     });
     return true;
   }
-  // 关 inactive：不改 active。关 active：按 panelCloseFocusPolicy 选 successor。
   const preservePanelId = api.activePanel?.id;
   const closedActive = preservePanelId === panel.id;
+  if (componentId === "terminal" && !(await closeNativeTerminalPanel(panel.id)))
+    return false;
   const preferredPanelId = closedActive
     ? (prepareFocusedPanelClose(api, panel.id) ?? undefined)
     : preservePanelId;
-  if (componentId === "terminal") {
-    closeNativeTerminalPanel(panel.id);
-  }
   api.removePanel(panel);
   finishPanelCloseFocus(api, closedActive, preferredPanelId);
   noteHangBreadcrumb({
@@ -339,7 +341,7 @@ export async function closeOthers(
   const closingPanelIds = toClose.map((p) => p.id);
   const preservePanelId = api.activePanel?.id;
   const allowed = await filterCloseablePanels(toClose, closingPanelIds);
-  removeCloseablePanels(api, allowed);
+  await removeCloseablePanels(api, allowed);
   finishKeptPanelFocus(api, preservePanelId, keepPanel);
 }
 
@@ -364,7 +366,7 @@ export async function closeToTheRight(
   const keepPanel = groupPanels[index];
   const preservePanelId = api.activePanel?.id;
   const allowed = await filterCloseablePanels(toClose, closingPanelIds);
-  removeCloseablePanels(api, allowed);
+  await removeCloseablePanels(api, allowed);
   finishKeptPanelFocus(api, preservePanelId, keepPanel);
 }
 
@@ -398,7 +400,7 @@ export async function closeGroup(
       : null;
   // 批量 removePanel，避免逐个 closePanel 在 sole-group 倒数第二项之后
   // 触发「最后一 panel 关窗」而中断循环语义。组内活动 tab 最后卸。
-  removeCloseablePanels(
+  await removeCloseablePanels(
     api,
     removalsWithLast(allowed, closedWindowActive ? preservePanelId : undefined)
   );
@@ -443,9 +445,11 @@ export async function closeAll(get: WorkspaceCloseGet): Promise<void> {
     if (!allowed) {
       return;
     }
-    if (p.view.contentComponent === "terminal") {
-      closeNativeTerminalPanel(p.id);
-    }
+    if (
+      p.view.contentComponent === "terminal" &&
+      !(await closeNativeTerminalPanel(p.id))
+    )
+      return;
     api.removePanel(p);
   }
   // 所有 panel 都已通过各自 guard 并提交关闭后,显式清掉 record layout。

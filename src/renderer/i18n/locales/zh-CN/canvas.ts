@@ -32,4 +32,23 @@ export const canvas = {
     costPeriod: "近 {{count}} 天成本",
     costTokens: "近 {{count}} 天 tokens",
   },
+  workflow: {
+    invalidTitle: "这张流程图画不出来",
+    invalidHint: "{{message}} 下一步：{{fix}}",
+    legend: "图例",
+  },
+  screenFlow: {
+    invalidTitle: "这条界面路径画不出来",
+    invalidHint: "{{message}} 下一步：{{fix}}",
+    tight: "这两屏太近了，再留开一格。",
+    overlap: "两屏叠在一起了，挪开其中一块。",
+    missing: "路径上有一屏还没画上。",
+    cross: "折线穿过了别的屏，把其中一块挪开。",
+    labelPark: "两条动作说明叠在一起了，把其中一屏再留开一点。",
+    legend: "图例",
+    legendMain: "主路",
+    legendBranch: "旁路",
+    legendReturn: "返回",
+    legendError: "失败",
+  },
 } as const;

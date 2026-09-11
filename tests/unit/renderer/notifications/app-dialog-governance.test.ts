@@ -3,6 +3,8 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
+const DIALOG_SPEC =
+  "docs/superpowers/specs/2026-09-09-dialog-system-gold-standard.md";
 const SOURCE_FILE_RE = /\.(ts|tsx)$/;
 const PRODUCTION_SOURCE_ROOTS = [
   join(ROOT, "src", "renderer"),
@@ -58,23 +60,22 @@ describe("app dialog usage governance", () => {
     const agentContext = readFileSync(join(ROOT, "AGENTS.md"), "utf8");
 
     expect(agentContext).toContain("### 宿主弹窗使用规范");
-    expect(agentContext).toContain("桌面工具对话框");
+    expect(agentContext).toContain(DIALOG_SPEC);
     expect(agentContext).toContain("**`size` 禁止调用方传入**");
-    expect(agentContext).toContain(
-      "`alert` / `confirm` / `prompt` → 固定 `sm`"
-    );
-    expect(agentContext).toContain("`choice` → 固定 `default`");
-    expect(agentContext).toContain("`choice`：`alt | 取消 | confirm`");
-    expect(agentContext).toContain(
-      '破坏性确认必须显式传 `intent: "destructive"`'
-    );
-    expect(agentContext).toContain(
-      '若破坏动作落在 `choice.confirm`（如覆盖），`intent` 仍必须 `"default"`'
-    );
     expect(agentContext).toContain(
       "builtin 与 external 插件的简单弹窗 API **同构**"
     );
-    expect(agentContext).toContain("禁止回退为「每个确认各自传 sm/default」");
+
+    const spec = readFileSync(join(ROOT, DIALOG_SPEC), "utf8");
+    expect(spec).toContain("桌面工具对话框");
+    expect(spec).toContain("`alert` / `confirm` / `prompt` → 固定 `sm`");
+    expect(spec).toContain("`choice` → 固定 `default`");
+    expect(spec).toContain("`choice`：`alt | 取消 | confirm`");
+    expect(spec).toContain('破坏性确认必须显式传 `intent: "destructive"`');
+    expect(spec).toContain(
+      '若破坏动作落在 `choice.confirm`（如覆盖），`intent` 仍必须 `"default"`'
+    );
+    expect(spec).toContain("禁止回退为「每个确认各自传 sm/default」");
   });
 
   it("keeps shadcn AlertDialog primitive behind AppDialogHost", {

@@ -78,12 +78,26 @@ export function createClaudeTranscriptReconciler(
     transcriptRoot,
   });
 
-  return wrapClaudeFamilyProjectsPathResolve({
+  const reconciler = wrapClaudeFamilyProjectsPathResolve({
     agent: "claude",
     inner,
     pathCache,
     projectsRoot: transcriptRoot,
   });
+  return {
+    ...reconciler,
+    async observe(event) {
+      // Compaction restarts the session with a maintenance prompt_id. Retain
+      // the user's owner and PromptSubmit watermark for anonymous completions.
+      if (
+        event.event === "SessionStart" &&
+        event.v !== 1 &&
+        event.nativeState === "compact"
+      )
+        return;
+      await reconciler.observe(event);
+    },
+  };
 }
 
 /** `CLAUDE_CONFIG_DIR/projects` 或默认 `~/.claude/projects`。 */

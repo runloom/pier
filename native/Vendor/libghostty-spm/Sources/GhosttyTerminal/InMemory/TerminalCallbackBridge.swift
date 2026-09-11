@@ -15,9 +15,14 @@ import GhosttyKit
 /// the owning view.
 @MainActor
 final class TerminalCallbackBridge {
-    weak var delegate: (any TerminalSurfaceViewDelegate)?
+    weak var delegate: (any TerminalSurfaceViewDelegate)? {
+        didSet { applyRetainAfterChildExitPolicy() }
+    }
     /// Raw surface pointer for use in C callbacks (e.g. clipboard).
     nonisolated(unsafe) var rawSurface: ghostty_surface_t?
+    /// Copied from the child-exited delegate on the main actor. The IO-thread
+    /// action callback reads this before returning to Zig.
+    nonisolated(unsafe) var retainAfterChildExit = false
     /// Owned before the main-actor hop so teardown cannot miss `opaquePtr`.
     nonisolated let clipboardConfirmInFlight = ClipboardConfirmInFlightSlot()
     /// In-flight clipboard confirmation. Replacing it cancels the previous
@@ -37,6 +42,24 @@ final class TerminalCallbackBridge {
 
     init(delegate: (any TerminalSurfaceViewDelegate)? = nil) {
         self.delegate = delegate
+        applyRetainAfterChildExitPolicy()
+    }
+
+    func applyRetainAfterChildExitPolicy() {
+        if let child = delegate as? any TerminalSurfaceChildExitedDelegate {
+            retainAfterChildExit = child.retainSurfaceAfterChildExit
+        } else {
+            retainAfterChildExit = false
+        }
+    }
+
+    func setRetainAfterChildExit(_ retain: Bool) {
+        retainAfterChildExit = retain
+    }
+
+    nonisolated func retainSurfaceIfNeeded(_ surface: ghostty_surface_t) {
+        guard retainAfterChildExit else { return }
+        ghostty_surface_retain_after_exit(surface)
     }
 
     func handleAction(_ action: ghostty_action_s) {

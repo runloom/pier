@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NativeAddon } from "../../../../src/main/ipc/terminal/native-addon.ts";
 import {
   readTerminalCursorVisibility,
   sendTerminalKeyPress,
   sendTerminalText,
 } from "../../../../src/main/ipc/terminal/operations.ts";
+import { nativeTerminalProcesses } from "../../../../src/main/ipc/terminal/process/registry.ts";
 import type { AppWindow } from "../../../../src/main/windows/app-window.ts";
 import {
   APPKIT_KEYCODE,
@@ -26,6 +27,10 @@ function fakeAddon(handlers: {
   } as unknown as NativeAddon;
 }
 const win = { id: 7 } as unknown as AppWindow;
+beforeEach(() => {
+  const process = nativeTerminalProcesses.begin("7::terminal-a");
+  nativeTerminalProcesses.created(process);
+});
 
 describe("sendTerminalText", () => {
   it("submit=true 时先 paste 文本，settle 延迟后再注入带 \\r 文本的 Return 键", async () => {

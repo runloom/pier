@@ -6,6 +6,7 @@ export const settingsShellEnvironment = {
   windowsNote:
     "Windows에서는 로그인 셸 불러오기를 건너뜁니다. 명령은 프로세스 환경에서 옵니다.",
   statusLabel: "상태:",
+  nodeLabel: "Node:",
   status: {
     resolved: "터미널과 일치",
     failed: "기본 환경 사용 중",

@@ -9,6 +9,7 @@ import { installDetachedDevToolsHandlers } from "../devtools.ts";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
 import { terminalFocusCoordinator } from "../ipc/terminal/focus-coordinator.ts";
 import { getTerminalAddon } from "../ipc/terminal/index.ts";
+import { nativeTerminalProcesses } from "../ipc/terminal/process/registry.ts";
 import {
   armDetaching,
   isWindowDetaching,
@@ -280,6 +281,7 @@ class WindowManager {
         terminalFocusCoordinator.clearWindow(electronWindowId);
         try {
           getTerminalAddon()?.closeAllTerminals(window.getNativeWindowHandle());
+          nativeTerminalProcesses.closeWindow(electronWindowId);
         } catch {
           // ignore: window 即将销毁/已销毁
         }
@@ -370,6 +372,7 @@ class WindowManager {
     });
 
     window.host.on("closed", () => {
+      nativeTerminalProcesses.closeWindow(electronWindowId);
       rendererShowGate.cancel();
       this.rendererShowGates.delete(id);
       const transferDestroy = this.transferDestroyIds.delete(id);

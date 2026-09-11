@@ -41,6 +41,47 @@ describe("Git 变更阅读稳定性治理", () => {
     expect(runtime).not.toMatch(/\bcaptureTopAnchor\b/);
     expect(runtime).not.toMatch(/\brequestAnimationFrame\b/);
     expect(runtime).not.toMatch(/\bsetTimeout\b/);
+
+    const treeOpen = read(
+      "src/plugins/builtin/git/renderer/hooks/use-tree-open.ts"
+    );
+    expect(treeOpen.indexOf("alreadyOpen")).toBeGreaterThan(0);
+    expect(treeOpen.indexOf("alreadyOpen")).toBeLessThan(
+      treeOpen.indexOf("onRequestOpen(fileRef)")
+    );
+    const sidebar = read(
+      "src/plugins/builtin/git/renderer/review/tree/sidebar.tsx"
+    );
+    expect(sidebar).toContain("isActiveOpenPath?.(path) === true");
+    const navigation = read(
+      "src/plugins/builtin/git/renderer/hooks/use-navigation.ts"
+    );
+    expect(navigation).toContain("window.visibleItemIds.length > 0");
+    const sharedTreeOpen = read(
+      "src/plugins/builtin/git/renderer/review/use-shared-tree-open.ts"
+    );
+    expect(sharedTreeOpen).toContain("shouldSkipDuplicateTreeOpen");
+    expect(sharedTreeOpen.indexOf("shouldSkipDuplicateTreeOpen")).toBeLessThan(
+      sharedTreeOpen.indexOf("navigationNonceRef.current += 1")
+    );
+    expect(
+      read("src/plugins/builtin/git/renderer/review/surface-types.ts")
+    ).toContain("export function shouldSkipDuplicateTreeOpen");
+    const pinSpec = read(
+      "docs/archive/superpowers/specs/2026-08-14-git-review-tree-nav-pin-design.md"
+    );
+    expect(pinSpec).toContain("B-Select ≠ 阅读钉");
+    expect(pinSpec).toContain("空 render window 不是恢复信号");
+    expect(pinSpec).toContain("同路径 selection 重报不是点树");
+    expect(pinSpec).toContain("CodeView 总高权威");
+    expect(pinSpec).toContain("syncContainerHeight");
+    expect(pinSpec).toContain("滚动槽 pointerdown");
+    const diffViewIntent = read(
+      "tests/unit/renderer/git/pier-diff-view.test.tsx"
+    );
+    expect(diffViewIntent).toContain(
+      "fireEvent.pointerDown(scroller as HTMLElement, { button: 0 })"
+    );
   });
 
   it("成员更新只有 packages/ui 的锚定事务可以读取滚动坐标", () => {
@@ -107,7 +148,9 @@ describe("Git 变更阅读稳定性治理", () => {
     expect(surfaces).toContain("inert={active ? undefined : true}");
     // 树跨面：requestTreeOpen 立即 setActiveSurface；无 handoff 叠层状态机
     expect(surfaces).toContain("activeSurfaceRef");
-    expect(surfaces).toContain("树跨面点击：立即切面");
+    expect(
+      read("src/plugins/builtin/git/renderer/review/use-shared-tree-open.ts")
+    ).toContain("树跨面点击：立即切面");
     expect(surfaces).not.toContain("handoffSourceSurface");
     expect(surfaces).not.toContain("handoffOverlay");
     expect(surfaceView).toContain("projection={projection}");

@@ -362,7 +362,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     panelId,
     setActive: activatePanel,
   });
-  useTerminalSurfaceClose(panelId, props.params);
+  useTerminalSurfaceClose(panelId, props.params, {
+    hasAgentSession: savedSession?.agent != null,
+  });
   useTaskResultKeyboardRetain(
     panelId,
     props.params,
@@ -476,7 +478,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           agentKind={activity?.kind === "agent" ? activity.agentId : null}
           attachRequest={attachRequest}
           bottomOffsetPx={statusInsetPx}
-          disabled={!nativeTerminalReady || Boolean(error)}
+          disabled={!nativeTerminalReady || Boolean(error) || Boolean(endState)}
           focusRequest={composerFocusRequest}
           isActive={api.isActive}
           onClose={closeComposer}
@@ -485,6 +487,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           projectRootPath={
             effectiveContext?.projectRootPath ?? effectiveContext?.cwd ?? null
           }
+          restartRequired={Boolean(error) || Boolean(endState)}
         />
       ) : null}
       <TerminalStatusBar {...statusContext} />

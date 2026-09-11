@@ -11,6 +11,10 @@ export const shellEnvironmentHostStatusSchema = z.object({
   hostAppliedStatus: z
     .enum(["applied", "not-applied", "stale-after-fail"])
     .optional(),
+  /** Host Node runtime path (settings fact). */
+  nodePath: z.string().optional(),
+  /** Host Node version, e.g. "v24.15.0". */
+  nodeVersion: z.string().optional(),
   pathChanged: z.boolean().optional(),
   platform: z.string(),
   shell: z.string().optional(),

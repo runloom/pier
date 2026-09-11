@@ -19,4 +19,14 @@ describe("fileDocumentShowsUnsavedMark", () => {
       fileDocumentShowsUnsavedMark({ dirty: false, needsSaveAs: false })
     ).toBe(false);
   });
+
+  it("hides the mark when dirty is only because the file was deleted", () => {
+    expect(
+      fileDocumentShowsUnsavedMark({
+        deletionOnlyDirty: true,
+        dirty: true,
+        needsSaveAs: false,
+      })
+    ).toBe(false);
+  });
 });

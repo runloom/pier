@@ -1,5 +1,6 @@
 export {
   type AccountMetadataBadgeMode,
+  membershipIsExpired,
   membershipNeedsAttention,
   membershipPeriodNeedsAttention,
 } from "./membership-attention.ts";

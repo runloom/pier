@@ -31,13 +31,23 @@ import {
   tryGitReviewImageSection,
 } from "./image.ts";
 import {
+  GitReviewDocumentProtocolError,
   GitReviewDocumentStaleError,
   type GitReviewPatchMaterial,
   type GitReviewRenderableGroup,
   readGitReviewPatch,
 } from "./patch.ts";
-import type { ReadGitReviewPatchOptions } from "./patch-contract.ts";
+import type {
+  GitReviewRenderableFact,
+  ReadGitReviewPatchOptions,
+} from "./patch-contract.ts";
 import { patchSectionContents } from "./patch-sides.ts";
+import {
+  classifyWorkingChangeBlocks,
+  createWorkingFact,
+  workingSectionBacking,
+  workingStageState,
+} from "./working-section.ts";
 
 interface BuildGitReviewDocumentOptions {
   readonly budget: GitReviewIndexExecutionBudget;
@@ -120,6 +130,11 @@ export async function buildGitReviewDocumentWithEvidence(
       continue;
     }
     const material = await readGitReviewPatch(patchOptions);
+    if (material === null) {
+      throw new GitReviewDocumentProtocolError(
+        "Git Review 槽背书分组缺少 patch 正文"
+      );
+    }
     assertMaterialMatchesIndexFact(group, fact, material);
     const section = sectionFromMaterial({
       entryKey: options.entry.entryKey,
@@ -151,23 +166,26 @@ export async function buildGitReviewDocumentWithEvidence(
     });
     if (imageSection === null) {
       const material = await readGitReviewPatch(patchOptions);
-      assertMaterialMatchesIndexFact(group, workingFact, material);
-      const rawSection = sectionFromMaterial({
-        entryKey: options.entry.entryKey,
-        fact: workingFact,
-        group,
-        material,
-        sectionKey,
-        stageStateOverride: workingStageState(options),
-      });
-      const section =
-        rawSection.kind === "patch"
-          ? classifyWorkingChangeBlocks(rawSection, sections)
-          : rawSection;
-      sections.push(section);
-      revisions.push(material.sourceRevision);
-      if (section.kind === "patch") {
-        patches.push({ group, patch: section.patch, sectionKey });
+      // 派生面给不出单一记录时这一段不存在：surfaceSections.head 自然为 null。
+      if (material !== null) {
+        assertMaterialMatchesIndexFact(group, workingFact, material);
+        const rawSection = sectionFromMaterial({
+          entryKey: options.entry.entryKey,
+          fact: workingFact,
+          group,
+          material,
+          sectionKey,
+          stageStateOverride: workingStageState(options),
+        });
+        const section =
+          rawSection.kind === "patch"
+            ? classifyWorkingChangeBlocks(rawSection, sections)
+            : rawSection;
+        sections.push(section);
+        revisions.push(material.sourceRevision);
+        if (section.kind === "patch") {
+          patches.push({ group, patch: section.patch, sectionKey });
+        }
       }
     } else {
       sections.push(imageSection);
@@ -187,55 +205,9 @@ export async function buildGitReviewDocumentWithEvidence(
   return deepFreezeJson({ document, evidence: { patches } });
 }
 
-function classifyWorkingChangeBlocks(
-  workingSection: Extract<GitReviewFileSection, { kind: "patch" }>,
-  existingSections: readonly GitReviewFileSection[]
-): Extract<GitReviewFileSection, { kind: "patch" }> {
-  const stagedBlocks = existingSections.flatMap((section) =>
-    section.kind === "patch"
-      ? section.changeBlocks.filter((block) => block.stageState === "staged")
-      : []
-  );
-  const unstagedBlocks = existingSections.flatMap((section) =>
-    section.kind === "patch"
-      ? section.changeBlocks.filter((block) => block.stageState === "unstaged")
-      : []
-  );
-  return {
-    ...workingSection,
-    changeBlocks: workingSection.changeBlocks.map((block) => {
-      const staged = stagedBlocks.some((candidate) =>
-        rangesOverlap(block.headRange, candidate.headRange)
-      );
-      const unstaged = unstagedBlocks.some((candidate) =>
-        rangesOverlap(block.workingRange, candidate.workingRange)
-      );
-      let stageState: GitReviewStageState = "unstaged";
-      if (staged && unstaged) {
-        stageState = "partial";
-      } else if (staged) {
-        stageState = "staged";
-      }
-      return {
-        ...block,
-        stageState,
-      };
-    }),
-  };
-}
-
-function rangesOverlap(
-  left: GitReviewChangeBlock["headRange"],
-  right: GitReviewChangeBlock["headRange"]
-): boolean {
-  const leftEnd = left.start + Math.max(left.count, 1);
-  const rightEnd = right.start + Math.max(right.count, 1);
-  return left.start < rightEnd && right.start < leftEnd;
-}
-
 function sectionFromMaterial(options: {
   readonly entryKey: string;
-  readonly fact: RenderableGitReviewIndexFact;
+  readonly fact: GitReviewRenderableFact;
   readonly group: GitReviewRenderableGroup;
   readonly material: GitReviewPatchMaterial;
   readonly sectionKey: string;
@@ -265,17 +237,6 @@ function sectionFromMaterial(options: {
     sectionKey,
     ...patchSectionContents(material),
   };
-}
-
-function workingStageState(
-  options: BuildGitReviewDocumentOptions
-): GitReviewStageState {
-  const hasStaged = options.resolvedEntry.groupFacts.staged !== undefined;
-  const hasUnstaged = options.resolvedEntry.groupFacts.unstaged !== undefined;
-  if (hasStaged && hasUnstaged) {
-    return "partial";
-  }
-  return hasStaged ? "staged" : "unstaged";
 }
 
 function describeChangeBlock(options: {
@@ -329,7 +290,7 @@ function createChangeKey(
 
 function assertMaterialMatchesIndexFact(
   group: GitReviewRenderableGroup,
-  fact: RenderableGitReviewIndexFact,
+  fact: GitReviewRenderableFact,
   material: GitReviewPatchMaterial
 ): void {
   if (
@@ -344,42 +305,6 @@ function assertMaterialMatchesIndexFact(
       "Git Review patch 对象与 index 事实不一致"
     );
   }
-}
-
-function createWorkingFact(
-  options: BuildGitReviewDocumentOptions
-): RenderableGitReviewIndexFact | null {
-  if (options.source.target.kind !== "uncommitted") {
-    return null;
-  }
-  const staged = options.resolvedEntry.groupFacts.staged;
-  const unstaged = options.resolvedEntry.groupFacts.unstaged;
-  if (staged === undefined && unstaged === undefined) {
-    return null;
-  }
-  if (options.entry.status === "conflicted") {
-    return null;
-  }
-  const status: Exclude<GitReviewIndexGroupFact["status"], "conflicted"> =
-    options.entry.status;
-  const first = staged ?? unstaged;
-  if (first === undefined) {
-    return null;
-  }
-  return {
-    conflict: null,
-    movement: staged?.movement ?? unstaged?.movement ?? null,
-    oldPath: staged?.oldPath ?? unstaged?.oldPath ?? null,
-    origin:
-      staged === undefined && unstaged?.origin === "untracked"
-        ? "untracked"
-        : "tracked",
-    sourceOid: staged?.sourceOid ?? unstaged?.sourceOid ?? null,
-    statsExpected: staged?.statsExpected ?? unstaged?.statsExpected ?? true,
-    status,
-    targetOid: null,
-    targetPath: unstaged?.targetPath ?? staged?.targetPath ?? first.targetPath,
-  };
 }
 
 function resolveSurfaceSections(
@@ -427,16 +352,9 @@ function createDocumentRevision(
   ]);
 }
 
-type GitReviewIndexFact = NonNullable<
-  GitReviewIndexResolvedEntry["groupFacts"][GitReviewGroup]
->;
-type RenderableGitReviewIndexFact = GitReviewIndexFact & {
-  readonly status: Exclude<GitReviewIndexFact["status"], "conflicted">;
-};
-
 function isRenderableFact(
-  fact: GitReviewIndexFact
-): fact is RenderableGitReviewIndexFact {
+  fact: GitReviewIndexGroupFact
+): fact is GitReviewRenderableFact {
   return fact.status !== "conflicted";
 }
 
@@ -448,7 +366,7 @@ function isRenderableGroup(
 
 function createPatchReadOptions(
   options: BuildGitReviewDocumentOptions,
-  fact: RenderableGitReviewIndexFact,
+  fact: GitReviewRenderableFact,
   group: GitReviewRenderableGroup
 ): ReadGitReviewPatchOptions {
   return {
@@ -459,6 +377,7 @@ function createPatchReadOptions(
     group,
     headOid: options.metadata.headOid,
     rangeBounds: options.metadata.rangeBounds,
+    ...(group === "working" ? { backing: workingSectionBacking(options) } : {}),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   };
 }

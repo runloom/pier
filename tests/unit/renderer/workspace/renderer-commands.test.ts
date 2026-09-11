@@ -115,7 +115,7 @@ describe("workspace renderer commands", () => {
     });
   });
 
-  it("tolerates a missing terminal close API and clears a relaunch request when closing through a renderer command", async () => {
+  it("keeps the panel and pending relaunch when native closure cannot be acknowledged", async () => {
     const terminal = terminalPanel("terminal-missing-close");
     const welcome = webPanel("welcome-1");
     const api = createApi([terminal, welcome]);
@@ -144,13 +144,14 @@ describe("workspace renderer commands", () => {
       });
     });
 
-    expect(api.removePanel).toHaveBeenCalledWith(terminal);
-    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
-      data: null,
-      ok: true,
-      requestId: "renderer-close-missing-terminal-api",
-    });
-    expect(relaunch.result.current).toBeNull();
+    expect(api.removePanel).not.toHaveBeenCalled();
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ok: false,
+        requestId: "renderer-close-missing-terminal-api",
+      })
+    );
+    expect(relaunch.result.current?.launchId).toBe("launch-pending");
   });
 
   it("returns not_found when closing a missing panel", async () => {

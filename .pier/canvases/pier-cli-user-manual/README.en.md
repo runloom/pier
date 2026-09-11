@@ -140,6 +140,13 @@ Common queries and controls follow. `<run-ref>` in the table means the same `--b
 
 `accepted: true` only means the input was delivered, not that the work is done. `agents wait` waits for `ready`, `waiting`, `exited`, or `attention`. `agents watch` observes status changes. The final result is still the agent's own output.
 
+
+An initial task uses a verified native interactive launch argument. Unsupported commands or unverified versions keep it in the enhanced input box for manual submission. `inputDisposition` is `native-launch`, `draft`, or `unconfirmed`; `creationStatus: unconfirmed` means native creation is not yet acknowledged. Inspect the panel before starting again. Complete native approvals manually in the terminal.
+
+Unsent drafts, including attachments and editor formatting, survive app restarts. Interrupted sends remain unconfirmed for review and are never replayed automatically. `agents turn` preserves the text and trailing newlines and saves a checkpoint before sending; acceptance confirms transport only.
+
+`agents interrupt` sends native Ctrl+C. `agents terminate` sends TERM, escalates to KILL after 2 seconds, and waits up to 10 seconds for the host-launched process to exit; timeout is an error. The panel and its output remain available for reading and copying during the app lifetime. Use `terminal close` to close the panel. This does not guarantee cleanup of services that detach from the terminal or indicate that the task succeeded.
+
 ## git worktrees
 
 ```bash

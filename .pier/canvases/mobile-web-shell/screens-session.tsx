@@ -8,9 +8,13 @@ import {
 import {
   cx,
   DEFAULT_TERMINAL_FONT,
-  IconButton,
+  HitButton,
+  NavAction,
   NavBar,
   PhoneShell,
+  QuietEmpty,
+  sessionSubtitle,
+  TERMINAL_FONT_STEPS,
   TerminalSurface,
   TOUCH_PRESS,
 } from "./chrome.tsx";
@@ -25,24 +29,48 @@ export type SessionSheet = "sessions" | "reading";
 const TOOL_BUTTON =
   "flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-full px-3.5 text-[13px] font-medium leading-5";
 
+/** 阅读字号跟随设备记忆，量产行为与现行 localStorage 实现一致。 */
+const FONT_PREF_KEY = "pier.mobile-web.reading-font";
+
+function readFontPref(): number {
+  const raw = globalThis.localStorage?.getItem(FONT_PREF_KEY);
+  const parsed = raw === null || raw === undefined ? Number.NaN : Number(raw);
+  return Number.isInteger(parsed) &&
+    parsed >= 0 &&
+    parsed < TERMINAL_FONT_STEPS.length
+    ? parsed
+    : DEFAULT_TERMINAL_FONT;
+}
+
 /** 读屏为主体，工具仅占一行。按键是受限输入能力，不是终端选项模型。 */
 export function SessionScreen(props: {
   backLabel: string;
-  dirty?: boolean | undefined;
-  initialSheet?: SessionSheet | undefined;
-  initialKeysOpen?: boolean | undefined;
   disconnected?: boolean | undefined;
+  /** T1 轮询滞后但连接未断：读屏顶缘给「画面可能不是最新」的新鲜度提示。 */
+  feedInterrupted?: boolean | undefined;
+  initialKeysOpen?: boolean | undefined;
+  /** 与 initialKeysOpen 搭配：静态帧定格「已发送，等待终端响应」。 */
+  initialEchoKey?: DemoResponseKey | undefined;
+  initialSheet?: SessionSheet | undefined;
+  /** 静态帧直接定格「回应已失效」态（P0 里要靠真实发送触发）。 */
+  initialStale?: boolean | undefined;
   onBack?: (() => void) | undefined;
   onOpenChanges?: (() => void) | undefined;
   onOpenFiles?: (() => void) | undefined;
   onRespond?:
     | ((key: DemoResponseKey, interactionId: string) => DemoKeyResult)
     | undefined;
+  /** 断线横幅上的手动重试；不传则不显示（保持纯被动等待）。 */
+  onRetry?: (() => void) | undefined;
   onSwitchSession?: ((sessionId: string) => void) | undefined;
   session: DemoSession;
   sessions?: readonly DemoSession[] | undefined;
 }): ReactNode {
-  const [fontIndex, setFontIndex] = useState(DEFAULT_TERMINAL_FONT);
+  const [fontIndex, setFontIndexState] = useState(readFontPref);
+  const setFontIndex = (index: number) => {
+    setFontIndexState(index);
+    globalThis.localStorage?.setItem(FONT_PREF_KEY, String(index));
+  };
   const [sheet, setSheet] = useState<SessionSheet | null>(
     props.initialSheet ?? null
   );
@@ -52,7 +80,11 @@ export function SessionScreen(props: {
   const [keysFor, setKeysFor] = useState<string | null>(
     props.initialKeysOpen === true ? props.session.id : null
   );
-  const [staleFor, setStaleFor] = useState<string | null>(null);
+  const [staleFor, setStaleFor] = useState<string | null>(
+    props.initialStale === true
+      ? `${props.session.id}:${props.session.pendingInteractionId}`
+      : null
+  );
   const terminalRef = useRef<HTMLPreElement>(null);
   const restoreKeyFocus = useRef(false);
   const keyToggleRef = useCallback((node: HTMLButtonElement | null) => {
@@ -66,13 +98,13 @@ export function SessionScreen(props: {
   const interactionId = session.pendingInteractionId;
   const inputKey = `${session.id}:${interactionId}`;
   const stale = staleFor === inputKey;
-  const canSend =
+  const panelEligible =
     waiting &&
     interactionId !== undefined &&
-    !stale &&
     props.disconnected !== true &&
     props.onRespond !== undefined;
-  const keysOpen = keysFor === session.id && canSend;
+  const canSend = panelEligible && !stale;
+  const keysOpen = keysFor === session.id && panelEligible;
   const peers = props.sessions ?? [session];
   const canSwitch = peers.length > 1 && props.onSwitchSession !== undefined;
   const closeSheet = () => {
@@ -92,6 +124,8 @@ export function SessionScreen(props: {
         <div className="border-t border-border/50 px-3 pt-3 pb-3">
           {keysOpen ? (
             <TerminalKeys
+              initialEcho={props.initialEchoKey}
+              initialStale={props.initialStale === true}
               key={inputKey}
               onClose={() => {
                 restoreKeyFocus.current = true;
@@ -105,29 +139,30 @@ export function SessionScreen(props: {
               }}
             />
           ) : waiting && props.disconnected !== true ? (
-            <div className="flex min-h-[72px] items-center gap-3 rounded-[20px] border border-border/80 bg-surface-raised py-2 pr-2 pl-4 shadow-xs">
+            <div className="flex min-h-12 items-center gap-3 rounded-[20px] border border-border/80 bg-surface-raised py-1.5 pr-1.5 pl-4 shadow-xs">
+              <span
+                aria-hidden="true"
+                className="size-1.5 shrink-0 rounded-full bg-warning"
+              />
               <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-2 font-semibold text-[13px] leading-5">
-                  <span
-                    aria-hidden="true"
-                    className="size-1.5 shrink-0 rounded-full bg-warning"
-                  />
+                <p className="font-semibold text-[13px] leading-5">
                   需要你处理
                 </p>
-                <p
-                  className="mt-0.5 text-[12px] text-muted-foreground leading-[18px]"
-                  role={canSend ? undefined : "status"}
-                >
-                  {canSend
-                    ? "按终端提示回应"
-                    : stale
-                      ? "这次回应已失效，请重新查看终端。"
+                {canSend ? null : (
+                  <p
+                    className="mt-0.5 text-[12px] text-muted-foreground leading-[18px]"
+                    role="status"
+                  >
+                    {stale
+                      ? "这次回应已失效。等智能体给出新的提示，这里会重新开放按键。"
                       : "此处暂不能回应，请在电脑上处理。"}
-                </p>
+                  </p>
+                )}
               </div>
               {canSend ? (
                 <button
-                  aria-expanded={false}
+                  aria-expanded={keysOpen}
+                  aria-label="打开终端按键，对照上面的提示发送"
                   className={cx(
                     "flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-action-accent px-4 font-medium text-[13px] text-action-accent-foreground",
                     TOUCH_PRESS,
@@ -142,7 +177,7 @@ export function SessionScreen(props: {
                 </button>
               ) : (
                 <Icon
-                  className="mr-3 size-[18px] shrink-0 text-muted-foreground"
+                  className="mr-2 size-[18px] shrink-0 text-muted-foreground"
                   name="lock"
                 />
               )}
@@ -150,7 +185,7 @@ export function SessionScreen(props: {
           ) : null}
           <div
             className={cx(
-              "grid grid-cols-[1fr_auto_1fr] items-center gap-2",
+              "flex items-center justify-between gap-2",
               waiting && props.disconnected !== true && "mt-2"
             )}
             role="group"
@@ -171,9 +206,6 @@ export function SessionScreen(props: {
               </span>
               字号
             </button>
-            <span className="text-[11px] text-muted-foreground">
-              {canSend ? null : "只读"}
-            </span>
             {canSwitch ? (
               <button
                 aria-haspopup="dialog"
@@ -200,40 +232,22 @@ export function SessionScreen(props: {
       nav={
         <NavBar
           back={{ label: props.backLabel, onClick: props.onBack }}
-          backIconOnly
           layout="split"
           onTitleClick={canSwitch ? () => setSheet("sessions") : undefined}
           subtitle={
             <span className="flex min-w-0 items-center gap-1.5">
               <SessionGlyph session={session} size={12} />
-              <span className="truncate">
-                {session.agent ?? "终端"} ·{" "}
-                {props.disconnected === true
-                  ? "连接已断开"
-                  : waiting
-                    ? "需要你处理"
-                    : session.status === "processing"
-                      ? "运行中"
-                      : "就绪"}
-              </span>
+              <span className="truncate">{sessionSubtitle(session)}</span>
             </span>
           }
           title={session.title}
           titleOpen={sheet === "sessions"}
           trailing={
-            <div className="flex rounded-full bg-surface-raised">
+            <div className="flex items-center">
               {session.hasGit ? (
-                <IconButton
-                  icon="branch"
-                  label={props.dirty === true ? "变更，有未提交的改动" : "变更"}
-                  onClick={props.onOpenChanges}
-                />
+                <NavAction onClick={props.onOpenChanges}>变更</NavAction>
               ) : null}
-              <IconButton
-                icon="folder"
-                label="文件"
-                onClick={props.onOpenFiles}
-              />
+              <NavAction onClick={props.onOpenFiles}>文件</NavAction>
             </div>
           }
         />
@@ -265,20 +279,79 @@ export function SessionScreen(props: {
     >
       {props.disconnected === true ? (
         <div
-          className="border-b border-status-warning-border bg-status-warning-bg px-4 py-3 text-[13px] text-status-warning-fg leading-5"
+          className="flex items-center gap-3 border-b border-status-warning-border bg-status-warning-bg px-4 py-3 text-[13px] text-status-warning-fg leading-5"
           role="status"
         >
-          <p className="font-medium">连接已断开</p>
-          <p className="mt-0.5">正在等待恢复，以下是断开前的内容。</p>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">连接已断开</p>
+            <p className="mt-0.5">正在等待恢复，以下是断开前的内容。</p>
+          </div>
+          {props.onRetry === undefined ? null : (
+            <button
+              className="flex min-h-11 shrink-0 items-center rounded-full border border-status-warning-border px-4 font-medium transition-colors duration-75 active:bg-interactive-active"
+              onClick={props.onRetry}
+              type="button"
+            >
+              重试
+            </button>
+          )}
+        </div>
+      ) : props.feedInterrupted === true ? (
+        <div
+          className="border-b border-border/50 px-4 py-2 text-[12px] text-status-warning-fg leading-5"
+          role="status"
+        >
+          读取中断 · 画面可能不是最新，恢复后自动更新。
         </div>
       ) : null}
-      <TerminalSurface
-        className="px-4 pt-4 pb-6"
-        fontIndex={fontIndex}
-        key={session.id}
-        lines={session.screen}
-        ref={terminalRef}
-      />
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <TerminalSurface
+          className="px-4 pt-4 pb-6"
+          fontIndex={fontIndex}
+          key={session.id}
+          lines={session.screen}
+          ref={terminalRef}
+        />
+      </div>
+    </PhoneShell>
+  );
+}
+
+/** S1x：通知指向的会话已在电脑上结束。不落空帧，给明确终态与去向。 */
+export function SessionEndedScreen(props: {
+  backLabel: string;
+  onBack?: (() => void) | undefined;
+  /** 终态页的去向：回到这台电脑的工作台。 */
+  onOpenWorkbench?: (() => void) | undefined;
+  title?: string | undefined;
+}): ReactNode {
+  return (
+    <PhoneShell
+      nav={
+        <NavBar
+          back={{ label: props.backLabel, onClick: props.onBack }}
+          layout="split"
+          title={props.title ?? "会话"}
+        />
+      }
+    >
+      <div className="flex min-h-0 flex-1 flex-col">
+        <QuietEmpty
+          body="它在电脑上已关闭；相关通知已标为已读。可以在工作台上查看还在运行的会话。"
+          title="该会话已结束"
+        />
+        {props.onOpenWorkbench === undefined ? null : (
+          <div className="px-6 pb-10">
+            <HitButton
+              className="w-full"
+              onClick={props.onOpenWorkbench}
+              variant="outline"
+            >
+              查看工作台
+            </HitButton>
+          </div>
+        )}
+      </div>
     </PhoneShell>
   );
 }

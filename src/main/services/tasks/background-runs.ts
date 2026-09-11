@@ -172,10 +172,10 @@ export function createTaskBackgroundRuns(
     }
     const processRecord = processes.get(processKey);
     if (!processRecord) {
-      finishPanel(panelId, 130, windowId).catch((error: unknown) => {
-        console.error("[tasks] background stop reconciliation failed:", error);
-      });
-      return { ok: true };
+      return {
+        ok: false,
+        message: "background process creation or exit is not yet confirmed",
+      };
     }
     const accepted = signalBackgroundTaskProcess(processRecord.process, false);
     if (!accepted) {
@@ -200,23 +200,16 @@ export function createTaskBackgroundRuns(
     }
     const processRecord = processes.get(processKey);
     if (!processRecord) {
-      finishPanel(panelId, 137, windowId).catch((error: unknown) => {
-        console.error(
-          "[tasks] background force stop reconciliation failed:",
-          error
-        );
-      });
-      return { ok: true };
+      return {
+        ok: false,
+        message: "background process creation or exit is not yet confirmed",
+      };
     }
     const accepted = signalBackgroundTaskProcess(processRecord.process, true);
     if (!accepted) {
       return { message: "background process rejected force stop", ok: false };
     }
-    forgetProcess(processRecord.runId);
-    outputs.flush(processRecord.runId, processRecord.outputTaskId);
-    finishPanel(panelId, 137, windowId).catch((error: unknown) => {
-      console.error("[tasks] background force stop completion failed:", error);
-    });
+    // Keep process/output ownership until the child's actual close callback.
     return { ok: true };
   }
 

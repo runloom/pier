@@ -9,6 +9,9 @@
  */
 import { pierCanvasExports } from "@/lib/live-modules/pier-canvas-exports.ts";
 
+export type { ScreenFlowSpec } from "@pier/ui/canvas-workflow/screen-flow.ts";
+export type { WorkflowSpec } from "@pier/ui/canvas-workflow/types.ts";
+
 export const {
   Accordion,
   AccordionContent,
@@ -123,6 +126,7 @@ export const {
   RadioGroup,
   RadioGroupItem,
   Row,
+  ScreenFlow,
   ScrollArea,
   ScrollBar,
   Select,
@@ -164,6 +168,7 @@ export const {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  WorkflowDiagram,
   WorldStage,
   formatBytes,
   formatCompactCurrency,
@@ -177,4 +182,7 @@ export const {
   useCostOverview,
   useSystemResources,
   useCanvasFile,
+  validateScreenFlowPaint,
+  validateScreenFlowSpec,
+  validateWorkflowSpec,
 } = pierCanvasExports;

@@ -2,10 +2,10 @@ import { useTerminalOverlayRegistration } from "@pier/ui/use-terminal-overlay.ts
 import { APPKIT_KEYCODE } from "@shared/terminal-appkit-keys.ts";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -18,15 +18,18 @@ import {
   useTerminalStore,
 } from "@/stores/terminal.store.ts";
 import { registerTerminalComposerTakeover } from "@/stores/terminal-composer-takeover.ts";
+import { useTerminalDraftStore } from "@/stores/terminal-drafts.store.ts";
+import {
+  getOrCreateTerminalComposerSession,
+  writeComposerDraft,
+} from "./composer/session.ts";
 import type { ComposerAttachment } from "./composer-attachments-model.ts";
 import { createComposerEditorMutations } from "./composer-editor-bridge.ts";
 import {
-  clearComposerDraft,
   elementSoftWrapped,
+  focusComposerFromChrome,
   focusComposerInput,
-  readComposerDraft,
   sendComposerPassthroughKeyPress,
-  writeComposerDraft,
 } from "./composer-helpers.ts";
 import {
   type ComposerPassthroughKeyPress,
@@ -64,13 +67,15 @@ interface TerminalComposerProps {
   panelId: string;
   /** Absolute project root for @ mentions; null without workspace. */
   projectRootPath?: string | null;
+  restartRequired?: boolean;
 }
 
 export function TerminalComposer({
   agentKind = null,
   attachRequest = 0,
   bottomOffsetPx,
-  disabled,
+  disabled: sendDisabled,
+  restartRequired = false,
   focusRequest = 0,
   isActive,
   onClose,
@@ -79,10 +84,21 @@ export function TerminalComposer({
   projectRootPath = null,
 }: TerminalComposerProps) {
   const t = useT();
+  const session = useMemo(
+    () => getOrCreateTerminalComposerSession(panelId),
+    [panelId]
+  );
+  const frozen = useTerminalDraftStore(
+    (state) => state.drafts[panelId]?.frozen ?? false
+  );
+  const sendBlocked = sendDisabled || frozen;
   const overlayId = `terminal-composer:${panelId}`;
   const rootRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<StructuredComposerEditorHandle>(null);
-  const [value, setValue] = useState(() => readComposerDraft(panelId));
+  const [value, setValue] = useComposerDraft(session);
+  const draftStatus = useTerminalDraftStore(
+    (state) => state.drafts[panelId]?.durable.status
+  );
   const [softWrapped, setSoftWrapped] = useState(false);
   const [stickyExpanded, setStickyExpanded] = useState(false);
   const activeOverlayId = useTerminalOverlayFocus(
@@ -99,17 +115,17 @@ export function TerminalComposer({
   const imeGate = imeGateRef.current;
   useEffect(() => () => imeGate.dispose(), [imeGate]);
 
-  useComposerDraft(panelId, value);
-  useEffect(() => registerComposerDraftSinkForTests(setValue), []);
+  useEffect(() => registerComposerDraftSinkForTests(setValue), [setValue]);
   const initialSnapshotJson = useComposerEditorSnapshot({
     editorRef,
-    panelId,
+    session,
     value,
   });
   useComposerInserter({
     editorRef,
     onValueChange: setValue,
     panelId,
+    session,
     valueRef,
   });
 
@@ -123,28 +139,31 @@ export function TerminalComposer({
     [t]
   );
 
-  const attachments = useTerminalComposerAttachments({
-    disabled,
-    editorMutations: createComposerEditorMutations({ editorRef, valueRef }),
-    getDraftAndCursor: () => {
-      const handle = editorRef.current;
-      const draft = valueRef.current;
-      if (!handle) {
-        return { cursor: draft.length, draft, selectionEnd: draft.length };
-      }
-      const selection = handle.getSelection();
-      return {
-        cursor: selection.cursor,
-        draft,
-        selectionEnd: selection.selectionEnd,
-      };
-    },
-    onDraftChange: (draft, cursor) => {
+  const editorMutations = useMemo(
+    () => createComposerEditorMutations({ editorRef, valueRef }),
+    // Refs are stable; a new mutations object would re-register the edit handler.
+    []
+  );
+  const getDraftAndCursor = useCallback(() => {
+    const handle = editorRef.current;
+    const draft = valueRef.current;
+    if (!handle) {
+      return { cursor: draft.length, draft, selectionEnd: draft.length };
+    }
+    const selection = handle.getSelection();
+    return {
+      cursor: selection.cursor,
+      draft,
+      selectionEnd: selection.selectionEnd,
+    };
+  }, []);
+  const onDraftChange = useCallback(
+    (draft: string, cursor?: number) => {
       valueRef.current = draft;
       setValue(draft);
       queueMicrotask(() => {
         const handle = editorRef.current;
-        if (!handle) {
+        if (!handle || session.signal.aborted) {
           return;
         }
         // Lexical-preserving mutations already updated the editor; only
@@ -157,8 +176,16 @@ export function TerminalComposer({
         }
       });
     },
-    panelId,
+    [session, setValue]
+  );
+
+  const attachments = useTerminalComposerAttachments({
+    disabled: frozen,
+    editorMutations,
+    getDraftAndCursor,
+    onDraftChange,
     reportError: reportAttachmentError,
+    session,
     t,
   });
 
@@ -174,9 +201,6 @@ export function TerminalComposer({
   );
 
   const inputFocusRisk = useTuiInputFocusRisk(panelId, isActive);
-  // 光标探针只提示风险，不禁用发送：发送时会实时恢复焦点，恢复失败再由用户确认。
-  // 真正禁用按钮的只有终端不可用或草稿/附件本身不可发送。
-  const canSend = !disabled && attachments.canSendWithDraft(value);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -231,16 +255,16 @@ export function TerminalComposer({
         }
         // 面板激活 / 点 tab：若 composer 仍开着，refocus 输入框。
         const el = editorRef.current?.getElement();
-        if (!el || disabled) {
+        if (!el || frozen) {
           return false;
         }
         return focusComposerInput(el, overlayId);
       }),
-    [disabled, overlayId, panelId]
+    [frozen, overlayId, panelId]
   );
 
   useEffect(() => {
-    if (disabled || !isActive) {
+    if (focusRequest <= 0 || !isActive) {
       return;
     }
     const request = focusRequest;
@@ -249,7 +273,7 @@ export function TerminalComposer({
         return;
       }
       const el = editorRef.current?.getElement();
-      if (!el || disabled) {
+      if (!el || frozen) {
         return;
       }
       focusComposerInput(el, overlayId);
@@ -259,7 +283,7 @@ export function TerminalComposer({
     return () => {
       cancelAnimationFrame(raf);
     };
-  }, [disabled, focusRequest, isActive, overlayId]);
+  }, [frozen, focusRequest, isActive, overlayId]);
 
   const attachPickFilesRef = useRef(attachments.pickFiles);
   attachPickFilesRef.current = attachments.pickFiles;
@@ -270,7 +294,7 @@ export function TerminalComposer({
       lastAttachRequestRef.current = 0;
       return;
     }
-    if (disabled || attachRequest === lastAttachRequestRef.current) {
+    if (frozen || attachRequest === lastAttachRequestRef.current) {
       return;
     }
     lastAttachRequestRef.current = attachRequest;
@@ -283,7 +307,7 @@ export function TerminalComposer({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [attachRequest, disabled]);
+  }, [attachRequest, frozen]);
 
   useEffect(() => {
     if (activeOverlayId !== null && activeOverlayId !== overlayId) {
@@ -299,10 +323,10 @@ export function TerminalComposer({
   );
 
   useEffect(() => {
-    if (disabled) {
+    if (frozen) {
       useTerminalStore.getState().deactivateOverlay(overlayId);
     }
-  }, [disabled, overlayId]);
+  }, [frozen, overlayId]);
 
   useEffect(() => {
     if (!isActive) {
@@ -317,31 +341,32 @@ export function TerminalComposer({
   }, []);
 
   useTerminalComposerEscape({
-    disabled,
+    disabled: frozen,
     editorRef,
     isActive,
     onClose: closeComposer,
     panelId,
+    session,
     valueRef,
   });
 
   const sendKey = (keyPress: ComposerPassthroughKeyPress) =>
     sendComposerPassthroughKeyPress({ keyPress, panelId, t });
 
-  const { send } = useTerminalComposerSend({
+  const { send, sending } = useTerminalComposerSend({
     buildPayloadOrReport: attachments.buildPayloadOrReport,
-    disabled,
+    disabled: sendBlocked,
     getDraft: () => editorRef.current?.getValue() ?? valueRef.current,
     isComposing: () => imeGate.isHeld(),
-    onSent: () => {
-      clearComposerDraft(panelId);
-      setValue("");
-      attachments.clearAll();
-      onCloseRef.current();
-    },
-    panelId,
+    onSent: () => onCloseRef.current(),
+    session,
     t,
   });
+  // 光标探针只提示风险；发送中的终端不接受重复提交，正文仍可继续编辑。
+  const canSend =
+    !(sendBlocked || sending) &&
+    draftStatus !== "sending" &&
+    attachments.canSendWithDraft(value);
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (isImePendingKeyboardEvent(event.nativeEvent) || imeGate.isHeld()) {
@@ -362,7 +387,7 @@ export function TerminalComposer({
       }
       event.preventDefault();
       event.stopPropagation();
-      writeComposerDraft(panelId, valueRef.current);
+      writeComposerDraft(session, valueRef.current);
       closeComposer();
       return;
     }
@@ -423,35 +448,11 @@ export function TerminalComposer({
 
   const compact = !(wantExpand || stickyExpanded);
 
-  const focusInputFromChrome = (
-    event: ReactMouseEvent<HTMLDivElement>
-  ): void => {
-    if (disabled) {
-      return;
-    }
-    const target = event.target;
-    if (!(target instanceof Element)) {
-      return;
-    }
-    if (
-      target.closest(
-        "button, a, input, textarea, [role='button'], .composer-attachment-surface"
-      )
-    ) {
-      return;
-    }
-    const el = editorRef.current?.getElement();
-    if (!el) {
-      return;
-    }
-    // Do not steal mousedown inside the editor — that kills drag-select.
-    if (el === target || el.contains(target)) {
-      return;
-    }
-    event.preventDefault();
-    focusComposerInput(el, overlayId);
-  };
-
+  let notice = restartRequired
+    ? t("terminal.composer.restartToSend")
+    : undefined;
+  if (draftStatus === "unconfirmed")
+    notice = t("terminal.composer.unconfirmedHint");
   return (
     <TerminalComposerView
       agentKind={agentKind}
@@ -459,13 +460,21 @@ export function TerminalComposer({
       bottomOffsetPx={bottomOffsetPx}
       canSend={canSend}
       compact={compact}
-      disabled={disabled}
+      disabled={frozen}
       editorRef={editorRef}
       hasAttachments={hasAttachments}
       imeGate={imeGate}
       initialSnapshotJson={initialSnapshotJson}
       inputFocusRisk={inputFocusRisk}
-      onChromeMouseDown={focusInputFromChrome}
+      notice={notice}
+      onChromeMouseDown={(event) => {
+        if (!frozen)
+          focusComposerFromChrome(
+            event,
+            editorRef.current?.getElement() ?? null,
+            overlayId
+          );
+      }}
       onDragOver={attachments.onDragOver}
       onDrop={attachments.onDrop}
       onEditPaste={onEditPaste}

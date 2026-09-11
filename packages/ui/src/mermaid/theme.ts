@@ -1,4 +1,5 @@
 import type { Mermaid } from "mermaid";
+import { applyFlowchartLook } from "./flowchart-look.ts";
 import {
   type MermaidDirection,
   type MermaidEdge,
@@ -9,138 +10,9 @@ import {
   SLOT_WIDTH_PX,
   slotHeightPx,
 } from "./model.ts";
+import { MERMAID_THEME_CSS } from "./theme-css.ts";
 
-export const MERMAID_THEME_CSS = `
-  .node, .cluster, .actor, .classGroup, .er.entityBox, .mindmap-node {
-    filter: none !important;
-  }
-  .flowchart-link, .edge-thickness-normal, .relation, .transition, .messageLine0, .messageLine1, .actor-line, .loopLine {
-    stroke: color-mix(in srgb, var(--foreground) 45%, var(--background)) !important;
-  }
-  marker path, .arrowMarkerPath, .marker {
-    fill: color-mix(in srgb, var(--foreground) 45%, var(--background)) !important;
-    stroke: color-mix(in srgb, var(--foreground) 45%, var(--background)) !important;
-  }
-  .nodeLabel, .edgeLabel, .label, .actor, .messageText, .labelText, .loopText, .noteText, .entityLabel, .classTitle, .titleText, .taskText, .legendText,
-  .messageText > tspan, .labelText > tspan, .loopText > tspan, .noteText > tspan,
-  text.actor > tspan {
-    color: var(--foreground) !important;
-    fill: var(--foreground) !important;
-    font-family: var(--font-sans) !important;
-  }
-  /* mermaid base theme paints edge-label pills pink through its own
-     ".edgeLabel p" / ".edgeLabel rect" rules; neutralize every layer so a
-     label reads as plain foreground text floating on the surface. */
-  .edgeLabel, .labelBkg, .edgeLabel p {
-    background-color: var(--background) !important;
-  }
-  .edgeLabel rect {
-    fill: transparent !important;
-    opacity: 1 !important;
-  }
-  /* Sequence actor titles share class "actor" with the box; paint only the
-     rect here so text.actor keeps --foreground from the rule above. */
-  .actor-man, .classGroup rect, .er.entityBox, .statediagram-state rect, .statediagram-cluster rect, .mindmap-node > * {
-    fill: var(--card) !important;
-    stroke: var(--border) !important;
-  }
-  .activation0, .activation1, .activation2 {
-    fill: var(--muted) !important;
-    stroke: var(--border) !important;
-  }
-  /* Sequence notes / alt headers: mermaid's light theme paints a dark gray
-     fill on .noteText > tspan (and loop/label/actor tspans). !important
-     on the parent does not inherit, so those labels stay dark-on-dark
-     unless the tspan rule above paints them. --muted on --background is
-     ~0.09 L in dark theme, so the note rect itself also vanishes;
-     --secondary is the next structural surface that still contrasts in
-     both themes. */
-  .note, .labelBox, rect.actor {
-    fill: var(--secondary) !important;
-    stroke: var(--border) !important;
-  }
-  /* Default flowchart nodes: mermaid.js paints a cream nodeBkg after this
-     block. !important beats that fill so dark-theme labels (foreground)
-     stay readable. classDef rules are also !important and are appended
-     after themeCSS, so author fills still win. Slotted Pier rects stay
-     transparent below. */
-  .node rect, .node polygon, .node circle, .node .label-container, .node .basic {
-    fill: var(--card) !important;
-    stroke: var(--border) !important;
-  }
-  .${SLOT_CLASS} > rect,
-  .${SLOT_CLASS} > polygon,
-  .${SLOT_CLASS} > circle,
-  .${SLOT_CLASS} .label-container,
-  .${SLOT_CLASS} .basic {
-    fill: transparent !important;
-    stroke: none !important;
-    filter: none !important;
-  }
-  /* mermaid htmlLabels wrap the slot in span.nodeLabel + table-cell
-     (vertical-align middle, line-height 1.5). A centered card shorter
-     than that cell leaves a transparent band at the top of the node.
-     Pin the wrapper to the top and keep overflow visible so the status
-     surface can cover every title line. Leftover htmlLabel text (vertex
-     id) stays invisible without collapsing the box. Do not set height
-     100% on [data-pier-slot]: that would override the measured px box. */
-  .${SLOT_CLASS} .label {
-    fill: none !important;
-    overflow: visible !important;
-    padding: 0 !important;
-  }
-  .${SLOT_CLASS} foreignObject,
-  .${SLOT_CLASS} foreignObject > div {
-    color: initial !important;
-    display: block !important;
-    fill: none !important;
-    line-height: normal !important;
-    overflow: visible !important;
-    vertical-align: top !important;
-    white-space: normal !important;
-  }
-  .${SLOT_CLASS} .nodeLabel,
-  .${SLOT_CLASS} .nodeLabel p {
-    color: transparent !important;
-    display: block !important;
-    fill: none !important;
-    font-size: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  .${SLOT_CLASS} .nodeLabel [${SLOT_ATTR}] {
-    color: initial !important;
-    font-size: 1rem !important;
-    line-height: normal !important;
-  }
-  /* mermaid flowchart CSS fills node paths with a pale yellow. Lucide
-     icons in htmlLabels are descendants of g.node, so that rule turns
-     kind/status glyphs into pale yellow blobs unless we isolate them. */
-  .${SLOT_CLASS} foreignObject svg {
-    color: inherit;
-    height: unset;
-    max-width: none;
-    overflow: visible;
-  }
-  .${SLOT_CLASS} foreignObject path,
-  .${SLOT_CLASS} foreignObject circle,
-  .${SLOT_CLASS} foreignObject ellipse,
-  .${SLOT_CLASS} foreignObject line,
-  .${SLOT_CLASS} foreignObject polyline,
-  .${SLOT_CLASS} foreignObject polygon,
-  .${SLOT_CLASS} foreignObject rect {
-    fill: none !important;
-    stroke: currentColor !important;
-    stroke-width: 2px !important;
-  }
-  .${SLOT_CLASS} foreignObject [data-slot="mermaid-node-content"] [data-slot="button"][data-variant="outline"] {
-    background-color: transparent !important;
-    border-color: inherit !important;
-  }
-  svg {
-    overflow: visible;
-  }
-`;
+export { MERMAID_THEME_CSS } from "./theme-css.ts";
 
 let mermaidPromise: Promise<Mermaid> | null = null;
 
@@ -203,7 +75,7 @@ export async function renderMermaid(
   source: string
 ): Promise<{ svg: string }> {
   const mermaid = await loadMermaid();
-  return mermaid.render(id, source);
+  return mermaid.render(id, applyFlowchartLook(source));
 }
 
 /** `nodes`/`edges` → mermaid flowchart text. Other families pass `source`. */
@@ -222,19 +94,14 @@ export function mermaidFlowchart(options: {
   for (const node of options.nodes) {
     lines.push(`  ${flowchartNode(node, ids.get(node.id) ?? node.id)}`);
   }
-  const kinds = new Map(options.nodes.map((node) => [node.id, node.kind]));
   for (const edge of options.edges) {
     const from = ids.get(edge.source) ?? edge.source;
     const to = ids.get(edge.target) ?? edge.target;
-    const dashed =
-      kinds.get(edge.source) === "external" ||
-      kinds.get(edge.target) === "external";
     const label = edgeLabel(edge.label);
-    if (dashed && label) {
-      lines.push(`  ${from} -.->|${label}| ${to}`);
-    } else if (dashed) {
-      lines.push(`  ${from} -.-> ${to}`);
-    } else if (label) {
+    // Neo look's generateDashArray throws on dotted mermaid edges
+    // (`RangeError: Invalid array length`). External/artifact stay dashed
+    // on the slotted card, not the connector.
+    if (label) {
       lines.push(`  ${from} -->|${label}| ${to}`);
     } else {
       lines.push(`  ${from} --> ${to}`);

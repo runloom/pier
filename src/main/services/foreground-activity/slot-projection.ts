@@ -36,6 +36,7 @@ export function projectSlot(
         ? {}
         : { stateStartedAt: hook.stateStartedAt, status: hook.status }),
       subagentCount: hook.subagentCount,
+      ...(hook.turnResult ? { turnResult: hook.turnResult } : {}),
       updatedAt: hook.updatedAt,
       windowId: hook.windowId,
       ...(slot.sessionTitle === undefined

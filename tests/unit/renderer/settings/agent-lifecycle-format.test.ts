@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatAgentVersionMeta,
+  formatLifecycleBatchFailureBody,
   formatLifecycleBatchFailureLine,
   formatLifecycleError,
   formatLifecycleRowFailure,
@@ -53,6 +54,76 @@ describe("formatLifecycleError", () => {
   });
 });
 
+describe("formatLifecycleError runtime facts", () => {
+  it("appends host Node and install paths", () => {
+    const formatted = formatLifecycleError(t, {
+      errorCode: "version_unchanged",
+      hostNode: { path: "/usr/bin/node", version: "v24.15.0" },
+      installPaths: ["/usr/bin/grok", "/opt/homebrew/bin/grok"],
+    });
+    expect(formatted).toContain(
+      'settings.agents.lifecycle.facts.node:{"path":"/usr/bin/node","version":"v24.15.0"}'
+    );
+    expect(formatted).toContain(
+      'settings.agents.lifecycle.facts.installs:{"count":2,"paths":"/usr/bin/grok\\n/opt/homebrew/bin/grok"}'
+    );
+  });
+
+  it("can omit the message so a soft-failure alert title is not duplicated", () => {
+    const facts = formatLifecycleError(
+      t,
+      {
+        errorCode: "version_unchanged",
+        hostNode: { path: "/usr/bin/node", version: "v24.15.0" },
+        installPaths: ["/usr/bin/kilo"],
+      },
+      { includeMessage: false }
+    );
+    expect(facts).not.toContain("errors.version_unchanged");
+    expect(facts).toContain("facts.node");
+    expect(facts).toContain("facts.installs");
+  });
+
+  it("does not dump the command preview on version_unchanged", () => {
+    const formatted = formatLifecycleError(t, {
+      commandPreview: "kilo upgrade || npm i -g @kilocode/cli@latest --force",
+      errorCode: "version_unchanged",
+      hostNode: { path: "/usr/bin/node", version: "v24.15.0" },
+    });
+    expect(formatted).not.toContain("kilo upgrade");
+    expect(formatted).not.toContain("npm i -g");
+  });
+
+  it("does not dump the command preview on node_requirement_unmet", () => {
+    const formatted = formatLifecycleError(t, {
+      commandPreview: "npm i -g openclaw@latest",
+      errorCode: "node_requirement_unmet",
+      hostNode: { path: "/usr/bin/node", version: "v24.15.0" },
+      requiredNode: ">=24.16.0 <25 || >=26.1.0",
+    });
+    expect(formatted).not.toContain("npm i -g");
+  });
+
+  it("renders node_requirement_unmet with required and current", () => {
+    const formatted = formatLifecycleError(t, {
+      errorCode: "node_requirement_unmet",
+      requiredNode: ">=24.16.0 <25 || >=26.1.0",
+      hostNode: { path: "/usr/bin/node", version: "v24.15.0" },
+    });
+    expect(formatted).toContain(
+      'settings.agents.lifecycle.errors.node_requirement_unmet:{"required":">=24.16.0 <25 || >=26.1.0","current":"v24.15.0"}'
+    );
+  });
+
+  it("omits facts when the host Node is unknown", () => {
+    const formatted = formatLifecycleError(t, {
+      errorCode: "command_failed",
+      errorDetail: "boom",
+    });
+    expect(formatted).not.toContain("facts.node");
+  });
+});
+
 describe("formatLifecycleBatchFailureLine", () => {
   it("prefixes the product label and omits timeout dumps", () => {
     expect(
@@ -62,6 +133,38 @@ describe("formatLifecycleBatchFailureLine", () => {
         errorDetail: "npm error signal SIGTERM",
       })
     ).toBe("Amp: settings.agents.lifecycle.errors.timeout");
+  });
+});
+
+describe("formatLifecycleBatchFailureBody", () => {
+  it("separates agents and appends host Node once", () => {
+    const body = formatLifecycleBatchFailureBody(t, [
+      {
+        agentLabel: "Kilo Code",
+        commandPreview: "kilo upgrade || npm i -g @kilocode/cli@latest",
+        errorCode: "version_unchanged",
+        hostNode: { path: "/usr/bin/node", version: "v24.15.0" },
+        installPaths: ["/usr/bin/kilo", "/opt/homebrew/bin/kilo"],
+      },
+      {
+        agentLabel: "OpenClaw",
+        commandPreview: "npm i -g openclaw@latest",
+        errorCode: "node_requirement_unmet",
+        hostNode: { path: "/usr/bin/node", version: "v24.15.0" },
+        requiredNode: ">=24.16.0 <25 || >=26.1.0",
+      },
+    ]);
+    expect(body).toContain("Kilo Code:");
+    expect(body).toContain("OpenClaw:");
+    expect(body).toContain("\n\nOpenClaw:");
+    expect(body).not.toContain("kilo upgrade");
+    expect(body).not.toContain("npm i -g");
+    expect(body.split("facts.node").length - 1).toBe(1);
+    expect(
+      body.endsWith(
+        'settings.agents.lifecycle.facts.node:{"path":"/usr/bin/node","version":"v24.15.0"}'
+      )
+    ).toBe(true);
   });
 });
 

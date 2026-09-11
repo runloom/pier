@@ -362,6 +362,16 @@ public final class TerminalSurface {
         readSelectionResult()?.text
     }
 
+    func retainAfterExit() {
+        guard let surface else { return }
+        ghostty_surface_retain_after_exit(surface)
+    }
+
+    func signalProcess(force: Bool) -> Bool {
+        guard let surface else { return false }
+        return ghostty_surface_signal_process(surface, force)
+    }
+
     /// Current viewport text only (no scrollback). Empty viewport → "".
     func readViewportText() -> String? {
         guard let s = surface else {

@@ -1,5 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
+import { MAC_UNUSED_USAGE_DESCRIPTION_KEYS } from "./mac-privacy-descriptions.mjs";
 
 export const MAC_HELPER_SUFFIXES = Object.freeze([
   "",
@@ -131,6 +132,10 @@ export function rootPlistStringValue(source, key) {
   }
 }
 
+export function stripRootPlistStringKeys(source, keys) {
+  return updateRootPlistStrings(source, {}, [...keys]);
+}
+
 function updateRootPlistStrings(source, set, remove) {
   const parsed = plistRootStrings(source);
   const targets = new Set([...Object.keys(set), ...remove]);
@@ -205,7 +210,7 @@ export async function installMacHelperIcons(appPath, options = {}) {
       const nextPlist = updateRootPlistStrings(
         plist,
         { CFBundleIconFile: "icon.icns" },
-        ["CFBundleIconName"]
+        ["CFBundleIconName", ...MAC_UNUSED_USAGE_DESCRIPTION_KEYS]
       );
       if (
         rootPlistStringValue(nextPlist, "CFBundleIconFile") !== "icon.icns" ||
@@ -238,14 +243,42 @@ export async function installMacHelperIcons(appPath, options = {}) {
   };
 }
 
+export async function stripUnusedMacUsageDescriptionsFromApp(
+  appPath,
+  options = {}
+) {
+  const app = resolve(appPath);
+  const productName = options.productName ?? basename(app, ".app");
+  const plistPaths = [
+    join(app, "Contents", "Info.plist"),
+    ...MAC_HELPER_SUFFIXES.map((suffix) =>
+      join(
+        app,
+        "Contents",
+        "Frameworks",
+        `${productName} Helper${suffix}.app`,
+        "Contents",
+        "Info.plist"
+      )
+    ),
+  ];
+  for (const plistPath of plistPaths) {
+    const plist = await readFile(plistPath, "utf8");
+    await writeFile(
+      plistPath,
+      stripRootPlistStringKeys(plist, MAC_UNUSED_USAGE_DESCRIPTION_KEYS)
+    );
+  }
+}
+
 export async function afterPack(context) {
   if (context.electronPlatformName !== "darwin") {
     return;
   }
   const productName = context.packager.appInfo.productFilename;
-  await installMacHelperIcons(join(context.appOutDir, `${productName}.app`), {
-    productName,
-  });
+  const app = join(context.appOutDir, `${productName}.app`);
+  await installMacHelperIcons(app, { productName });
+  await stripUnusedMacUsageDescriptionsFromApp(app, { productName });
 }
 
 export default afterPack;

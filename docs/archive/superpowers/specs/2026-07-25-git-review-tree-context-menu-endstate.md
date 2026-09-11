@@ -7,7 +7,7 @@
 
 | 名 | 所有者 | 用途 |
 |----|--------|------|
-| L-Select | pierre `selectedPaths` | 树 `aria-selected` |
+| L-Select | pierre `selectedPaths` | 树 `aria-selected`（可为多行；见 `2026-09-10-tree-multiselect-gold-standard`） |
 | L-Focus | pierre focused + DOM | 焦点环；**永不 open / 永不滚 CodeView** |
 | B-Select | `selectedEntryKey` + `sectionKey` | 审查目标；**仅 B 变化可 `scrollToItem`（含 section 重绑）** |
 
@@ -26,7 +26,7 @@
 - **Command**：`begin` 起 **rAF 循环**钉 CodeView 真实滚动节点的 raw `scrollTop`（解析 overflow 祖先，禁止 `restoreAnchor`）；`end` stop + 再钉两帧。会话内 `commandMenuSessionRef` 硬禁 `openTreeNode`。
 - **Inspect**：不 freeze；允许一次 navigate。
 - 菜单会话 `suppressOpenPathFromContextMenu` 全程有效。
-- 菜单关闭后：补 L-Select 若丢失；**不** `focusPath`。
+- 菜单关闭后：补 L-Select 若丢失；Command 且 begin 快照长度 > 1 时恢复整集，禁止只 `selectOnlyPath(目标)`；**不** `focusPath`。
 
 ## 4. resume 规则
 

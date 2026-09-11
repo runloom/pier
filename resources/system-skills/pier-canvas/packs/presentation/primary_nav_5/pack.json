@@ -44,6 +44,7 @@
       "shows": ["defaults", "phases", "tasks", "acceptance", "competitors"]
     }
   ],
+  "template": "templates/closed-loop.canvas.tsx",
   "antiPatterns": [
     "more than 5 top-level tabs",
     "equal-weight tabs with no primary",
@@ -58,5 +59,5 @@
     "overviewMax": 1,
     "preferred": ["sequence", "flowchart"]
   },
-  "agentPrompt": "Build a composition Canvas with ≤5 ordered Tabs (ids: overview primary, problem, design, path, landing). Resolve visible labels from i18n/nav.json using locale= (labels[id][locale] ?? labels[id].en ?? view.label). path = Day-1 copyable commands/recipe (≤4). Do not put implementation phases on path. Default STATIC product design. Start from templates/overview.canvas.tsx and rewrite all user-visible copy into the user's language. Prefer this pack only with content=closed-loop. See references/methodology.md Pack selection."
+  "agentPrompt": "≤5 Tabs: overview (primary), problem, design, path, landing. path = Day-1 recipe (≤4), not a migration schedule. Approval/recover loops are recipe=workflow, not Day-1 Mermaid. Prefer content=closed-loop."
 }

@@ -11,6 +11,7 @@ import type {
   AgentLifecycleProgress,
 } from "@shared/contracts/agent/lifecycle.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import type { HostNodeRuntime } from "../../process-environment/host-node-runtime.ts";
 import type { PlannedPlan } from "./plan/types.ts";
 import { planLifecycle } from "./plan.ts";
 import {
@@ -25,9 +26,13 @@ import { wslDistroFromPath } from "./wsl.ts";
 export interface RunUninstallUnlockedContext {
   afterUninstall?: (agentId: AgentKind) => Promise<void>;
   agentId: AgentKind;
+  cwd?: string | undefined;
   getLifecycleCommands?: () =>
     | LifecycleCommandOverrides
     | Promise<LifecycleCommandOverrides>;
+  hostNodeRuntime?: (
+    env?: NodeJS.ProcessEnv
+  ) => Promise<HostNodeRuntime | null>;
   onProgress?: (progress: AgentLifecycleProgress) => void;
   probeOne: (
     agentId: AgentKind,
@@ -151,6 +156,7 @@ export async function runUninstallUnlocked(
 
   // Single-shot plan: no version-stuck multi-channel loop.
   const result = await runner.run(planned, {
+    ...(ctx.cwd ? { cwd: ctx.cwd } : {}),
     env,
     signal,
     onProgress: (step) => {
@@ -183,6 +189,7 @@ export async function runUninstallUnlocked(
       runId,
       commandPreview: planned.preview,
       errorDetail: result.stderr || undefined,
+      hostNode: (await ctx.hostNodeRuntime?.(env)) ?? null,
     });
   }
   if (!result.ok) {
@@ -191,6 +198,7 @@ export async function runUninstallUnlocked(
       runId,
       commandPreview: planned.preview,
       errorDetail: detail,
+      hostNode: (await ctx.hostNodeRuntime?.(env)) ?? null,
     });
   }
 

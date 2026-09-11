@@ -2,6 +2,7 @@ import {
   DataChart,
   Mermaid,
   Table,
+  WorkflowDiagram,
   TableBody,
   TableCaption,
   TableCell,
@@ -130,6 +131,23 @@ export function VizPage() {
               />
             </TabsContent>
           </Tabs>
+        </MaterialCard>
+        <MaterialCard
+          install='import { WorkflowDiagram } from "pier/canvas"'
+          lead="泳道和步骤上的交互流程"
+          name="WorkflowDiagram"
+        >
+          <WorkflowDiagram
+            spec={{
+              edges: [{ from: "a", id: "e1", label: "Go", to: "b" }],
+              lanes: [{ id: "happy", label: "Path" }],
+              nodes: [
+                { col: 0, id: "a", label: "Start", lane: "happy" },
+                { col: 1, id: "b", label: "Done", lane: "happy" },
+              ],
+              title: "Path",
+            }}
+          />
         </MaterialCard>
       </KitGrid>
     </KitSection>

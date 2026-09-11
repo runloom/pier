@@ -140,9 +140,6 @@ describe("RuntimeControlService", () => {
       async interrupt() {
         return true;
       },
-      async deliverInitialPrompt() {
-        return true;
-      },
       async terminate() {
         return true;
       },
@@ -191,6 +188,44 @@ describe("RuntimeControlService", () => {
     const panel = backend.panels.get(started.data.panelId);
     expect(panel?.sent).toContain("\u0003");
     expect(panel?.closed).toBe(false);
+  });
+
+  it("projects a closed tab as exited so wait-until-exited can resolve", async () => {
+    const backend = createFakeTerminalBackend();
+    let now = 0;
+    const service = createRuntimeControlService({
+      bootId: "boot_close_exit",
+      backend,
+      nowMs: () => now,
+    });
+    const started = await service.start({ agentId: "codex" });
+    if (!started.ok) {
+      return;
+    }
+    const ref = started.data.runtime;
+    service.observeProcess({
+      panelId: started.data.panelId,
+      windowId: started.data.windowId,
+      generation: ref.generation,
+      lifecycleId: "life-close",
+      created: true,
+      exited: false,
+      closed: true,
+    });
+    const waited = await service.wait({
+      ...ref,
+      until: "exited",
+      timeoutMs: 50,
+      nowMs: () => now,
+      sleepMs: async () => {
+        now += 10;
+      },
+    });
+    expect(waited.ok).toBe(true);
+    if (waited.ok) {
+      expect(waited.data.reached).toBe(true);
+      expect(waited.data.until).toBe("exited");
+    }
   });
 
   it("wait until exited after terminate", async () => {
@@ -430,9 +465,11 @@ describe("RuntimeControlService", () => {
     expect(screened.data.screen.truncated).toBe(true);
     expect(screened.data.screen.text.split("\n").length).toBeLessThanOrEqual(5);
   });
-  it("prompt delivery failure terminates the spawned panel", async () => {
+  it("never pastes initial tasks into an already opened TUI or rolls back that surface", async () => {
     const backend = createFakeTerminalBackend();
-    backend.deliverInitialPrompt = async () => false;
+    backend.sendText = async () => {
+      throw new Error("startup approval must not receive a paste");
+    };
     const service = createRuntimeControlService({
       bootId: "boot_rb",
       backend,
@@ -443,14 +480,10 @@ describe("RuntimeControlService", () => {
       originAgentKind: "omp",
       originPanelId: "panel_parent",
     });
-    expect(started.ok).toBe(false);
-    if (started.ok) {
-      return;
-    }
-    expect(started.code).toBe("prompt_undeliverable");
+    expect(started.ok).toBe(true);
     const panels = [...backend.panels.values()];
     expect(panels.length).toBe(1);
-    expect(panels[0]?.closed).toBe(true);
+    expect(panels[0]?.closed).toBe(false);
   });
 
   it("releaseForPanel marks closed, frees quota, and is idempotent", async () => {
@@ -488,7 +521,7 @@ describe("RuntimeControlService", () => {
     expect(released).toEqual([first.data.runtime.runtimeId]);
   });
 
-  it("released runtime still answers wait(until exited)", async () => {
+  it("does not infer a process exit from a surface being released", async () => {
     const backend = createFakeTerminalBackend();
     const service = createRuntimeControlService({
       bootId: "boot_w",
@@ -506,7 +539,7 @@ describe("RuntimeControlService", () => {
     });
     expect(waited.ok).toBe(true);
     if (waited.ok) {
-      expect(waited.data.reached).toBe(true);
+      expect(waited.data.reached).toBe(false);
     }
   });
 
@@ -533,5 +566,39 @@ describe("RuntimeControlService", () => {
       expect(started.code).toBe("prompt_too_long");
     }
     expect(creates).toBe(0);
+  });
+
+  it("does not invent a native generation when a lifecycle id is present", async () => {
+    const backend = {
+      async create() {
+        return {
+          panelId: "panel_x",
+          windowId: "win_1",
+          runtimeId: "panel_x",
+          lifecycleId: "life-1",
+        };
+      },
+      async sendText() {
+        return true;
+      },
+      async readViewport() {
+        return { text: "x", rows: 1, cols: 1 };
+      },
+      async interrupt() {
+        return true;
+      },
+      async terminate() {
+        return true;
+      },
+    };
+    const service = createRuntimeControlService({
+      bootId: "boot_native_gen",
+      backend,
+    });
+    const started = await service.start({ agentId: "codex" });
+    expect(started.ok).toBe(false);
+    if (!started.ok) {
+      expect(started.code).toBe("provider_unavailable");
+    }
   });
 });

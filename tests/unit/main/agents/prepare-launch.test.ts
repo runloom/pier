@@ -94,12 +94,13 @@ describe("pier:agents:prepareLaunch", () => {
     });
   });
 
-  it("registers PATH prepend from wrap handlers", async () => {
+  it("keeps the registered launch pristine until native creation applies wrappers", async () => {
+    const wrap = vi.fn(async () => ({
+      decorateSpawn: true,
+      pathPrepend: ["/tmp/pier-wrap-bin"],
+    }));
     registerLaunchWrapHandler("pier.wrap.test", {
-      wrap: async () => ({
-        decorateSpawn: true,
-        pathPrepend: ["/tmp/pier-wrap-bin"],
-      }),
+      wrap,
       decorateSpawn: async () => ({}),
     });
     fakePreferences.read.mockResolvedValueOnce({
@@ -116,7 +117,8 @@ describe("pier:agents:prepareLaunch", () => {
     const registered = registerSpy.mock.calls[0]?.[0] as {
       env?: { PATH?: string };
     };
-    expect(registered.env?.PATH?.startsWith("/tmp/pier-wrap-bin")).toBe(true);
+    expect(registered.env?.PATH).toBeUndefined();
+    expect(wrap).not.toHaveBeenCalled();
   });
 
   it("注册 launch 时带上 agent 默认 env", async () => {

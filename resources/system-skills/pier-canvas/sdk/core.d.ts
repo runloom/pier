@@ -20,6 +20,10 @@ export interface RowProps {
 export interface FrameProps {
   children?: ReactNode;
   className?: string;
+  /**
+   * Optional inner cap. Omit so the files preview shell owns comfortable /
+   * wide measure (`max-w-5xl` vs full bleed).
+   */
   maxWidth?: number;
 }
 
@@ -51,6 +55,8 @@ export interface ArtboardProps {
    * preview only. Explicit value beats `preset`.
    */
   height?: number;
+  /** Stable path id for ScreenFlow edges (`data-artboard-id`). */
+  id?: string;
   /** Short id shown before the title, e.g. `K1`. */
   label?: string;
   /** `clip` (default) or `scroll` (prototype overflow only). */
@@ -203,3 +209,137 @@ export const Droppable: (props: DroppableProps) => ReactNode;
  */
 export const DocsShell: (props: DocsShellProps) => ReactNode;
 export const Text: (props: TextProps) => ReactNode;
+
+export type WorkflowEdgeRole = "main" | "branch" | "return" | "error";
+export type WorkflowLaneVariant = "default" | "exception";
+export type WorkflowNodeKind =
+  | "step"
+  | "gate"
+  | "system"
+  | "store"
+  | "external";
+
+export interface WorkflowLane {
+  id: string;
+  label: string;
+  variant?: WorkflowLaneVariant;
+}
+
+export interface WorkflowNode {
+  col: number;
+  detail?: string;
+  id: string;
+  kind?: WorkflowNodeKind;
+  label: string;
+  lane: string;
+  tag?: string;
+}
+
+export interface WorkflowPhase {
+  fromCol: number;
+  id: string;
+  label: string;
+  toCol: number;
+}
+
+export interface WorkflowGroup {
+  fromCol: number;
+  id: string;
+  label: string;
+  lane: string;
+  toCol: number;
+}
+
+export interface WorkflowNote {
+  items: readonly string[];
+  title: string;
+}
+
+export interface WorkflowEdge {
+  from: string;
+  id: string;
+  label: string;
+  role?: WorkflowEdgeRole;
+  to: string;
+}
+
+export interface WorkflowSpec {
+  edges: readonly WorkflowEdge[];
+  groups?: readonly WorkflowGroup[];
+  lanes: readonly WorkflowLane[];
+  mainPath?: readonly string[];
+  nodes: readonly WorkflowNode[];
+  notes?: readonly WorkflowNote[];
+  phases?: readonly WorkflowPhase[];
+  title: string;
+}
+
+export interface WorkflowDiagnostic {
+  code: string;
+  evidence?: Readonly<Record<string, string | number>>;
+  message: string;
+  severity: "error" | "warning";
+  subject: { edgeId?: string; nodeId?: string; path?: string };
+  supportedFixes: readonly string[];
+}
+
+export interface WorkflowValidateReceipt {
+  diagnostics: readonly WorkflowDiagnostic[];
+  status: 0 | 1;
+}
+
+export interface WorkflowDiagramProps {
+  className?: string;
+  spec: WorkflowSpec;
+}
+
+/**
+ * Compiled interaction flowchart. Authors write `spec` only — no pixels,
+ * `via`, or colors. Failed validation paints Empty, not a partial graph.
+ */
+export const WorkflowDiagram: (props: WorkflowDiagramProps) => ReactNode;
+/** Fail-closed receipt. Apply the first `supportedFixes` entry, then re-run. */
+export const validateWorkflowSpec: (
+  spec: WorkflowSpec
+) => WorkflowValidateReceipt;
+
+export type ScreenFlowEdge = WorkflowEdge;
+
+export interface ScreenFlowSpec {
+  edges: readonly ScreenFlowEdge[];
+  mainPath?: readonly string[];
+  start?: string;
+  title: string;
+}
+
+export interface ScreenFlowBox {
+  h: number;
+  id: string;
+  w: number;
+  x: number;
+  y: number;
+}
+
+export interface ScreenFlowProps {
+  className?: string;
+  spec: ScreenFlowSpec;
+}
+
+/**
+ * User-path overlay on WorldStage artboards. Authors write spec only.
+ * Failed validation paints Empty over the connectors, not a partial graph.
+ */
+export const ScreenFlow: (props: ScreenFlowProps) => ReactNode;
+/** Fail-closed receipt for screen-flow structure. Geometry runs after measure. */
+export const validateScreenFlowSpec: (
+  spec: ScreenFlowSpec
+) => WorkflowValidateReceipt;
+/**
+ * Author-time paint gate: structure + gutters + routing.
+ * `frames` are artboard-frame boxes (Layer.x, Layer.y + caption stack).
+ * If `status` is 1, apply only the first `supportedFixes` entry and re-run.
+ */
+export const validateScreenFlowPaint: (input: {
+  frames: readonly ScreenFlowBox[];
+  spec: ScreenFlowSpec;
+}) => WorkflowValidateReceipt;

@@ -68,6 +68,14 @@ export const CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> = {
     p("width", "number", "1280", "width"),
     p("height", "number", "800", "height")
   ),
+  ScreenFlow: entry(
+    [
+      "const receipt = validateScreenFlowPaint({ spec, frames })",
+      "if (receipt.status === 1) throw new Error(receipt.diagnostics[0]?.supportedFixes[0])",
+      "<ScreenFlow spec={spec} />",
+    ].join("\n"),
+    p("spec", "ScreenFlowSpec", "—", "screenFlowSpec")
+  ),
   AspectRatio: entry(
     "<AspectRatio ratio={16 / 9}>…</AspectRatio>",
     p("ratio", "number", "1", "ratio")
@@ -194,6 +202,13 @@ export const CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> = {
     ),
     p("renderNodeContent", "(node) => ReactNode", "—", "renderNodeContent"),
     p("expandable", "boolean", "true", "expandable")
+  ),
+  WorkflowDiagram: entry(
+    [
+      "const receipt = validateWorkflowSpec(spec)",
+      "<WorkflowDiagram spec={spec} />",
+    ].join("\n"),
+    p("spec", "WorkflowSpec", "—", "workflowSpec")
   ),
   Pagination: entry(
     "<Pagination><PaginationContent>…</PaginationContent></Pagination>",

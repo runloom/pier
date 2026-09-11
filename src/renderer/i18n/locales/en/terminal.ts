@@ -56,6 +56,17 @@ export const terminal = {
     waiting: "Awaiting confirmation",
   },
   composer: {
+    draftSaveFailed: "Couldn't save unsent input",
+    unconfirmedHint:
+      "This input may already be in the terminal. Check it before sending again.",
+    restartToSend: "Your draft is saved. Restart the agent before sending.",
+    unconfirmedTitle: "Send this input again?",
+    unconfirmedBody:
+      "Pier could not confirm the previous submission. Check the terminal first to avoid sending the same task twice.",
+    sendAgain: "Send again",
+    needsInput:
+      "Complete the confirmation or question in the terminal, then send your task.",
+
     attachFailed: "Couldn’t add file — try again",
     attachFile: "Add file",
     // Only warn for verified TUIs; cursor risk never disables sending by itself.
@@ -379,6 +390,7 @@ export const terminal = {
    * Prefer product wording over Ghostty brand for user-facing copy.
    */
   ghosttyHost: {
+    processStopped: "Process stopped. Output is available for review.",
     processExited: "Process exited",
     processExitedFailed: "Process exited with code {{code}}",
     processExitedAbnormal:

@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NativeAddon } from "../../../../src/main/ipc/terminal/native-addon.ts";
+import { nativeTerminalProcesses } from "../../../../src/main/ipc/terminal/process/registry.ts";
 import {
   pasteTerminalText,
   SUBMIT_ENTER_SETTLE_MS,
@@ -17,7 +18,62 @@ function fakeAddon(handlers: {
   } as unknown as NativeAddon;
 }
 
+beforeEach(() => {
+  for (const key of ["7::t1", "7::queued"])
+    nativeTerminalProcesses.created(nativeTerminalProcesses.begin(key));
+});
+
 describe("pasteTerminalText", () => {
+  it("does not submit into a replacement process after text was pasted", async () => {
+    vi.useFakeTimers();
+    try {
+      let current = true;
+      const addon = fakeAddon({ sendText: () => true });
+      const pending = pasteTerminalText({
+        addon,
+        nativePanelId: "7::stale-return",
+        submit: true,
+        text: "original task",
+        isCurrent: () => current,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      current = false;
+      await vi.advanceTimersByTimeAsync(SUBMIT_ENTER_SETTLE_MS);
+      expect(await pending).toMatchObject({ ok: false, textDelivered: true });
+      expect(addon.sendKeyPress).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects a queued paste if its process ended before it acquired the queue", async () => {
+    vi.useFakeTimers();
+    try {
+      let current = true;
+      const addon = fakeAddon({ sendText: () => true });
+      const first = pasteTerminalText({
+        addon,
+        nativePanelId: "7::queued",
+        submit: true,
+        text: "first",
+      });
+      const second = pasteTerminalText({
+        addon,
+        nativePanelId: "7::queued",
+        submit: true,
+        text: "second",
+        isCurrent: () => current,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      current = false;
+      await vi.runAllTimersAsync();
+      expect(await first).toEqual({ ok: true });
+      expect(await second).toMatchObject({ ok: false });
+      expect(addon.sendText).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("pastes then submits Return after settle", async () => {
     vi.useFakeTimers();
     try {

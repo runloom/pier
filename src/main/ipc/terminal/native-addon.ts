@@ -8,6 +8,7 @@ import type {
   TerminalNativeWindowState,
   TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
+import { stripHostColorPolicyFromProcessEnv } from "../../services/process-environment/clean-env.ts";
 
 export interface NativeAddon {
   /**
@@ -249,6 +250,15 @@ export interface NativeAddon {
     fontSize: number
   ): void;
   /**
+   * Arm or disarm Ghostty retain-after-exit on a live surface.
+   * Must run before SHOW_CHILD_EXITED so Zig does not close a kept tab.
+   */
+  setTerminalRetainAfterExit?(
+    panelId: string,
+    lifecycleId: string,
+    retain: boolean
+  ): boolean;
+  /**
    * 注册 Title forward callback. swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 后调用,
    * 传 (browserWindowId, panelId, title). TUI 应用 (claude / vim / aider) 自定义 title
    * 通道. 与 PWD 路由方式相同, 按 windowId 精准送到对应 BrowserWindow renderer.
@@ -264,6 +274,12 @@ export interface NativeAddon {
       | null
   ): void;
   setupWindow(parentHandle: Buffer, browserWindowId: number): boolean;
+  /** Signal the owned PTY process on its IO thread without closing its surface. */
+  signalTerminalProcess?(
+    panelId: string,
+    lifecycleId: string,
+    force: boolean
+  ): boolean;
   /** NSWindow.windowNumber for an Electron native window handle. Optional. */
   windowNumberFor?(parentHandle: Buffer): number;
   writeTerminalOutput(panelId: string, data: Buffer): boolean;
@@ -301,6 +317,8 @@ export function loadNativeAddon(): {
     // 必须在 ghostty native 首次 init 前设，否则会 fallback 到禁用集成。
     process.env.GHOSTTY_RESOURCES_DIR ??=
       ghosttyResourcesDirFromAddonPath(addonPath);
+    // Ghostty snapshots process env at init; drop host NO_COLOR before that.
+    stripHostColorPolicyFromProcessEnv();
     const addon: NativeAddon = require(addonPath);
     return { addon, error: null };
   } catch (e) {

@@ -30,7 +30,7 @@ describe("terminal focus restoration", () => {
       applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
-      closeTerminal: vi.fn(),
+      closeTerminal: vi.fn(() => true),
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
       reconcileTerminals: vi.fn(),
@@ -320,7 +320,7 @@ describe("terminal focus restoration", () => {
       }
     );
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({ ok: true });
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
       Buffer.from("window"),
       "7::terminal-1",
@@ -334,7 +334,7 @@ describe("terminal focus restoration", () => {
           PIER_WINDOW_ID: "7",
         }),
       },
-      "",
+      expect.stringMatching(/^shell:\d+$/),
       1
     );
   });
@@ -361,7 +361,7 @@ describe("terminal focus restoration", () => {
       }
     );
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({ ok: true });
     expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(
       "main",
       "terminal-1",
@@ -443,7 +443,7 @@ describe("terminal focus restoration", () => {
       }
     );
 
-    expect(result).toEqual({ ok: true, agentRestore: "resumed" });
+    expect(result).toMatchObject({ ok: true, agentRestore: "resumed" });
     expect(processEnvironment.resolve).toHaveBeenCalledWith({
       cwd: "/repo",
       projectRootPath: "/repo",
@@ -516,7 +516,7 @@ describe("terminal focus restoration", () => {
       }
     );
 
-    expect(result).toEqual({ ok: true, agentRestore: "resumed" });
+    expect(result).toMatchObject({ ok: true, agentRestore: "resumed" });
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
@@ -670,7 +670,7 @@ describe("terminal focus restoration", () => {
         }
       );
 
-      expect(result).toEqual({ ok: true });
+      expect(result).toMatchObject({ ok: true });
       // initial-input-gate 把注入延后到 shell 打完 banner + 首个 prompt 之后。
       // 测试模拟第一次 OSC 7 触发（生产链路是 native shell integration 上报 cwd）。
       const { signalPromptReady } = await import(
@@ -730,7 +730,7 @@ describe("terminal focus restoration", () => {
     }
   });
 
-  it("reports agent prompt inject failure without clearing the live session", async () => {
+  it("keeps an unverified initial task as a draft without pasting into the live session", async () => {
     vi.useFakeTimers();
     try {
       const { fakeAddon, invokeHandlers, ipcWindow, sessionState } =
@@ -761,13 +761,16 @@ describe("terminal focus restoration", () => {
       signalPromptReady("terminal-1");
       await vi.runAllTimersAsync();
       expect(ipcWindow.webContents.send).toHaveBeenCalledWith(
-        "pier:terminal:initial-input-failed",
+        "pier://terminal:draft-changed",
         {
-          kind: "prompt",
           panelId: "terminal-1",
-          textDelivered: false,
+          draft: expect.objectContaining({
+            text: "fix the focus bug",
+            status: "draft",
+          }),
         }
       );
+      expect(fakeAddon.sendText).not.toHaveBeenCalled();
       expect(sessionState.clearTerminalPanelAgent).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
@@ -798,7 +801,7 @@ describe("terminal focus restoration", () => {
       }
     );
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({ ok: true });
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
       Buffer.from("window"),
       "7::terminal-1",
@@ -812,7 +815,7 @@ describe("terminal focus restoration", () => {
           PIER_WINDOW_ID: "7",
         }),
       },
-      "",
+      expect.stringMatching(/^shell:\d+$/),
       4
     );
   });
@@ -841,7 +844,7 @@ describe("terminal focus restoration", () => {
       }
     );
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({ ok: true });
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
       Buffer.from("window"),
       "7::terminal-1",
@@ -857,7 +860,7 @@ describe("terminal focus restoration", () => {
           SECRET: "token",
         }),
       },
-      "",
+      expect.stringMatching(/^shell:\d+$/),
       5
     );
     expect(consumeLaunch).toHaveBeenCalledWith("launch-rerun");
@@ -880,7 +883,7 @@ describe("terminal focus restoration", () => {
       }
     );
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({ ok: true });
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
       Buffer.from("window"),
       "7::terminal-1",
@@ -894,7 +897,7 @@ describe("terminal focus restoration", () => {
           PIER_WINDOW_ID: "7",
         }),
       },
-      "",
+      expect.stringMatching(/^shell:\d+$/),
       6
     );
   });
@@ -907,7 +910,7 @@ describe("terminal focus restoration", () => {
       sender: ipcWindow.webContents,
     });
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({ ok: true });
     expect(ipcWindow.setBackgroundColor).not.toHaveBeenCalled();
     expect(fakeAddon.setupWindow).toHaveBeenCalledWith(
       Buffer.from("window"),

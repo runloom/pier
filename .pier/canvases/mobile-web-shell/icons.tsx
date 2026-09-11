@@ -15,19 +15,14 @@ export type IconName =
   | "corner-up-left"
   | "file"
   | "folder"
-  | "image"
-  | "inbox"
   | "keyboard"
   | "laptop"
   | "lock"
   | "mini"
-  | "minus"
-  | "monitor"
-  | "plus"
   | "panels"
   | "refresh"
   | "scan"
-  | "sparkle"
+  | "search"
   | "studio"
   | "terminal"
   | "x";
@@ -72,19 +67,6 @@ const PATHS: Record<IconName, ReactNode> = {
   folder: (
     <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
   ),
-  image: (
-    <>
-      <rect height="18" rx="2" width="18" x="3" y="3" />
-      <circle cx="9" cy="9" r="2" />
-      <path d="m21 15-5-5L5 21" />
-    </>
-  ),
-  inbox: (
-    <>
-      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
-      <path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1" />
-    </>
-  ),
   keyboard: (
     <>
       <rect height="14" rx="2" width="20" x="2" y="5" />
@@ -110,20 +92,6 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M11 12h6" />
     </>
   ),
-  minus: <path d="M5 12h14" />,
-  monitor: (
-    <>
-      <rect height="14" rx="2" width="20" x="2" y="3" />
-      <path d="M8 21h8" />
-      <path d="M12 17v4" />
-    </>
-  ),
-  plus: (
-    <>
-      <path d="M12 5v14" />
-      <path d="M5 12h14" />
-    </>
-  ),
   panels: (
     <>
       <rect height="14" rx="2" width="14" x="3" y="7" />
@@ -145,8 +113,11 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M7 12h10" />
     </>
   ),
-  sparkle: (
-    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+  search: (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </>
   ),
   studio: (
     <>

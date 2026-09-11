@@ -57,6 +57,17 @@ export const terminal = {
     waiting: "확인 대기",
   },
   composer: {
+    draftSaveFailed: "전송하지 않은 내용을 저장하지 못했습니다",
+    unconfirmedHint:
+      "이 내용이 이미 터미널에 전달되었을 수 있습니다. 다시 보내기 전에 확인하세요.",
+    restartToSend:
+      "초안이 저장되었습니다. 보내기 전에 에이전트를 다시 시작하세요.",
+    unconfirmedTitle: "이 내용을 다시 보낼까요?",
+    unconfirmedBody:
+      "이전 전송이 완료되었는지 확인할 수 없습니다. 중복 전송을 피하려면 먼저 터미널을 확인하세요.",
+    sendAgain: "다시 보내기",
+    needsInput: "터미널에서 확인하거나 질문에 답한 후 작업을 보내세요.",
+
     attachFailed: "파일을 추가하지 못했습니다. 다시 시도하세요",
     attachFile: "파일 추가",
     // Only warn for verified TUIs; cursor risk never disables sending by itself.
@@ -375,6 +386,8 @@ export const terminal = {
    * Prefer product wording over Ghostty brand for user-facing copy.
    */
   ghosttyHost: {
+    processStopped:
+      "프로세스가 중지되었습니다. 출력을 계속 확인할 수 있습니다.",
     processExited: "프로세스가 종료됨",
     processExitedFailed: "프로세스가 종료 코드 {{code}}(으)로 종료됨",
     processExitedAbnormal:

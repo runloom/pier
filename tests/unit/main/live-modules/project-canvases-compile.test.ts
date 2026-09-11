@@ -28,6 +28,7 @@ const IN_REPO_CANVAS_DIRS = [
   "mobile-web-shell",
   "pier-cli-user-manual",
   "smoke",
+  "workbench-sidebar-review",
 ] as const;
 
 const IN_REPO_REACT_CANVASES = [
@@ -35,6 +36,7 @@ const IN_REPO_REACT_CANVASES = [
   "mobile-web-shell/mobile-web-shell.canvas.tsx",
   "pier-cli-user-manual/pier-cli-user-manual.canvas.tsx",
   "smoke/hello.canvas.tsx",
+  "workbench-sidebar-review/workbench-sidebar-review.canvas.tsx",
 ] as const;
 
 function isReactCanvasEntry(name: string): boolean {

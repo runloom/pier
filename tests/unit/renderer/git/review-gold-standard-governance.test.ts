@@ -185,8 +185,9 @@ describe("git review gold-standard governance", () => {
       "setItemCollapsed(id, collapsed, false, false)"
     );
     expect(estimateHeight).toContain("isCollapseAllIntent?.() === true");
-    // emit 路径仅 collapse-all 全表 apply，普通滚动不 O(n)
-    expect(estimateHeight).toContain("普通滚动：不付 O(n) 全表代价");
+    // emit：collapse-all 全表 apply；普通滚动禁止全表 apply，总高漂移时 pin
+    expect(estimateHeight).toContain("普通滚动：禁止全表 apply");
+    expect(estimateHeight).toContain("syncContainerHeight");
     const sessionCache = read(
       "src/plugins/builtin/git/renderer/review/session-cache.ts"
     );

@@ -34,4 +34,23 @@ export const canvas = {
     costPeriod: "Cost · last {{count}} days",
     costTokens: "Tokens · last {{count}} days",
   },
+  workflow: {
+    invalidTitle: "This flowchart can’t be drawn",
+    invalidHint: "{{message}} Next: {{fix}}",
+    legend: "Legend",
+  },
+  screenFlow: {
+    invalidTitle: "This screen flow can’t be drawn",
+    invalidHint: "{{message}} Next: {{fix}}",
+    tight: "These two screens are too close. Leave a wider gap.",
+    overlap: "Two screens overlap. Move one of them.",
+    missing: "A screen on this path is not on the board.",
+    cross: "A connector crosses another screen. Move one of them.",
+    labelPark: "Two action names overlap. Move one of the screens.",
+    legend: "Key",
+    legendMain: "Main",
+    legendBranch: "Branch",
+    legendReturn: "Return",
+    legendError: "Failure",
+  },
 } as const;

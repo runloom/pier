@@ -36,6 +36,25 @@ describe("accountMembershipSummary", () => {
     expect(text).not.toContain("Expires");
   });
 
+  it("labels a clock-expired SuperGrok plan as expired instead of still a member", () => {
+    const text = accountMembershipSummary(
+      {
+        kind: "oidc",
+        subscription: {
+          planType: "super_grok_pro",
+          status: "active",
+          expiresAt: Date.parse("2026-09-05T00:00:00.000Z"),
+        },
+      },
+      "en",
+      t,
+      Date.parse("2026-09-10T00:00:00.000Z")
+    );
+    expect(text).toContain("SUPER GROK PRO");
+    expect(text).toContain("Expired");
+    expect(text).not.toContain("Expires");
+  });
+
   it("merges cancel-at-period-end with expiry into one summary phrase", () => {
     const text = accountMembershipSummary(
       {

@@ -114,7 +114,13 @@ export const settingsAgents = {
       env_unavailable: "无法准备终端环境，请刷新后重试。",
       package_manager_missing:
         "未找到所需的包管理器（npm、Homebrew、pipx 或 uv）。请先安装其中一种后再试。",
+      node_requirement_unmet:
+        "此智能体需要 Node {{required}}，当前是 {{current}}。请在终端升级 Node 后重试。",
       still_detected: "卸载命令已执行，但仍检测到该智能体。",
+    },
+    facts: {
+      node: "当前 Node {{version}}（{{path}}）",
+      installs: "探测到 {{count}} 处安装：\n{{paths}}",
     },
   },
   row: {

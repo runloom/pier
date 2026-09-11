@@ -122,7 +122,13 @@ export const settingsAgents = {
         "Couldn't prepare the shell environment. Refresh and try again.",
       package_manager_missing:
         "A required package manager (npm, Homebrew, pipx, or uv) was not found. Install one, then try again.",
+      node_requirement_unmet:
+        "This agent needs Node {{required}}; you have {{current}}. Upgrade Node in your terminal, then try again.",
       still_detected: "Uninstall finished, but the agent is still detected.",
+    },
+    facts: {
+      node: "Node {{version}} ({{path}})",
+      installs: "{{count}} installs detected:\n{{paths}}",
     },
   },
   row: {

@@ -76,7 +76,11 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
     "pier:agents:lifecycle:run",
     async (
       _e,
-      payload: { agentId: AgentKind; action: AgentLifecycleAction }
+      payload: {
+        agentId: AgentKind;
+        action: AgentLifecycleAction;
+        projectRootPath?: string;
+      }
     ): Promise<AgentLifecycleActionResult> => {
       if (!lifecycle) {
         return {
@@ -86,7 +90,11 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
           errorCode: "unavailable" as const,
         };
       }
-      return lifecycle.run(payload.agentId, payload.action);
+      return lifecycle.run(payload.agentId, payload.action, {
+        ...(payload.projectRootPath
+          ? { projectRootPath: payload.projectRootPath }
+          : {}),
+      });
     }
   );
 
@@ -97,6 +105,7 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
       payload: {
         agentIds: AgentKind[];
         action: AgentLifecycleAction;
+        projectRootPath?: string;
       }
     ): Promise<AgentLifecycleActionResult[]> => {
       if (!lifecycle) {
@@ -107,7 +116,11 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
           errorCode: "unavailable" as const,
         }));
       }
-      return lifecycle.runMany(payload.agentIds, payload.action);
+      return lifecycle.runMany(payload.agentIds, payload.action, {
+        ...(payload.projectRootPath
+          ? { projectRootPath: payload.projectRootPath }
+          : {}),
+      });
     }
   );
 

@@ -3,6 +3,8 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
+const DIALOG_SPEC =
+  "docs/superpowers/specs/2026-09-09-dialog-system-gold-standard.md";
 const SOURCE_FILE_RE = /\.(ts|tsx)$/;
 
 const PRODUCTION_SOURCE_ROOTS = [
@@ -61,20 +63,23 @@ function projectRelative(filePath: string): string {
 }
 
 describe("dialog form governance", () => {
-  it("documents commit vs live preference models in AGENTS.md", () => {
+  it("documents commit vs live preference models in the dialog gold standard", () => {
     const agents = source("AGENTS.md");
-    expect(agents).toContain("#### 弹窗表单规范");
-    expect(agents).toContain("提交型（commit form）");
-    expect(agents).toContain("即时偏好（live preference）");
-    expect(agents).toContain("dialog-form-layout.ts");
-    expect(agents).toContain("禁止 body 内仿 footer");
-    expect(agents).toContain("提交型 dialog 的可选勾选");
-    expect(agents).toContain("禁止第三套「记住上次」");
-    expect(agents).toContain("情境决策");
-    expect(agents).toContain("稳定工作流习惯");
+    expect(agents).toContain("### 宿主弹窗使用规范");
+    expect(agents).toContain(DIALOG_SPEC);
     expect(agents).toContain(
       "tests/unit/renderer/app/dialog-form-governance.test.ts"
     );
+    const spec = source(DIALOG_SPEC);
+    expect(spec).toContain("弹窗表单规范");
+    expect(spec).toContain("提交型（commit form）");
+    expect(spec).toContain("即时偏好（live preference）");
+    expect(spec).toContain("dialog-form-layout.ts");
+    expect(spec).toContain("禁止 body 内仿 footer");
+    expect(spec).toContain("提交型 dialog 的可选勾选");
+    expect(spec).toContain("禁止第三套「记住上次」");
+    expect(spec).toContain("情境决策");
+    expect(spec).toContain("稳定工作流习惯");
   });
 
   it("keeps shared dialog form layout tokens in packages/ui", () => {

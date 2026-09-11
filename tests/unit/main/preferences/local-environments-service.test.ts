@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 function fakeProcessEnvironment(): ProcessEnvironmentService {
   return {
     getHostDiagnostics: () => undefined,
+    hostNodeRuntime: async () => null,
     invalidate: async () => undefined,
     recordHostDiagnostics: () => undefined,
     resolve: vi.fn(async ({ cwd, explicitEnv, source }) => ({

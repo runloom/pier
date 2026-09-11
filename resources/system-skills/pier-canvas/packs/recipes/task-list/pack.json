@@ -15,5 +15,5 @@
     "Calling GitHub from the canvas",
     "Copying applet source instead of importing @pier-applet/pier.tasks/task-list"
   ],
-  "agentPrompt": "Freeform composition. Root in Frame (flow). Import TaskList from @pier-applet/pier.tasks/task-list and mount it as an island card — the applet defaults to island chrome. Pass repo plus a milestone or label. Do not copy applet source. Do not import tracker-board; the project panel is the kanban. Do not fetch tracker APIs from the canvas. Rewrite every user-visible string into the user's language. See templates/task-list.canvas.tsx."
+  "agentPrompt": "Import TaskList from @pier-applet/pier.tasks/task-list as an island. Pass repo plus a milestone or label. Do not copy applet source or import tracker-board."
 }

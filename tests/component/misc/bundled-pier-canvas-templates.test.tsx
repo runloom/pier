@@ -53,11 +53,26 @@ describe("bundled Pier Canvas templates", () => {
 
       const { container, unmount } = render(<Canvas />);
       expect(container.firstChild, `${path} must mount content`).not.toBeNull();
+      if (name === "workflow.canvas.tsx") {
+        expect(container.querySelector("[data-workflow='invalid']")).toBeNull();
+        expect(
+          container.querySelector("[data-slot='workflow-diagram']")
+        ).toBeTruthy();
+        expect(
+          container.querySelectorAll("[data-slot='workflow-lane']").length
+        ).toBe(4);
+        expect(
+          container.querySelector("[data-slot='workflow-phase']")
+        ).toBeTruthy();
+        expect(
+          container.querySelector("[data-slot='workflow-notes']")
+        ).toBeTruthy();
+      }
       unmount();
     }
 
     expect(appletBacked).toBeGreaterThan(0);
-    expect([...kinds].sort()).toEqual(["composition", "docs", "kit"]);
+    expect([...kinds].sort()).toEqual(["composition", "docs"]);
   });
 
   it("keeps the reading-flow showcase above skeleton quality", () => {
@@ -75,15 +90,69 @@ describe("bundled Pier Canvas templates", () => {
   it("keeps the board-stage showcase above skeleton quality", () => {
     const source = templateSource("design-mockup.canvas.tsx");
     expect(source).toContain("WorldStage");
+    expect(source).toContain("ScreenFlow");
+    expect(source).toContain("validateScreenFlowPaint");
+    expect(source).toContain('role: "error"');
+    expect(source).toContain('role: "return"');
     expect(source).toContain("data-pier-comment-id");
+    expect(source).not.toContain("<svg");
+    const artboardIds = [
+      ...source.matchAll(/id="([a-zA-Z][a-zA-Z0-9_-]*)"/g),
+    ].map((match) => match[1]);
+    expect(new Set(artboardIds).size).toBeGreaterThanOrEqual(4);
     const artboards = source.match(/<Artboard/g) ?? [];
-    expect(artboards.length).toBeGreaterThanOrEqual(3);
-    const presets = new Set(
-      [...source.matchAll(/preset="([a-z]+)"/g)].map((match) => match[1])
-    );
-    expect(presets.size).toBeGreaterThanOrEqual(2);
+    expect(artboards.length).toBeGreaterThanOrEqual(4);
+    expect(source).toContain('preset="phone"');
     expect(source).not.toContain("className={`");
     expect(source).not.toContain("h-auto");
+  });
+
+  it("keeps the workflow recipe as a typed IR diagram without device frames", () => {
+    const source = templateSource("workflow.canvas.tsx");
+    expect(source).toContain("WorkflowDiagram");
+    expect(source).toContain("validateWorkflowSpec");
+    expect(source).toContain('role: "return"');
+    expect(source).toContain('role: "error"');
+    expect(source).toContain('role: "branch"');
+    expect(source).toContain('id: "approval"');
+    expect(source).toContain('id: "blocked"');
+    expect(source).toContain('variant: "exception"');
+    expect(source).toContain("Compiler contract");
+    expect(source).toContain("phases");
+    expect(source).toContain("groups");
+    expect(source).toContain('kind: "gate"');
+    expect(source).toContain('kind: "store"');
+    expect(source).toContain('kind: "external"');
+    expect(source).toContain("detail:");
+    expect(source).not.toContain("<Artboard");
+    expect(source).not.toContain("<Layer");
+  });
+
+  it("keeps the one-pager from teaching approval loops as Mermaid", () => {
+    const source = templateSource("one-pager.canvas.tsx");
+    expect(source).toContain('kind: "actor"');
+    expect(source).toContain("recipe=workflow");
+    expect(source).not.toContain("maxWidth={960}");
+    expect(source).not.toContain('tone: "danger"');
+  });
+
+  it("lets the preview shell own flow measure on Frame templates", () => {
+    for (const name of [
+      "one-pager.canvas.tsx",
+      "decision.canvas.tsx",
+      "closed-loop.canvas.tsx",
+    ]) {
+      const source = templateSource(name);
+      expect(source, name).not.toMatch(/maxWidth=\{9\d{2}\}/);
+      expect(source, name).not.toContain("maxWidth={1040}");
+    }
+  });
+
+  it("names workflow as a board recipe in the reading-flow guide", () => {
+    const source = templateSource("docs.canvas.tsx");
+    expect(source).toContain("recipe=workflow");
+    expect(source).toContain("WorkflowDiagram");
+    expect(source).toContain("templates/workflow.canvas.tsx");
   });
 
   it("keeps tracker skins as thin applet islands, not a local ledger", () => {

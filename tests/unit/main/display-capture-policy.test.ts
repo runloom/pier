@@ -110,15 +110,40 @@ describe("display-capture policy", () => {
   });
 
   it("disables unused ScreenCaptureKit features before ready on macOS", async () => {
-    const { disableUnusedScreenCaptureFeatures } = await import(
-      "../../../src/main/display-capture-policy.ts"
-    );
+    const {
+      SCREEN_CAPTURE_DISABLE_FEATURES,
+      disableUnusedScreenCaptureFeatures,
+    } = await import("../../../src/main/display-capture-policy.ts");
     commandLine.getSwitchValue.mockReturnValue("FooFeature");
     disableUnusedScreenCaptureFeatures();
+    const merged = commandLine.appendSwitch.mock.calls[0]?.[1] as string;
     expect(commandLine.appendSwitch).toHaveBeenCalledWith(
       "disable-features",
-      expect.stringMatching(/^FooFeature,ScreenCaptureKitPickerScreen/)
+      merged
     );
+    expect(merged.startsWith("FooFeature,")).toBe(true);
+    expect(merged.split(",")).toEqual([
+      "FooFeature",
+      ...SCREEN_CAPTURE_DISABLE_FEATURES,
+    ]);
+    expect(merged).not.toContain(":");
+  });
+
+  it("dedupes capture features already present on disable-features", async () => {
+    const {
+      SCREEN_CAPTURE_DISABLE_FEATURES,
+      mergeDisabledScreenCaptureFeatures,
+    } = await import("../../../src/main/display-capture-policy.ts");
+    const first = SCREEN_CAPTURE_DISABLE_FEATURES[0];
+    const merged = mergeDisabledScreenCaptureFeatures(
+      `KeepMe,${first},${first}`
+    );
+    expect(merged.split(",")[0]).toBe("KeepMe");
+    expect(merged.split(",").filter((name) => name === first)).toHaveLength(1);
+    expect(merged.split(",")).toEqual([
+      "KeepMe",
+      ...SCREEN_CAPTURE_DISABLE_FEATURES,
+    ]);
   });
 
   it("does not touch Chromium flags off macOS", async () => {

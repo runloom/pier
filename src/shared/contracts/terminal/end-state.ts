@@ -27,8 +27,11 @@ export interface TerminalEndState {
   /** 仅内存；是否已 inject 退出文案 */
   bufferInjected?: boolean;
   dismissMode: "any-key" | "explicit";
+  endReason?: "exited" | "stopped" | undefined;
   exitCode?: number;
   finishedAt: number;
+  generation?: number | undefined;
+  lifecycleId?: string | undefined;
   panelId: string;
   retainPanel: true;
   role: Exclude<TerminalEndRole, "shell">;
@@ -217,6 +220,9 @@ export function agentEndTabHasForbiddenSuccess(
  */
 export function materializeAgentEndState(args: {
   agentId: AgentKind;
+  generation?: number | undefined;
+  lifecycleId?: string | undefined;
+  endReason?: "exited" | "stopped" | undefined;
   exitCode?: number | undefined;
   finishedAt?: number | undefined;
   panelId: string;
@@ -224,12 +230,15 @@ export function materializeAgentEndState(args: {
   title?: string | null | undefined;
 }): TerminalEndState {
   const tab = agentEndResultTabChrome(args.agentId, {
-    exitCode: args.exitCode,
+    exitCode: args.endReason === "stopped" ? undefined : args.exitCode,
     exited: true,
     title: args.title,
   });
   return {
     agentId: args.agentId,
+    generation: args.generation,
+    lifecycleId: args.lifecycleId,
+    endReason: args.endReason,
     dismissMode: "explicit",
     ...(args.exitCode === undefined ? {} : { exitCode: args.exitCode }),
     finishedAt: args.finishedAt ?? Date.now(),
@@ -246,6 +255,9 @@ export function materializeAgentEndState(args: {
  * shell 不进 EndState。
  */
 export function materializeTaskEndState(args: {
+  generation?: number | undefined;
+  lifecycleId?: string | undefined;
+  endReason?: "exited" | "stopped" | undefined;
   exitCode: number;
   finishedAt?: number | undefined;
   panelId: string;
@@ -253,10 +265,14 @@ export function materializeTaskEndState(args: {
   runtimeMs?: number | undefined;
   title?: string | null | undefined;
 }): TerminalEndState {
-  const nodeStatus = args.exitCode === 0 ? "succeeded" : "failed";
+  const exitStatus = args.exitCode === 0 ? "succeeded" : "failed";
+  const nodeStatus = args.endReason === "stopped" ? "cancelled" : exitStatus;
   const title = args.title?.trim();
   return {
     dismissMode: "explicit",
+    generation: args.generation,
+    lifecycleId: args.lifecycleId,
+    endReason: args.endReason,
     exitCode: args.exitCode,
     finishedAt: args.finishedAt ?? Date.now(),
     panelId: args.panelId,
@@ -278,7 +294,17 @@ export function mergeTerminalEndState(
   prev: TerminalEndState | undefined,
   next: TerminalEndState
 ): TerminalEndState {
-  if (!prev || prev.panelId !== next.panelId) {
+  if (
+    prev?.generation !== undefined &&
+    next.generation !== undefined &&
+    next.generation < prev.generation
+  )
+    return prev;
+  if (
+    !prev ||
+    prev.panelId !== next.panelId ||
+    (next.generation !== undefined && next.generation !== prev.generation)
+  ) {
     return forbidAgentSuccess(next);
   }
   if (prev.role !== next.role && next.role === "agent") {
@@ -289,7 +315,10 @@ export function mergeTerminalEndState(
   const tab =
     next.role === "agent" && agentId
       ? agentEndResultTabChrome(agentId, {
-          exitCode,
+          exitCode:
+            (next.endReason ?? prev.endReason) === "stopped"
+              ? undefined
+              : exitCode,
           exited: true,
           title: next.tab.title ?? prev.tab.title,
         })

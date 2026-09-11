@@ -12,7 +12,7 @@
 
 检查点：`tests/unit/renderer/command-list-group-heading-governance.test.ts`、`tests/unit/command/present-groups.test.ts`。
 
-2026-09-05 重设计提案见 [工作台体验与人体工程学](./2026-09-03-workbench-ux-and-ergonomics-design.md) §5 / §9.1：将新建菜单收为「开始」，工具视图另有可见入口；默认快捷动作、提供方二级目录、工作树启动与插件面板归属的字符稿和迁移约束已在同文说明。该提案待实施，届时须明确替换本文的新建菜单内容 / 顺序政策并同步治理；当前正文仍是实现基线。共享 CommandsView、标题门槛、固定排序、搜索内核保留，不能另写菜单绕过。
+2026-09-07 更新：09-03 的「开始 / 工具」菜单提案已归档（[归档稿](../../archive/superpowers/specs/2026-09-03-workbench-ux-and-ergonomics-design.md)）；现行方向见 [工作台骨架：工作树 tile 与主 / 子窗口](./2026-09-07-workbench-worktree-tiles-design.md) §9.1——新建动作附着在 tile 头部 `+`、侧栏行 `+` 与命令面板上，宾语永远是某个工作树，不设无宾语的全局「开始」菜单。本文的新建菜单分组规则继续适用于这些入口。
 
 ---
 

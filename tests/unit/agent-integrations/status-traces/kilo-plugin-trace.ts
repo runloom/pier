@@ -148,7 +148,7 @@ const kiloActions: AgentStatusTraceAction[] = [
     })
   ),
   // idle 是 advisory 候选（2026-08-29 降级对齐 opencode）：不产生 ready
-  // 覆盖，状态进入候选完成（无具体 status）。
+  // 覆盖，保持已有的 processing。
   {
     checkpoints: [],
     eventAssertions: [
@@ -160,7 +160,7 @@ const kiloActions: AgentStatusTraceAction[] = [
     ],
     expectedNativeEvents: ["session.idle"],
     nativeEvent: "session.idle",
-    nonCoveringAssertion: { expectedStatusAbsent: true },
+    nonCoveringAssertion: { expectedStatus: "processing" },
     payload: event("session.idle", { info: { id: "kilo-main-1" } }),
   },
   action(

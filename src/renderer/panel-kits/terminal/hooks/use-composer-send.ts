@@ -1,6 +1,25 @@
-import { useRef } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
+import {
+  flushTerminalDraft,
+  useTerminalDraftStore,
+  writeTerminalDraftText,
+} from "@/stores/terminal-drafts.store.ts";
+import {
+  acquireComposerSend,
+  commitComposerSend,
+  isComposerSending,
+  releaseComposerSend,
+  subscribeComposerSession,
+  type TerminalComposerSession,
+} from "../composer/session.ts";
+import { flushPendingComposerEdits } from "../composer-bridge.ts";
 import { reportComposerSendFailure } from "../composer-helpers.ts";
 import { ensureTuiInputFocus } from "../tui-input-focus.ts";
 
@@ -31,35 +50,88 @@ export function useTerminalComposerSend(opts: {
   getDraft: () => string;
   isComposing: () => boolean;
   onSent: () => void;
-  panelId: string;
+  session: TerminalComposerSession;
   t: (key: string) => string;
-}): { send: () => void } {
+}): { send: () => void; sending: boolean } {
   const {
     buildPayloadOrReport,
     disabled,
     getDraft,
     isComposing,
     onSent,
-    panelId,
+    session,
     t,
   } = opts;
-  const sendingRef = useRef(false);
+  const { panelId, signal } = session;
+  const mountRef = useRef<{ session: TerminalComposerSession } | null>(null);
+  useLayoutEffect(() => {
+    const mount = { session };
+    mountRef.current = mount;
+    return () => {
+      if (mountRef.current === mount) {
+        mountRef.current = null;
+      }
+    };
+  }, [session]);
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeComposerSession(session, listener),
+    [session]
+  );
+  const getSending = useCallback(() => isComposerSending(session), [session]);
+  const sending = useSyncExternalStore(subscribe, getSending, getSending);
 
   const send = () => {
-    if (disabled || sendingRef.current || isComposing()) {
+    if (
+      disabled ||
+      signal.aborted ||
+      !mountRef.current ||
+      isComposerSending(session) ||
+      isComposing()
+    ) {
       return;
     }
-    const payload = buildPayloadOrReport(getDraft());
+    flushPendingComposerEdits(session);
+    if (signal.aborted || isComposerSending(session)) {
+      return;
+    }
+    const draft = getDraft();
+    const payload = buildPayloadOrReport(draft);
     if (payload == null) {
       return;
     }
-    sendingRef.current = true;
+    const lease = acquireComposerSend(session, draft);
+    if (!lease) {
+      return;
+    }
+    const mount = mountRef.current;
     (async () => {
+      if (
+        useTerminalDraftStore.getState().drafts[panelId]?.durable.status ===
+        "unconfirmed"
+      ) {
+        const proceed = await showAppConfirm({
+          title: t("terminal.composer.unconfirmedTitle"),
+          body: t("terminal.composer.unconfirmedBody"),
+          confirmLabel: t("terminal.composer.sendAgain"),
+          intent: "default",
+        });
+        if (!proceed || signal.aborted) {
+          return;
+        }
+      }
+      writeTerminalDraftText(panelId, draft);
+      await flushTerminalDraft(panelId);
+      if (signal.aborted) {
+        return;
+      }
       const activity =
         useForegroundActivityStore.getState().activities[panelId];
       const isAgent = activity?.kind === "agent";
       if (isAgent) {
         const ready = await ensureTuiInputFocus(panelId).catch(() => false);
+        if (signal.aborted) {
+          return;
+        }
         if (!ready) {
           // 探针提示风险：给用户原因和继续入口，而不是静默放弃。
           const proceed = await showAppConfirm({
@@ -68,27 +140,42 @@ export function useTerminalComposerSend(opts: {
             intent: "default",
             title: t("terminal.composer.blockedUnfocusedTitle"),
           });
-          if (!proceed) {
+          if (!proceed || signal.aborted) {
             return;
           }
         }
         await window.pier.clipboard.beginImageSuppress();
       }
       try {
+        if (signal.aborted) {
+          return;
+        }
         const result = await window.pier.terminal.sendText({
           panelId,
+          draftText: draft,
           submit: true,
           text: payload,
         });
+        if (signal.aborted) {
+          return;
+        }
 
-        if (result.ok || result.textDelivered) {
-          onSent();
-          if (!result.ok) {
-            reportComposerSendFailure(t, result.error ?? "");
+        if (result.ok) {
+          if (
+            commitComposerSend(session, lease) &&
+            mount !== null &&
+            mountRef.current === mount
+          ) {
+            onSent();
           }
           return;
         }
-        reportComposerSendFailure(t, result.error ?? "");
+        let message = result.error ?? "";
+        if (result.errorCode === "unconfirmed" || result.textDelivered)
+          message = t("terminal.composer.unconfirmedHint");
+        if (result.errorCode === "needs-input")
+          message = t("terminal.composer.needsInput");
+        reportComposerSendFailure(t, message);
       } finally {
         if (isAgent) {
           await new Promise((resolve) => {
@@ -99,15 +186,19 @@ export function useTerminalComposerSend(opts: {
       }
     })()
       .catch((err: unknown) => {
+        if (signal.aborted) {
+          return;
+        }
         reportComposerSendFailure(
           t,
           err instanceof Error ? err.message : String(err)
         );
       })
       .finally(() => {
-        sendingRef.current = false;
+        releaseComposerSend(session, lease);
+        flushPendingComposerEdits(session);
       });
   };
 
-  return { send };
+  return { send, sending };
 }

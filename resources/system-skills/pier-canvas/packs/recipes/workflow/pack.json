@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "workflow",
+  "axis": "recipe",
+  "title": "Workflow diagram",
+  "description": "Typed interaction flowchart: lanes, columns, edges, and a happy path. The host compiles geometry.",
+  "kind": "composition",
+  "stage": "world",
+  "template": "templates/workflow.canvas.tsx",
+  "primitives": ["WorkflowDiagram"],
+  "required": ["typedIr"],
+  "antiPatterns": [
+    "hand-placing Layer pixels as graph nodes",
+    "using Artboard / phone frames as workflow nodes",
+    "inventing a router, via points, or a review toolbar",
+    "expanding a recipe=design appearance mockup into a flowchart",
+    "writing edge.color or Tailwind color classes on edges"
+  ],
+  "agentPrompt": "Mount WorkflowDiagram from a typed WorkflowSpec. validateWorkflowSpec; apply only the first supportedFix. No x/y/via/labelAt/fromSide/color. Architecture/sequence stay Mermaid. Device chrome stays recipe=design."
+}

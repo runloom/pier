@@ -76,7 +76,9 @@ interface GitReviewSurfaceViewProps {
   readonly navigationPending: boolean;
   readonly noteUserScrollReading: () => void;
   readonly onAcquireMutationAuthority: () => GitReviewMutationLease | null;
-  readonly onActiveChromeChange?: (chrome: ReviewActiveChrome | null) => void;
+  readonly onActiveChromeChange:
+    | ((chrome: ReviewActiveChrome | null) => void)
+    | undefined;
   readonly onContextMenuSession: React.ComponentProps<
     typeof GitReviewDocumentView
   >["onContextMenuSession"];
@@ -87,6 +89,7 @@ interface GitReviewSurfaceViewProps {
     typeof GitReviewDocumentView
   >["onGutterReviewActivate"];
   readonly onRetryIndex: () => void;
+  readonly onUserReleasedReadingPin: () => void;
   readonly openTreeNode: React.ComponentProps<
     typeof GitReviewDocumentView
   >["onOpenPath"];
@@ -158,6 +161,7 @@ export function GitReviewSurfaceView({
   onDriftCommentActivate,
   onAcquireMutationAuthority,
   onRetryIndex,
+  onUserReleasedReadingPin,
   openTreeNode,
   panelId,
   projection,
@@ -201,11 +205,13 @@ export function GitReviewSurfaceView({
   const reviewScrollCallbacksRef = useRef({
     clearForUserIntent,
     noteUserScrollReading,
+    onUserReleasedReadingPin,
     setSelectedTreeTarget,
   });
   reviewScrollCallbacksRef.current = {
     clearForUserIntent,
     noteUserScrollReading,
+    onUserReleasedReadingPin,
     setSelectedTreeTarget,
   };
   const handleReviewScroll = useCallback(() => {
@@ -217,6 +223,7 @@ export function GitReviewSurfaceView({
     // Pierre 的程序化 onScroll 不会进入这里。用户输入始终接管导航事务。
     callbacks.noteUserScrollReading();
     callbacks.clearForUserIntent();
+    callbacks.onUserReleasedReadingPin();
     callbacks.setSelectedTreeTarget(null);
   }, [activeRef]);
   const [allCollapsed, setAllCollapsed] = useState(false);

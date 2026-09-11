@@ -60,16 +60,11 @@ export function activateFocusedMatch(
   if (item?.kind !== "file") {
     return false;
   }
-  const handle = model.getItem(focusedPath);
-  if (!handle) {
+  if (!model.getItem(focusedPath)) {
     return false;
   }
-  const alreadyOnlySelected =
-    handle.isSelected() && model.getSelectedPaths().length === 1;
   model.selectOnlyPath(focusedPath);
-  if (alreadyOnlySelected) {
-    refs.onOpenPath?.(item.path);
-  }
+  refs.onOpenPath?.(item.path);
   return true;
 }
 

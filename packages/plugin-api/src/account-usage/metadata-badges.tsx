@@ -7,6 +7,7 @@ import {
 import type { JSX } from "react";
 import {
   type AccountMetadataBadgeMode,
+  membershipIsExpired,
   membershipNeedsAttention,
   membershipPeriodNeedsAttention,
 } from "./membership-attention.ts";
@@ -55,9 +56,10 @@ function formatScalar(
 }
 
 function membershipVariant(
-  membership: AccountMembershipSnapshot
+  membership: AccountMembershipSnapshot,
+  expired: boolean
 ): "danger" | "info" | "neutral" | "warning" {
-  if (membership.status === "expired") return "danger";
+  if (expired) return "danger";
   if (membership.status === "canceled") return "warning";
   if (membership.status === "free" || membership.status === "unknown") {
     return "neutral";
@@ -103,10 +105,10 @@ export function AccountMetadataBadges({
   // stacking "Expires in 47 days" next to "Cancels at period end".
   let periodBadge: JSX.Element | null = null;
   let cancelBadge: JSX.Element | null = null;
+  const isExpired = membershipIsExpired(membership, now);
   if (mode !== "tier" && membership) {
     const periodEndAt = periodEndTimestamp(membership);
     const cancelAtEnd = membership.cancelAtPeriodEnd === true;
-    const isExpired = membership.status === "expired";
 
     if (cancelAtEnd && periodEndAt !== undefined && !isExpired) {
       const cancelVariant = membershipPeriodNeedsAttention(membership, now)
@@ -118,7 +120,7 @@ export function AccountMetadataBadges({
         </Badge>
       );
     } else {
-      if (membership.trialEndsAt !== undefined) {
+      if (!isExpired && membership.trialEndsAt !== undefined) {
         periodBadge = (
           <Badge size="xs" variant="warning">
             {copy.trialEnds(
@@ -126,7 +128,7 @@ export function AccountMetadataBadges({
             )}
           </Badge>
         );
-      } else if (membership.expiresAt !== undefined) {
+      } else if (isExpired || membership.expiresAt !== undefined) {
         // Period color: proximity / expired / canceled only.
         let variant: "danger" | "neutral" | "warning" = "neutral";
         if (isExpired) {
@@ -139,12 +141,12 @@ export function AccountMetadataBadges({
             {isExpired
               ? copy.expired
               : copy.expires(
-                  formatRelativeTime(membership.expiresAt, now, language)
+                  formatRelativeTime(membership.expiresAt ?? now, now, language)
                 )}
           </Badge>
         );
       }
-      if (cancelAtEnd) {
+      if (cancelAtEnd && !isExpired) {
         // No usable end date — keep warning so cancel without a date still
         // surfaces as an attention signal.
         cancelBadge = (
@@ -162,7 +164,7 @@ export function AccountMetadataBadges({
       data-slot="account-metadata-badges"
     >
       {membershipVisible && membership ? (
-        <Badge size="xs" variant={membershipVariant(membership)}>
+        <Badge size="xs" variant={membershipVariant(membership, isExpired)}>
           {membershipLabel(membership)}
         </Badge>
       ) : null}

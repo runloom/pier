@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  canvasFlowMeasureApplies,
   canvasFlowMeasureClass,
   detectCanvasStage,
   FLOW_CANVAS_STAGE,
@@ -92,7 +93,7 @@ describe("detectCanvasStage", () => {
 describe("canvasFlowMeasureClass", () => {
   it("keeps the reading measure on ordinary flow canvases", () => {
     expect(canvasFlowMeasureClass(FLOW_CANVAS_STAGE)).toContain("max-w-5xl");
-    expect(canvasFlowMeasureClass(FLOW_CANVAS_STAGE, "wide")).toContain(
+    expect(canvasFlowMeasureClass(FLOW_CANVAS_STAGE, "wide")).not.toContain(
       "max-w-5xl"
     );
   });
@@ -112,5 +113,20 @@ describe("canvasFlowMeasureClass", () => {
     const docs = { docs: true, fill: false, stage: "flow" } as const;
     expect(canvasFlowMeasureClass(docs, "comfortable")).toContain("max-w-5xl");
     expect(canvasFlowMeasureClass(docs, "wide")).not.toContain("max-w-5xl");
+  });
+});
+
+describe("canvasFlowMeasureApplies", () => {
+  it("is true only for scrolling flow canvases", () => {
+    expect(canvasFlowMeasureApplies(FLOW_CANVAS_STAGE)).toBe(true);
+    expect(
+      canvasFlowMeasureApplies({ docs: true, fill: false, stage: "flow" })
+    ).toBe(true);
+    expect(
+      canvasFlowMeasureApplies({ docs: false, fill: true, stage: "flow" })
+    ).toBe(false);
+    expect(
+      canvasFlowMeasureApplies({ docs: false, fill: false, stage: "world" })
+    ).toBe(false);
   });
 });

@@ -195,13 +195,12 @@ export function MarkdownPreview({
     handlePreviewWheel,
   } = useMarkdownPreviewZoom(fontScale);
 
-  useScrollMemory(
+  const { memoryAnchor, memoryRequestId } = useScrollMemory(
     scrollRoot,
     source,
-    value,
     initialAnchor,
     contentAnchorRequestId,
-    state.status
+    state.status === "ready" && state.sourceValue === value
   );
   // Outline layout exposes a callback ref; comments layer needs RefObject.current.
   const commentsScrollRootRef = useRef<HTMLElement | null>(null);
@@ -435,8 +434,10 @@ export function MarkdownPreview({
                   colorMode={previewColorMode}
                   forceCommentPageIndex={forceCommentPageIndex}
                   {...(commentsChrome ? { comments: commentsChrome } : {})}
-                  contentAnchor={contentAnchor}
-                  contentAnchorRequestId={contentAnchorRequestId}
+                  contentAnchor={contentAnchor ?? memoryAnchor}
+                  contentAnchorRequestId={
+                    contentAnchorRequestId ?? memoryRequestId
+                  }
                   copyAnchor={copyAnchor}
                   copyCode={copyCode}
                   fileResources={fileResources}

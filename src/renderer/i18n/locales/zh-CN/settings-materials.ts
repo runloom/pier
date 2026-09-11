@@ -100,6 +100,8 @@ export const settingsMaterials = {
     edges: "流程图 / 架构连线。",
     mermaidSource:
       "原生 mermaid 文本。时序、状态、类图、实体关系和思维导图用这个。",
+    workflowSpec: "泳道、步骤、连线和主路径。不要写像素或颜色。",
+    screenFlowSpec: "画板 id、连线和主路径。不要写像素或颜色。",
     renderNodeContent: "画在标题下方的展示内容；该节点须设 contentHeight。",
     sortableItems: "按显示顺序的条目 id。",
     onReorder: "在本列表里放下后，回传新顺序。",
@@ -187,6 +189,8 @@ export const settingsMaterials = {
     DataChart: "数值趋势与对比",
     Mermaid:
       "节点流程图，以及原生 mermaid 时序、状态、类图、实体关系和思维导图。",
+    WorkflowDiagram: "用泳道和步骤画交互流程",
+    ScreenFlow: "多屏界面之间的用户路径",
     canvasFile: "读写画布相邻文件，含冲突；不是全局 file 命令",
     activityOverview: "谁在运行、谁需要你，一目了然",
     costOverview: "跨插件 token 成本聚合",

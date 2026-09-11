@@ -135,17 +135,17 @@ describe("workspace renderer command listener", () => {
       command: { type: "workspace.flushLayout" },
       requestId: "flush-starting",
     });
-    await Promise.resolve();
-
-    expect(resolve).toHaveBeenCalledWith({
-      error: {
-        code: "platform_unavailable",
-        message:
-          "The workspace is still starting, so its layout could not be saved yet.",
-      },
-      ok: false,
-      requestId: "flush-starting",
-    });
+    await vi.waitFor(() =>
+      expect(resolve).toHaveBeenCalledWith({
+        error: {
+          code: "platform_unavailable",
+          message:
+            "The workspace is still starting, so its layout could not be saved yet.",
+        },
+        ok: false,
+        requestId: "flush-starting",
+      })
+    );
     dispose();
   });
 

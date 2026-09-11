@@ -2183,7 +2183,7 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("主会话可信终态封掉未见过提问的子智能体独立 conversation", () => {
+  it("未见过提问的另一 conversation 不能被推断成当前主会话的子会话", () => {
     const agg = createForegroundActivityAggregator({ now });
     const subagentSession = "6597f476-e166-4d4c-a12b-838d579191dc";
     agg.ingestAgentEvent(
@@ -2224,12 +2224,12 @@ describe("ForegroundActivityAggregator", () => {
       })
     );
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
-      "ready"
+      "processing"
     );
     agg.dispose();
   });
 
-  it("主会话空终态仍封掉未见过提问的衍生账本", () => {
+  it("主会话空终态不能结算身份未关联的另一会话", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(
       agentHookEvent({
@@ -2255,9 +2255,7 @@ describe("ForegroundActivityAggregator", () => {
         sessionId: "prompt-session",
       })
     );
-    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
-      "ready"
-    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
     agg.dispose();
   });
 
@@ -2498,12 +2496,12 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("advisory Stop 不谎报 ready，后续 ToolStart 恢复为 tool", () => {
+  it("advisory Stop 保持 processing，后续 ToolStart 进入 tool", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
     agg.ingestAgentEvent(hookEvent("Stop"), { stopAuthority: "advisory" });
     let a = agg.snapshot().activities[0] as AgentActivity;
-    expect(a.status).toBeUndefined();
+    expect(a.status).toBe("processing");
     agg.ingestAgentEvent(hookEvent("ToolStart"), {
       stopAuthority: "advisory",
     });
@@ -3338,7 +3336,7 @@ describe("ForegroundActivityAggregator", () => {
       { stopAuthority: "advisory" }
     );
     let a = agg.snapshot().activities[0] as AgentActivity;
-    expect(a.status).toBeUndefined();
+    expect(a.status).toBe("processing");
 
     agg.ingestAgentEvent(
       agentHookEvent({ agent: "codex", event: "ToolStart", pid: 2003 })
@@ -3648,26 +3646,26 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("advisory Stop 后 SubagentStart / Stop 只计数，不恢复主状态", () => {
+  it("advisory Stop 后 SubagentStart / Stop 只计数，保持主状态", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
     agg.ingestAgentEvent(hookEvent("Stop"), { stopAuthority: "advisory" });
-    expect(
-      (agg.snapshot().activities[0] as AgentActivity).status
-    ).toBeUndefined();
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
 
     agg.ingestAgentEvent(hookEvent("SubagentStart"), {
       stopAuthority: "advisory",
     });
     let activity = agg.snapshot().activities[0] as AgentActivity;
-    expect(activity.status).toBeUndefined();
+    expect(activity.status).toBe("processing");
     expect(activity.subagentCount).toBe(1);
 
     agg.ingestAgentEvent(hookEvent("SubagentStop"), {
       stopAuthority: "advisory",
     });
     activity = agg.snapshot().activities[0] as AgentActivity;
-    expect(activity.status).toBeUndefined();
+    expect(activity.status).toBe("processing");
     expect(activity.subagentCount).toBe(0);
     agg.dispose();
   });

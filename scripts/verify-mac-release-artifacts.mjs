@@ -23,6 +23,7 @@ import {
   MAC_FOLDER_USAGE_DESCRIPTIONS,
   MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS,
   MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS,
+  MAC_UNUSED_USAGE_DESCRIPTION_KEYS,
   renderInfoPlistStrings,
 } from "./mac-privacy-descriptions.mjs";
 import {
@@ -32,6 +33,8 @@ import {
   validateLatestMacYmlFiles,
   validateMacReleaseAssetNames,
 } from "./mac-release-assets.mjs";
+
+export const MAC_RELEASE_TEAM_ID = "QXK3VU5R45";
 
 /**
  * @param {string[]} args
@@ -60,6 +63,53 @@ export function parseArgs(args) {
     i += 1;
   }
   return out;
+}
+
+/**
+ * Formal-package designated requirement must pin bundle id + Team ID.
+ * Returns an error string, or null when the requirement is acceptable.
+ * Unsigned fixtures (no "designated =>" line) are skipped by the caller.
+ *
+ * @param {string} requirementText
+ * @returns {string | null}
+ */
+export function evaluateMacAppDesignatedRequirement(requirementText) {
+  const match = requirementText.match(/designated\s*=>\s*(.+)/s);
+  if (!match?.[1]) {
+    return null;
+  }
+  const designated = match[1].replaceAll(/\s+/g, " ").trim();
+  if (
+    designated.startsWith("cdhash ") &&
+    !designated.includes('identifier "io.pier.app"')
+  ) {
+    return "designated requirement must not be cdhash-only";
+  }
+  if (!designated.includes('identifier "io.pier.app"')) {
+    return 'designated requirement must include identifier "io.pier.app"';
+  }
+  if (!designated.includes(`subject.OU] = ${MAC_RELEASE_TEAM_ID}`)) {
+    return `designated requirement must pin Team ID ${MAC_RELEASE_TEAM_ID}`;
+  }
+  return null;
+}
+
+async function readDesignatedRequirement(appPath) {
+  if (process.platform !== "darwin") {
+    return;
+  }
+  const result = spawnSync("codesign", ["-d", "-r-", appPath], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const combined = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  if (/code object is not signed/i.test(combined)) {
+    return;
+  }
+  if (result.status !== 0 && !combined.includes("designated =>")) {
+    return combined.trim() || "codesign -d -r- failed";
+  }
+  return combined;
 }
 
 /**
@@ -92,6 +142,14 @@ async function readPlistValue(plistPath, key) {
   } catch {
     return;
   }
+}
+
+function unusedUsageDescriptionError(label, key, unusedUsage) {
+  if (unusedUsage === undefined) {
+    return;
+  }
+  const received = unusedUsage === "" ? "empty" : (unusedUsage ?? "non-string");
+  return `${label}: ${key} must not be present (received ${received})`;
 }
 
 async function validatePackagedMacHelpers(app, canonicalIcon) {
@@ -127,6 +185,16 @@ async function validatePackagedMacHelpers(app, canonicalIcon) {
       errors.push(
         `${helperName}: CFBundleIconName must be absent for the ICNS-only Helper (received ${iconName})`
       );
+    }
+    for (const key of MAC_UNUSED_USAGE_DESCRIPTION_KEYS) {
+      const unusedError = unusedUsageDescriptionError(
+        helperName,
+        key,
+        await readPlistValue(plistPath, key)
+      );
+      if (unusedError) {
+        errors.push(unusedError);
+      }
     }
 
     try {
@@ -230,6 +298,33 @@ export async function validatePackagedMacApp(appPath, options = {}) {
       errors.push(
         `${appPath}: ${key} must match scripts/mac-privacy-descriptions.mjs (received ${usage ?? "missing"})`
       );
+    }
+  }
+  for (const key of MAC_UNUSED_USAGE_DESCRIPTION_KEYS) {
+    const unusedError = unusedUsageDescriptionError(
+      appPath,
+      key,
+      await readPlistValue(plistPath, key)
+    );
+    if (unusedError) {
+      errors.push(unusedError);
+    }
+  }
+  const designatedRequirement = await readDesignatedRequirement(app);
+  if (
+    designatedRequirement != null &&
+    designatedRequirement.length > 0 &&
+    !designatedRequirement.includes("designated =>")
+  ) {
+    errors.push(
+      `${appPath}: codesign -d -r- failed (${designatedRequirement})`
+    );
+  } else if (designatedRequirement) {
+    const requirementError = evaluateMacAppDesignatedRequirement(
+      designatedRequirement
+    );
+    if (requirementError) {
+      errors.push(`${appPath}: ${requirementError}`);
     }
   }
   for (const relative of MAC_INFO_PLIST_STRINGS_RELATIVE_PATHS) {

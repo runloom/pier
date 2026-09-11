@@ -672,7 +672,7 @@
           "name": "agents start",
           "status": "shipped",
           "synopsis": "pier agents start <id> [--cwd <path>] [--window <id>] [--placement tab|right|below] [--stdin|--text <text>|--text-file <path>] --json",
-          "description": "启动持久智能体并打开对应终端（须在 Pier 智能体面板内运行；首轮提示词可经 --stdin 传入，作为后台标签委派子智能体）。例：echo \"只回复 OK\" | pier agents start omp --stdin。--agent 仍可用。",
+          "description": "启动持久智能体并打开对应终端（须在 Pier 智能体面板内运行）。--stdin 原样接收首条任务；已验证的交互式命令使用原生启动参数，其余保存在增强输入框，等待手动发送。inputDisposition 表示 native-launch / draft / unconfirmed；creationStatus 为 unconfirmed 时请先检查面板，不要重复启动。原生授权由用户在终端中完成。--agent 仍可用。",
           "humanSample": "pier agents start claude"
         },
         {
@@ -680,7 +680,7 @@
           "name": "agents turn",
           "status": "shipped",
           "synopsis": "pier agents turn --boot … --runtime … --generation … [--text …|--text-file …|--stdin] --json",
-          "description": "向该次运行发送一轮输入。boot/runtime/generation 来自 start 的返回，不要省略。accepted 不等于已经处理完。"
+          "description": "向该次运行提交一轮输入，保留文本末尾的换行。boot/runtime/generation 来自 start；accepted 只确认传输，不表示处理完成。终端等待确认时拒绝发送并保存草稿；无法确认提交时保留待核对草稿，不自动重发。"
         },
         {
           "id": "agents-screen",
@@ -708,14 +708,14 @@
           "name": "agents interrupt",
           "status": "shipped",
           "synopsis": "pier agents interrupt --boot <id> --runtime <id> --generation <n> --json",
-          "description": "中断运行。"
+          "description": "向当前终端发送真正的 Ctrl+C 按键；由前台程序按其原生规则处理。"
         },
         {
           "id": "agents-terminate",
           "name": "agents terminate",
           "status": "shipped",
           "synopsis": "pier agents terminate --boot <id> --runtime <id> --generation <n> --json",
-          "description": "结束运行。"
+          "description": "停止宿主启动的终端进程，先 TERM，2 秒后升级 KILL，最多等待 10 秒的真实退出。面板和当前应用内的历史输出保留；超时返回错误，不伪造完成。单独关闭面板请用 terminal close。"
         },
         {
           "id": "agents-watch",

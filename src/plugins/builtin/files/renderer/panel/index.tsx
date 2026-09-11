@@ -5,20 +5,15 @@ import type {
   PierDockviewGroupHandle,
 } from "@shared/contracts/dockview.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
+import { isDeletionOnlyDirty } from "../document/disk-protection.ts";
 import {
   type FilesDocumentPanelSource,
   sameFilesDocumentPanelSource,
 } from "../document/types.ts";
 import { useFilesDocument } from "../document/use-document.ts";
+import { useAcquirePanelDocument } from "../document/use-ensure-document.ts";
 import type { FileEditorController } from "../editor/controller.ts";
 import { createFileEditorSessionId } from "../editor/session-id.ts";
 import { createFilesTranslate, useFilesPluginLanguage } from "../i18n.ts";
@@ -109,10 +104,7 @@ function FilePanelContent({
     panelSessionId,
     stableSource,
   });
-  useLayoutEffect(() => {
-    if (!stableSource) return;
-    return controller.acquirePanel(panelSessionId, stableSource);
-  }, [controller, panelSessionId, stableSource]);
+  useAcquirePanelDocument(controller, panelSessionId, stableSource);
 
   // group 绑定必须活着：跨组拖拽不 remount，只 reparent。render 快照会指向旧组。
   // onDidGroupChange 把 groupId 提升为 state，cleanup/setup 对称完成迁移。
@@ -174,6 +166,9 @@ function FilePanelContent({
   const trackedSource = panelSourceForDocument(trackedDocument);
   const trackedDirty = trackedDocument?.dirty === true;
   const trackedUnsaved = fileDocumentShowsUnsavedMark({
+    deletionOnlyDirty: trackedDocument
+      ? isDeletionOnlyDirty(trackedDocument)
+      : false,
     dirty: trackedDirty,
     needsSaveAs: trackedDocument?.needsSaveAs === true,
   });

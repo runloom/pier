@@ -103,6 +103,8 @@ export const settingsMaterials = {
     edges: "흐름/구성 변.",
     mermaidSource:
       "네이티브 mermaid 텍스트. 시퀀스, 상태, 클래스, ER, 마인드맵에 씁니다.",
+    workflowSpec: "레인, 단계, 선, 주 경로. 픽셀이나 색은 쓰지 마세요.",
+    screenFlowSpec: "아트보드 id, 선, 주 경로. 픽셀이나 색은 쓰지 마세요.",
     renderNodeContent:
       "제목 아래 표시. 해당 노드는 contentHeight를 설정해야 합니다.",
     sortableItems: "표시 순서의 항목 id.",
@@ -194,6 +196,8 @@ export const settingsMaterials = {
     DataChart: "추세와 비교",
     Mermaid:
       "노드로 흐름을 그리고, 네이티브 mermaid 시퀀스, 상태, 클래스, ER, 마인드맵도 씁니다.",
+    WorkflowDiagram: "레인과 단계로 조작 흐름을 그립니다",
+    ScreenFlow: "화면 사이 사용자 경로",
     canvasFile: "캔버스 옆 파일용 샌드박스. 충돌 포함",
     activityOverview: "누가 움직이고 누가 도움이 필요한지 한눈에",
     costOverview: "플러그인 전체 토큰 비용 집계",

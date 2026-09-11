@@ -5,9 +5,16 @@ import { showFileDurabilityError } from "../panel/dialog-feedback.ts";
 import type { FileSaveFeedback } from "../save/feedback.ts";
 import type { FileSaveOutcome } from "../save/outcome.ts";
 import type { FilesWatchHub } from "../watch-hub.ts";
+import { filesDocumentRequiresSaveOnClose } from "./disk-protection.ts";
 import { reloadDiskDocument } from "./disk-reload.ts";
 import { FilesDraftRecoveryReporter } from "./draft-recovery-reporter.ts";
 import {
+  createRestoreSuppression,
+  documentIdForPanelSource,
+  ensureFilesDocument,
+} from "./ensure.ts";
+import {
+  bindDocumentLiveSync,
   clearAllDocumentAutoSaveTimers,
   clearDocumentAutoSaveTimer,
   handleDocumentStoreChangeForLiveSync,
@@ -26,7 +33,6 @@ import {
   configureFilesDraftBackend,
   createUntitledDocument as createUntitledStoreDocument,
   dismissDocumentDiskConflict,
-  ensureDiskDocument,
   getDocument,
   getDocumentForPanelSource,
   listOpenDiskDocuments,
@@ -36,14 +42,9 @@ import {
   markDocumentPathReconciled,
   markDocumentSaveIdle,
   removeDocument,
-  restoreUntitledDocumentFromPanelSource,
   subscribeFilesDocumentStore,
 } from "./store.ts";
-import {
-  type FilesDocument,
-  type FilesDocumentPanelSource,
-  resolveDiskDocumentId,
-} from "./types.ts";
+import type { FilesDocument, FilesDocumentPanelSource } from "./types.ts";
 
 export class FileDocumentLifecycle {
   readonly #context: RendererPluginContext;
@@ -55,6 +56,7 @@ export class FileDocumentLifecycle {
   readonly #panels: FileDocumentPanelRegistry;
   readonly #draftRecoveryReporter = new FilesDraftRecoveryReporter();
   readonly #reconciler: OpenDocumentReconciler;
+  readonly #restoreSuppression = createRestoreSuppression();
   readonly #saver: FileDocumentSaver;
   readonly #saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
   #autoSaveEnabled: boolean;
@@ -155,28 +157,21 @@ export class FileDocumentLifecycle {
     }
   }
   documentId(source: FilesDocumentPanelSource): string {
-    return source.kind === "untitled"
-      ? source.id
-      : resolveDiskDocumentId(source);
+    return documentIdForPanelSource(source);
   }
   ensureDocument(source: FilesDocumentPanelSource): FilesDocument | null {
-    if (source.kind === "untitled") {
-      const document =
-        getDocument(source.id) ??
-        restoreUntitledDocumentFromPanelSource(source);
-      if (!document) {
-        this.#claimLegacySource(source);
-      }
-      return document;
-    }
-    const document = ensureDiskDocument({
-      ...(source.documentId ? { documentId: source.documentId } : {}),
-      path: source.path,
-      root: source.root,
+    return ensureFilesDocument({
+      bindLiveSync: (document) => this.#bindLiveSync(document),
+      claimLegacySource: (nextSource) => this.#claimLegacySource(nextSource),
+      loader: this.#loader,
+      source,
+      suppressed: this.#restoreSuppression.isSuppressed(
+        documentIdForPanelSource(source)
+      ),
     });
-    this.#loader.start(document.id, false);
-    this.#claimLegacySource(source);
-    return document;
+  }
+  suppressRestore(documentId: string): void {
+    this.#restoreSuppression.suppress(documentId);
   }
   createUntitledDocument(
     input: Parameters<typeof createUntitledStoreDocument>[0]
@@ -184,18 +179,13 @@ export class FileDocumentLifecycle {
     return createUntitledStoreDocument(input);
   }
   acquirePanel(panelId: string, source: FilesDocumentPanelSource): () => void {
+    this.#restoreSuppression.allow(this.documentId(source));
     const document = this.ensureDocument(source);
-    const release = this.#panels.acquire({
+    return this.#panels.acquire({
       documentId: document?.id ?? this.documentId(source),
       panelId,
       source,
     });
-    if (document) {
-      this.#lastContents.set(document.id, document.currentContents);
-      this.#lastDirty.set(document.id, document.dirty);
-      this.#scheduleAutoSave(document);
-    }
-    return release;
   }
   closePanel(input: {
     hasOtherOpenInstance: boolean;
@@ -205,10 +195,7 @@ export class FileDocumentLifecycle {
       return;
     }
     const document = getDocumentForPanelSource(input.source);
-    if (
-      document &&
-      !(document.dirty || document.needsSaveAs || document.durabilityUnknown)
-    ) {
+    if (document && !filesDocumentRequiresSaveOnClose(document)) {
       this.discardDocument(document.id);
     }
   }
@@ -220,6 +207,7 @@ export class FileDocumentLifecycle {
   }
 
   discardDocument(documentId: string): void {
+    this.#restoreSuppression.suppress(documentId);
     const document = getDocument(documentId);
     if (!document) {
       return;
@@ -432,6 +420,7 @@ export class FileDocumentLifecycle {
     this.#panels.dispose();
     this.#loader.dispose();
     this.#saver.dispose();
+    this.#restoreSuppression.clear();
     if (options.clearDocuments) {
       clearFilesDocumentStore({ persisted: false });
     }
@@ -459,6 +448,20 @@ export class FileDocumentLifecycle {
       panelDocumentIds: this.#panels.documentIds(),
       panelIdForDocument: (documentId) =>
         this.#panels.panelIdForDocument(documentId),
+      saveDocument: (documentId, panelId) =>
+        this.saveDocument(documentId, panelId),
+      saveTimers: this.#saveTimers,
+      suspending: this.#suspending,
+    });
+  }
+
+  #bindLiveSync(document: FilesDocument): void {
+    bindDocumentLiveSync({
+      autoSaveEnabled: this.#autoSaveEnabled,
+      document,
+      lastContents: this.#lastContents,
+      lastDirty: this.#lastDirty,
+      panelId: this.#panels.panelIdForDocument(document.id),
       saveDocument: (documentId, panelId) =>
         this.saveDocument(documentId, panelId),
       saveTimers: this.#saveTimers,

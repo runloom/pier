@@ -200,10 +200,17 @@ export async function handleAgentsRuntimeOp(args: {
               : result;
           }
           success = true;
-          return {
-            ok: true as const,
-            data: attachChildCapabilityRef(result.data, reservation),
-          };
+          const data = attachChildCapabilityRef(result.data, reservation);
+          // A fast child may exit before its capability is attached.
+          const ended = runtimeControl
+            .listRuntimeSummaries()
+            .find((item) => item.runtimeId === result.data.runtime.runtimeId);
+          if (ended?.fact === "exited" || ended?.closed)
+            releaseRuntimeReservation({
+              authority: capabilityAuthority,
+              runtimeId: result.data.runtime.runtimeId,
+            });
+          return { ok: true as const, data };
         } finally {
           // throw 或 ok:false 都释放占额；成功则保留至 terminate
           if (!success) {
@@ -235,9 +242,15 @@ export async function handleAgentsRuntimeOp(args: {
         return controlErrorResponse(requestId, denied.code, denied.message);
       }
     }
-    const text = /[\r\n]$/u.test(parsed.data.text)
-      ? parsed.data.text
-      : `${parsed.data.text}\n`;
+    let text = parsed.data.text;
+    if (parsed.data.submit === true) {
+      text = text.replace(/\r?\n$/u, "");
+    } else if (
+      parsed.data.submit === undefined &&
+      !/[\r\n]$/u.test(parsed.data.text)
+    ) {
+      text = `${parsed.data.text}\n`;
+    }
     // digest 与副作用使用同一规范化 text，保证 --operation-id 幂等
     const effectParams = { ...params, text };
     return runWriteWithFence({

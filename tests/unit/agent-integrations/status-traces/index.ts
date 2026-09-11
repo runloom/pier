@@ -15,6 +15,8 @@ import { EXTENSION_PLUGIN_STATUS_TRACES } from "./extension-plugin-traces.ts";
 import { FLAT_COMMAND_STATUS_TRACES } from "./flat-command-traces.ts";
 import { HOSTED_PLUGIN_STATUS_TRACES } from "./hosted-plugin-traces.ts";
 import { NESTED_HOOK_STATUS_TRACES } from "./nested-hook-traces.ts";
+import { INTERRUPT_RECONCILER_TRACES } from "./reconciled/interrupt-traces.ts";
+import { KIMI_RECONCILER_TRACE } from "./reconciled/kimi-trace.ts";
 import { RECONCILER_STATUS_TRACES } from "./reconciler-traces.ts";
 import { REMAINING_HOSTED_PLUGIN_STATUS_TRACES } from "./remaining-hosted-plugin-traces-index.ts";
 import { SPECIAL_COMMAND_STATUS_TRACES } from "./special-command-traces.ts";
@@ -30,6 +32,8 @@ export const ACTIVE_AGENT_STATUS_TRACES: readonly AgentStatusTraceFixture[] = [
   ...HOSTED_PLUGIN_STATUS_TRACES,
   ...REMAINING_HOSTED_PLUGIN_STATUS_TRACES,
   ...RECONCILER_STATUS_TRACES,
+  ...INTERRUPT_RECONCILER_TRACES,
+  KIMI_RECONCILER_TRACE,
   CODEBUDDY_RECONCILER_STATUS_TRACE,
   ...SPECIAL_COMMAND_STATUS_TRACES,
   ...BRANCHING_COMMAND_STATUS_TRACES,

@@ -38,11 +38,17 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       string,
       (...args: unknown[]) => unknown | Promise<unknown>
     >();
+    const { nativeTerminalProcesses } = await import(
+      "@main/ipc/terminal/process/registry.ts"
+    );
     const fakeAddon = {
+      signalTerminalProcess: vi.fn((key: string, lifecycleId: string) =>
+        nativeTerminalProcesses.exited(key, lifecycleId, 143)
+      ),
       applyTerminalWindowState: vi.fn(() => ({ status: "applied" })),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
-      closeTerminal: vi.fn(),
+      closeTerminal: vi.fn(() => true),
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
       reconcileTerminals: vi.fn(),
@@ -166,12 +172,18 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       string,
       (...args: unknown[]) => unknown | Promise<unknown>
     >();
+    const { nativeTerminalProcesses } = await import(
+      "@main/ipc/terminal/process/registry.ts"
+    );
     const fakeAddon = {
+      signalTerminalProcess: vi.fn((key: string, lifecycleId: string) =>
+        nativeTerminalProcesses.exited(key, lifecycleId, 143)
+      ),
       applyTerminalInputRouting: vi.fn(),
       applyTerminalPresentation: vi.fn(),
       applyTerminalTheme: vi.fn(),
       closeAllTerminals: vi.fn(),
-      closeTerminal: vi.fn(),
+      closeTerminal: vi.fn(() => true),
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
       reconcileTerminals: vi.fn(),
@@ -307,7 +319,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_WINDOW_ID: "1",
         }),
       },
-      "",
+      expect.stringMatching(/^shell:\d+$/),
       11
     );
     expect(fakeAddon.createTerminal).toHaveBeenNthCalledWith(
@@ -323,7 +335,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_WINDOW_ID: "2",
         }),
       },
-      "",
+      expect.stringMatching(/^shell:\d+$/),
       12
     );
   });
@@ -385,7 +397,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_WINDOW_ID: "7",
         }),
       },
-      "",
+      expect.stringMatching(/^shell:\d+$/),
       13
     );
   });
@@ -411,7 +423,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       }
     );
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({ ok: true });
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
       Buffer.from("win-7"),
       "7::panel-a",
@@ -427,7 +439,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_WINDOW_ID: "7",
         }),
       },
-      "",
+      expect.stringMatching(/^shell:\d+$/),
       14
     );
     expect(consumeLaunch).toHaveBeenCalledWith("launch-1");

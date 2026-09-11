@@ -13,6 +13,11 @@ import { GIT_CHANGES_PANEL_ID } from "../../manifest.ts";
 import { pluginText } from "../plugin-text.ts";
 import { panelContextFromReviewGitRoot } from "./context/from-git-root.ts";
 import type { GitReviewTreeFileRef } from "./tree/section.ts";
+import {
+  collectReviewTreeSelectionFileRefs,
+  isReviewTreeMultiSelection,
+  reviewTreeCopyPaths,
+} from "./tree/selection-menu.ts";
 import type { GitReviewTreeModel } from "./tree.tsx";
 import { GIT_REVIEW_TREE_ITEM_SURFACE } from "./tree-actions.ts";
 
@@ -212,6 +217,7 @@ interface GitReviewTreeContextMenuOptions {
   contextId: string;
   gitRootPath: string;
   mutationAuthorityBlocked: boolean;
+  selectedPathsRef: { readonly current: readonly string[] };
   sourcePanelContext?: PanelContext | null;
   sourcePanelId?: string;
   treeModel: GitReviewTreeModel;
@@ -224,6 +230,7 @@ export function useGitReviewTreeContextMenu({
   mutationAuthorityBlocked,
   sourcePanelContext,
   sourcePanelId,
+  selectedPathsRef,
   treeModel,
 }: GitReviewTreeContextMenuOptions) {
   return useCallback(
@@ -234,14 +241,20 @@ export function useGitReviewTreeContextMenu({
       // tree path 带 group 前缀（Changed Files / Changes / …）。
       // path 保留树路径供 expand/collapse；repoPath 才是磁盘/git 相对路径。
       // 目录/组根：聚合子文件 refs，供 stage/unstage 批量路径。
+      const selectedPaths = selectedPathsRef.current;
+      const multi = isReviewTreeMultiSelection(item.path, selectedPaths);
+      const selectionRefs = multi
+        ? collectReviewTreeSelectionFileRefs(treeModel, selectedPaths)
+        : undefined;
       const fileRef =
-        item.kind === "file"
+        selectionRefs === undefined && item.kind === "file"
           ? treeModel.getFileRefForTreePath(item.path)
           : undefined;
       const fileRefs =
-        item.kind === "directory"
+        selectionRefs ??
+        (item.kind === "directory"
           ? treeModel.getFileRefsUnderTreePath(item.path)
-          : undefined;
+          : undefined);
       const entry = fileRef
         ? treeModel.entryByKey.get(fileRef.entryKey)
         : undefined;
@@ -251,6 +264,9 @@ export function useGitReviewTreeContextMenu({
         ...(fileRef ? { fileRef } : {}),
         ...(fileRefs ? { fileRefs } : {}),
       });
+      const copyPaths = reviewTreeCopyPaths(
+        fileRefs ?? (fileRef ? [fileRef] : [])
+      );
       // 目录也弹 surface，阻断冒泡到 panel/content 的复制/全选；Open File 仅对文件有意义。
       // 返回 Promise：PierFileTree 在菜单关闭后把 focus 还回右键行。
       return context.contextMenu
@@ -273,6 +289,8 @@ export function useGitReviewTreeContextMenu({
             path: item.path,
             // Repo-relative for copy/reveal/open; omitted on synthetic group roots.
             ...(repoPath == null ? {} : { repoPath }),
+            copyPaths,
+            ...(multi ? { selectedPaths: [...selectedPaths] } : {}),
             stagePaths: flags.stagePaths,
             unstagePaths: flags.unstagePaths,
             unstagedStatus: flags.unstagedStatus,
@@ -307,6 +325,7 @@ export function useGitReviewTreeContextMenu({
       gitRootPath,
       mutationAuthorityBlocked,
       sourcePanelContext,
+      selectedPathsRef,
       sourcePanelId,
       treeModel,
     ]

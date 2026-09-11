@@ -1,0 +1,324 @@
+--- a/include/ghostty.h
++++ b/include/ghostty.h
+@@ -1105,6 +1105,8 @@
+ void ghostty_surface_update_config(ghostty_surface_t, ghostty_config_t);
+ bool ghostty_surface_needs_confirm_quit(ghostty_surface_t);
+ bool ghostty_surface_process_exited(ghostty_surface_t);
++void ghostty_surface_retain_after_exit(ghostty_surface_t);
++bool ghostty_surface_signal_process(ghostty_surface_t, bool);
+ void ghostty_surface_write_buffer(ghostty_surface_t, const uint8_t*, uintptr_t);
+ void ghostty_surface_process_exit(ghostty_surface_t, uint32_t, uint64_t);
+ void ghostty_surface_refresh(ghostty_surface_t);
+--- a/src/Surface.zig
++++ b/src/Surface.zig
+@@ -141,6 +141,8 @@
+ /// This is set to true if our IO thread notifies us our child exited.
+ /// This is used to determine if we need to confirm, hold open, etc.
+ child_exited: bool = false,
++/// Host-owned result panels are dismissed explicitly, never by typing.
++retain_after_exit: bool = false,
+ 
+ /// We maintain our focus state and assume we're focused by default.
+ /// If we're not initially focused then apprts can call focusCallback
+@@ -1302,7 +1304,7 @@
+ 
+     // Waiting after command we stop here. The terminal is updated, our
+     // state is updated, and now its up to the user to decide what to do.
+-    if (self.config.wait_after_command) return;
++    if (self.config.wait_after_command or self.retain_after_exit) return;
+ 
+     // If we aren't waiting after the command, then we exit immediately
+     // with no confirmation.
+@@ -2799,6 +2801,8 @@
+         // an encoded value, we close the surface. We want to eventually
+         // move this behavior to the apprt probably.
+         if (self.child_exited) {
++            write_req.deinit();
++            if (self.retain_after_exit) return .consumed;
+             self.close();
+             return .closed;
+         }
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -1660,6 +1660,24 @@
+     /// Returns true if the surface process has exited.
+     export fn ghostty_surface_process_exited(surface: *Surface) bool {
+         return surface.core_surface.child_exited;
++    }
++
++    export fn ghostty_surface_retain_after_exit(surface: *Surface) void {
++        surface.core_surface.retain_after_exit = true;
++    }
++
++    /// Acceptance of an IO request, not proof of exit. Never block AppKit
++    /// waiting for the bounded IO mailbox or for a child process.
++    export fn ghostty_surface_signal_process(surface: *Surface, force: bool) bool {
++        const core = &surface.core_surface;
++        if (core.io.backend != .exec) return false;
++        core.retain_after_exit = true;
++        if (core.child_exited) return true;
++        const accepted = switch (core.io.mailbox) {
++            .spsc => |*mb| mb.queue.push(.{ .signal_process = force }, .{ .instant = {} }) > 0,
++        };
++        core.io.mailbox.notify();
++        return accepted;
+     }
+ 
+     export fn ghostty_surface_write_buffer(
+--- a/src/termio/Exec.zig
++++ b/src/termio/Exec.zig
+@@ -134,6 +134,11 @@
+     var termios_timer = try xev.Timer.init();
+     errdefer termios_timer.deinit();
+ 
++    var stop_timer = try xev.Timer.init();
++    errdefer stop_timer.deinit();
++    var exit_timer = try xev.Timer.init();
++    errdefer exit_timer.deinit();
++
+     // Start our read thread
+     const read_thread = try std.Thread.spawn(
+         .{},
+@@ -151,16 +156,23 @@
+         .read_thread_pipe = pipe[1],
+         .read_thread_fd = pty_fds.read,
+         .termios_timer = termios_timer,
++        .stop_timer = stop_timer,
++        .exit_timer = exit_timer,
+     } };
+ 
+     // Start our process watcher. If we have an xev.Process use it.
+-    if (process) |*p| p.wait(
+-        td.loop,
+-        &td.backend.exec.process_wait_c,
+-        termio.Termio.ThreadData,
+-        td,
+-        processExit,
+-    ) else if (comptime build_config.flatpak) flatpak: {
++    if (process) |*p| {
++        if (comptime builtin.os.tag == .macos) {
++            // Keep the child unreaped during stop escalation. The ordinary
++            // xev.Process wrapper calls waitpid before our exit callback.
++            td.backend.exec.process_wait_c = .{
++                .op = .{ .proc = .{ .pid = p.pid, .flags = xev.Sys.NOTE_EXIT_FLAGS } },
++                .userdata = td,
++                .callback = rawProcessExit,
++            };
++            td.loop.add(&td.backend.exec.process_wait_c);
++        } else p.wait(td.loop, &td.backend.exec.process_wait_c, termio.Termio.ThreadData, td, processExit);
++    } else if (comptime build_config.flatpak) flatpak: {
+         switch (self.subprocess.process orelse break :flatpak) {
+             // If we're in flatpak and we have a flatpak command
+             // then we can run the special flatpak logic for watching.
+@@ -194,7 +206,13 @@
+ pub fn threadExit(self: *Exec, td: *termio.Termio.ThreadData) void {
+     assert(td.backend == .exec);
+     const exec = &td.backend.exec;
+-
++    exec.shutting_down = true;
++
++    // Shutdown may interrupt the native grace timer. Finish group cleanup
++    // before reaping the owned leader, then let normal teardown proceed.
++    if (comptime builtin.os.tag == .macos) {
++        if (exec.pending_exit != null) self.signalProcess(td, true);
++    }
+     if (exec.exited) self.subprocess.externalExit();
+     self.subprocess.stop();
+ 
+@@ -224,6 +242,122 @@
+     }
+ 
+     exec.read_thread.join();
++}
++
++/// IO-thread-only signal path. NOTE_EXIT pins the owned leader until group
++/// cleanup finishes. Never reuse Subprocess.stop (blocking teardown).
++pub fn signalProcess(self: *Exec, td: *termio.Termio.ThreadData, force: bool) void {
++    if (td.backend.exec.exited) return;
++    if (comptime builtin.os.tag == .windows) return;
++    const execdata = &td.backend.exec;
++    if (!execdata.stop_requested) {
++        execdata.stop_requested = true;
++        execdata.stop_owner = self;
++        if (!force) execdata.stop_timer.run(td.loop, &execdata.stop_timer_c, 2000, termio.Termio.ThreadData, td, stopTimer);
++    }
++    if (force) execdata.stop_forced = true;
++    defer {
++        if (comptime builtin.os.tag == .macos) {
++            if (force) finishPendingExit(td);
++        }
++    }
++    const c = Subprocess.c;
++    const signal: c_int = if (force) c.SIGKILL else c.SIGTERM;
++    switch (self.subprocess.process orelse return) {
++        .fork_exec => |cmd| {
++            const pid = cmd.pid orelse return;
++            const pgid = execdata.owned_pgid orelse c.getpgid(pid);
++            if (pgid < 0) return; // watcher, not ESRCH, confirms exit
++            const host_group = c.getpgid(0);
++            // Between fork and setsid the child still shares our group.
++            // Signal only our direct child; never wait/spin on AppKit or IO.
++            if (pgid == host_group) {
++                _ = c.kill(pid, signal);
++                return;
++            }
++            if (pgid != pid) return;
++            execdata.owned_pgid = pgid;
++            // Signal the PTY's current foreground group atomically through
++            // its kernel-owned endpoint, never a potentially reused job PGID.
++            // Detached jobs/new sessions are outside the owned process group.
++            if (self.subprocess.pty) |pty| {
++                if (comptime builtin.os.tag == .macos) _ = c.ioctl(pty.master, c.TIOCSIG, signal);
++            }
++            _ = c.killpg(pgid, signal);
++        },
++        .flatpak => {},
++    }
++}
++
++fn stopTimer(td_: ?*termio.Termio.ThreadData, _: *xev.Loop, _: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
++    r catch return .disarm;
++    const td = td_.?;
++    if (td.backend.exec.stop_owner) |owner| owner.signalProcess(td, true);
++    return .disarm;
++}
++
++fn notifyPendingChildExited(td: *termio.Termio.ThreadData, exit_code: u32) void {
++    if (comptime builtin.os.tag != .macos) return;
++    const execdata = &td.backend.exec;
++    if (execdata.child_exit_notified or execdata.exited or execdata.shutting_down) return;
++    execdata.child_exit_notified = true;
++    const runtime_ms: u64 = runtime: {
++        const process_end = std.time.Instant.now() catch break :runtime 0;
++        break :runtime process_end.since(execdata.start) / std.time.ns_per_ms;
++    };
++    _ = td.surface_mailbox.push(.{
++        .child_exited = .{
++            .exit_code = exit_code,
++            .runtime_ms = runtime_ms,
++        },
++    }, .{ .forever = {} });
++}
++
++fn finishPendingExit(td: *termio.Termio.ThreadData) void {
++    if (comptime builtin.os.tag != .macos) return;
++    const execdata = &td.backend.exec;
++    if (execdata.exited) return;
++    const process = execdata.process orelse return;
++    if (execdata.stop_requested and !execdata.stop_forced) return;
++    // WNOHANG is mandatory even after NOTE_EXIT. A short retry also recovers
++    // a failed kqueue registration without ever fabricating a process exit.
++    const waited = posix.waitpid(process.pid, posix.W.NOHANG);
++    if (waited.pid == 0) {
++        if (!execdata.shutting_down) execdata.exit_timer.run(td.loop, &execdata.exit_timer_c, 50, termio.Termio.ThreadData, td, retryProcessExit);
++        return;
++    }
++    execdata.pending_exit = null;
++    if (execdata.shutting_down) {
++        // AppKit is joining this IO thread; do not push a blocking UI message.
++        execdata.exited = true;
++        return;
++    }
++    const code: u32 = if (posix.W.IFEXITED(waited.status)) posix.W.EXITSTATUS(waited.status) else 128 + posix.W.TERMSIG(waited.status);
++    if (execdata.child_exit_notified) {
++        execdata.exited = true;
++        return;
++    }
++    processExitCommon(td, code);
++}
++
++fn retryProcessExit(td_: ?*termio.Termio.ThreadData, _: *xev.Loop, _: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
++    r catch return .disarm;
++    finishPendingExit(td_.?);
++    return .disarm;
++}
++
++fn rawProcessExit(userdata: ?*anyopaque, _: *xev.Loop, _: *xev.Completion, result: xev.Result) xev.CallbackAction {
++    const td: *termio.Termio.ThreadData = @ptrCast(@alignCast(userdata.?));
++    const code = result.proc catch |err| {
++        if (err == error.Canceled) return .disarm;
++        log.warn("process watcher failed, retrying waitpid err={}", .{err});
++        finishPendingExit(td);
++        return .disarm;
++    };
++    td.backend.exec.pending_exit = code;
++    notifyPendingChildExited(td, code);
++    if (!td.backend.exec.stop_requested or td.backend.exec.stop_forced) finishPendingExit(td);
++    return .disarm;
+ }
+ 
+ pub fn focusGained(
+@@ -618,6 +752,18 @@
+     /// Process start time and boolean of whether its already exited.
+     start: std.time.Instant,
+     exited: bool = false,
++    // IO-owned stop lifecycle; pending NOTE_EXIT pins the child PID/PGID.
++    stop_requested: bool = false,
++    shutting_down: bool = false,
++    owned_pgid: ?posix.pid_t = null,
++    exit_timer: xev.Timer,
++    exit_timer_c: xev.Completion = .{},
++    stop_forced: bool = false,
++    stop_owner: ?*Exec = null,
++    pending_exit: ?u32 = null,
++    child_exit_notified: bool = false,
++    stop_timer: xev.Timer,
++    stop_timer_c: xev.Completion = .{},
+ 
+     /// The data stream is the main IO for the pty.
+     write_stream: xev.Stream,
+@@ -674,6 +820,8 @@
+ 
+         // Stop our termios timer
+         self.termios_timer.deinit();
++        self.stop_timer.deinit();
++        self.exit_timer.deinit();
+     }
+ };
+ 
+@@ -696,6 +844,7 @@
+     const c = @cImport({
+         @cInclude("errno.h");
+         @cInclude("signal.h");
++        @cInclude("sys/ioctl.h");
+         @cInclude("unistd.h");
+     });
+ 
+--- a/src/termio/Message.zig
++++ b/src/termio/Message.zig
+@@ -73,6 +73,9 @@
+     /// The surface gained or lost focus.
+     focused: bool,
+ 
++    /// Signal the owned child on the IO thread, retaining the surface.
++    signal_process: bool,
++
+     /// Write where the data fits in the union.
+     write_small: WriteReq.Small,
+ 
+--- a/src/termio/Termio.zig
++++ b/src/termio/Termio.zig
+@@ -671,6 +671,13 @@
+ }
+ 
+ /// Called when focus is gained or lost (when focus events are enabled)
++pub fn signalProcess(self: *Termio, td: *ThreadData, force: bool) void {
++    switch (self.backend) {
++        .exec => |*exec| exec.signalProcess(td, force),
++        .host_managed => {},
++    }
++}
++
+ pub fn focusGained(self: *Termio, td: *ThreadData, focused: bool) !void {
+     self.renderer_state.mutex.lock();
+     const focus_event = self.renderer_state.terminal.modes.get(.focus_event);
+--- a/src/termio/Thread.zig
++++ b/src/termio/Thread.zig
+@@ -342,6 +342,7 @@
+             .start_synchronized_output => self.startSynchronizedOutput(cb),
+             .linefeed_mode => |v| self.flags.linefeed_mode = v,
+             .focused => |v| try io.focusGained(data, v),
++            .signal_process => |force| io.signalProcess(data, force),
+             .write_small => |v| try io.queueWrite(
+                 data,
+                 v.data[0..v.len],

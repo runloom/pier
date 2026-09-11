@@ -2,6 +2,7 @@ import i18next from "i18next";
 import { useEffect } from "react";
 import { syncTaskPanelParams } from "@/lib/workspace/task-panel-params-sync.ts";
 import { rejectTerminalLaunch } from "@/lib/workspace/terminal-launch-confirmation.ts";
+import { flushTerminalDraft } from "@/stores/terminal-drafts.store.ts";
 import { useTerminalEndStateStore } from "@/stores/terminal-end-state.store.ts";
 import type { TerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -40,8 +41,8 @@ export function useTerminalRelaunch({
     setNativeTerminalReady(false);
     // 先装上新 launch，再清 savedSession，避免 skipNativeCreate 提前关掉
     // 导致无 launchId 的 plain create 抢跑。
-    window.pier.terminal
-      .close(panelId, { reason: "relaunch" })
+    flushTerminalDraft(panelId)
+      .then(() => window.pier.terminal.close(panelId, { reason: "relaunch" }))
       .then(() => {
         if (disposed) {
           rejectTerminalLaunch(
@@ -61,7 +62,7 @@ export function useTerminalRelaunch({
           taskOutput: undefined,
         });
         setSavedSession(null);
-        useTerminalEndStateStore.getState().clear(panelId);
+        useTerminalEndStateStore.getState().beginRelaunch(panelId);
         if (relaunchRequest.exitPresentation) {
           const panel = useWorkspaceStore
             .getState()

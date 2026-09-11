@@ -23,6 +23,19 @@ export const MAC_FOLDER_USAGE_DESCRIPTIONS = Object.freeze({
     "Pier needs access to files on removable volumes so it can open projects stored there.",
 });
 
+/**
+ * Electron's default Info.plist ships these. Pier does not use the matching
+ * capabilities; afterPack / PierDev must delete them before signing.
+ */
+export const MAC_UNUSED_USAGE_DESCRIPTION_KEYS = Object.freeze([
+  "NSScreenCaptureUsageDescription",
+  "NSAudioCaptureUsageDescription",
+  "NSCameraUsageDescription",
+  "NSMicrophoneUsageDescription",
+  "NSBluetoothAlwaysUsageDescription",
+  "NSBluetoothPeripheralUsageDescription",
+]);
+
 export const MAC_FOLDER_USAGE_DESCRIPTIONS_ZH_HANS = Object.freeze({
   NSAppleEventsUsageDescription:
     "Pier 需要控制其他 App（发送 Apple 事件），以便你在终端中运行的脚本和命令（如 osascript）正常工作。",

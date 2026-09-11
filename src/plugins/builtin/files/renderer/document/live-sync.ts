@@ -6,6 +6,28 @@ import { isSamePathOrDescendant } from "./paths.ts";
 import { getDocument, listOpenDiskDocuments } from "./store.ts";
 import type { FilesDocument } from "./types.ts";
 
+export function bindDocumentLiveSync(input: {
+  autoSaveEnabled: boolean;
+  document: FilesDocument;
+  lastContents: Map<string, string>;
+  lastDirty: Map<string, boolean>;
+  panelId: string | null | undefined;
+  saveDocument: (documentId: string, panelId?: string) => Promise<unknown>;
+  saveTimers: Map<string, ReturnType<typeof setTimeout>>;
+  suspending: boolean;
+}): void {
+  input.lastContents.set(input.document.id, input.document.currentContents);
+  input.lastDirty.set(input.document.id, input.document.dirty);
+  scheduleDocumentAutoSave({
+    autoSaveEnabled: input.autoSaveEnabled,
+    document: input.document,
+    panelId: input.panelId,
+    saveDocument: input.saveDocument,
+    saveTimers: input.saveTimers,
+    suspending: input.suspending,
+  });
+}
+
 export function scheduleDocumentAutoSave(input: {
   autoSaveEnabled: boolean;
   document: FilesDocument;
@@ -20,12 +42,22 @@ export function scheduleDocumentAutoSave(input: {
     input.suspending ||
     !(input.autoSaveEnabled && document.dirty) ||
     document.source.kind !== "disk" ||
+    document.deletedOnDisk ||
     document.saveState === "saving"
   ) {
     return;
   }
   const timer = setTimeout(() => {
     input.saveTimers.delete(document.id);
+    const latest = getDocument(document.id);
+    if (
+      !latest ||
+      latest.deletedOnDisk ||
+      latest.source.kind !== "disk" ||
+      !latest.dirty
+    ) {
+      return;
+    }
     input
       .saveDocument(document.id, input.panelId ?? undefined)
       .catch(() => undefined);
@@ -126,14 +158,16 @@ export function handleDocumentStoreChangeForLiveSync(input: {
     const wasDirty = input.lastDirty.get(document.id) === true;
     input.lastContents.set(document.id, document.currentContents);
     input.lastDirty.set(document.id, document.dirty);
-    if (!document.dirty) {
+    if (document.deletedOnDisk || !document.dirty) {
       clearDocumentAutoSaveTimer(input.saveTimers, document.id);
-      maybeAdoptDiskAfterDirtyCleared({
-        documentId: document.id,
-        loader: input.loader,
-        suspending: input.suspending,
-        wasDirty,
-      });
+      if (!document.deletedOnDisk) {
+        maybeAdoptDiskAfterDirtyCleared({
+          documentId: document.id,
+          loader: input.loader,
+          suspending: input.suspending,
+          wasDirty,
+        });
+      }
     } else if (previousContents !== document.currentContents) {
       scheduleDocumentAutoSave({
         autoSaveEnabled: input.autoSaveEnabled,

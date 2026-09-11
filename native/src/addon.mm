@@ -43,6 +43,8 @@ extern "C" {
         unsigned long long presentationId
     );
     bool ghostty_bridge_close(const char* panelId);
+    bool ghostty_bridge_signal_process(const char* panelId, const char* lifecycleId, bool force);
+    bool ghostty_bridge_set_retain_after_exit(const char* panelId, const char* lifecycleId, bool retain);
     bool ghostty_bridge_perform_binding_action(const char* panelId, const char* action);
     bool ghostty_bridge_send_text(const char* panelId, const uint8_t* bytes, long count);
     bool ghostty_bridge_send_key_press(
@@ -399,6 +401,27 @@ static Napi::Value JsClose(const Napi::CallbackInfo& info) {
     std::string panelId = info[0].As<Napi::String>().Utf8Value();
     bool ok = ghostty_bridge_close(panelId.c_str());
     return Napi::Boolean::New(info.Env(), ok);
+}
+
+static Napi::Value JsSignalProcess(const Napi::CallbackInfo& info) {
+    std::string panelId = info[0].As<Napi::String>().Utf8Value();
+    std::string lifecycleId = info[1].As<Napi::String>().Utf8Value();
+    bool force = info[2].As<Napi::Boolean>().Value();
+    return Napi::Boolean::New(info.Env(), ghostty_bridge_signal_process(panelId.c_str(), lifecycleId.c_str(), force));
+}
+
+static Napi::Value JsSetRetainAfterExit(const Napi::CallbackInfo& info) {
+    std::string panelId = info[0].As<Napi::String>().Utf8Value();
+    std::string lifecycleId = info[1].As<Napi::String>().Utf8Value();
+    bool retain = info[2].As<Napi::Boolean>().Value();
+    return Napi::Boolean::New(
+        info.Env(),
+        ghostty_bridge_set_retain_after_exit(
+            panelId.c_str(),
+            lifecycleId.c_str(),
+            retain
+        )
+    );
 }
 
 static Napi::Value JsPerformBindingAction(const Napi::CallbackInfo& info) {
@@ -1295,6 +1318,8 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("moveTerminal", Napi::Function::New(env, JsMoveTerminal));
     exports.Set("requestTerminalPresentation", Napi::Function::New(env, JsRequestTerminalPresentation));
     exports.Set("closeTerminal",   Napi::Function::New(env, JsClose));
+    exports.Set("signalTerminalProcess", Napi::Function::New(env, JsSignalProcess));
+    exports.Set("setTerminalRetainAfterExit", Napi::Function::New(env, JsSetRetainAfterExit));
     exports.Set("performTerminalBindingAction", Napi::Function::New(env, JsPerformBindingAction));
     exports.Set("sendText", Napi::Function::New(env, JsSendText));
     exports.Set("sendKeyPress", Napi::Function::New(env, JsSendKeyPress));

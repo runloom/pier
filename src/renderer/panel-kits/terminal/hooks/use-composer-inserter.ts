@@ -1,14 +1,15 @@
 import { type RefObject, useEffect } from "react";
 import { mergeComposerText } from "@/lib/comments/processable.ts";
 import {
+  type ComposerReviewChipDraft,
+  readReviewChipDraft,
+  type TerminalComposerSession,
+} from "../composer/session.ts";
+import {
   isReviewInsertFlushPending,
   registerComposerInserter,
   registerComposerReviewInserter,
 } from "../composer-bridge.ts";
-import {
-  type ComposerReviewChipDraft,
-  readReviewChipDraft,
-} from "../composer-helpers.ts";
 import type { StructuredComposerEditorHandle } from "../structured-composer/editor.tsx";
 import type { ReviewCommentsChipInsert } from "../structured-composer/mutations.ts";
 
@@ -32,10 +33,27 @@ function insertReviewChipWhenReady(
   onValueChange: (value: string) => void,
   valueRef: RefObject<string>,
   framesLeft: number,
-  stripPlainPayload: boolean
+  stripPlainPayload: boolean,
+  signal: AbortSignal
 ): Promise<boolean> {
   return new Promise((resolve) => {
+    let frame = 0;
+    const finish = (ok: boolean) => {
+      cancelAnimationFrame(frame);
+      signal.removeEventListener("abort", onAbort);
+      resolve(ok);
+    };
+    const onAbort = () => finish(false);
+    if (signal.aborted) {
+      finish(false);
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
     const attempt = (left: number): void => {
+      if (signal.aborted) {
+        finish(false);
+        return;
+      }
       const handle = editorRef.current;
       if (handle) {
         if (stripPlainPayload) {
@@ -49,22 +67,24 @@ function insertReviewChipWhenReady(
         const next = handle.getValue();
         // Ack only when agent payload is present in the serialized draft.
         if (!next.includes(chip.payloadText.trim())) {
-          resolve(false);
+          finish(false);
           return;
         }
         valueRef.current = next;
         onValueChange(next);
         queueMicrotask(() => {
-          editorRef.current?.focus();
+          if (!signal.aborted && editorRef.current === handle) {
+            handle.focus();
+          }
         });
-        resolve(true);
+        finish(true);
         return;
       }
       if (left <= 0) {
-        resolve(false);
+        finish(false);
         return;
       }
-      requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
         attempt(left - 1);
       });
     };
@@ -80,12 +100,18 @@ export function useComposerInserter(input: {
   editorRef: RefObject<StructuredComposerEditorHandle | null>;
   onValueChange: (value: string) => void;
   panelId: string;
+  session: TerminalComposerSession;
   valueRef: RefObject<string>;
 }): void {
-  const { editorRef, onValueChange, panelId, valueRef } = input;
+  const { editorRef, onValueChange, panelId, session, valueRef } = input;
 
   useEffect(() => {
-    const unregisterPlain = registerComposerInserter(panelId, (text) => {
+    const mounted = new AbortController();
+    const signal = AbortSignal.any([session.signal, mounted.signal]);
+    const unregisterPlain = registerComposerInserter(session, (text) => {
+      if (signal.aborted) {
+        return;
+      }
       const handle = editorRef.current;
       const current = handle?.getValue() ?? valueRef.current;
       const next = mergeComposerText(current, text);
@@ -93,7 +119,7 @@ export function useComposerInserter(input: {
       onValueChange(next);
       queueMicrotask(() => {
         const editor = editorRef.current;
-        if (!editor) {
+        if (!editor || signal.aborted) {
           return;
         }
         if (editor.getValue() !== next) {
@@ -105,7 +131,7 @@ export function useComposerInserter(input: {
     });
 
     const unregisterReview = registerComposerReviewInserter(
-      panelId,
+      session,
       (chip: ReviewCommentsChipInsert) =>
         insertReviewChipWhenReady(
           editorRef,
@@ -113,14 +139,15 @@ export function useComposerInserter(input: {
           onValueChange,
           valueRef,
           HANDLE_RETRY_FRAMES,
-          false
+          false,
+          signal
         )
     );
 
     // Remount rehydrate only when plain draft holds an expanded payload and no
     // live pending flush is about to insert the same (or newer) chip.
     const chipDraft: ComposerReviewChipDraft | null =
-      readReviewChipDraft(panelId);
+      readReviewChipDraft(session);
     const plain = valueRef.current;
     const shouldRehydrate =
       chipDraft !== null &&
@@ -133,13 +160,15 @@ export function useComposerInserter(input: {
         onValueChange,
         valueRef,
         HANDLE_RETRY_FRAMES,
-        true
+        true,
+        signal
       ).catch(() => undefined);
     }
 
     return () => {
       unregisterPlain();
       unregisterReview();
+      mounted.abort();
     };
-  }, [editorRef, onValueChange, panelId, valueRef]);
+  }, [editorRef, onValueChange, panelId, session, valueRef]);
 }

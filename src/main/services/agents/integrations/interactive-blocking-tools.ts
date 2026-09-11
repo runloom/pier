@@ -55,6 +55,14 @@ export const GROK_INTERACTIVE_BLOCKING_TOOLS = [
   },
 ] as const satisfies readonly InteractiveBlockingToolCase[];
 
+/** Kimi Code 0.41.0: AskUserQuestion Pre/Post hooks bracket the question UI. */
+export const KIMI_INTERACTIVE_BLOCKING_TOOLS = [
+  {
+    interactionKind: "question",
+    toolNames: ["AskUserQuestion"],
+  },
+] as const satisfies readonly InteractiveBlockingToolCase[];
+
 /**
  * Cursor 阻塞等人工具。AskQuestion 不走 hook（上游 preToolUse 不覆盖），
  * 问卷只由 transcript 对账。CreatePlan / SwitchMode 若触发 preToolUse，

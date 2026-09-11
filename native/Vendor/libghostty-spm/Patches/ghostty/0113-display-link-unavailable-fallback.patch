@@ -1,0 +1,43 @@
+--- a/pkg/macos/video/display_link.zig
++++ b/pkg/macos/video/display_link.zig
+@@ -8,14 +8,18 @@
+         InvalidOperation,
+     };
+ 
+-    pub fn createWithActiveCGDisplays() Allocator.Error!*DisplayLink {
++    pub fn createWithActiveCGDisplays() (Allocator.Error || error{DisplayLinkUnavailable})!*DisplayLink {
+         var result: ?*DisplayLink = null;
+-        if (c.CVDisplayLinkCreateWithActiveCGDisplays(
++        const status = c.CVDisplayLinkCreateWithActiveCGDisplays(
+             @ptrCast(&result),
+-        ) != c.kCVReturnSuccess)
+-            return error.OutOfMemory;
++        );
++        if (status == c.kCVReturnAllocationFailed) return error.OutOfMemory;
++        if (status != c.kCVReturnSuccess) {
++            std.log.scoped(.display_link).warn("display link unavailable status={d}; using change-driven rendering", .{status});
++            return error.DisplayLinkUnavailable;
++        }
+ 
+-        return result orelse error.OutOfMemory;
++        return result orelse error.DisplayLinkUnavailable;
+     }
+ 
+     pub fn release(self: *DisplayLink) void {
+--- a/src/renderer/generic.zig
++++ b/src/renderer/generic.zig
+@@ -696,7 +696,13 @@
+ 
+             const display_link: ?DisplayLink = switch (builtin.os.tag) {
+                 .macos => if (options.config.vsync)
+-                    try macos.video.DisplayLink.createWithActiveCGDisplays()
++                    macos.video.DisplayLink.createWithActiveCGDisplays() catch |err| switch (err) {
++                        // Display services may be unavailable in an otherwise
++                        // valid host session. The existing no-vsync renderer
++                        // still submits frames on changes; keep the PTY usable.
++                        error.DisplayLinkUnavailable => null,
++                        else => return err,
++                    }
+                 else
+                     null,
+                 else => null,

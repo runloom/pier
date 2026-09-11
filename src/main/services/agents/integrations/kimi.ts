@@ -5,9 +5,11 @@ import { join } from "node:path";
 import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { PIER_HOOK_COMMAND_GENERATION } from "../hooks-install.ts";
+import { KIMI_INTERACTIVE_BLOCKING_TOOLS } from "./interactive-blocking-tools.ts";
 import {
   atomicWriteFile,
   commandExistsOnPath,
+  interactiveBlockingToolLifecycleEvents,
   isManagedPierHookCommand,
   pierBlockMarkers,
   pierHookCommandGeneration,
@@ -24,16 +26,19 @@ const AGENT_ID: AgentKind = "kimi";
  * Kimi Code（2026-08-29 审计；本机 0.38.0/0.39.1 binary）：
  * - 配置只读 `KIMI_CODE_HOME`（默认 `~/.kimi-code`）config.toml；`~/.kimi`
  *   只做遗留清理。载体仍是顶层 [[hooks]]（CamelCase event、timeout 秒）。
- * - 装 14 事件：原 12 项 + PermissionRequest/Result（`tool_call_id` /
+ * - 装 15 事件：原 12 项 + Interrupt + PermissionRequest/Result（`tool_call_id` /
  *   `toolCallId` 配对，`decision` → accepted/rejected/cancelled/failed）。
- * - 不装 TurnStarted/Interrupt：payload 用主 session_id 且带 turn_id，子
- *   智能体会抢占主 scope。不装 Notification（与状态无关）。
+ * - 不装 TurnStarted：payload 缺少主/子身份。不装 Notification（与状态无关）。
+ *   Interrupt 只触发私有 main wire 对账，不能直接结算或认领主回合。
  * - PostToolUseFailure 的 error 在新 CLI 是对象，补 `error.message` 路径。
+ * - 0.41.0 子智能体 Stop 只有主 session_id，不能作为主回合结束候选；
+ *   Stop/StopFailure 不参与状态结算；主 wire 区分完成/取消/失败。
+ *   AskUserQuestion 的 Pre/Post 映射具名问答交互。
  *
  * 翻案：PR#1131 文件制 HOOK.md 未合并；uninstall 仍清 pier-<trigger>。
  * 孤儿：上游重写 TOML 会丢 marker，按 `isManagedPierHookCommand` 剔条目。
- * 终态：`kimi-reconciler.ts` 读 wire.jsonl TurnEnd → TurnCompleted（无法
- * 区分取消，interrupted 维持 unsupported）。
+ * 终态：`kimi-reconciler.ts` 关联主 agent 原生 turnId，读 v2 turn.ended
+ * 的 completed/cancelled/failed；旧版无身份的 message.TurnEnd 只映射完成。
  */
 
 const KIMI_PERMISSION_ID_FIELDS = ["tool_call_id", "toolCallId"] as const;
@@ -44,27 +49,24 @@ const KIMI_PERMISSION_OUTCOMES = [
   { interactionOutcome: "failed" as const, nativeValue: "error" },
 ];
 
-/** HookEventType → pier 规范事件。不装 Notification / TurnStarted / Interrupt。 */
+/** HookEventType → pier 规范事件。不装 Notification / TurnStarted。 */
 export const KIMI_HOOK_EVENTS: ReadonlyArray<{
   agentTypeFields?: readonly string[];
+  buildCommand?: (agentId: AgentKind) => string;
+  emittedPierEvents?: readonly string[];
   matcher?: string;
   nativeStateFields?: readonly string[];
   nativeStatePaths?: readonly string[];
+  parentSessionIdFields?: readonly string[];
   nativeEvent: string;
   pierEvent: AgentHookEventPayloadV3["event"];
 }> = [
   { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
   { nativeEvent: "UserPromptSubmit", pierEvent: "PromptSubmit" },
-  { nativeEvent: "PreToolUse", pierEvent: "ToolStart" },
-  { nativeEvent: "PostToolUse", pierEvent: "ToolComplete" },
-  {
-    nativeEvent: "PostToolUseFailure",
-    // 老 CLI error 是字符串（字段提取）；Kimi Code error 是对象
-    // （toKimiErrorPayload），走 error.message 路径提取。
-    nativeStateFields: ["error"],
+  ...interactiveBlockingToolLifecycleEvents({
     nativeStatePaths: ["error.message"],
-    pierEvent: "ToolComplete",
-  },
+    tools: KIMI_INTERACTIVE_BLOCKING_TOOLS,
+  }),
   {
     nativeEvent: "PermissionRequest",
     pierEvent: "InteractionRequested",
@@ -77,19 +79,22 @@ export const KIMI_HOOK_EVENTS: ReadonlyArray<{
   { nativeEvent: "PreCompact", pierEvent: "processing" },
   { nativeEvent: "PostCompact", pierEvent: "processing" },
   { nativeEvent: "Stop", pierEvent: "Stop" },
+  { nativeEvent: "Interrupt", pierEvent: "Stop" },
   {
     nativeEvent: "StopFailure",
     nativeStateFields: ["error_type", "error_message"],
-    pierEvent: "error",
+    pierEvent: "Stop",
   },
   {
     agentTypeFields: ["agent_name"],
     nativeEvent: "SubagentStart",
+    parentSessionIdFields: ["session_id"],
     pierEvent: "SubagentStart",
   },
   {
     agentTypeFields: ["agent_name"],
     nativeEvent: "SubagentStop",
+    parentSessionIdFields: ["session_id"],
     pierEvent: "SubagentStop",
   },
   { nativeEvent: "SessionEnd", pierEvent: "SessionEnd" },
@@ -149,6 +154,9 @@ const TRAILING_NEWLINES_RE = /\n+$/;
 function kimiManagedHookCommand(
   event: (typeof KIMI_HOOK_EVENTS)[number]
 ): string {
+  if (event.buildCommand) {
+    return event.buildCommand(AGENT_ID);
+  }
   if (event.pierEvent === "InteractionRequested") {
     return pierHookCommandV3WithStdin({
       agentId: AGENT_ID,
@@ -178,6 +186,9 @@ function kimiManagedHookCommand(
       : {}),
     event: event.pierEvent,
     nativeEvent: event.nativeEvent,
+    ...(event.parentSessionIdFields
+      ? { parentSessionIdFields: event.parentSessionIdFields }
+      : {}),
     ...(event.nativeStateFields
       ? { nativeStateFields: event.nativeStateFields }
       : {}),
@@ -427,11 +438,13 @@ export const kimiIntegration: AgentHookIntegration = {
   detect: kimiDetect,
   id: AGENT_ID,
   runtime: {
-    emittedMappings: KIMI_HOOK_EVENTS.map(({ nativeEvent, pierEvent }) => ({
-      nativeEvent,
-      pierEvent,
-    })),
-    stopAuthority: "advisory",
+    emittedMappings: KIMI_HOOK_EVENTS.flatMap((event) =>
+      (event.emittedPierEvents ?? [event.pierEvent]).map((pierEvent) => ({
+        nativeEvent: event.nativeEvent,
+        pierEvent,
+      }))
+    ),
+    stopAuthority: "none",
   },
   install: () => installKimiHooks(),
   uninstall: () => uninstallKimiHooks(),

@@ -14,6 +14,23 @@ interface RepositoryAuthorityState {
  * 插件生命周期内的仓库级修改权限。它只持有 UI 策略与刷新屏障；
  * main 的 GitReviewRepositoryCoordinator 仍是跨窗口写入顺序的最终所有者。
  */
+let activeAuthority: GitReviewMutationAuthority | null = null;
+
+export function bindGitReviewMutationAuthority(
+  authority: GitReviewMutationAuthority
+): () => void {
+  activeAuthority = authority;
+  return () => {
+    if (activeAuthority === authority) {
+      activeAuthority = null;
+    }
+  };
+}
+
+export function activeGitReviewMutationAuthority(): GitReviewMutationAuthority | null {
+  return activeAuthority;
+}
+
 export class GitReviewMutationAuthority {
   readonly #states = new Map<string, RepositoryAuthorityState>();
 

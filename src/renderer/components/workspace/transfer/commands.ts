@@ -1,3 +1,8 @@
+import {
+  flushTerminalDraft,
+  forgetTerminalDraft,
+  freezeTerminalDraft,
+} from "@/stores/terminal-drafts.store.ts";
 /**
  * Renderer command handlers for cross-window panel transfer
  * (prepareSource / stageTarget / releaseSource / finalize) plus bootstrap.
@@ -13,6 +18,7 @@ import type { DockviewApi } from "dockview-react";
 import { getPluginPanelRevision } from "@/lib/plugins/panel-registry.ts";
 import { flushWorkspaceLayout } from "@/lib/workspace/layout-persistence.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import { disposeTerminalComposerSession } from "@/panel-kits/terminal/composer/session.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { clearCurrentWindowLayout } from "@/stores/workspace-panel-helpers.ts";
 import { panelKindOf } from "../panel-registry.ts";
@@ -141,6 +147,15 @@ async function handlePrepareSource(
       }`
     );
   }
+  if (component === "terminal") {
+    freezeTerminalDraft(sourcePanelId, true);
+    try {
+      await flushTerminalDraft(sourcePanelId);
+    } catch (error) {
+      freezeTerminalDraft(sourcePanelId, false);
+      throw error;
+    }
+  }
   let prepared: PanelTransferPreparedSource = { drafts: [] };
   if (reg.kind === "custom") {
     prepared = await reg.prepareSource({
@@ -157,8 +172,10 @@ async function handlePrepareSource(
   );
   setFrozenSourceSnapshot(transferId, snapshot, revision);
   setPanelRelocationSuppressed(true);
-  hidePanelTransferTearOff(sourcePanelId, api);
-  armPanelTransferTearOffClaim();
+  if (command.mode !== "copy") {
+    hidePanelTransferTearOff(sourcePanelId, api);
+    armPanelTransferTearOffClaim();
+  }
   return snapshot;
 }
 
@@ -255,6 +272,10 @@ async function handleReleaseSource(
   const remainingParams = collectRemainingParams(api, sourcePanelId);
   setPanelRelocationSuppressed(true);
   api.removePanel(panel);
+  if (component === "terminal") {
+    disposeTerminalComposerSession(sourcePanelId);
+    forgetTerminalDraft(sourcePanelId);
+  }
   clearPanelTransferTearOff();
   if (reg?.kind === "custom" && reg.releaseSource) {
     await reg.releaseSource({
@@ -263,11 +284,8 @@ async function handleReleaseSource(
       transferId,
     });
   }
-  if (api.totalPanels === 0) {
-    await clearCurrentWindowLayout();
-  } else {
-    await flushWorkspaceLayout();
-  }
+  if (api.totalPanels === 0) await clearCurrentWindowLayout();
+  else await flushWorkspaceLayout();
 }
 
 function collectRemainingParams(
@@ -324,6 +342,7 @@ async function handleFinalize(command: FinalizeCommand): Promise<void> {
       }
     }
   }
+  if (component === "terminal" && panelId) freezeTerminalDraft(panelId, false);
   if (component && panelId) {
     const reg = panelTransferRegistrationOf(component);
     if (reg?.kind === "custom") {
@@ -336,9 +355,7 @@ async function handleFinalize(command: FinalizeCommand): Promise<void> {
     }
   }
   if (role === "target" && outcome === "commit" && stagedPanelId && api) {
-    // Moved panels land active (VS Code targetGroup.focus() semantics).
-    // Without this, the sole panel of a fresh transfer window stays
-    // inactive and the window renders blank.
+    // Activate the moved panel after ownership commits.
     activateWorkspacePanel(api, stagedPanelId, {
       kindOfComponent: panelKindOf,
       reveal: "always",
@@ -346,9 +363,7 @@ async function handleFinalize(command: FinalizeCommand): Promise<void> {
   }
   clearFrozenSourceSnapshot(transferId);
   setPanelRelocationSuppressed(false);
-  if (outcome === "abort") {
-    clearPanelTransferTearOff();
-  }
+  clearPanelTransferTearOff();
   clearFinalizeRecord(transferId);
   // Guard the async transfer-startup boot path: a late gate set for this
   // transfer must not resurrect after release.

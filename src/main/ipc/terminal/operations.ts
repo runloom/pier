@@ -4,8 +4,11 @@ import type {
   TerminalOperationResult,
 } from "@shared/contracts/terminal.ts";
 import type { AppWindow } from "../../windows/app-window.ts";
+import { terminalInputNeedsUser } from "./drafts/approval.ts";
+import { sendPersistedTerminalInput } from "./drafts/send.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import { toNativePanelKey } from "./panel-id.ts";
+import { nativeTerminalProcesses } from "./process/registry.ts";
 import { pasteTerminalText } from "./submit-text.ts";
 
 export { SUBMIT_ENTER_SETTLE_MS } from "./submit-text.ts";
@@ -107,6 +110,7 @@ export function performTerminalOperation(opts: {
 const MAX_SEND_TEXT_LENGTH = 64_000;
 
 interface ParsedSendTextArgs {
+  draftText?: string | undefined;
   panelId: string;
   submit: boolean;
   text: string;
@@ -137,7 +141,16 @@ function parseSendTextArgs(value: unknown): ParsedSendTextArgs | null {
   if (record.submit !== undefined && typeof record.submit !== "boolean") {
     return null;
   }
+  if (
+    record.draftText !== undefined &&
+    (typeof record.draftText !== "string" ||
+      record.draftText.length > 1_048_576)
+  )
+    return null;
   return {
+    ...(typeof record.draftText === "string"
+      ? { draftText: record.draftText }
+      : {}),
     panelId: record.panelId,
     submit: record.submit === true,
     text: record.text,
@@ -197,9 +210,29 @@ export async function sendTerminalText(opts: {
     return { ok: false, error: "window not found" };
   }
   try {
+    const nativeKey = toNativePanelKey(opts.win, parsed.panelId);
+    if (
+      parsed.draftText === undefined &&
+      terminalInputNeedsUser(nativeKey, opts.addon)
+    )
+      return {
+        ok: false,
+        errorCode: "needs-input",
+        error:
+          "Complete the confirmation or question in the terminal before sending a task.",
+      };
+    if (parsed.draftText !== undefined)
+      return await sendPersistedTerminalInput({
+        ...parsed,
+        addon: opts.addon,
+        win: opts.win,
+      });
+    const isCurrent = nativeTerminalProcesses.inputGuard(nativeKey);
     return await pasteTerminalText({
       addon: opts.addon,
-      nativePanelId: toNativePanelKey(opts.win, parsed.panelId),
+      nativePanelId: nativeKey,
+      isCurrent: () =>
+        isCurrent() && !terminalInputNeedsUser(nativeKey, opts.addon!),
       submit: parsed.submit,
       text: parsed.text,
     });
@@ -226,6 +259,8 @@ export function sendTerminalKeyPress(opts: {
   }
   try {
     const nativePanelId = toNativePanelKey(opts.win, parsed.panelId);
+    if (!nativeTerminalProcesses.inputGuard(nativePanelId)())
+      return { ok: false, error: "terminal process changed or ended" };
     const ok =
       parsed.text === undefined
         ? opts.addon.sendKeyPress(nativePanelId, parsed.keycode, parsed.mods)

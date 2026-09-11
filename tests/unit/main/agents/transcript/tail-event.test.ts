@@ -1,6 +1,7 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import { describe, expect, it } from "vitest";
 import { emitTranscriptEvent } from "../../../../../src/main/services/agents/integrations/transcript/tail-event.ts";
+import { shouldDropStaleEmptyTurnTerminal } from "../../../../../src/main/services/agents/integrations/transcript/tail-watermark.ts";
 
 function emptyState() {
   return {
@@ -77,18 +78,32 @@ describe("emitTranscriptEvent", () => {
     expect(received[0]).not.toHaveProperty("turnId");
   });
 
-  it("still dedupes terminals that carry a native turnId", () => {
+  it.each([
+    "TurnCompleted",
+    "TurnInterrupted",
+    "error",
+  ] as const)("dedupes %s and retires its native turn context", (pierEvent) => {
     const received: AgentHookEventPayload[] = [];
     const state = emptyState();
     const ctx = context("context-turn");
     const record = {
       nativeEvent: "codex.transcript.turn_completed",
-      pierEvent: "TurnCompleted" as const,
+      pierEvent,
       turnId: "native-turn",
     };
+    state.contextsByTurnId.set("native-turn", ctx);
     emitTranscriptEvent(state, ctx, record, (event) => received.push(event));
     emitTranscriptEvent(state, ctx, record, (event) => received.push(event));
     expect(received).toHaveLength(1);
     expect(received[0]).toMatchObject({ turnId: "native-turn" });
+    expect(state.contextsByTurnId.has("native-turn")).toBe(false);
+    expect(state.seenTerminalEvents.has("native-turn")).toBe(true);
+    expect(
+      shouldDropStaleEmptyTurnTerminal({
+        record: { ...record, turnId: "" },
+        lineEnd: 10,
+        watermark: 10,
+      })
+    ).toBe(true);
   });
 });

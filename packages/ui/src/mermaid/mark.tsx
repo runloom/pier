@@ -12,12 +12,10 @@ import {
 import type { ReactNode } from "react";
 import { cn } from "../utils.ts";
 import {
-  KIND_GLYPH,
-  KIND_SURFACE,
   type MermaidKind,
   type MermaidNode,
   type MermaidRunStatus,
-  TONE_SURFACE,
+  mermaidNodePaint,
 } from "./model.ts";
 
 const KIND_ICON: Record<MermaidKind, LucideIcon> = {
@@ -87,10 +85,8 @@ export function MermaidMark({
   onSelect?: ((id: string) => void) | undefined;
   selected: boolean;
 }) {
-  const toneSurface = node.tone ? TONE_SURFACE[node.tone] : undefined;
-  const kindSurface = node.kind ? KIND_SURFACE[node.kind] : undefined;
+  const paint = mermaidNodePaint(node);
   const KindIcon = node.kind ? KIND_ICON[node.kind] : undefined;
-  const pastelWash = Boolean(toneSurface || kindSurface);
   const select = () => onSelect?.(node.id);
   const label = `${node.id} ${node.title}`;
   const card = (
@@ -98,31 +94,46 @@ export function MermaidMark({
       className={cn(
         "relative box-border flex min-h-full w-full flex-col justify-start border px-3 py-3 text-left text-card-foreground!",
         node.shape === "round" ? "rounded-full" : "rounded-md",
-        toneSurface ?? kindSurface ?? "bg-card",
-        selected && "border-ring ring-1 ring-ring/40"
+        paint.dashed && "border-dashed",
+        paint.fill ? undefined : "bg-card",
+        paint.stroke ? undefined : "border-border",
+        selected && "ring-1 ring-ring/40"
       )}
       data-kind={node.kind ?? "none"}
       data-slot="mermaid-node"
       data-tone={node.tone ?? "muted"}
-      {...(pastelWash ? { "data-mermaid-wash": "pastel" } : {})}
+      style={
+        paint.fill || paint.stroke
+          ? {
+              ...(paint.fill ? { backgroundColor: paint.fill } : {}),
+              ...(paint.stroke
+                ? { borderColor: paint.stroke, borderWidth: 1.5 }
+                : {}),
+            }
+          : undefined
+      }
     >
       <div className="flex min-w-0 items-start gap-2">
         {KindIcon ? (
           <KindIcon
             aria-hidden="true"
-            className={cn(
-              "size-5 shrink-0",
-              node.kind ? KIND_GLYPH : undefined
-            )}
+            className="size-5 shrink-0"
             data-icon
+            style={paint.stroke ? { color: paint.stroke } : undefined}
           />
         ) : null}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <div className="min-w-0 whitespace-normal break-words font-medium text-card-foreground! text-sm leading-5!">
+          <div
+            className="min-w-0 whitespace-normal break-words font-medium text-card-foreground! text-sm leading-5!"
+            data-slot="mermaid-node-title"
+          >
             {node.title}
           </div>
           {node.meta ? (
-            <div className="min-w-0 break-words text-muted-foreground! text-xs leading-4!">
+            <div
+              className="min-w-0 break-words text-muted-foreground! text-xs leading-4!"
+              data-slot="mermaid-node-meta"
+            >
               {node.meta}
             </div>
           ) : null}

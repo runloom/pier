@@ -161,6 +161,11 @@ enum TerminalCallbacks {
         let bridge = Unmanaged<TerminalCallbackBridge>
             .fromOpaque(bridgePtr)
             .takeUnretainedValue()
+        if action.tag == GHOSTTY_ACTION_SHOW_CHILD_EXITED {
+            // Must run before this callback returns: Zig decides Surface.close()
+            // from retain_after_exit on the same stack.
+            bridge.retainSurfaceIfNeeded(surfacePtr)
+        }
         terminalRunOnMain {
             bridge.handleAction(action)
         }

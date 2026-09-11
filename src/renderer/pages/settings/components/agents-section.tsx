@@ -25,7 +25,7 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { Fragment, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
-import { formatLifecycleBatchFailureLine } from "@/pages/settings/components/agent-lifecycle-format.ts";
+import { formatLifecycleBatchFailureBody } from "@/pages/settings/components/agent-lifecycle-format.ts";
 import { AgentRow } from "@/pages/settings/components/agent-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
@@ -261,16 +261,18 @@ function AgentsToolbar() {
         }
         return showAppAlert({
           title: t("settings.agents.list.updateAllPartial"),
-          body: failures
-            .map((f) =>
-              formatLifecycleBatchFailureLine(t, {
-                agentLabel: getAgentCatalogEntry(f.agentId)?.label ?? f.agentId,
-                errorCode: f.errorCode,
-                errorDetail: f.errorDetail,
-                commandPreview: f.commandPreview,
-              })
-            )
-            .join("\n"),
+          body: formatLifecycleBatchFailureBody(
+            t,
+            failures.map((f) => ({
+              agentLabel: getAgentCatalogEntry(f.agentId)?.label ?? f.agentId,
+              errorCode: f.errorCode,
+              errorDetail: f.errorDetail,
+              commandPreview: f.commandPreview,
+              hostNode: f.hostNode,
+              installPaths: f.installPaths,
+              requiredNode: f.requiredNode,
+            }))
+          ),
         });
       })
       .catch((err: unknown) => {

@@ -186,13 +186,13 @@ describe("buildVibeHookBlock / withPierVibeHooks", () => {
         statuses.push(activity.status);
       }
     }
-    expect(statuses).toEqual(["processing", "processing"]);
+    expect(statuses).toEqual(["processing", "processing", "processing"]);
     const finalActivity = aggregator.snapshot().activities[0];
     expect(finalActivity).toMatchObject({
       kind: "agent",
       sessionId: "main-1",
     });
-    expect(finalActivity).not.toHaveProperty("status");
+    expect(finalActivity).toHaveProperty("status", "processing");
   }, 15_000);
 
   it("TOML 转义正确性：command 字面量是合法带引号转义的 TOML 字符串", async () => {

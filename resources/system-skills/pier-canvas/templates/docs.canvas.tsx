@@ -21,17 +21,9 @@ import {
 import { useState } from "react";
 
 /**
- * Showcase for the reading flow: a real guide built on DocsShell.
- * The document teaches how to pick a canvas stage — so opening the reading
- * flow example is itself the lesson. Rewrite every user-visible string into
- * the user's language before delivery.
- *
- * Composition notes (this template doubles as a reference):
- * - Layout uses host DocsShell. Do not hand-roll dual ScrollArea shells.
- * - `Text` sizing/weight/color come from `as` + `tone` variants (inline
- *   styles own typography; `text-*` / `font-*` classes would be ignored).
- * - Fonts: DocsShell body/titles use the host document font; sidebar
- *   controls and live component demos keep the UI font.
+ * DocsShell reading-flow showcase. The document is the stage-selection
+ * lesson. Do not hand-roll dual ScrollArea shells.
+ * Rewrite every user-visible string into the user's language.
  */
 export const canvas = {
   description: "Guide: picking a canvas stage (reading-flow showcase).",
@@ -107,7 +99,10 @@ function OverviewSection() {
             <TableCell>
               <code>WorldStage</code>
             </TableCell>
-            <TableCell>Mockups, spatial layouts</TableCell>
+            <TableCell>
+              Device mockups (<code>recipe=design</code>) or typed flowcharts
+              (<code>recipe=workflow</code>)
+            </TableCell>
           </TableRow>
         </TableBody>
       </Table>
@@ -175,9 +170,17 @@ function WorldSection() {
       </SectionTitle>
       <Text>
         Reach for the board stage when position carries meaning: multi-device
-        design mockups, moodboards, spatial walkthroughs. Frames sit at world
-        coordinates; the reader flies over them with the camera instead of
-        scrolling past them.
+        design mockups, moodboards, spatial walkthroughs, and typed interaction
+        flowcharts. Frames and diagrams sit at world coordinates; the reader
+        flies over them with the camera instead of scrolling past them.
+      </Text>
+      <Text>
+        Two recipes share this stage. <code>recipe=design</code> places
+        product chrome on <code>Artboard</code> presets and mounts
+        <code>ScreenFlow</code> so a user path is readable at fit zoom.
+        <code>recipe=workflow</code> mounts a <code>WorkflowDiagram</code> from
+        a typed spec — lanes, columns, and edges, not 393×852 phone frames.
+        Architecture and sequence stay <code>Mermaid</code>.
       </Text>
       <Stack gap={4}>
         <Text>
@@ -228,6 +231,12 @@ function ChoosingSection() {
         ]}
       />
       <Separator />
+      <Text>
+        On the board, pick a recipe from the job: device frames are
+        <code>recipe=design</code>; approval and recover loops are
+        <code>recipe=workflow</code>. Do not draw those loops as Mermaid, and
+        do not put phone frames on a flowchart.
+      </Text>
       <Text tone="secondary">
         Mixed needs? A flow document can embed fit-all cards (like the diagram
         above), and a board can carry long captions. Pick the stage that
@@ -243,12 +252,15 @@ function NextSection() {
       <SectionTitle anchorId="sec-next">Next steps</SectionTitle>
       <Text>
         The board-stage counterpart of this guide is the design-mockup
-        template: three device frames of one product surface, placed on a
-        world plane with a caption note beside them.
+        template: a user path across product frames on a world plane, with
+        <code>ScreenFlow</code> compiling the connectors.
       </Text>
       <Stack gap={4}>
         <Text>
           · Board showcase: <code>templates/design-mockup.canvas.tsx</code>
+        </Text>
+        <Text>
+          · Flowchart showcase: <code>templates/workflow.canvas.tsx</code>
         </Text>
         <Text>
           · Generate your own: run the <code>pier-canvas</code> skill and

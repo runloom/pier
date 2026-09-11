@@ -161,7 +161,12 @@ describe("withPierGooseHooks / withoutPierGooseHooks", () => {
       if (activity?.kind === "agent" && activity.status)
         statuses.push(activity.status);
     }
-    expect(statuses).toEqual(["processing", "tool", "processing"]);
+    expect(statuses).toEqual([
+      "processing",
+      "tool",
+      "processing",
+      "processing",
+    ]);
   }, 15_000);
 
   it("幂等：重复安装事件条目不重复", () => {
