@@ -26,6 +26,7 @@ describe("Mermaid flowchart from nodes", () => {
     expect(slotted).toContain(`${SLOT_ATTR}='host'`);
     expect(slotted).toContain(`:::${SLOT_CLASS}`);
     expect(slotted).toContain("height:");
+    expect(slotted).not.toContain("-.->");
     expect(nodeNeedsSlot({ id: "host", kind: "artifact", title: "Host" })).toBe(
       true
     );

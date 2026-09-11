@@ -94,19 +94,14 @@ export function mermaidFlowchart(options: {
   for (const node of options.nodes) {
     lines.push(`  ${flowchartNode(node, ids.get(node.id) ?? node.id)}`);
   }
-  const kinds = new Map(options.nodes.map((node) => [node.id, node.kind]));
   for (const edge of options.edges) {
     const from = ids.get(edge.source) ?? edge.source;
     const to = ids.get(edge.target) ?? edge.target;
-    const dashed =
-      kinds.get(edge.source) === "external" ||
-      kinds.get(edge.target) === "external";
     const label = edgeLabel(edge.label);
-    if (dashed && label) {
-      lines.push(`  ${from} -.->|${label}| ${to}`);
-    } else if (dashed) {
-      lines.push(`  ${from} -.-> ${to}`);
-    } else if (label) {
+    // Neo look's generateDashArray throws on dotted mermaid edges
+    // (`RangeError: Invalid array length`). External/artifact stay dashed
+    // on the slotted card, not the connector.
+    if (label) {
       lines.push(`  ${from} -->|${label}| ${to}`);
     } else {
       lines.push(`  ${from} --> ${to}`);

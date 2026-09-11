@@ -106,7 +106,9 @@ describe("Pier dockview tab focus CSS", () => {
     expect(css).not.toContain(
       '.dv-tab:not(:first-child):has([data-tab-status="running"])::before'
     );
-    const reduceStart = css.indexOf("@media (prefers-reduced-motion: reduce)");
+    const reduceStart = css.indexOf(
+      "@media (prefers-reduced-motion: reduce) {\n  .dockview-theme-pier .dv-tab .pier-tab-running-bar"
+    );
     expect(reduceStart).toBeGreaterThanOrEqual(0);
     const reduceBlock = css.slice(reduceStart, reduceStart + 500);
     expect(reduceBlock).toContain(".dv-tab .pier-tab-running-bar");

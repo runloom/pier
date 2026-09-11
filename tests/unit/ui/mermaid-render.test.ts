@@ -152,6 +152,20 @@ describe("Mermaid render", () => {
     expect(result.svg).toMatch(new RegExp(`${SLOT_ATTR}=['"]cli['"]`));
   });
 
+  it("renders actor/external dashed labeled edges", async () => {
+    const source = mermaidFlowchart({
+      edges: [{ label: "产品外", source: "h", target: "e" }],
+      nodes: [
+        { id: "h", kind: "actor", title: "人类" },
+        { id: "e", kind: "external", title: "外部" },
+      ],
+    });
+    const result = await renderMermaid("mm-arch-kind", source);
+    expect(result.svg).toMatch(new RegExp(`${SLOT_ATTR}=['"]h['"]`));
+    expect(result.svg).toMatch(new RegExp(`${SLOT_ATTR}=['"]e['"]`));
+    expect(source).not.toContain("-.->");
+  }, 8000);
+
   it("keeps isolated slotted nodes in the SVG", async () => {
     const source = mermaidFlowchart({
       edges: [{ source: "a", target: "b" }],

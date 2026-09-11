@@ -58,7 +58,7 @@ function defaultRunVersion(
     resolve(value);
   };
 
-  // PATH shims (mise/asdf/fnm) must see the dump env, not Electron's.
+  // Class B: node --version probe after PATH overlay so mise/asdf/fnm shims resolve.
   let child: ReturnType<typeof spawn>;
   try {
     child = spawn(path, ["--version"], {

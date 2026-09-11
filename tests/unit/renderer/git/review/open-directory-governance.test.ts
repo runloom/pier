@@ -104,7 +104,13 @@ describe("review open-directory gold standard", () => {
   });
 
   it("keeps file-tree primary click on files only", () => {
-    const source = readFileSync(TREE, "utf8");
+    const source = [
+      TREE,
+      join(ROOT, "packages/ui/src/file/use-tree-row-click-salvage.ts"),
+      join(ROOT, "packages/ui/src/file/tree-selection-model.ts"),
+    ]
+      .map((path) => readFileSync(path, "utf8"))
+      .join("\n");
     expect(source).toMatch(/kind !== "file"/);
   });
 });
