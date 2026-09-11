@@ -20,8 +20,8 @@ describe("tuneNeoFlowchartMarkers", () => {
         style="stroke-dasharray: 0 8 100 8"></path>
     `;
     const path = svg.querySelector("path");
-    if (path instanceof Element && "style" in path) {
-      (path as HTMLElement).style.strokeDasharray = "0 8 100 8";
+    if (path instanceof SVGElement) {
+      path.style.strokeDasharray = "0 8 100 8";
     }
     tuneNeoFlowchartMarkers(svg);
     expect(
@@ -49,8 +49,8 @@ describe("tuneNeoFlowchartMarkers", () => {
         style="stroke-dasharray: 0 0 100 4"></path>
     `;
     const path = svg.querySelector("path");
-    if (path instanceof Element && "style" in path) {
-      (path as HTMLElement).style.strokeDasharray = "0 0 100 4";
+    if (path instanceof SVGElement) {
+      path.style.strokeDasharray = "0 0 100 4";
     }
     tuneNeoFlowchartMarkers(svg);
     expect(path?.style.strokeDasharray).toBe("0 0 96 8");
@@ -82,12 +82,12 @@ describe("tuneNeoFlowchartMarkers", () => {
       ?.trim()
       .split(/[\s,]+/u)
       .map(Number);
-    if (path instanceof Element && "style" in path && dashes?.length === 4) {
-      (path as HTMLElement).style.strokeDasharray = dashes.join(" ");
+    if (path instanceof SVGElement && dashes?.length === 4) {
+      path.style.strokeDasharray = dashes.join(" ");
     }
-    const before = (path as HTMLElement).style.strokeDasharray;
+    const before = path instanceof SVGElement ? path.style.strokeDasharray : "";
     tuneNeoFlowchartMarkers(svg);
-    const after = (path as HTMLElement).style.strokeDasharray;
+    const after = path instanceof SVGElement ? path.style.strokeDasharray : "";
     expect(path.getAttribute("marker-start")).toBeFalsy();
     expect(path.getAttribute("marker-end")).toMatch(/pointEnd-margin/u);
     if (before) {

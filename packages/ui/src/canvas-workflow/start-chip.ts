@@ -54,7 +54,7 @@ function startWrapper(
   if (!startFrame) {
     return;
   }
-  let best: ScreenFlowBox | undefined;
+  let best: ChipBox | undefined;
   let bestArea = Number.POSITIVE_INFINITY;
   for (const layer of layers) {
     if (!rectsContain(layer, startFrame)) {

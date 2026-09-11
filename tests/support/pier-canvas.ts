@@ -9,6 +9,9 @@
  */
 import { pierCanvasExports } from "@/lib/live-modules/pier-canvas-exports.ts";
 
+export type { ScreenFlowSpec } from "@pier/ui/canvas-workflow/screen-flow.ts";
+export type { WorkflowSpec } from "@pier/ui/canvas-workflow/types.ts";
+
 export const {
   Accordion,
   AccordionContent,

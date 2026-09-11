@@ -23,10 +23,11 @@ export function captureReviewTreeSelectionKeys(
         treePath,
       };
     }
+    const group = treeModel.getGroupForTreePath(treePath);
     return {
-      group: treeModel.getGroupForTreePath(treePath),
       kind: "directory",
       treePath,
+      ...(group === undefined ? {} : { group }),
     };
   });
 }

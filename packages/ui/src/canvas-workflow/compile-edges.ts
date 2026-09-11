@@ -92,7 +92,7 @@ export function compileWorkflowEdges(input: {
   readonly edges: readonly WorkflowEdge[];
   readonly groups: readonly WorkflowGroupLayout[];
   readonly lanes: readonly WorkflowLaneLayout[];
-  readonly mainPath?: readonly string[];
+  readonly mainPath?: readonly string[] | undefined;
   readonly nodes: readonly WorkflowNodeLayout[];
   readonly width: number;
 }): {

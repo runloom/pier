@@ -45,11 +45,11 @@ function error(
 ): WorkflowDiagnostic {
   return {
     code,
-    evidence,
     message,
     severity: "error",
     subject,
     supportedFixes,
+    ...(evidence === undefined ? {} : { evidence }),
   };
 }
 
@@ -184,11 +184,15 @@ export function validateScreenFlowSpec(
     if (ids.length < 2) {
       continue;
     }
+    const edgeId = ids[1];
+    if (edgeId === undefined) {
+      continue;
+    }
     diagnostics.push(
       error(
         "screen-flow/parallel-unlabeled",
         `Edges ${ids.map((id) => `"${id}"`).join(" and ")} share ${key} without labels.`,
-        { edgeId: ids[1], path: "/edges" },
+        { edgeId, path: "/edges" },
         ["Give each parallel edge a short action label."]
       )
     );

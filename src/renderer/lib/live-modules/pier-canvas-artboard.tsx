@@ -325,7 +325,7 @@ export function WorldStage({
 }: {
   background?: string;
   children?: ReactNode;
-  className?: string;
+  className?: string | undefined;
   gap?: number;
   height?: number;
   padding?: number;

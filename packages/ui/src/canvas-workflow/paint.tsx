@@ -20,7 +20,7 @@ export function WorkflowPaint({
   legendLabel = "Legend",
   spec,
 }: {
-  className?: string;
+  className?: string | undefined;
   layout: WorkflowLayout;
   legendLabel?: string;
   spec: WorkflowSpec;

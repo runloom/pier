@@ -18,11 +18,11 @@ function error(
 ): WorkflowDiagnostic {
   return {
     code,
-    evidence,
     message,
     severity: "error",
     subject,
     supportedFixes,
+    ...(evidence === undefined ? {} : { evidence }),
   };
 }
 

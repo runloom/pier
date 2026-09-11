@@ -19,7 +19,7 @@ export function tuneNeoFlowchartMarkers(svg: Element): void {
   );
   const tuned = new Set<Element>();
   for (const path of svg.querySelectorAll(NEO_EDGE_SELECTOR)) {
-    if (!(path instanceof Element)) {
+    if (!(path instanceof SVGElement)) {
       continue;
     }
     const dashes = path.style.strokeDasharray
@@ -55,7 +55,7 @@ export function tuneNeoFlowchartMarkers(svg: Element): void {
 }
 
 function inspectEnd(
-  path: Element,
+  path: SVGElement,
   end: "start" | "end",
   markers: Map<string, Element>,
   tuned: Set<Element>

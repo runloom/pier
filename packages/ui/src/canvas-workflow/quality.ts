@@ -187,10 +187,13 @@ export function layoutQualityDiagnostics(
   for (const group of verticalByPair.values()) {
     for (let i = 1; i < group.length; i += 1) {
       const current = group[i];
+      if (!current) {
+        continue;
+      }
       const clash = group.find(
         (item, index) => index < i && Math.abs(item.x - current.x) < 1
       );
-      if (current && clash) {
+      if (clash) {
         out.push(
           edgeError(
             "workflow/stacked-verticals",
