@@ -1,6 +1,12 @@
 import { parsePierCanvasMeta } from "@shared/contracts/pier-canvas.ts";
 import { PIER_CANVAS_EXPORT_NAMES } from "@shared/pier-canvas-export-names.ts";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import type { ComponentType } from "react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -104,15 +110,21 @@ describe("project canvases render", () => {
       );
     }
     render(<Canvas />);
-    const desk = screen.getAllByRole("button", { name: /办公桌 Mac mini/ })[0];
-    const tree = screen.getAllByRole("button", { name: /feat-mobile/ })[0];
-    if (!(desk && tree)) {
+    const prototype = document.querySelector(
+      "[data-pier-comment-id='mobile-web-prototype']"
+    );
+    if (!(prototype instanceof HTMLElement)) {
+      throw new Error("mobile-web-shell prototype phone is missing");
+    }
+    const desk = within(prototype).getAllByRole("button", {
+      name: /办公桌 Mac mini/,
+    })[0];
+    if (!desk) {
       throw new Error("mobile-web-shell host buttons are missing");
     }
     fireEvent.click(desk);
-    fireEvent.click(tree);
     expect(
-      document.querySelector("[data-slot='mobile-slide-overlay']")
+      prototype.querySelector("[data-slot='mobile-slide-overlay']")
     ).not.toBeNull();
   });
 
