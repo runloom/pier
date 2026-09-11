@@ -127,6 +127,11 @@
       "inputMicrousd": 10,
       "outputMicrousd": 50
     },
+    "claude-mythos-5-1": {
+      "cachedInputMicrousd": 0.25,
+      "inputMicrousd": 10,
+      "outputMicrousd": 50
+    },
     "claude-mythos-preview": {
       "cachedInputMicrousd": 1,
       "inputMicrousd": 10,
