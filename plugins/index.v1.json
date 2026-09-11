@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1788645978133,
+  "generatedAt": 1789168319636,
   "plugins": {
     "pier.agent-splits": {
       "description": "Connect splits opened by assistants to workbench panels.",
@@ -239,7 +239,7 @@
       "description": "Manage Grok accounts, login, and switch for Pier.",
       "displayName": "Grok Account Management",
       "id": "pier.grok",
-      "latest": "1.1.16",
+      "latest": "1.1.17",
       "locales": {
         "en": {
           "name": "Grok Account Management",
@@ -348,6 +348,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "6c9ec76bac2dba67ff609fb27ee7d1525a3e28448edccc8652bb34d101079eb9",
           "size": 633412
+        },
+        "1.1.17": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.17/pier.grok-1.1.17.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "51711612b11274560023a774a4ba6a86401bcf92dc67502aba1e310fca6cd137",
+          "size": 636996
         }
       }
     },
@@ -464,11 +470,11 @@
       }
     }
   },
-  "sequence": 42,
+  "sequence": 43,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "W3Gi6cF1vclcOJLyzAR6+eAK/g6wZXFfAyJrTrE4zXMNu26I25oB8uwwyfBOdWwKUfPQAkcN7/GE4tYoNrBEAQ=="
+    "value": "r/d9hviiOM3UzrtCn1yNGOpqesEIvJCd4Y+mHPfKMy15Gr1PfhtR+p3ZBvc1rmaStihYsRC305cms8k+ATBlBg=="
   }
 }
