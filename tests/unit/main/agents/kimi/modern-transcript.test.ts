@@ -16,6 +16,12 @@ import type {
 } from "@shared/contracts/agent/session.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const TRANSCRIPT_WAIT_MS = 5000;
+
+function waitForTranscript(assertion: () => void): Promise<void> {
+  return vi.waitFor(assertion, { timeout: TRANSCRIPT_WAIT_MS });
+}
+
 type SimpleHookEvent = Exclude<
   AgentHookEventPayloadV3,
   { event: "InteractionRequested" | "InteractionResolved" }
@@ -197,7 +203,7 @@ describe("Kimi Code 0.41 main turn completion", () => {
       expect(status()).toBe("processing");
       await hook("Stop");
       wire({ reason: "completed", turnId, type: "turn.ended" });
-      await vi.waitFor(() => expect(status()).toBe("ready"));
+      await waitForTranscript(() => expect(status()).toBe("ready"));
       expect(received.at(-1)).toMatchObject({
         event: "TurnCompleted",
         turnId: String(turnId),
@@ -216,7 +222,7 @@ describe("Kimi Code 0.41 main turn completion", () => {
     if (flushed) wire({ reason: "completed", turnId: 0, type: "turn.ended" });
     await hook("Stop", { ts: ts * 1_000_000 });
     if (!flushed) wire({ reason: "completed", turnId: 0, type: "turn.ended" });
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
     expect(status()).toBe("ready");
   });
 
@@ -246,7 +252,7 @@ describe("Kimi Code 0.41 main turn completion", () => {
       toolUseId: "new-main-tool",
     });
     wire({ reason: "completed", turnId: 1, type: "turn.ended" });
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
     expect(received[0]?.turnId).toBe("1");
   });
 
@@ -262,7 +268,7 @@ describe("Kimi Code 0.41 main turn completion", () => {
     // StopFailure is emitted after the native failed event, unlike Stop.
     await new Promise((resolve) => setTimeout(resolve, 10));
     await hook("Stop", { nativeEvent: "StopFailure" });
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
     expect(received[0]).toMatchObject({ event: "error", turnId: "0" });
     expect(status()).toBe("error");
   });
@@ -278,7 +284,7 @@ describe("Kimi Code 0.41 main turn completion", () => {
     expect(received).toHaveLength(0);
     expect(status()).toBe("tool");
     wire({ reason: "completed", turnId: 1, type: "turn.ended" });
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
     expect(received[0]?.turnId).toBe("1");
   });
 
@@ -302,7 +308,7 @@ describe("Kimi Code 0.41 main turn completion", () => {
     step(0, "main-tool");
     await hook("ToolStart", { toolName: "Bash", toolUseId: "main-tool" });
     wire({ reason: "cancelled", turnId: 0, type: "turn.ended" });
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
     expect(received[0]).toMatchObject({
       event: "TurnInterrupted",
       turnId: "0",
