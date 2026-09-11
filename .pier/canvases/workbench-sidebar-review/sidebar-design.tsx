@@ -428,6 +428,9 @@ export function SidebarDesign({
       (row) => row.sessionId === from.dataset.session
     );
     const next = targets[(index + 1) % targets.length] ?? targets[0];
+    if (!next) {
+      return;
+    }
     setCollapsed((current) => {
       const nextSet = new Set(current);
       nextSet.delete(next.projectId);

@@ -269,7 +269,7 @@ export default function WorkbenchSidebarReview() {
                 width={width}
               />
             </Artboard>
-            <Stack gap={28} style={{ minWidth: 288, width: 896 }}>
+            <Stack gap={28}>
               {feedback ? (
                 <Text style={{ fontSize: 12 }} tone="secondary">
                   {feedback}
