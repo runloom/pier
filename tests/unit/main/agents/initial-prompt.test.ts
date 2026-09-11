@@ -1,5 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -24,7 +30,13 @@ describe("native interactive initial prompt", () => {
         agentId: "claude",
         command: "claude",
         text,
-        env: { PATH: dir, SHELL: "/bin/zsh" },
+        env: {
+          PATH: dir,
+          SHELL:
+            ["/bin/zsh", "/bin/bash", "/bin/sh"].find((path) =>
+              existsSync(path)
+            ) ?? "/bin/sh",
+        },
       });
       if (plan.mode !== "native-launch")
         throw new Error("expected verified argv");
