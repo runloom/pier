@@ -43,9 +43,12 @@ async function capture(scene, name, hover) {
   );
   await page.waitForTimeout(600);
   if (hover) {
-    await page.locator(hover).first().evaluate((el) => {
-      el.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
-    });
+    await page
+      .locator(hover)
+      .first()
+      .evaluate((el) => {
+        el.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+      });
     await page.waitForTimeout(700);
   }
   const target =

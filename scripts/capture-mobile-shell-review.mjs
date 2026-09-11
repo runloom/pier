@@ -68,10 +68,10 @@ async function measure(ids) {
       return null;
     }
     const planeRect = plane.getBoundingClientRect();
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
     const add = (el) => {
       if (!(el instanceof Element)) {
         return;
