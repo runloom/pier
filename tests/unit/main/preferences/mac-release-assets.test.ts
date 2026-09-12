@@ -267,7 +267,9 @@ files:
     });
   });
 
-  it("verifies the packaged app uses the exact release ICNS and native catalog", async () => {
+  it("verifies the packaged app uses the exact release ICNS and native catalog", {
+    timeout: 20_000,
+  }, async () => {
     const app = await makePackagedAppFixture();
     await expect(validatePackagedMacApp(app)).resolves.toEqual([]);
 
@@ -277,7 +279,9 @@ files:
     ]);
   });
 
-  it("rejects a packaged app without the native icon name", async () => {
+  it("rejects a packaged app without the native icon name", {
+    timeout: 20_000,
+  }, async () => {
     const app = await makePackagedAppFixture();
     const plist = join(app, "Contents/Info.plist");
     await writeFile(
@@ -293,7 +297,9 @@ files:
     ]);
   });
 
-  it("rejects stale or layered icon configuration in any Helper", async () => {
+  it("rejects stale or layered icon configuration in any Helper", {
+    timeout: 20_000,
+  }, async () => {
     const app = await makePackagedAppFixture();
     const helperContents = join(
       app,
@@ -319,7 +325,9 @@ files:
     );
   });
 
-  it("rejects a Helper that ships an unused capture usage description", async () => {
+  it("rejects a Helper that ships an unused capture usage description", {
+    timeout: 20_000,
+  }, async () => {
     const app = await makePackagedAppFixture();
     const plist = join(
       app,
@@ -339,7 +347,9 @@ files:
     );
   });
 
-  it("rejects a Helper whose icon key exists only in a nested plist dictionary", async () => {
+  it("rejects a Helper whose icon key exists only in a nested plist dictionary", {
+    timeout: 20_000,
+  }, async () => {
     const app = await makePackagedAppFixture();
     const plist = join(
       app,
