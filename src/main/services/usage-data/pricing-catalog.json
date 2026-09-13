@@ -421,6 +421,14 @@
         "deepseek/deepseek-coder"
       ]
     },
+    "deepseek-flash": {
+      "cachedInputMicrousd": 0.006,
+      "inputMicrousd": 0.3,
+      "outputMicrousd": 1.2,
+      "aliases": [
+        "deepseek/deepseek-flash"
+      ]
+    },
     "deepseek-r1": {
       "cachedInputMicrousd": 0.055,
       "inputMicrousd": 0.55,
@@ -491,9 +499,9 @@
       ]
     },
     "deepseek-v4-flash": {
-      "cachedInputMicrousd": 0.014,
-      "inputMicrousd": 0.44,
-      "outputMicrousd": 1.32,
+      "cachedInputMicrousd": 0.006,
+      "inputMicrousd": 0.3,
+      "outputMicrousd": 1.2,
       "aliases": [
         "dashscope/deepseek-v4-flash",
         "deepseek/deepseek-v4-flash",
@@ -511,11 +519,12 @@
       ]
     },
     "deepseek-v4-flash-vision-exp": {
-      "cachedInputMicrousd": 0.014,
-      "inputMicrousd": 0.44,
-      "outputMicrousd": 1.32,
+      "cachedInputMicrousd": 0.006,
+      "inputMicrousd": 0.3,
+      "outputMicrousd": 1.2,
       "aliases": [
-        "deepseek/deepseek-v4-flash-vision-exp"
+        "deepseek/deepseek-v4-flash-vision-exp",
+        "deepseek/deepseek-v4-flash-vision-exp:batch"
       ]
     },
     "deepseek-v4-pro": {
@@ -534,6 +543,14 @@
       "aliases": [
         "deepseek/deepseek-v4-pro-0813",
         "deepseek/deepseek-v4-pro-0813:batch"
+      ]
+    },
+    "deepseek-v4.1-flash": {
+      "cachedInputMicrousd": 0.003,
+      "inputMicrousd": 0.15,
+      "outputMicrousd": 0.6,
+      "aliases": [
+        "deepseek/deepseek-v4.1-flash"
       ]
     },
     "gemini-2.0-flash": {
@@ -1028,6 +1045,7 @@
       "outputMicrousd": 4.4,
       "aliases": [
         "z-ai/glm-5.3",
+        "z-ai/glm-5.3:batch",
         "zai/glm-5.3"
       ]
     },
