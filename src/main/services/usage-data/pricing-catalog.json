@@ -426,7 +426,8 @@
       "inputMicrousd": 0.3,
       "outputMicrousd": 1.2,
       "aliases": [
-        "deepseek/deepseek-flash"
+        "deepseek/deepseek-flash",
+        "~deepseek/deepseek-flash-latest"
       ]
     },
     "deepseek-r1": {
@@ -555,8 +556,8 @@
     },
     "gemini-2.0-flash": {
       "cachedInputMicrousd": 0.025,
-      "inputMicrousd": 0.1,
-      "outputMicrousd": 0.4
+      "inputMicrousd": 0.15,
+      "outputMicrousd": 0.6
     },
     "gemini-2.0-flash-001": {
       "cachedInputMicrousd": 0.0375,
@@ -1602,6 +1603,11 @@
       "inputMicrousd": 5,
       "outputMicrousd": 30
     },
+    "gpt-5.5-cyber": {
+      "cachedInputMicrousd": 1.25,
+      "inputMicrousd": 12.5,
+      "outputMicrousd": 75
+    },
     "gpt-5.5-pro": {
       "inputMicrousd": 30,
       "cachedInputMicrousd": 30,
@@ -1800,6 +1806,11 @@
       "cachedInputMicrousd": 0.06,
       "inputMicrousd": 0.6,
       "outputMicrousd": 2.4
+    },
+    "gpt-rosalind-research": {
+      "cachedInputMicrousd": 0.5,
+      "inputMicrousd": 5,
+      "outputMicrousd": 25
     },
     "grok-2": {
       "cachedInputMicrousd": 0.2,
