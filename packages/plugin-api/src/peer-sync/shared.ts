@@ -70,16 +70,18 @@ export function effectivePeerAvailabilityForKind(
  * Split protocol-eligible targets into sync-ready vs not-installed.
  * Callers may further filter by protocol (e.g. Grok OIDC uses
  * `effectivePeerAvailabilityForKind` so pi requires `piOauthCapable`).
+ * Generic over the caller's target union so plugins with a narrower
+ * protocol set (Codex/Claude without fx) keep their local types.
  */
-export function partitionPeerTargets(
-  protocolTargets: readonly PeerSyncTarget[],
+export function partitionPeerTargets<T extends PeerSyncTarget>(
+  protocolTargets: readonly T[],
   availability: PeerAvailability
 ): {
-  available: PeerSyncTarget[];
-  unavailable: PeerSyncTarget[];
+  available: T[];
+  unavailable: T[];
 } {
-  const available: PeerSyncTarget[] = [];
-  const unavailable: PeerSyncTarget[] = [];
+  const available: T[] = [];
+  const unavailable: T[] = [];
   for (const target of protocolTargets) {
     if (isPeerTargetAvailable(target, availability)) {
       available.push(target);
