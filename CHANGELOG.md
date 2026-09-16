@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+## [0.1.43] - 2026-09-16
+
+### Added
+
+- **fx 智能体支持。** 新 agent `fx`（https://fx.sh）：目录探测、启动、one-shot（`fx ask`）、MCP/skill 发现、安装与更新源。Grok 插件切换账号时可同步订阅凭证到 `~/.fx/grok-auth.json`（仅登录类 OIDC 账号）。
+- **fx Herdr 状态通道。** 宿主冒充 Herdr multiplexor，fx 经 Unix socket 上报 idle/working/blocked；socket 按实例 userData 隔离、多窗同名面板 fail-closed、仅 fx 面板注入归属 env、ingest 要求 OSC 已点亮 fx。
+
+### Fixed
+
+- **peer-sync 目标泛型化。** Codex/Claude 保持本地窄目标集，Grok 独享 fx 目标；共享 `PeerAvailability.fx` 可选，旧快照兼容。
+- **Grok remaining-resets live fixture 过期刷新。** token 2026-09-12 过期导致 4 用例失败，重建 2030 到期同形 fixture。
+- **fx skills 重复发现语义修正。** fx 同时读 `.agents` + `.claude`，无确定性裁决，duplicate-discovery 按 multi-root-scan 上报。
+
 ## [0.1.42] - 2026-09-11
 
 ### Added
