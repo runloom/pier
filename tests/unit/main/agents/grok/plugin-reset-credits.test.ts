@@ -14,13 +14,13 @@ const NOW = Date.parse("2026-08-14T00:00:00Z");
 
 /** Live grpc-web-text body from prod_mc_billing.ConsumerUiSvc/GetRemainingResets. */
 const LIVE_GRPC_WEB_TEXT =
-  "AAAAACNSIVINcmVzdG9rX3ZwWURxb6IBBgicgPPTBvIBBgicvZbVBg==gAAAAA9ncnBjLXN0YXR1czowDQo=";
+  "AAAAABhSFlILcmVzdG9rX2xpdmXyAQYIgLHvhgeAAAAAD2dycGMtc3RhdHVzOjANCg==";
 
 /** Same live payload as a raw grpc-web+proto frame. Node/Electron fetch only
  *  returns this when the request body is the 5-byte empty protobuf frame. */
 const LIVE_GRPC_WEB_PROTO = Uint8Array.from(
   Buffer.from(
-    "00000000235221520d726573746f6b5f76705944716fa20106089c80f3d306f20106089cbd96d506800000000f677270632d7374617475733a300d0a",
+    "00000000185216520b726573746f6b5f6c697665f201060880b1ef8607800000000f677270632d7374617475733a300d0a",
     "hex"
   )
 );
