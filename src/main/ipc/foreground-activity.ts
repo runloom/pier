@@ -33,6 +33,7 @@ import { notifyAgentHookEventListeners } from "../services/foreground-activity/a
 import { createForegroundActivityAggregator } from "../services/foreground-activity/aggregator.ts";
 import { isBlankShellCommandLine } from "../services/foreground-activity/blank-command-line.ts";
 import { SUSPENDED_JOB_EXIT_CODES } from "../services/foreground-activity/entry.ts";
+
 import {
   createJsonlObserver,
   type JsonlObserver,
@@ -49,6 +50,7 @@ import {
   listAppWindowIds,
 } from "../windows/identity.ts";
 import { recordAgentResumeSession } from "./agent-resume-persist.ts";
+import { createFxHerdrSocketEnv } from "./foreground-activity/fx-herdr-socket.ts";
 import { handleObservedAgentHookEvent } from "./foreground-activity/hook-pipeline.ts";
 import { materializeForegroundActivityPublications } from "./foreground-activity-publication.ts";
 import { forwardToWindow } from "./terminal/forwarding.ts";
@@ -79,6 +81,19 @@ function withResolvedOwner<T extends { panelId: string; windowId: string }>(
 
 let jsonlObserver: JsonlObserver | null = null;
 let agentTerminalReconciler: AgentTerminalReconciler | null = null;
+let fxHerdrSocketEnvHolder: {
+  dispose: () => void;
+  env: () => Record<string, string>;
+} | null = null;
+
+function fxHerdrSocketEnv(): Record<string, string> {
+  if (!fxHerdrSocketEnvHolder) {
+    fxHerdrSocketEnvHolder = createFxHerdrSocketEnv({
+      aggregator: foregroundActivityAggregator,
+    });
+  }
+  return fxHerdrSocketEnvHolder.env();
+}
 
 /**
  * 按 windowId 定向发送快照。Pier 窗口是 BaseWindow+WebContentsView（见
@@ -202,6 +217,8 @@ export const foregroundActivityService = {
       PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(),
       // 事件日志仍按实例 userData 隔离，避免多窗抢同一 JSONL。
       PIER_AGENT_EVENT_LOG: eventsJsonlPath(userData),
+      // fx Herdr 状态监听 socket（实例隔离，与事件日志同 userData）。
+      ...fxHerdrSocketEnv(),
     };
   },
   commandFinished(panelId: string, exitCode?: number, windowId?: string): void {
@@ -341,6 +358,8 @@ export function closeForegroundActivityResources(): void {
   jsonlObserver = null;
   agentTerminalReconciler?.dispose();
   agentTerminalReconciler = null;
+  fxHerdrSocketEnvHolder?.dispose();
+  fxHerdrSocketEnvHolder = null;
 }
 
 export function registerForegroundActivityIpc(ipcMain: IpcMain): void {

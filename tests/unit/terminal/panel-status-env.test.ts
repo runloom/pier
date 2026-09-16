@@ -17,6 +17,20 @@ describe("withPanelStatusEnv", () => {
     });
   });
 
+  it("仅 fx 面板注入 HERDR_PANE_ID（非 fx 不伪造 Herdr 归属）", () => {
+    const fx = withPanelStatusEnv(
+      undefined,
+      "terminal-1",
+      "7",
+      hookEnv,
+      undefined,
+      "fx"
+    );
+    expect(fx.env?.HERDR_PANE_ID).toBe("terminal-1");
+    const plain = withPanelStatusEnv(undefined, "terminal-1", "7", hookEnv);
+    expect(plain.env?.HERDR_PANE_ID).toBeUndefined();
+  });
+
   it("保留已有 launch 的 command/cwd/env, PIER_* 覆盖同名键", () => {
     const out = withPanelStatusEnv(
       { command: "claude", cwd: "/w", env: { FOO: "1", PIER_PANEL_ID: "x" } },
@@ -33,7 +47,10 @@ describe("withPanelStatusEnv", () => {
 
   it("hookEnv 空时仍注入路由变量（无异常回退）", () => {
     const out = withPanelStatusEnv(undefined, "panel-3", "7", {});
-    expect(out.env).toEqual({ PIER_PANEL_ID: "panel-3", PIER_WINDOW_ID: "7" });
+    expect(out.env).toEqual({
+      PIER_PANEL_ID: "panel-3",
+      PIER_WINDOW_ID: "7",
+    });
   });
 
   it("剥离父级历史 PIER_AGENT_CALLER_* 且不重新注入", () => {

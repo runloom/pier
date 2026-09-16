@@ -70,6 +70,7 @@ function samePeerAvailability(
   right: PeerAvailability
 ): boolean {
   return (
+    left.fx === right.fx &&
     left.omp === right.omp &&
     left.opencode === right.opencode &&
     left.pi === right.pi &&

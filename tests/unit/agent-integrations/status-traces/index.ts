@@ -13,6 +13,7 @@ import { AMP_PLUGIN_STATUS_TRACE } from "./amp-plugin-trace.ts";
 import { CODEBUDDY_RECONCILER_STATUS_TRACE } from "./codebuddy-reconciler-trace.ts";
 import { EXTENSION_PLUGIN_STATUS_TRACES } from "./extension-plugin-traces.ts";
 import { FLAT_COMMAND_STATUS_TRACES } from "./flat-command-traces.ts";
+import { FX_HERDR_STATUS_TRACE } from "./fx-herdr-trace.ts";
 import { HOSTED_PLUGIN_STATUS_TRACES } from "./hosted-plugin-traces.ts";
 import { NESTED_HOOK_STATUS_TRACES } from "./nested-hook-traces.ts";
 import { INTERRUPT_RECONCILER_TRACES } from "./reconciled/interrupt-traces.ts";
@@ -39,6 +40,7 @@ export const ACTIVE_AGENT_STATUS_TRACES: readonly AgentStatusTraceFixture[] = [
   ...BRANCHING_COMMAND_STATUS_TRACES,
   AMP_PLUGIN_STATUS_TRACE,
   ...EXTENSION_PLUGIN_STATUS_TRACES,
+  FX_HERDR_STATUS_TRACE,
 ];
 
 import { BRANCHING_COMMAND_STATUS_TRACES } from "./branching-command-traces.ts";

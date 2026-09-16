@@ -1,6 +1,10 @@
 import type { AccountUsageMetric } from "@pier/plugin-api/account-usage";
 import { z } from "zod/mini";
 
+export type { PeerAvailability } from "@pier/plugin-api/peer-sync";
+
+import type { PeerAvailability as PeerAvailabilityType } from "@pier/plugin-api/peer-sync";
+
 /**
  * Plugin-local Grok account DTOs. Intentionally duplicated from any host
  * contracts so the plugin does not import host modules.
@@ -79,24 +83,19 @@ export type AddAccountPayload =
  * Peer tools that can receive a mirrored Grok/xAI credential.
  * - `"grok"` is the primary switch (materialize), not a peer write target.
  * - opencode / pi / omp accept xAI oauth or api_key under tool-specific keys.
+ * - fx accepts the Grok subscription session (`~/.fx/grok-auth.json`) when its
+ *   provider is `grok`; fx has no xAI API-key path. OIDC only.
  * - pi oauth requires pi ≥ 0.80.8 (same xAI client as Grok CLI); api_key works on older pi.
  */
-export type CrossToolSyncTarget = "grok" | "opencode" | "pi" | "omp";
+export type CrossToolSyncTarget = "grok" | "opencode" | "pi" | "omp" | "fx";
 
 export const ALL_SYNC_TARGETS: readonly Exclude<CrossToolSyncTarget, "grok">[] =
-  ["opencode", "pi", "omp"];
+  ["opencode", "pi", "omp", "fx"];
 
 export type PeerSyncTarget = (typeof ALL_SYNC_TARGETS)[number];
 
-export interface PeerAvailability {
-  omp: boolean;
-  opencode: boolean;
-  pi: boolean;
-  /** Pi ≥ 0.80.8 can consume xAI OAuth; API-key sync still keys off `pi`. */
-  piOauthCapable: boolean;
-}
-
-export const EMPTY_PEER_AVAILABILITY: PeerAvailability = {
+export const EMPTY_PEER_AVAILABILITY: PeerAvailabilityType = {
+  fx: false,
   omp: false,
   opencode: false,
   pi: false,
@@ -128,7 +127,7 @@ export interface UsagePollingPayload {
 }
 
 const nonEmptyStringSchema = z.string().check(z.minLength(1));
-const peerSyncTargetSchema = z.enum(["opencode", "pi", "omp"]);
+const peerSyncTargetSchema = z.enum(["opencode", "pi", "omp", "fx"]);
 
 export const addAccountPayloadSchema = z.union([
   z.strictObject({

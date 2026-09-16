@@ -132,6 +132,47 @@ describe("grok cross-tool sync", () => {
     expect(piAuth.xai).toEqual({ key: "xai-secret", type: "api_key" });
   });
 
+  it("writes the Grok subscription session into fx grok-auth.json (OIDC only)", async () => {
+    const homeDir = join(dir, "home-fx");
+    const credential = extractOauthFromGrokAuth(AUTH);
+    const results = await syncCrossToolCredentials(["fx"], credential, {
+      homeDir,
+    });
+    expect(results).toEqual([{ ok: true, target: "fx" }]);
+    const fxAuth = JSON.parse(
+      await readFile(join(homeDir, ".fx", "grok-auth.json"), "utf8")
+    ) as {
+      access_token: string;
+      account_id: string;
+      expires_at_ms: number;
+      refresh_token: string;
+      version: number;
+    };
+    expect(fxAuth).toMatchObject({
+      access_token: "access-token-xyz",
+      account_id: "user-1",
+      refresh_token: "refresh-token-xyz",
+      version: 1,
+    });
+    expect(fxAuth.expires_at_ms).toBe(credential.expiresAtMs);
+  });
+
+  it("fails closed when syncing an API key to fx (no xAI key path)", async () => {
+    const homeDir = join(dir, "home-fx-api");
+    const results = await syncCrossToolCredentials(
+      ["fx"],
+      { apiKey: "xai-secret", kind: "api_key" },
+      { homeDir }
+    );
+    expect(results).toEqual([
+      {
+        ok: false,
+        target: "fx",
+        error: expect.stringContaining("no xAI API-key path"),
+      },
+    ]);
+  });
+
   it("rolls back an omp API-key selection when disabling another API-key row fails", async () => {
     const ompHome = join(dir, ".omp", "agent");
     await mkdir(ompHome, { recursive: true });

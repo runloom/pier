@@ -45,6 +45,7 @@ describe("project-skills discovery adapters", { timeout: 30_000 }, () => {
         "grok",
         "goose",
         "droid",
+        "fx",
         // Verified skills support, private roots only (audit evidence):
         "kiro",
         "qwen-code",
@@ -255,7 +256,13 @@ describe("project-skills discovery adapters", { timeout: 30_000 }, () => {
     // Priority-override / user-shadows scanners resolve same-name copies
     // deterministically; only multi-root scanners that read BOTH projection
     // targets surface duplicates.
-    expect(duplicateKinds).toEqual(["autohand", "copilot", "crush", "cursor"]);
+    expect(duplicateKinds).toEqual([
+      "autohand",
+      "copilot",
+      "crush",
+      "cursor",
+      "fx",
+    ]);
 
     expect(
       listDuplicateDiscoveryAgentKinds({

@@ -58,11 +58,28 @@ describe("detectPeerAvailability", () => {
   it("reports all peers unavailable in an empty home", async () => {
     dir = await mkdtemp(join(tmpdir(), "pier-peer-availability-"));
     expect(detectPeerAvailability({ homeDir: dir, pathEnv: dir })).toEqual({
+      fx: false,
       omp: false,
       opencode: false,
       pi: false,
       piOauthCapable: false,
     });
+  });
+
+  it("detects fx via home dir or binary on PATH", async () => {
+    dir = await mkdtemp(join(tmpdir(), "pier-peer-availability-"));
+    await mkdir(join(dir, ".fx"), { recursive: true });
+    expect(
+      detectPeerAvailability({ homeDir: dir, pathEnv: dir })
+    ).toMatchObject({ fx: true });
+
+    const empty = await mkdtemp(join(tmpdir(), "pier-peer-availability-"));
+    const bin = join(dir, "bin");
+    await mkdir(bin, { recursive: true });
+    await writeFile(join(bin, "fx"), "");
+    expect(
+      detectPeerAvailability({ homeDir: empty, pathEnv: bin })
+    ).toMatchObject({ fx: true });
   });
 
   it("detects opencode via config, pi via home, and omp only with agent.db", async () => {
@@ -75,6 +92,7 @@ describe("detectPeerAvailability", () => {
 
     // Agent dir alone cannot verify oauth capability.
     expect(detectPeerAvailability({ homeDir: dir, pathEnv: dir })).toEqual({
+      fx: false,
       omp: false,
       opencode: true,
       pi: true,
@@ -83,6 +101,7 @@ describe("detectPeerAvailability", () => {
 
     await writeFile(join(dir, ".omp", "agent", "agent.db"), "");
     expect(detectPeerAvailability({ homeDir: dir, pathEnv: dir })).toEqual({
+      fx: false,
       omp: true,
       opencode: true,
       pi: true,
@@ -104,6 +123,7 @@ describe("detectPeerAvailability", () => {
         pathEnv: bin,
       })
     ).toEqual({
+      fx: false,
       omp: false,
       opencode: true,
       pi: true,
@@ -164,6 +184,7 @@ describe("partitionPeerTargets", () => {
 describe("effectivePeerAvailabilityForKind", () => {
   it("hides pi for OIDC when oauth is not capable, keeps pi for API keys", () => {
     const base = {
+      fx: true,
       omp: true,
       opencode: true,
       pi: true,
@@ -176,6 +197,23 @@ describe("effectivePeerAvailabilityForKind", () => {
         ...base,
         piOauthCapable: true,
       }).pi
+    ).toBe(true);
+  });
+
+  it("hides fx for API-key accounts (OIDC session only), keeps fx for OIDC", () => {
+    const base = {
+      fx: true,
+      omp: true,
+      opencode: true,
+      pi: true,
+      piOauthCapable: false,
+    };
+    expect(effectivePeerAvailabilityForKind("api_key", base).fx).toBe(false);
+    expect(
+      effectivePeerAvailabilityForKind("oidc", {
+        ...base,
+        piOauthCapable: true,
+      }).fx
     ).toBe(true);
   });
 });

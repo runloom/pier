@@ -134,6 +134,7 @@ describe("MCP discovery adapters", () => {
       "claude",
       "codebuddy",
       "copilot",
+      "fx",
       "omp",
       "openclaude",
       "qodercli",

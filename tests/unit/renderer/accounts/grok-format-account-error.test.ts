@@ -13,6 +13,20 @@ describe("Grok formatAccountError", () => {
     ).toBe("No valid local Grok login found. Sign in with the Grok CLI first.");
   });
 
+  it("maps fx install failures and the api-key fail-closed to distinct copy", () => {
+    expect(formatAccountError(new Error("fx: write failed"), t)).toBe(
+      "Couldn't sync credentials to fx. Make sure fx is installed on this device."
+    );
+    expect(
+      formatAccountError(
+        new Error("fx has no xAI API-key path; sync an OIDC account instead"),
+        t
+      )
+    ).toBe(
+      "fx can only receive login (OIDC) accounts. Switch to a login account to sync to fx."
+    );
+  });
+
   it("keeps a safe CLI reason and adds an actionable next step", () => {
     expect(
       formatAccountError(

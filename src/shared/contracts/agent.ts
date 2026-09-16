@@ -37,6 +37,7 @@ export const agentKindSchema = z.enum([
   "openclaude",
   "codebuddy",
   "qodercli",
+  "fx",
 ]);
 export type AgentKind = z.infer<typeof agentKindSchema>;
 
@@ -144,7 +145,7 @@ export const YOLO_FLAGS: Partial<Record<AgentKind, string>> = {
   "mimo-code": "--yolo",
   // OMP：`omp --auto-approve`（`omp --help` 核定）。
   omp: "--auto-approve",
-  // 其余 agent 无全局一键 yolo flag：goose 走 YOLO_ENV，pi/aug/codebuff/openclaw 见各 CLI 特性说明。
+  // 其余 agent 无全局一键 yolo flag：goose 走 YOLO_ENV，pi/aug/codebuff/openclaw/fx 见各 CLI 特性说明。
 };
 
 /** env-based yolo（goose 用环境变量而非 flag）。 */

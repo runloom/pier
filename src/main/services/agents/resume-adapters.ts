@@ -76,6 +76,7 @@ export const AGENT_RESUME_ADAPTERS = {
   // Augment docs: `auggie --resume <sessionId>`.
   aug: sessionAdapter("aug", (args) => appendResumeFlag(args, "--resume")),
   autohand: unsupported("autohand"),
+  fx: unsupported("fx"),
   claude: sessionAdapter("claude", (args) =>
     appendResumeFlag(args, "--resume")
   ),

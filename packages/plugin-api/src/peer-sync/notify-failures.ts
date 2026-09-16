@@ -25,6 +25,7 @@ function isPeerSyncResults(
 }
 
 const TARGET_FALLBACK_LABELS: Record<PeerSyncTarget, string> = {
+  fx: "fx",
   omp: "OMP",
   opencode: "OpenCode",
   pi: "Pi",

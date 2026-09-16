@@ -403,6 +403,17 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     homepageUrl: "https://qoder.com/cli",
     oneShotArgs: (prompt) => ["-p", prompt],
   },
+  {
+    id: "fx",
+    initialPrompt: AGENT_INITIAL_PROMPTS.fx,
+    label: "fx",
+    launchCmd: "fx",
+    detectCmd: "fx",
+    expectedProcess: "fx",
+    faviconDomain: "fx.sh",
+    homepageUrl: "https://fx.sh/",
+    oneShotArgs: (prompt) => ["ask", prompt],
+  },
 ];
 
 const byId = new Map<string, AgentCatalogEntry>(

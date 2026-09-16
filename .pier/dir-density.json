@@ -39,7 +39,7 @@
       "reason": "debt: more surface vs chrome split beyond hooks/; composer paste edit bridge/dialog/actions pending structured-composer/; core comments status item"
     },
     "src/main/services/agents/integrations": {
-      "max": 43,
+      "max": 44,
       "reason": "debt: provider files still flat; interactive-tool lifecycle helpers pending tools/ folder; evidence/transcript/hooks extracted"
     },
     "src/plugins/builtin/files/renderer/tree": {

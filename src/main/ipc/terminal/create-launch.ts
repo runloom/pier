@@ -333,7 +333,8 @@ export function withPanelStatusEnv(
   panelId: string,
   windowId: string,
   hookEnv: Record<string, string>,
-  controlSocketPath?: string | undefined
+  controlSocketPath?: string | undefined,
+  agentId?: AgentKind | undefined
 ): ResolvedTerminalLaunchOptions {
   const {
     PIER_AGENT_CALLER_BINDING: _parentBinding,
@@ -350,6 +351,10 @@ export function withPanelStatusEnv(
         ...hookEnv,
         PIER_PANEL_ID: panelId,
         PIER_WINDOW_ID: windowId,
+        // fx Herdr 上报的 pane 归属：fx 原样回传 HERDR_PANE_ID，监听以此
+        // 路由回 panel。仅 fx 面板注入：非 fx 进程继承该 env 也可伪造
+        // report_agent 帧点亮任意面板（socket 在 userData 下同用户可写）。
+        ...(agentId === "fx" ? { HERDR_PANE_ID: panelId } : {}),
         ...(controlSocketPath
           ? { PIER_CONTROL_SOCKET: controlSocketPath }
           : {}),

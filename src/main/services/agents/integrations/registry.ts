@@ -25,6 +25,7 @@ import { cursorIntegration } from "./cursor.ts";
 import { devinIntegration } from "./devin.ts";
 import { droidIntegration } from "./droid.ts";
 import { AGENT_STATUS_EVIDENCE } from "./evidence/matrix.ts";
+import { fxIntegration } from "./fx.ts";
 import { geminiIntegration } from "./gemini.ts";
 import { gooseIntegration } from "./goose.ts";
 import { grokIntegration } from "./grok.ts";
@@ -66,6 +67,7 @@ const AGENT_HOOK_INTEGRATION_IMPLEMENTATIONS: readonly AgentHookIntegration[] =
     cursorIntegration,
     devinIntegration,
     droidIntegration,
+    fxIntegration,
     geminiIntegration,
     gooseIntegration,
     grokIntegration,

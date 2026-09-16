@@ -196,7 +196,7 @@ describe("agent hook runtime semantics", () => {
         "qwen-code",
       ],
       authoritative: ["autohand", "mimo-code", "omp", "pi"],
-      none: ["aider", "amp", "cline", "crush", "hermes", "kimi", "kiro"],
+      none: ["aider", "amp", "cline", "crush", "fx", "hermes", "kimi", "kiro"],
     } as const;
 
     for (const [authority, agentIds] of Object.entries(expected)) {

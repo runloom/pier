@@ -217,4 +217,9 @@ export const AGENT_INITIAL_PROMPTS: Record<
     evidence:
       "Interactive entry checked with installed CLI --help (2026-09-07); rechecked for the installed binary before use.",
   },
+  fx: {
+    mode: "draft",
+    evidence:
+      "Native interactive initial input not verified; preserve for manual submission. Headless options are not substitutes.",
+  },
 };

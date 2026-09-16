@@ -3,7 +3,7 @@
  *
  * | Agent family | Insert form | Notes |
  * |--------------|-------------|--------|
- * | Codex        | `$skill-id` | CLI custom skills; `/` is for commands |
+ * | Codex / fx   | `$skill-id` | CLI custom skills; `/` is for commands |
  * | Goose        | `/skills id` | Official using-skills |
  * | OMP / Pi     | `/skill:id` | enableSkillCommands namespace |
  * | Claude / most skill TUIs | `/skill-id` | Official slash invoke |
@@ -21,9 +21,10 @@ export type SkillInvokePrefix = "/" | "$";
 
 /**
  * Agents that force-invoke skills with `$name`.
- * Keep tight: only verified dollar invokers.
+ * Keep tight: only verified dollar invokers (codex CLI custom skills;
+ * fx `/skills` catalog + `$` composer search).
  */
-const DOLLAR_INVOKE_AGENTS = new Set<string>(["codex"]);
+const DOLLAR_INVOKE_AGENTS = new Set<string>(["codex", "fx"]);
 
 /**
  * Agents with verified slash-style skill force-invoke (`/id`).

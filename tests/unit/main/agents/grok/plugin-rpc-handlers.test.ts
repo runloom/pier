@@ -145,6 +145,7 @@ describe("Grok plugin RPC handlers", () => {
     const snapshot = await handlers.get("accounts.peerAvailability")?.(null);
     expect(snapshot).toEqual(
       expect.objectContaining({
+        fx: expect.any(Boolean),
         omp: expect.any(Boolean),
         opencode: expect.any(Boolean),
         pi: expect.any(Boolean),

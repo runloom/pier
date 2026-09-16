@@ -39,6 +39,7 @@ export const AGENT_AUTO_PICK_ORDER: readonly AgentKind[] = [
   "hermes",
   "openclaw",
   "devin",
+  "fx",
 ];
 
 const AUTO_PICK_INDEX = new Map(
