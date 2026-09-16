@@ -58,6 +58,8 @@ export async function createFxHerdrProducer(): Promise<AgentStatusTraceProducer>
         state: string;
       };
       const socket = connect(socketPath);
+      // dispose 销毁服务端连接时的客户端 RST 竞态：回包已收到即算送达。
+      socket.on("error", () => {});
       const replied = once(socket, "data");
       socket.setEncoding("utf8");
       const params: Record<string, unknown> = {

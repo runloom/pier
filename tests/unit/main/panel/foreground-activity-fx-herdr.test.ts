@@ -27,10 +27,14 @@ afterEach(async () => {
 
 async function sendFrame(socketPath: string, line: string): Promise<void> {
   const socket = connect(socketPath);
+  // 监听 dispose/对端 RST 与回包到达的竞态：回包已收到即算送达，
+  // 后续的客户端错误不再让测试失败（回包本身仍由 once 保证）。
+  socket.on("error", () => {});
   const replied = once(socket, "data");
   socket.setEncoding("utf8");
   socket.write(line.endsWith("\n") ? line : `${line}\n`);
-  // 监听在首行后即回单行 ok（fx 语义：≤250ms 回包后关连接）。
+  // 监听首帧落定后才回单行 ok（fx 语义：≤250ms 回包后关连接），
+  // 收到回包即代表帧已处理，可直接断言事件。
   await replied;
   socket.end();
 }

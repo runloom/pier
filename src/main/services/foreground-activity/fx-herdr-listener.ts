@@ -95,6 +95,14 @@ export function createFxHerdrListener(options: {
     socket.once("close", () => sockets.delete(socket));
     socket.setEncoding("utf8");
     let buffer = "";
+    let replied = false;
+    const replyOnce = () => {
+      if (replied) {
+        return;
+      }
+      replied = true;
+      socket.write('{"ok":true}\n');
+    };
     socket.on("data", (chunk: string) => {
       buffer += chunk;
       let index = buffer.indexOf("\n");
@@ -104,17 +112,27 @@ export function createFxHerdrListener(options: {
         if (line) {
           handleLine(line);
         }
+        // 首帧落定后再回包：客户端收到 ok 即代表本连接首帧已处理
+        // （接纳或静默丢弃），调用方无需猜时延即可断言。
+        // fx 只要求 ≤250ms 内回包，处理为同 tick 同步工作。
+        replyOnce();
         index = buffer.indexOf("\n");
       }
       if (buffer.length > 64 * 1024) {
         buffer = "";
       }
     });
+    socket.on("end", () => {
+      // 无换行尾部帧：处理但不再回包（单连接只回一次）。
+      const tail = buffer.trim();
+      buffer = "";
+      if (tail) {
+        handleLine(tail);
+      }
+    });
     socket.on("error", () => {
       // fx best-effort 上报；单连接失败不影响监听。
     });
-    // fx 等单行回包（≤250ms）后关连接；无回包则它自己超时关闭。
-    socket.write('{"ok":true}\n');
   }
 
   function ensureStarted(): void {
