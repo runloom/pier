@@ -17,12 +17,15 @@ import type { CrossToolSyncTarget } from "../shared/accounts.ts";
  * - pi `~/.pi/agent/auth.json`: provider key `xai`
  *   - oauth (pi ≥ 0.80.8): `{ type: "oauth", access, refresh, expires, accountId? }`
  *     same xAI client_id as Grok CLI (`b1a00492-073a-47ea-816f-4c329264a828`)
- *   - api: `{ type: "api_key", key }` (not OpenCode's `"api"`)
  * - omp `~/.omp/agent/agent.db` `auth_credentials`:
  *   - provider `xai-oauth`, credential_type `oauth`,
  *     identity_key `account:<user_id>`,
  *     data `{ access, refresh, expires }`
  *   - api_key rows use provider `xai`, credential_type `api_key`, data `{ key }`
+ * - fx `~/.fx/grok-auth.json`: `{ version: 1, access_token, refresh_token,
+ *   expires_at_ms, account_id }` (vercel-labs/fx `src/core/auth/
+ *   grok_session.zig` + `src/core/shared/profile_paths.zig`).
+ *   fx has no xAI API-key path: OIDC only; api_key sync to fx must fail closed.
  */
 
 export type GrokSyncCredential =
@@ -74,6 +77,41 @@ function piAuthPath(opts: CrossToolSyncOptions): string {
 function ompDbPath(opts: CrossToolSyncOptions): string {
   const home = opts.homeDir ?? defaultHomeDir();
   return join(home, ".omp", "agent", "agent.db");
+}
+
+function fxGrokAuthPath(opts: CrossToolSyncOptions): string {
+  const home = opts.homeDir ?? defaultHomeDir();
+  return join(home, ".fx", "grok-auth.json");
+}
+
+/** fx Grok session file: `{ version: 1, access_token, refresh_token, expires_at_ms, account_id }`. */
+function fxGrokSessionEntry(
+  credential: GrokSyncCredential
+): Record<string, unknown> {
+  if (credential.kind !== "oauth") {
+    // fx has no xAI API-key path: fail closed, never write a fake session.
+    throw new Error("fx has no xAI API-key path; sync an OIDC account instead");
+  }
+  return {
+    version: 1,
+    access_token: credential.accessToken,
+    refresh_token: credential.refreshToken,
+    expires_at_ms: credential.expiresAtMs,
+    account_id: credential.accountId,
+  };
+}
+
+async function syncFx(
+  credential: GrokSyncCredential,
+  opts: CrossToolSyncOptions
+): Promise<void> {
+  const path = fxGrokAuthPath(opts);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFileAtomic(
+    path,
+    `${JSON.stringify(fxGrokSessionEntry(credential), null, 2)}\n`,
+    { mode: 0o600 }
+  );
 }
 
 async function readJsonObject(path: string): Promise<Record<string, unknown>> {
@@ -324,6 +362,9 @@ export async function syncCrossToolCredentials(
           break;
         case "omp":
           await syncOmp(credential, opts);
+          break;
+        case "fx":
+          await syncFx(credential, opts);
           break;
         default:
           break;

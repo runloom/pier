@@ -266,7 +266,8 @@ export async function applyLaunchWrapForCreate(input: {
     input.panelId,
     input.windowId,
     input.hookEnv,
-    input.controlSocketPath
+    input.controlSocketPath,
+    input.agentId
   );
   if (input.agentId && input.userData) {
     withIdentity = {

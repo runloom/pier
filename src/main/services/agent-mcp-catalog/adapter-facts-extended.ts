@@ -206,4 +206,12 @@ export const MCP_EXTENDED_ADAPTERS: readonly McpDiscoveryAdapter[] = [
       "https://support.atlassian.com/rovo/docs/connect-to-an-mcp-server-in-rovo-dev-cli/",
     verifiedOn: "2026-08-30",
   },
+  {
+    agentKind: "fx",
+    consumesMcp: true,
+    projectConfigs: [mcpProject(".mcp.json")],
+    userConfigs: [mcpUser(".fx/mcp.json", "opencode-json")],
+    officialDocsUrl: "https://fx.sh/docs/capabilities/mcp",
+    verifiedOn: "2026-09-15",
+  },
 ];

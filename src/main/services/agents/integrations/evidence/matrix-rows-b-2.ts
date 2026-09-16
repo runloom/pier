@@ -272,4 +272,34 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_2 = {
       "Qoder CLI hooks documentation"
     ),
   },
+  fx: {
+    integration: "active",
+    transport: ["herdr-socket", "host-terminal-escape"],
+    evidence: {
+      lifecycle: "unsupported",
+      ready: "native",
+      processing: "native",
+      tool: "unsupported",
+      waiting: "unsupported",
+      error: "unsupported",
+      completed: "unsupported",
+      interrupted: "unsupported",
+      subagent: "unsupported",
+    },
+    eventMappings: facts(
+      nativeFact("processing", "herdr.working", "processing"),
+      nativeFact("ready", "herdr.idle", "ActivityIdle"),
+      nativeFact("processing", "herdr.blocked.permission", "processing"),
+      nativeFact("processing", "herdr.blocked.question", "processing"),
+      nativeFact("processing", "herdr.blocked.recovery", "processing")
+    ),
+    // Herdr 生命周期上报（interactive scope）：`src/builtins/hooks/herdr.zig`
+    // + `src/builtins/hooks.zig`（vercel-labs/fx@e45d780933bfb42ae376aee54a49bd3ebe81f04d）。
+    // ask one-shot（`src/core/cli/cli_ask.zig`）无 Herdr 引用，不在此通道产状态。
+    // 无 tool 事件：tool/completed/interrupted/error 保持 unsupported，不伪造。
+    upstream: upstream(
+      "https://fx.sh/docs/configure-fx/configuration",
+      "fx Herdr integration documentation"
+    ),
+  },
 } as const satisfies Partial<Record<AgentKind, AgentStatusEvidence>>;

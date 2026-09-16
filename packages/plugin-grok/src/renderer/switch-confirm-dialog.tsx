@@ -33,6 +33,7 @@ function isPeerAvailability(value: unknown): value is PeerAvailability {
   }
   const record = value as Record<string, unknown>;
   return (
+    (record.fx === undefined || typeof record.fx === "boolean") &&
     typeof record.omp === "boolean" &&
     typeof record.opencode === "boolean" &&
     typeof record.pi === "boolean" &&
@@ -114,6 +115,7 @@ function SwitchConfirmContent({
     opencode: t("pier.grok.switch.syncTarget.opencode", "OpenCode"),
     pi: t("pier.grok.switch.syncTarget.pi", "Pi"),
     omp: t("pier.grok.switch.syncTarget.omp", "OMP"),
+    fx: t("pier.grok.switch.syncTarget.fx", "fx"),
   };
 
   const sectionLabel =

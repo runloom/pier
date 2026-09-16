@@ -124,7 +124,7 @@ describe("智能体状态官方轨迹跨层验收", () => {
     );
   });
 
-  it("27 个主动集成的 fixture 与 provider 可测维度严格等集（不含仅 host-Esc 维）", () => {
+  it("28 个主动集成的 fixture 与 provider 可测维度严格等集（不含仅 host-Esc 维）", () => {
     const actualAgents = new Set(
       ACTIVE_AGENT_STATUS_TRACES.map((trace) => trace.agentId)
     );
@@ -135,7 +135,7 @@ describe("智能体状态官方轨迹跨层验收", () => {
     );
     const matrixCoverage = expectedActiveCoverage();
 
-    expect(actualAgents.size).toBe(27);
+    expect(actualAgents.size).toBe(28);
     // 每个已声明、可由提供方输入验证的维度都必须有完整轨迹，不设缺口白名单。
     expect(actualCoverage).toEqual(matrixCoverage);
   });

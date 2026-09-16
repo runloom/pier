@@ -95,4 +95,38 @@ export const EXTENDED_SKILL_DISCOVERY_ADAPTERS: readonly SkillDiscoveryAdapter[]
       officialDocsUrl: "https://docs.factory.ai/harness/skills",
       verifiedOn: "2026-08-12",
     },
+    {
+      agentKind: "fx",
+      // Discovery roots: https://fx.sh/docs/capabilities/skills（workspace 向上扫到 home 前；
+      // user 侧 `~/.fx/skills` 为 managed 安装位）。`skills/` 保留为 matrix 事实，
+      // Pier 枚举只收点根（见 listProjectDiscoveryRoots）。
+      discoveryRoots: [
+        ".agents/skills",
+        ".claude/skills",
+        ".codex/skills",
+        ".opencode/skills",
+        ".claw/skills",
+        "skills/",
+      ],
+      userDiscoveryRoots: [
+        "~/.fx/skills",
+        "~/.agents/skills",
+        "~/.claude/skills",
+        "~/.codex/skills",
+        "~/.config/opencode/skills",
+        "~/.claw/skills",
+      ],
+      walkUpToRepoRoot: true,
+      consumesProjectSkills: true,
+      duplicateSemantics: "multi-root-scan",
+      duplicatePolicy: "report",
+      sessionRefresh: "new-session-recommended",
+      probeCaveats: [
+        "workspace-level `skills/` root is excluded from Pier's unmanaged enumeration (non-dot root, too generic a directory name)",
+        "additional workspace directories do not contribute skills",
+        "dual-delivery `.agents` + `.claude` projections both scanned without deterministic resolution — same content surfaces twice",
+      ],
+      officialDocsUrl: "https://fx.sh/docs/capabilities/skills",
+      verifiedOn: "2026-09-15",
+    },
   ] as const;

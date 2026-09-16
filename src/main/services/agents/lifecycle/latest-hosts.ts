@@ -7,6 +7,7 @@ export const ALLOWED_LATEST_HOSTS = new Set([
   "downloads.claude.ai",
   "code.kimi.com",
   "formulae.brew.sh",
+  "releases.fx.sh",
 ]);
 
 export function assertLatestHttpsUrl(url: string): URL {

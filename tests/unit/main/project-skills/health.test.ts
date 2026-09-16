@@ -366,7 +366,7 @@ describe("project-skills doctor", () => {
     // (project .opencode highest) — not a duplicate. Only multi-root
     // scanners without deterministic resolution that read BOTH projection
     // targets report duplicates (registry facts, 2026-07-20).
-    expect(adapters).toEqual(["autohand", "copilot", "crush", "cursor"]);
+    expect(adapters).toEqual(["autohand", "copilot", "crush", "cursor", "fx"]);
     for (const issue of dupes) {
       expect(issue.severity).toBe("notice");
       expect(issue.degradePolicy).toBe("allowed");

@@ -568,7 +568,7 @@ describe("fetchGrokUsage", () => {
       let body = "{}";
       if (url === GROK_REMAINING_RESETS_URL) {
         body =
-          "AAAAACNSIVINcmVzdG9rX3ZwWURxb6IBBgicgPPTBvIBBgicvZbVBg==gAAAAA9ncnBjLXN0YXR1czowDQo=";
+          "AAAAABhSFlILcmVzdG9rX2xpdmXyAQYIgLHvhgeAAAAAD2dycGMtc3RhdHVzOjANCg==";
       } else if (url === GROK_BILLING_CREDITS_URL) {
         body = JSON.stringify({
           config: {

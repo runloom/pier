@@ -140,6 +140,7 @@ describe("createAgentMcpCatalogService", () => {
       "claude",
       "codebuddy",
       "copilot",
+      "fx",
       "omp",
       "openclaude",
       "qodercli",

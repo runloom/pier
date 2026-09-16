@@ -51,6 +51,10 @@ const ALLOWED_SCRIPT_HOSTS = new Set([
   "www.github.com",
   // Qwen Code standalone installer (Aliyun OSS)
   "qwen-code-assets.oss-cn-hangzhou.aliyuncs.com",
+  // fx standalone installer (https://fx.sh/docs/getting-started/installation)
+  "fx.sh",
+  "www.fx.sh",
+  "releases.fx.sh",
 ]);
 
 export function assertAllowedScriptUrl(url: string): URL {

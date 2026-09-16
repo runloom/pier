@@ -6,6 +6,7 @@
 export {
   ALL_PEER_SYNC_TARGETS,
   detectPeerAvailability,
+  isFxSyncReady,
   isOmpSyncReady,
   isOpencodeSyncReady,
   isPeerTargetAvailable,

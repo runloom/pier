@@ -145,6 +145,21 @@ export function formatAccountError(err: unknown, t: Translate): string {
       "Couldn't sync credentials to OpenCode. Make sure OpenCode is installed on this device."
     );
   }
+  if (lower.includes("fx has no xai api-key path")) {
+    return t(
+      "pier.grok.accounts.settings.syncPeersFailedFxApiKey",
+      "fx can only receive login (OIDC) accounts. Switch to a login account to sync to fx."
+    );
+  }
+  if (
+    /(^|;\s*)fx:/.test(raw) ||
+    (lower.includes("fx ") && lower.includes("not found"))
+  ) {
+    return t(
+      "pier.grok.accounts.settings.syncPeersFailedFx",
+      "Couldn't sync credentials to fx. Make sure fx is installed on this device."
+    );
+  }
   if (
     /(^|;\s*)pi:/.test(raw) ||
     (lower.includes("pi ") && lower.includes("not found"))
@@ -169,7 +184,7 @@ export function formatAccountError(err: unknown, t: Translate): string {
       "Select at least one tool to sync."
     );
   }
-  if (/opencode:|pi:|omp:/.test(raw)) {
+  if (/opencode:|pi:|omp:|fx:/.test(raw)) {
     return t(
       "pier.grok.accounts.settings.syncPeersFailed",
       "Couldn't sync credentials to the selected tools. Try again after opening those tools once."

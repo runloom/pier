@@ -83,6 +83,20 @@ function ompDbPath(opts: PeerAvailabilityOptions): string {
 }
 
 /**
+ * Sync-ready probe for fx.
+ *
+ * Evidence: `fx` on PATH or `~/.fx` exists. Matches the auth.json location
+ * written by fx peer sync. fx reads `~/.fx/grok-auth.json` when its provider
+ * is `grok` (vercel-labs/fx `src/core/auth/grok_session.zig`,
+ * `src/core/shared/profile_paths.zig`).
+ */
+export function isFxSyncReady(opts: PeerAvailabilityOptions = {}): boolean {
+  const home = resolveHomeDir(opts);
+  return (
+    existsSync(join(home, ".fx")) || commandExistsOnPath("fx", opts.pathEnv)
+  );
+}
+/**
  * Sync-ready probe for OpenCode.
  *
  * Evidence: binary on PATH, known config path, data directory, or existing
@@ -209,5 +223,6 @@ export function detectPeerAvailability(
     pi,
     piOauthCapable: pi ? isPiOauthCapable(opts) : false,
     omp: isOmpSyncReady(opts),
+    fx: isFxSyncReady(opts),
   };
 }

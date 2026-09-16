@@ -141,6 +141,8 @@ export function parseOpencodeJsonMcpServerDecls(raw: string): McpServerDecl[] {
   } catch {
     return [];
   }
+  // fx profile（`~/.fx/mcp.json` canonical root `mcp`）与 opencode 同形，
+  // 复用同一解析器，不新增 format 分支。
   return mergeDecls([
     ...declsFromMap(nestedMap(parsed, "mcp")),
     ...declsFromMap(nestedMap(parsed, "mcpServers")),

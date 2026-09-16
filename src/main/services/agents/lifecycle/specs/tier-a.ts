@@ -273,4 +273,23 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
     // https://cursor.com/docs/cli/installation
     update: [{ kind: "reinstall" }, { kind: "self", argv: ["update"] }],
   },
+  {
+    agentId: "fx",
+    expectedBins: ["fx"],
+    latestProbe: {
+      kind: "http-text",
+      url: "https://releases.fx.sh/latest.txt",
+    },
+    support: "full",
+    // https://fx.sh/docs/getting-started/installation
+    install: [
+      {
+        kind: "official-script",
+        platform: "posix",
+        url: "https://fx.sh/setup.sh",
+      },
+    ],
+    // `fx upgrade` 服务脚本安装与源码构建；Windows 走同一 setup.sh（文档仅 macOS/Linux）。
+    update: [{ kind: "self", argv: ["upgrade"] }, { kind: "reinstall" }],
+  },
 ];
