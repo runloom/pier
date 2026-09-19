@@ -516,7 +516,8 @@
       "aliases": [
         "dashscope/deepseek-v4-flash-0731",
         "deepseek/deepseek-v4-flash-0731",
-        "deepseek/deepseek-v4-flash-0731:batch"
+        "deepseek/deepseek-v4-flash-0731:batch",
+        "deepseek/deepseek-v4-flash-0731:free"
       ]
     },
     "deepseek-v4-flash-vision-exp": {
@@ -552,6 +553,22 @@
       "outputMicrousd": 0.6,
       "aliases": [
         "deepseek/deepseek-v4.1-flash"
+      ]
+    },
+    "doubao-seed-2-1-pro-260628": {
+      "cachedInputMicrousd": 0.1725,
+      "inputMicrousd": 0.8625,
+      "outputMicrousd": 4.3125,
+      "aliases": [
+        "volcengine/doubao-seed-2-1-pro-260628"
+      ]
+    },
+    "doubao-seed-2-1-turbo-260628": {
+      "cachedInputMicrousd": 0.0862,
+      "inputMicrousd": 0.4313,
+      "outputMicrousd": 2.1563,
+      "aliases": [
+        "volcengine/doubao-seed-2-1-turbo-260628"
       ]
     },
     "gemini-2.0-flash": {
@@ -858,17 +875,17 @@
       "outputMicrousd": 2.5
     },
     "gemini-flash": {
-      "cachedInputMicrousd": 0.03,
-      "inputMicrousd": 0.3,
-      "outputMicrousd": 2.5,
+      "cachedInputMicrousd": 0.075,
+      "inputMicrousd": 0.75,
+      "outputMicrousd": 3.75,
       "aliases": [
         "~google/gemini-flash-latest"
       ]
     },
     "gemini-flash-lite": {
-      "cachedInputMicrousd": 0.01,
-      "inputMicrousd": 0.1,
-      "outputMicrousd": 0.4
+      "cachedInputMicrousd": 0.03,
+      "inputMicrousd": 0.3,
+      "outputMicrousd": 2.5
     },
     "gemini-omni-flash-preview": {
       "cachedInputMicrousd": 0.15,
@@ -876,13 +893,13 @@
       "outputMicrousd": 9
     },
     "gemini-pro": {
-      "cachedInputMicrousd": 0.125,
-      "inputMicrousd": 1.25,
-      "outputMicrousd": 10,
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 2,
+      "outputMicrousd": 12,
       "longContext": {
-        "cachedInputMicrousd": 0.25,
-        "inputMicrousd": 2.5,
-        "outputMicrousd": 15,
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 4,
+        "outputMicrousd": 18,
         "threshold": 200000
       },
       "aliases": [
@@ -1058,6 +1075,14 @@
         "z-ai/glm-5.3-flash",
         "z-ai/glm-5.3-flash:batch",
         "zai/glm-5.3-flash"
+      ]
+    },
+    "glm-5.3-flashx": {
+      "cachedInputMicrousd": 0.075,
+      "inputMicrousd": 0.37,
+      "outputMicrousd": 1.25,
+      "aliases": [
+        "z-ai/glm-5.3-flashx"
       ]
     },
     "glm-5v-turbo": {
@@ -3278,6 +3303,15 @@
         "qwen/qwen3.7-max"
       ]
     },
+    "qwen3.8-flash": {
+      "cachedInputMicrousd": 0.016,
+      "inputMicrousd": 0.15,
+      "outputMicrousd": 0.47,
+      "aliases": [
+        "dashscope/qwen3.8-flash",
+        "qwen/qwen3.8-flash"
+      ]
+    },
     "qwen3.8-max": {
       "cachedInputMicrousd": 0.25,
       "inputMicrousd": 2,
@@ -3285,6 +3319,14 @@
       "aliases": [
         "dashscope/qwen3.8-max",
         "qwen/qwen3.8-max"
+      ]
+    },
+    "qwen3.8-omni-flash": {
+      "cachedInputMicrousd": 0.016,
+      "inputMicrousd": 0.15,
+      "outputMicrousd": 0.47,
+      "aliases": [
+        "dashscope/qwen3.8-omni-flash"
       ]
     },
     "qwq-plus": {
