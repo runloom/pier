@@ -81,6 +81,7 @@ describe("Git diff renderer governance", () => {
       "packages/ui/src/diff-view/unresolved-conflict/file-body.tsx",
       "packages/ui/src/diff-view/unresolved-conflict/file-diff.ts",
       "packages/ui/src/diff-view/unresolved-conflict/markers-body.tsx",
+      "packages/ui/src/diff-view/unresolved-conflict/stage-diff.tsx",
       "packages/ui/src/diff-view/use-code-options.ts",
       "packages/ui/src/diff-view/use-content-selection.ts",
       "packages/ui/src/diff-view/use-headers.tsx",
