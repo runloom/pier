@@ -51,7 +51,7 @@ type GitReviewServiceScheduler = Pick<
 
 type GitReviewIndexReaderDependency = Pick<
   GitReviewIndexReader,
-  "read" | "resolve"
+  "read" | "recallFullSnapshot" | "resolve"
 >;
 
 interface CreateGitReviewServiceOptions {

@@ -138,6 +138,13 @@ const conflictSectionSchema = z.strictObject({
   contents: z.string().nullable(),
   /** sha256:… of worktree bytes when readable; synthetic digest otherwise. */
   contentsDigest: z.string().min(1).max(128),
+  /**
+   * Stage texts when the worktree has no readable body. Null means that
+   * side has no blob. Omit the pair when a side is binary, oversize, or
+   * unreadable — and always omit it on the marker path.
+   */
+  oursContents: z.string().nullable().optional(),
+  theirsContents: z.string().nullable().optional(),
   kind: z.literal("conflict"),
   oldPath: z.null(),
   presentation: gitReviewConflictPresentationSchema,
@@ -192,6 +199,26 @@ export const gitReviewFileSectionSchema = z
           message:
             "Only markers-text and file-level conflict may carry worktree contents",
           path: ["contents"],
+        });
+      }
+      const hasOurs = section.oursContents !== undefined;
+      const hasTheirs = section.theirsContents !== undefined;
+      if (hasOurs !== hasTheirs) {
+        context.addIssue({
+          code: "custom",
+          message: "Conflict stage texts must include both sides",
+          path: [hasOurs ? "theirsContents" : "oursContents"],
+        });
+      }
+      if (
+        (hasOurs || hasTheirs) &&
+        (section.presentation !== "file-level" || section.contents !== null)
+      ) {
+        context.addIssue({
+          code: "custom",
+          message:
+            "Conflict stage texts belong only on a file-level section with no worktree body",
+          path: ["oursContents"],
         });
       }
       return;
@@ -263,6 +290,16 @@ const gitReviewDocumentSectionsSchema = z
   );
 
 export const gitReviewFileDocumentRequestSchema = z.strictObject({
+  /**
+   * When true, attach full old/new text so collapsed unmodified lines can
+   * expand. The first paint omits this and returns hunks only.
+   */
+  includeDiffSides: z.boolean().optional(),
+  /**
+   * Sidebar index revision the renderer already painted. A hit reuses that
+   * snapshot. A miss is staleRevision — do not rediscover a newer index.
+   */
+  indexRevision: gitReviewRevisionSchema.optional(),
   operationId: gitReviewOperationIdSchema,
   /**
    * renderer 已持有的单文件内容修订。main 仍完成稳定读取，但内容相同
@@ -337,6 +374,11 @@ export const gitReviewExcerptBatchRequestSchema = z
       .array(gitReviewExcerptFileSchema)
       .min(1)
       .max(GIT_REVIEW_EXCERPT_BATCH_MAX),
+    /**
+     * Same reuse contract as {@link gitReviewFileDocumentRequestSchema}.
+     * A miss is staleRevision. Batch reads stay hunk-only.
+     */
+    indexRevision: gitReviewRevisionSchema.optional(),
     operationId: gitReviewOperationIdSchema,
     source: gitReviewScopeSchema,
   })

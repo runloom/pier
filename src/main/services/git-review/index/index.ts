@@ -54,6 +54,7 @@ import {
   GitReviewScopedMovementParser,
   mergeScopedPrimaryReads,
 } from "./scoped.ts";
+import { GitReviewIndexSnapshotCache } from "./snapshot-cache.ts";
 import {
   buildGitReviewGroupSummaries,
   type GitReviewUntrackedPathStatsReader,
@@ -115,6 +116,9 @@ export class GitReviewIndexReader {
     "resolveRepository"
   >;
   readonly #readUntrackedPathStats: GitReviewUntrackedPathStatsReader;
+  readonly #snapshots = new GitReviewIndexSnapshotCache<
+    Extract<GitReviewIndexResolution, { kind: "ok" }>
+  >();
 
   constructor(options: CreateGitReviewIndexReaderOptions = {}) {
     this.#execGitRaw = options.execGitRaw ?? execGitRaw;
@@ -197,7 +201,7 @@ export class GitReviewIndexReader {
         warnings: read.assembled.warnings,
       });
       assertGitReviewIndexExecutionActive(budget, signal);
-      return Object.freeze({
+      const resolution = Object.freeze({
         kind: "ok" as const,
         metadata: Object.freeze({
           canonicalRoot,
@@ -208,9 +212,24 @@ export class GitReviewIndexReader {
         resolvedEntries: read.assembled.resolvedEntries,
         result,
       });
+      if (paths === undefined) {
+        this.#snapshots.remember(scope, resolution);
+      }
+      return resolution;
     } catch (error) {
       return gitReviewFailureSchema.parse(toGitReviewIndexFailure(error));
     }
+  }
+
+  /**
+   * Tree click already painted this sidebar index. Reuse it instead of
+   * running status + numstat again. A miss means the sidebar moved on.
+   */
+  recallFullSnapshot(
+    scope: GitReviewScope,
+    indexRevision: string
+  ): Extract<GitReviewIndexResolution, { kind: "ok" }> | null {
+    return this.#snapshots.recall(scope, indexRevision);
   }
 
   /**

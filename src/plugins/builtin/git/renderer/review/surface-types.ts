@@ -135,6 +135,8 @@ export interface ReviewSurfaceProps {
   readonly indexGeneration: number;
   readonly indexRefreshFailure: GitReviewFailure | null;
   readonly indexRefreshing?: boolean;
+  /** Sidebar index revision. Document loads reuse it instead of rediscovery. */
+  readonly indexRevision: string | null;
   readonly mutationAuthorityBlocked: boolean;
   readonly navigationRequest: ReviewSurfaceNavigationRequest | null;
   readonly onAcquireMutationAuthority: () => GitReviewMutationLease | null;

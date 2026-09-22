@@ -17,6 +17,10 @@ import type {
   PierUnresolvedConflictLabels,
 } from "./types.ts";
 
+export {
+  conflictStageTexts,
+  PierConflictStageDiff,
+} from "./stage-diff.tsx";
 export type {
   ConflictGeometry,
   ConflictResolution,

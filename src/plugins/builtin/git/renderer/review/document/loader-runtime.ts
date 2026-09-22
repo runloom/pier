@@ -5,14 +5,16 @@ import type {
   GitReviewIndexEntry,
 } from "@shared/contracts/git/review.ts";
 import { isReviewEntryBodyHydratable } from "./body-class.ts";
-import { resourceFromDocumentResult } from "./loader-utils.ts";
+import {
+  isGitReviewIndexMoved,
+  resourceFromDocumentResult,
+} from "./loader-utils.ts";
 import type {
   GitReviewDocumentLoaderChange,
   GitReviewDocumentResource,
 } from "./resource.ts";
 import type { GitReviewDocumentRetention } from "./retention.ts";
 
-/** 背景路径瞬态失败的静默重试次数（不含首次）。有 last-good 时由 generation 继续展示。 */
 export const GIT_REVIEW_SILENT_RETRY_MAX = 3;
 
 export interface GitReviewDocumentLoaderRuntime {
@@ -48,7 +50,6 @@ export interface GitReviewDocumentLoaderRuntime {
   readonly waiting: string[];
 }
 
-/** 将 loader 私有字段桥接为 runtime 读写壳（避免重复手写 getter/setter）。 */
 export function bindLoaderRuntimeField<T>(
   get: () => T,
   set: (next: T) => void
@@ -118,7 +119,6 @@ export function cancelObsoleteLoaderLoads(
   }
 }
 
-/** 选中项 idle 且并发已满时，取消一条非选中 loading 让出槽位。 */
 export function yieldLoaderConcurrencyForSelected(
   runtime: GitReviewDocumentLoaderRuntime
 ): void {
@@ -159,7 +159,6 @@ export function yieldLoaderConcurrencyForSelected(
   }
 }
 
-/** 从 in-flight 批/单文件扣掉该 entry；末成员则取消 IPC 并释放并发槽。 */
 export function detachLoaderInFlightEntry(
   runtime: GitReviewDocumentLoaderRuntime,
   entryKey: string
@@ -453,6 +452,16 @@ export function settleLoaderLoad(
     runtime.setResource(entryKey, { entry: resource.entry, kind: "idle" });
     rebuildLoaderWaiting(runtime);
     runtime.pumpLoads(false);
+    emitLoaderChange(runtime);
+    return;
+  }
+  if (isGitReviewIndexMoved(result)) {
+    runtime.silentRetryCount.delete(entryKey);
+    runtime.setResource(entryKey, {
+      entry: resource.entry,
+      kind: "loading",
+      operationId,
+    });
     emitLoaderChange(runtime);
     return;
   }

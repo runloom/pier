@@ -32,7 +32,6 @@ import { useGitReviewTreeOpen } from "../hooks/use-tree-open.ts";
 import { useGitReviewViewportEffects } from "../hooks/use-viewport-effects.ts";
 import { createReviewCollidingFileLabel } from "../plugin-text.ts";
 import type { ReviewRenderFeedback } from "./code-view.tsx";
-import { ReviewCommentsChrome } from "./comments/chrome.tsx";
 import { applyReviewNavigationDemand } from "./document/apply-navigation-demand.ts";
 import { reviewEntryHasBodyContent } from "./document/body-class.ts";
 import type { ReviewDocumentDemand } from "./document/demand.ts";
@@ -57,6 +56,7 @@ function ReviewSurfaceComponent({
   diffBase,
   entries,
   indexGeneration,
+  indexRevision,
   indexRefreshFailure,
   indexRefreshing = false,
   mutationAuthorityBlocked,
@@ -294,7 +294,7 @@ function ReviewSurfaceComponent({
       scope,
       setProjection,
     });
-  useGitReviewDocumentSession({
+  const requestDiffSides = useGitReviewDocumentSession({
     collidingFileLabel,
     commentsIndexRef,
     commentsSeqRef,
@@ -310,6 +310,7 @@ function ReviewSurfaceComponent({
     firstSectionIdByEntryKeyRef,
     generationCallbacksRef,
     indexGeneration,
+    indexRevision,
     itemCacheKeysRef,
     itemIdsRef,
     loaderRef,
@@ -435,6 +436,7 @@ function ReviewSurfaceComponent({
         }
         clearForUserIntent={clearForUserIntent}
         collidingFileLabel={collidingFileLabel}
+        comments={comments}
         context={context}
         diffHandleRef={diffHandleRef}
         driftCommentLabels={comments.driftCommentLabels}
@@ -456,6 +458,8 @@ function ReviewSurfaceComponent({
         onContextMenuSession={onContextMenuSession}
         onDriftCommentActivate={comments.openDriftThread}
         onGutterReviewActivate={comments.handleGutterReviewActivate}
+        onRequestDiffSides={requestDiffSides}
+        onRequestTreeOpen={onRequestTreeOpen}
         onRetryIndex={onRetryIndex}
         onUserReleasedReadingPin={onUserReleasedReadingPin}
         openTreeNode={openTreeNode}
@@ -474,6 +478,7 @@ function ReviewSurfaceComponent({
         setSidebarCollapsed={setSidebarCollapsed}
         sidebarCollapsed={sidebarCollapsed}
         targetSelectionPending={targetSelectionPending}
+        threads={threads}
         treeModel={treeModel}
         updateRenderFeedback={updateRenderFeedback}
         updateRenderItemError={updateRenderItemError}
@@ -481,19 +486,7 @@ function ReviewSurfaceComponent({
         viewState={viewState}
         warnings={warnings}
       />
-      <ReviewCommentsChrome
-        collidingFileLabel={collidingFileLabel}
-        comments={comments}
-        context={context}
-        diffBase={diffBase}
-        diffHandleRef={diffHandleRef}
-        entries={entries}
-        onRequestTreeOpen={onRequestTreeOpen}
-        threads={threads}
-        worktreeKey={scope.gitRootPath}
-      />
     </div>
   );
 }
-
 export const ReviewSurface = memo(ReviewSurfaceComponent);

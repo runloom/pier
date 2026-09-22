@@ -17,24 +17,36 @@ export function isConflictOnlyBody(
 }
 
 /**
- * Merge-changes stays on the same CodeView list as ordinary diffs.
- * Conflict files keep CodeView chrome; UnresolvedFile fills the body slot.
+ * Merge-changes shows one selected conflict, not a CodeView list.
+ * Ordinary diffs keep every code item. A conflict-only ledger never falls
+ * through to CodeView.
  */
 export function resolveReviewDocumentBody(
   items: readonly PierDiffViewItem[],
-  surface: GitReviewReadingSurface
+  surface: GitReviewReadingSurface,
+  selectedSectionKey?: string | null
 ): {
+  readonly conflictItem: PierDiffViewItem | null;
   readonly items: readonly PierDiffViewItem[];
 } {
   const conflictItems = items.filter(isConflictSurfaceItem);
   const codeItems = items.filter((item) => !isConflictSurfaceItem(item));
   if (surface === "conflict" && conflictItems.length > 0) {
-    return { items };
+    const selected =
+      conflictItems.find((item) => item.id === selectedSectionKey) ??
+      conflictItems[0] ??
+      null;
+    return { conflictItem: selected, items: [] };
   }
   if (isConflictOnlyBody(conflictItems.length, codeItems.length)) {
-    return { items: conflictItems };
+    const selected =
+      conflictItems.find((item) => item.id === selectedSectionKey) ??
+      conflictItems[0] ??
+      null;
+    return { conflictItem: selected, items: [] };
   }
   return {
+    conflictItem: null,
     items: codeItems.length > 0 ? codeItems : items,
   };
 }

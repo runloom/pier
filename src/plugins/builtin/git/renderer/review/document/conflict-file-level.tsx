@@ -48,31 +48,64 @@ export function fileLevelConflictActionLabel(
 
 /**
  * Modify/delete file-level conflicts: Keep / Take / Delete buttons.
- * Readable worktree text, if any, is rendered beside this card by the host.
+ * Readable worktree text stays on File. A missing file uses stage blobs.
  */
+function conflictActionVariant(
+  unreadable: boolean,
+  destructive: boolean
+): "default" | "destructive" | "outline" {
+  if (unreadable) {
+    return "outline";
+  }
+  return destructive ? "destructive" : "default";
+}
+
+const UNREADABLE_CONFLICT_PRESENTATION = new Set([
+  "invalidEncoding",
+  "readError",
+  "tooLarge",
+]);
+
 export function FileLevelConflictCard(options: {
   readonly busy: boolean;
   readonly conflict: NonNullable<PierDiffViewItem["conflict"]>;
   readonly context: RendererPluginContext;
   readonly itemId: string;
+  readonly onOpen?: () => void;
   readonly onResolve: (action: "ours" | "stage" | "theirs") => void;
 }): ReactElement | null {
-  const { busy, conflict, context, itemId, onResolve } = options;
+  const { busy, conflict, context, itemId, onOpen, onResolve } = options;
   if (conflict.contentsDigest.startsWith("estimate:")) {
     return null;
   }
-  if (conflict.xy === "AA" || conflict.xy === "UU") {
+  const unreadable = UNREADABLE_CONFLICT_PRESENTATION.has(
+    conflict.presentation
+  );
+  if ((conflict.xy === "AA" || conflict.xy === "UU") && !unreadable) {
     return null;
   }
   const fileActions = gitReviewConflictFileActions(conflict.xy);
-  if (fileActions.length === 0) {
+  if (fileActions.length === 0 && onOpen === undefined) {
     return null;
   }
+  const openButton =
+    onOpen === undefined ? null : (
+      <Button
+        data-git-review-conflict-open=""
+        disabled={busy}
+        onClick={onOpen}
+        type="button"
+        variant={unreadable ? "default" : "outline"}
+      >
+        {pluginText(context, "reviewOpenFile", "Open File")}
+      </Button>
+    );
   return (
     <div
       className="flex justify-end gap-2 px-5 py-3"
       data-git-review-conflict-file-level={itemId}
     >
+      {unreadable ? null : openButton}
       {fileActions.map((spec) => (
         <Button
           disabled={busy}
@@ -81,11 +114,12 @@ export function FileLevelConflictCard(options: {
             onResolve(spec.action);
           }}
           type="button"
-          variant={spec.destructive ? "destructive" : "default"}
+          variant={conflictActionVariant(unreadable, spec.destructive)}
         >
           {fileLevelConflictActionLabel(context, spec.intent)}
         </Button>
       ))}
+      {unreadable ? openButton : null}
     </div>
   );
 }

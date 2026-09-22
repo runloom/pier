@@ -206,8 +206,14 @@ function projectLoadedReviewDocumentResource(
             conflict: {
               contents: section.contents,
               contentsDigest: section.contentsDigest,
+              ...(section.oursContents === undefined
+                ? {}
+                : { oursContents: section.oursContents }),
               presentation: section.presentation,
               stages: section.stages,
+              ...(section.theirsContents === undefined
+                ? {}
+                : { theirsContents: section.theirsContents }),
               xy: section.xy,
             },
             fileDisplay: fileDisplayForSlot(slot),

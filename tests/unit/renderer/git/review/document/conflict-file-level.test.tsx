@@ -39,4 +39,47 @@ describe("FileLevelConflictCard", () => {
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Confirm Delete" })).toBeTruthy();
   });
+
+  it("keeps marker-free text on the file body, without a resolve card", () => {
+    const { container } = render(
+      <FileLevelConflictCard
+        busy={false}
+        conflict={{
+          contents: "resolved\n",
+          contentsDigest: "sha256:resolved",
+          presentation: "file-level",
+          stages: { baseOid: null, oursOid: null, theirsOid: null },
+          xy: "UU",
+        }}
+        context={context()}
+        itemId="section:conflict"
+        onResolve={vi.fn()}
+      />
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("makes open file the primary action when the conflict cannot be previewed", () => {
+    render(
+      <FileLevelConflictCard
+        busy={false}
+        conflict={{
+          contents: null,
+          contentsDigest: "sha256:large",
+          presentation: "tooLarge",
+          stages: { baseOid: null, oursOid: null, theirsOid: null },
+          xy: "UU",
+        }}
+        context={context()}
+        itemId="section:conflict"
+        onOpen={vi.fn()}
+        onResolve={vi.fn()}
+      />
+    );
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.at(-1)?.textContent).toBe("Open File");
+    expect(buttons.at(-1)?.getAttribute("data-git-review-conflict-open")).toBe(
+      ""
+    );
+  });
 });

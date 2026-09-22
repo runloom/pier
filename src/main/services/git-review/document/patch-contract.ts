@@ -76,6 +76,11 @@ export interface ReadGitReviewPatchOptions {
   readonly gitRootPath: string;
   readonly group: GitReviewRenderableGroup;
   readonly headOid: string | null;
+  /**
+   * When false, return the hunk patch without reading full old/new text.
+   * Expand of collapsed unmodified lines stays partial until a later read.
+   */
+  readonly includeDiffSides?: boolean;
   /** committed 分组必需的 range 边界；其他分组为 null。 */
   readonly rangeBounds?: GitReviewRangeBounds | null;
   readonly signal?: AbortSignal;

@@ -119,9 +119,9 @@ resolveConflict → 更新 FileDiffMetadata（预览）
 | 类 | 判定 | 渲染 |
 |----|------|------|
 | **markers-text** | worktree UTF-8 文本，含完整 conflict marker 栈 | `UnresolvedFile` |
-| **file-level** | XY ∈ {DD, AU, UD, UA, DU} 等无可靠 markers，或解析失败 | 文件级 notice + 动作 |
+| **file-level** | XY ∈ {DD, AU, UD, UA, DU} 等无可靠 markers，或解析失败 | 工作区仍有可读文本：说明卡 + 动作，正文是工作区 `File`。工作区文件不存在、且当前侧与传入侧都能读成文本（缺 blob 的一侧为空）：两侧 diff 是**唯一正文**，不再叠在 `File` 下，也不做成有高度上限的摘录。任一侧二进制、超限或读失败：不画 diff |
 | **binary** | 含 `\0` / 非文本 | binary notice + 选版本（后期） |
-| **too-large / encoding** | 沿用 snapshot 上限 | 既有 state 文案 + 打开文件 |
+| **too-large / encoding / readError** | 沿用 snapshot 上限，或读失败 | 说明 + 打开文件。文件还在工作区时，「打开文件」是主按钮，放在动作右侧 |
 
 `parseMergeConflictDiffFromFile` 在未闭合 marker 栈时 **throw** → 降级 file-level 或 raw 打开，禁止白屏。
 
@@ -442,7 +442,7 @@ export function PierUnresolvedConflictView(props: {
 |------|------|
 | parse 结果塞 CodeView 当官方 UI | 无 marker 行 / Accept / 专用 renderer |
 | worktree 当 `type: "file"` 展示 raw markers | 非官方 conflict UI |
-| `git diff` 当冲突详情 | 语义错误 |
+| `git diff` 当**带标记**冲突详情 | 语义错误；标记正文只走 `UnresolvedFile`。工作区文件已不存在时的两侧 stage 文本 diff 是文件级唯一正文，见 §3.3 |
 | 默认多 Unresolved 虚拟进 CodeView | 上游不支持 |
 | 业务直接调 `parseMergeConflictDiffFromFile` 散落 | API beta，必须 adapter |
 

@@ -79,13 +79,19 @@ export async function readGitReviewPatch(
   options: ReadGitReviewPatchOptions
 ): Promise<GitReviewPatchMaterial | null> {
   const collected = await collectGitReviewPatch(options);
-  return collected === null
-    ? null
-    : withGitReviewDiffSides(
-        options,
-        collected.material,
-        collected.worktreeFence
-      );
+  if (collected === null) {
+    return null;
+  }
+  // Tree click must paint hunks before any full-file read. Sides only exist
+  // so collapsed unmodified lines can expand; they must not block the patch.
+  if (options.includeDiffSides === false) {
+    return collected.material;
+  }
+  return withGitReviewDiffSides(
+    options,
+    collected.material,
+    collected.worktreeFence
+  );
 }
 
 async function collectGitReviewPatch(

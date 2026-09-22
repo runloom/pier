@@ -424,6 +424,7 @@ function GitChangesPanelBody({
           indexGeneration={state.generation}
           indexRefreshFailure={state.refreshFailure}
           indexRefreshing={state.refreshing}
+          indexRevision={state.result.indexRevision ?? null}
           key={sourceKey}
           mutationAuthorityBlocked={mutationAuthorityBlocked}
           onAcquireMutationAuthority={acquireMutationAuthority}

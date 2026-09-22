@@ -5,12 +5,14 @@ import type {
   GitReviewConflictXy,
   GitReviewFileSection,
 } from "../../../../shared/contracts/git/review.ts";
+import type { ExecGitRaw } from "../../git/exec.ts";
 import type {
   GitReviewIndexExecutionBudget,
   GitReviewIndexGroupFact,
 } from "../index/contract.ts";
 import { GitReviewIndexExecutionError } from "../index/contract.ts";
 import {
+  GIT_REVIEW_SNAPSHOT_MAX_BYTES,
   GitReviewPathError,
   readGitReviewFileSnapshot,
 } from "../path/guard.ts";
@@ -21,6 +23,7 @@ import {
 
 export interface ReadGitReviewConflictOptions {
   readonly budget: GitReviewIndexExecutionBudget;
+  readonly execGitRaw: ExecGitRaw;
   readonly fact: GitReviewIndexGroupFact;
   readonly gitRootPath: string;
   readonly signal?: AbortSignal;
@@ -29,6 +32,7 @@ export interface ReadGitReviewConflictOptions {
 export interface GitReviewConflictMaterial {
   readonly contents: string | null;
   readonly contentsDigest: string;
+  readonly oursContents?: string | null;
   readonly presentation: GitReviewConflictPresentation;
   readonly sourceRevision: string;
   readonly stages: {
@@ -36,6 +40,7 @@ export interface GitReviewConflictMaterial {
     readonly oursOid: string | null;
     readonly theirsOid: string | null;
   };
+  readonly theirsContents?: string | null;
   readonly xy: GitReviewConflictXy;
 }
 
@@ -68,7 +73,7 @@ export async function readGitReviewConflictMaterial(
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
   } catch (error) {
-    return materialFromPathError(error, xy, stages, options.budget);
+    return materialFromPathError(error, xy, stages, options);
   }
 
   const { bytes, digest } = snapshot;
@@ -106,8 +111,7 @@ export async function readGitReviewConflictMaterial(
     };
   }
 
-  // Keep worktree text so Pierre File can use official file chrome.
-  // UnresolvedFile still only mounts on a closed marker stack.
+  // Worktree text is the body. Stage blobs are only for a missing file.
   return {
     contents: text,
     contentsDigest: digest,
@@ -126,6 +130,12 @@ export function sectionFromConflictMaterial(options: {
   return {
     contents: options.material.contents,
     contentsDigest: options.material.contentsDigest,
+    ...(options.material.oursContents === undefined
+      ? {}
+      : { oursContents: options.material.oursContents }),
+    ...(options.material.theirsContents === undefined
+      ? {}
+      : { theirsContents: options.material.theirsContents }),
     kind: "conflict",
     oldPath: null,
     presentation: options.material.presentation,
@@ -190,12 +200,13 @@ export function hasCompleteMergeConflictMarkers(text: string): boolean {
   return stack.length === 0 && completed > 0;
 }
 
-function materialFromPathError(
+async function materialFromPathError(
   error: unknown,
   xy: GitReviewConflictXy,
   stages: GitReviewConflictMaterial["stages"],
-  budget: GitReviewIndexExecutionBudget
-): GitReviewConflictMaterial {
+  options: ReadGitReviewConflictOptions
+): Promise<GitReviewConflictMaterial> {
+  const { budget } = options;
   if (!(error instanceof GitReviewPathError)) {
     throw error;
   }
@@ -231,7 +242,7 @@ function materialFromPathError(
   const digest = `sha256:${createHash("sha256")
     .update(`conflict:${xy}:${error.reason}:${error.message}`)
     .digest("hex")}`;
-  return {
+  const base = {
     contents: null,
     contentsDigest: digest,
     presentation,
@@ -239,6 +250,91 @@ function materialFromPathError(
     stages,
     xy,
   };
+  if (presentation !== "file-level") {
+    return base;
+  }
+  const sides = await readConflictStageTexts(options, stages);
+  if (sides === null) {
+    return base;
+  }
+  return {
+    ...base,
+    oursContents: sides.oursContents,
+    sourceRevision: `${digest}:sides:${sides.digest}`,
+    theirsContents: sides.theirsContents,
+  };
+}
+
+type ConflictStageBlob =
+  | { readonly contents: string; readonly kind: "text" }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unavailable" };
+
+async function readConflictStageTexts(
+  options: ReadGitReviewConflictOptions,
+  stages: GitReviewConflictMaterial["stages"]
+): Promise<{
+  readonly digest: string;
+  readonly oursContents: string | null;
+  readonly theirsContents: string | null;
+} | null> {
+  const [ours, theirs] = await Promise.all([
+    readConflictBlob(options, stages.oursOid),
+    readConflictBlob(options, stages.theirsOid),
+  ]);
+  if (ours.kind === "unavailable" || theirs.kind === "unavailable") {
+    return null;
+  }
+  const oursContents = ours.kind === "text" ? ours.contents : null;
+  const theirsContents = theirs.kind === "text" ? theirs.contents : null;
+  const digest = createHash("sha256")
+    .update(oursContents ?? "", "utf8")
+    .update("\0", "utf8")
+    .update(theirsContents ?? "", "utf8")
+    .digest("hex");
+  return { digest, oursContents, theirsContents };
+}
+
+async function readConflictBlob(
+  options: ReadGitReviewConflictOptions,
+  oid: string | null
+): Promise<ConflictStageBlob> {
+  if (oid === null || /^0+$/u.test(oid)) {
+    return { kind: "absent" };
+  }
+  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(oid)) {
+    return { kind: "unavailable" };
+  }
+  try {
+    const result = await options.execGitRaw(["cat-file", "-p", oid], {
+      budget: options.budget,
+      cwd: options.gitRootPath,
+      env: { GIT_DIFF_OPTS: "" },
+      maxOutputBytes: GIT_REVIEW_SNAPSHOT_MAX_BYTES + 1,
+      mode: "collect",
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+    if (result.kind !== "collected") {
+      return { kind: "unavailable" };
+    }
+    const bytes = result.stdout;
+    if (
+      bytes.length > GIT_REVIEW_SNAPSHOT_MAX_BYTES ||
+      bytes.includes(0) ||
+      !isUtf8(bytes)
+    ) {
+      return { kind: "unavailable" };
+    }
+    return { contents: bytes.toString("utf8"), kind: "text" };
+  } catch (error) {
+    if (
+      error instanceof GitReviewIndexExecutionError ||
+      (error instanceof Error && error.name === "AbortError")
+    ) {
+      throw error;
+    }
+    return { kind: "unavailable" };
+  }
 }
 
 function splitPreserveEmpty(text: string): string[] {

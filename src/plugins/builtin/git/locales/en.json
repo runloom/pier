@@ -412,6 +412,7 @@
     "ui.reviewFailureChangeNotFound": "This change moved or was updated. Refresh and try again.",
     "ui.reviewFailureCommandFailed": "git could not complete this operation. Try again.",
     "ui.reviewFailureDuplicateOperation": "This review request is already running.",
+    "ui.reviewFailureIndexMoved": "This review moved on. Wait for the list to refresh.",
     "ui.reviewFailureIndexLocked": "Another program is updating the git staging area. Try again in a moment.",
     "ui.reviewFailureInternal": "An internal error occurred while processing the change.",
     "ui.reviewFailureInvalidSource": "The git review source is no longer valid.",

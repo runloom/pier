@@ -64,6 +64,28 @@ function isHeaderControlTarget(path: readonly HTMLElement[]): boolean {
   return false;
 }
 
+/** Partial hunks render the unmodified row without Pierre's expand buttons. */
+function findPartialCollapsedSeparatorItemId(
+  path: readonly EventTarget[],
+  rendered: readonly { readonly element: Element; readonly id: string }[]
+): string | null {
+  const separator = path.find(
+    (node): node is HTMLElement =>
+      isHtmlElement(node) && node.hasAttribute("data-separator")
+  );
+  if (separator === undefined) {
+    return null;
+  }
+  const kind = separator.getAttribute("data-separator");
+  if (kind !== "line-info" && kind !== "line-info-basic") {
+    return null;
+  }
+  if (separator.hasAttribute("data-expand-index")) {
+    return null;
+  }
+  return findRenderedItemIdFromPath(path, rendered);
+}
+
 function findRenderedItemIdFromPath(
   path: readonly EventTarget[],
   rendered: readonly { readonly element: Element; readonly id: string }[]
@@ -84,9 +106,95 @@ function findRenderedItemIdFromPath(
   return null;
 }
 
+function expandPendingPartialDiffs(
+  pending: Set<string>,
+  rendered: readonly {
+    readonly id: string;
+    readonly instance: object;
+    readonly item: object;
+    readonly type: string;
+  }[]
+): void {
+  if (pending.size === 0) {
+    return;
+  }
+  for (const item of rendered) {
+    const fileDiff = partialFileDiff(item);
+    const expandHunk = expandHunkOf(item.instance);
+    if (
+      item.type !== "diff" ||
+      !pending.has(item.id) ||
+      fileDiff === null ||
+      fileDiff.isPartial ||
+      expandHunk === null
+    ) {
+      continue;
+    }
+    for (let index = 0; index <= fileDiff.hunks.length; index += 1) {
+      expandHunk(index, "both", Number.MAX_SAFE_INTEGER);
+    }
+    pending.delete(item.id);
+  }
+}
+
+function partialFileDiff(item: object): {
+  readonly hunks: readonly unknown[];
+  readonly isPartial: boolean;
+} | null {
+  if (!("fileDiff" in item)) {
+    return null;
+  }
+  const { fileDiff } = item;
+  if (typeof fileDiff !== "object" || fileDiff === null) {
+    return null;
+  }
+  if (
+    !("isPartial" in fileDiff && "hunks" in fileDiff) ||
+    typeof fileDiff.isPartial !== "boolean" ||
+    !Array.isArray(fileDiff.hunks)
+  ) {
+    return null;
+  }
+  return { hunks: fileDiff.hunks, isPartial: fileDiff.isPartial };
+}
+
+function expandHunkOf(
+  instance: object
+): ((index: number, direction: "both", count: number) => void) | null {
+  if (
+    !("expandHunk" in instance) ||
+    typeof instance.expandHunk !== "function"
+  ) {
+    return null;
+  }
+  return instance.expandHunk.bind(instance);
+}
+
+function beginPartialDiffSideRequest(
+  pending: Set<string>,
+  itemId: string,
+  request: (
+    itemId: string
+  ) => Promise<"accepted" | "failed"> | "accepted" | "failed"
+): void {
+  pending.add(itemId);
+  Promise.resolve(request(itemId))
+    .then((outcome) => {
+      if (outcome === "failed") {
+        pending.delete(itemId);
+      }
+    })
+    .catch(() => {
+      pending.delete(itemId);
+    });
+}
+
 export {
+  beginPartialDiffSideRequest,
   composedHtmlPath,
+  expandPendingPartialDiffs,
   findHeaderFromPath,
+  findPartialCollapsedSeparatorItemId,
   findRenderedItemIdFromPath,
   findTitleFromPath,
   isHeaderControlTarget,

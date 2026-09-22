@@ -30,18 +30,20 @@ describe("isConflictOnlyBody", () => {
 describe("resolveReviewDocumentBody", () => {
   const mixed = [item("skill", "loaded"), item("meta")];
 
-  it("keeps every conflict-surface file in tree order", () => {
-    expect(resolveReviewDocumentBody(mixed, "conflict")).toEqual({
-      items: mixed,
+  it("shows only the selected conflict, not a CodeView list", () => {
+    expect(resolveReviewDocumentBody(mixed, "conflict", "meta")).toEqual({
+      conflictItem: item("meta"),
+      items: [],
     });
   });
 
-  it("does not filter the list down to the selected file", () => {
+  it("falls back to the first conflict when nothing is selected", () => {
     const body = resolveReviewDocumentBody(
       [item("a"), item("b"), item("c")],
       "conflict"
     );
-    expect(body.items.map((row) => row.id)).toEqual(["a", "b", "c"]);
+    expect(body.conflictItem?.id).toBe("a");
+    expect(body.items).toEqual([]);
   });
 
   it("keeps ordinary diff surfaces on CodeView", () => {
@@ -51,13 +53,14 @@ describe("resolveReviewDocumentBody", () => {
         "index"
       )
     ).toEqual({
+      conflictItem: null,
       items: [item("a", "loaded"), item("b", "loaded")],
     });
   });
 });
 
 describe("conflict reading surface layout", () => {
-  it("always mounts ReviewCodeView and never a parallel conflict host", () => {
+  it("mounts one ReviewConflictView for the selected conflict", () => {
     const source = readFileSync(
       resolve(
         import.meta.dirname,
@@ -66,13 +69,13 @@ describe("conflict reading surface layout", () => {
       "utf8"
     );
     expect(source).toContain("resolveReviewDocumentBody");
-    expect(source).toContain("ReviewCodeView");
-    expect(source).not.toContain("ReviewConflictView");
+    expect(source).toContain("ReviewConflictView");
+    expect(source).toContain('data-git-review-document-content="conflict"');
     expect(source).not.toContain("max-h-[45%]");
     expect(source).not.toContain("allCollapsed");
   });
 
-  it("embeds UnresolvedFile in the CodeView annotation, not a second file header", () => {
+  it("does not embed the selected conflict in a dummy CodeView diff", () => {
     const host = readFileSync(
       resolve(
         import.meta.dirname,

@@ -361,6 +361,7 @@
     "ui.reviewFailureChangeNotFound": "이 변경이 움직였거나 업데이트되었습니다. 새로고침한 뒤 다시 시도하세요.",
     "ui.reviewFailureCommandFailed": "git이 이 작업을 끝내지 못했습니다. 다시 시도하세요.",
     "ui.reviewFailureDuplicateOperation": "이 검토 요청이 이미 실행 중입니다.",
+    "ui.reviewFailureIndexMoved": "이 검토가 바뀌었습니다. 목록이 새로고침될 때까지 기다리세요.",
     "ui.reviewFailureIndexLocked": "다른 프로그램이 git 스테이징 영역을 업데이트 중입니다. 잠시 후 다시 시도하세요.",
     "ui.reviewFailureInternal": "변경을 처리하는 중 내부 오류가 발생했습니다.",
     "ui.reviewFailureInvalidSource": "git 검토 출처가 더 이상 유효하지 않습니다.",

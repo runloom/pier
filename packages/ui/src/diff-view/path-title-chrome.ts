@@ -97,6 +97,71 @@ function attachPathTitleChrome(title: TitleWithCleanup): void {
  * 在 diffs-container 的 shadowRoot 内给路径标题挂 mono + hover 下划线。
  * 可重复调用；已绑定（CLEANUP_KEY）则只重刷 base。unmount 时传 clear=true。
  */
+const PARTIAL_EXPAND_KEY = "__pierPartialExpandCleanup";
+
+type SeparatorWithCleanup = HTMLElement & {
+  [PARTIAL_EXPAND_KEY]?: () => void;
+};
+
+function detachPartialExpand(separator: SeparatorWithCleanup): void {
+  separator[PARTIAL_EXPAND_KEY]?.();
+}
+
+function attachPartialExpand(separator: SeparatorWithCleanup): void {
+  if (separator[PARTIAL_EXPAND_KEY]) {
+    return;
+  }
+  separator.tabIndex = 0;
+  separator.setAttribute("role", "button");
+  separator.setAttribute("data-pier-partial-expand", "");
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    if (event.repeat) {
+      return;
+    }
+    event.preventDefault();
+    separator.click();
+  };
+  separator.addEventListener("keydown", onKeyDown);
+  separator[PARTIAL_EXPAND_KEY] = () => {
+    separator.removeEventListener("keydown", onKeyDown);
+    separator.removeAttribute("role");
+    separator.tabIndex = -1;
+    separator.removeAttribute("data-pier-partial-expand");
+    delete separator[PARTIAL_EXPAND_KEY];
+  };
+}
+
+/** Partial collapsed rows have no Pierre expand button, so they become buttons. */
+export function bindPartialExpandSeparators(
+  root: ParentNode,
+  clear = false
+): void {
+  const separators = root.querySelectorAll<SeparatorWithCleanup>(
+    "[data-separator='line-info'], [data-separator='line-info-basic']"
+  );
+  for (const separator of separators) {
+    if (clear || separator.hasAttribute("data-expand-index")) {
+      detachPartialExpand(separator);
+      continue;
+    }
+    attachPartialExpand(separator);
+  }
+}
+
+export function syncPartialExpandChrome(
+  element: HTMLElement,
+  clear = false
+): void {
+  const root = element.shadowRoot;
+  if (root == null) {
+    return;
+  }
+  bindPartialExpandSeparators(root, clear);
+}
+
 export function syncPathTitleChrome(element: HTMLElement, clear = false): void {
   const root = element.shadowRoot;
   if (root == null) {

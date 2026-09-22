@@ -33,7 +33,10 @@ const GIT_REVIEW_EXCERPT_GIT_POOL = 2;
 export interface ReadGitReviewExcerptBatchOptions {
   readonly budget: GitReviewIndexExecutionBudget;
   readonly execGitRaw: ExecGitRaw;
-  readonly indexReader: Pick<GitReviewIndexReader, "resolve">;
+  readonly indexReader: Pick<
+    GitReviewIndexReader,
+    "recallFullSnapshot" | "resolve"
+  >;
   readonly rememberEvidence: (
     revision: string,
     evidence: GitReviewDocumentEvidence
@@ -57,59 +60,47 @@ export async function readGitReviewExcerptBatch(
       if (before.kind !== "ok") {
         return before;
       }
-      let stale = false;
-      const items = await mapPool(
-        options.request.files,
-        GIT_REVIEW_EXCERPT_GIT_POOL,
-        async (file): Promise<GitReviewExcerptBatchItem> => {
-          if (stale) {
-            return {
-              path: file.path,
-              result: unchangedResult(),
-            };
-          }
-          try {
-            const result = await materializeExcerptFile({
-              file,
-              options,
-              resolution: before,
-            });
-            return { path: file.path, result };
-          } catch (error) {
-            if (
-              error instanceof GitReviewDocumentStaleError &&
-              attempt + 1 < GIT_REVIEW_DOCUMENT_MAX_ATTEMPTS
-            ) {
-              stale = true;
-              return { path: file.path, result: unchangedResult() };
+      let items: GitReviewExcerptBatchItem[];
+      try {
+        items = await mapPool(
+          options.request.files,
+          GIT_REVIEW_EXCERPT_GIT_POOL,
+          async (file): Promise<GitReviewExcerptBatchItem> => {
+            try {
+              const result = await materializeExcerptFile({
+                file,
+                options,
+                resolution: before,
+              });
+              return { path: file.path, result };
+            } catch (error) {
+              if (
+                error instanceof GitReviewDocumentStaleError ||
+                error instanceof GitReviewIndexExecutionError
+              ) {
+                throw error;
+              }
+              return {
+                path: file.path,
+                result: {
+                  kind: "error" as const,
+                  message:
+                    error instanceof Error ? error.message : String(error),
+                  reason: "internal" as const,
+                  retryable: !(error instanceof GitReviewDocumentProtocolError),
+                },
+              };
             }
-            if (
-              error instanceof GitReviewDocumentStaleError ||
-              error instanceof GitReviewIndexExecutionError
-            ) {
-              throw error;
-            }
-            return {
-              path: file.path,
-              result: {
-                kind: "error" as const,
-                message: error instanceof Error ? error.message : String(error),
-                reason: "internal" as const,
-                retryable: !(error instanceof GitReviewDocumentProtocolError),
-              },
-            };
           }
+        );
+      } catch (error) {
+        if (
+          error instanceof GitReviewDocumentStaleError &&
+          attempt + 1 < GIT_REVIEW_DOCUMENT_MAX_ATTEMPTS
+        ) {
+          continue;
         }
-      );
-      if (stale) {
-        continue;
-      }
-      const after = await resolveExcerptIndex(options);
-      if (after.kind !== "ok") {
-        return after;
-      }
-      if (after.metadata.indexRevision !== before.metadata.indexRevision) {
-        continue;
+        throw error;
       }
       assertActive(options.budget, options.signal);
       return { items, kind: "ok" as const };
@@ -162,14 +153,30 @@ async function resolveExcerptIndex(
 ): Promise<GitReviewIndexResolution> {
   // 单文件 document 的 scoped resolve 把 paths 钉死在 ≤4（path + oldPaths）。
   // 批摘录必须吃同一世代全量 index 快照，禁止把 32 条 path 塞进那条单文件通道。
+  const scope = {
+    contextId: options.request.source.contextId,
+    gitRootPath: options.request.source.gitRootPath,
+    target: options.request.source.target,
+  };
+  if (options.request.indexRevision !== undefined) {
+    const recalled = options.indexReader.recallFullSnapshot(
+      scope,
+      options.request.indexRevision
+    );
+    if (recalled !== null) {
+      return recalled;
+    }
+    return {
+      kind: "error",
+      message: "Git Review 侧栏索引修订已不在快照中",
+      reason: "indexMoved",
+      retryable: false,
+    };
+  }
   return options.indexReader.resolve(
     {
       includeGroupSummaries: false,
-      scope: {
-        contextId: options.request.source.contextId,
-        gitRootPath: options.request.source.gitRootPath,
-        target: options.request.source.target,
-      },
+      scope,
     },
     { budget: options.budget, signal: options.signal }
   );

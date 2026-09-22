@@ -17,11 +17,15 @@ export function loadReviewFileDocument(
   scope: GitReviewScope,
   previousByEntryKey: LoadedByKey,
   entry: GitReviewIndexEntry,
-  operationId: string
+  operationId: string,
+  indexRevision?: string,
+  includeDiffSides = false
 ): Promise<GitReviewFileDocumentResult> {
   const previousRevision = previousByEntryKey.get(entry.entryKey)?.document
     .revision;
   return context.git.getReviewFileDocument({
+    ...(includeDiffSides ? { includeDiffSides: true } : {}),
+    ...(indexRevision === undefined ? {} : { indexRevision }),
     operationId,
     ...(previousRevision === undefined ? {} : { previousRevision }),
     source: {
@@ -37,9 +41,11 @@ export function loadReviewExcerptBatch(
   scope: GitReviewScope,
   previousByEntryKey: LoadedByKey,
   entries: readonly GitReviewIndexEntry[],
-  operationId: string
+  operationId: string,
+  indexRevision?: string
 ): Promise<GitReviewExcerptBatchResult> {
   return context.git.getReviewExcerptBatch({
+    ...(indexRevision === undefined ? {} : { indexRevision }),
     files: entries.map((entry) => {
       const previousRevision = previousByEntryKey.get(entry.entryKey)?.document
         .revision;

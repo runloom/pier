@@ -28,6 +28,7 @@ import type {
 import type { GitReviewDocumentLoaderSnapshot } from "../review/document/resource.ts";
 import type { ReviewReadingMode } from "../review/reading-session.ts";
 import type { GitReviewReadingSurface } from "../review/reading-surface.ts";
+import { useReviewDiffSides } from "./use-diff-sides.ts";
 import { mountGitReviewDocumentGeneration } from "./use-document-generation-effect.ts";
 
 // 与 content 中 generationCallbacksRef 形状对齐；回调实现保留在 content。
@@ -101,6 +102,7 @@ export function useGitReviewDocumentSession(options: {
   readonly firstSectionIdByEntryKeyRef: RefObject<ReadonlyMap<string, string>>;
   readonly generationCallbacksRef: RefObject<GitReviewGenerationCallbacks>;
   readonly indexGeneration: number;
+  readonly indexRevision: string | null;
   readonly itemCacheKeysRef: RefObject<Map<string, string>>;
   readonly itemIdsRef: RefObject<readonly string[]>;
   readonly loaderRef: RefObject<GitReviewDocumentLoader | null>;
@@ -120,20 +122,31 @@ export function useGitReviewDocumentSession(options: {
     current: ReadonlySet<string>;
   };
   readonly viewStateRef: RefObject<ReviewDocumentViewState>;
-}): void {
+}): (sectionId: string) => Promise<"accepted" | "failed"> {
+  const requestDiffSides = useReviewDiffSides(options);
   const {
     collidingFileLabel,
     context,
     diffBase,
     entries,
     indexGeneration,
+    indexRevision,
     scope,
   } = options;
 
-  // 代际 effect 只随 index/scope/label 重建；refs/setState 故意不进 deps。
+  // 代际 effect 随已绘制的索引修订重建；refs/setState 故意不进 deps。
   // biome-ignore lint/correctness/useExhaustiveDependencies: generation lifecycle is ref-driven
   useEffect(
     () => mountGitReviewDocumentGeneration(options),
-    [collidingFileLabel, context, diffBase, entries, indexGeneration, scope]
+    [
+      collidingFileLabel,
+      context,
+      diffBase,
+      entries,
+      indexGeneration,
+      indexRevision,
+      scope,
+    ]
   );
+  return requestDiffSides;
 }

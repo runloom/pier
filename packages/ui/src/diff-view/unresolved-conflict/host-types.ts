@@ -17,6 +17,7 @@ export interface PierUnresolvedConflictHost {
   readonly labels: PierUnresolvedConflictLabels;
   readonly mutationLocked?: boolean;
   readonly onError?: (error: Error) => void;
+  readonly onOpenFile?: (path: string) => void;
   readonly onResolveFile?: (
     itemId: string,
     action: "ours" | "stage" | "theirs"

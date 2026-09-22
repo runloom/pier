@@ -30,6 +30,8 @@ import type {
   GitReviewReadingSurface,
 } from "../reading-surface.ts";
 import { resolveReviewDocumentBody } from "./conflict-focus.ts";
+import { useReviewUnresolvedConflictHost } from "./conflict-host.tsx";
+import { ReviewConflictView } from "./conflict-view.tsx";
 import type { ReviewDocumentProjection } from "./projection.ts";
 import { projectReviewLedger } from "./projection.ts";
 
@@ -58,6 +60,8 @@ export function documentContent(options: {
   ) => Promise<void>;
   readonly mutationAuthorityBlocked: boolean;
   readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
+  readonly onOpenPath?: (path: string) => void;
+  readonly onRequestDiffSides?: PierDiffViewProps["onRequestDiffSides"];
   readonly onRetryFailure: (entryKey: string) => void;
   readonly onScroll: () => void;
   readonly presentation?: PierDiffViewPresentation;
@@ -126,8 +130,29 @@ export function documentContent(options: {
   if (displayProjection.items.length > 0) {
     const body = resolveReviewDocumentBody(
       displayProjection.items,
-      options.emptySurface
+      options.emptySurface,
+      options.selectedSectionKey
     );
+    if (body.conflictItem !== null) {
+      return (
+        <ConflictReadingSurface
+          appearance={options.appearance}
+          context={options.context}
+          contextId={options.contextId}
+          gitRootPath={options.gitRootPath}
+          item={body.conflictItem}
+          items={displayProjection.items}
+          mutationAuthorityBlocked={options.mutationAuthorityBlocked}
+          onMutationCommitted={options.onMutationCommitted}
+          {...(options.onOpenPath === undefined
+            ? {}
+            : { onOpenFile: options.onOpenPath })}
+          {...(options.presentation === undefined
+            ? {}
+            : { presentation: options.presentation })}
+        />
+      );
+    }
 
     return (
       <div
@@ -190,6 +215,9 @@ export function documentContent(options: {
             onItemError={options.onItemError}
             onMutationCommitted={options.onMutationCommitted}
             onRenderWindowChange={options.onRenderWindowChange}
+            {...(options.onRequestDiffSides === undefined
+              ? {}
+              : { onRequestDiffSides: options.onRequestDiffSides })}
             onRetryItem={handleRetryItem}
             onScroll={options.onScroll}
             revisionBySectionId={displayProjection.revisionBySectionId}
@@ -224,5 +252,54 @@ export function documentContent(options: {
         <EmptyDescription>{options.emptyDescription}</EmptyDescription>
       </EmptyHeader>
     </Empty>
+  );
+}
+
+function ConflictReadingSurface(options: {
+  readonly appearance: RendererPluginAppearance;
+  readonly context: RendererPluginContext;
+  readonly contextId: string;
+  readonly gitRootPath: string;
+  readonly item: ReviewDocumentProjection["items"][number];
+  readonly items: ReviewDocumentProjection["items"];
+  readonly mutationAuthorityBlocked: boolean;
+  readonly onMutationCommitted: (
+    result: GitReviewMutationOk | null,
+    transition?: GitReviewMutationTransition
+  ) => Promise<void>;
+  readonly onOpenFile?: (path: string) => void;
+  readonly presentation?: PierDiffViewPresentation;
+}): React.JSX.Element {
+  const host = useReviewUnresolvedConflictHost({
+    context: options.context,
+    contextId: options.contextId,
+    gitRootPath: options.gitRootPath,
+    items: options.items,
+    mutationLocked: options.mutationAuthorityBlocked,
+    onMutationCommitted: options.onMutationCommitted,
+    ...(options.onOpenFile === undefined
+      ? {}
+      : { onOpenFile: options.onOpenFile }),
+  });
+  if (host === undefined) {
+    return <ReviewLoading context={options.context} />;
+  }
+  return (
+    <div
+      className="relative min-h-0 flex-1"
+      data-git-review-document-content="conflict"
+    >
+      <ReviewConflictView
+        appearance={options.appearance}
+        host={host}
+        item={options.item}
+        {...(options.onOpenFile === undefined
+          ? {}
+          : { onOpenFile: options.onOpenFile })}
+        {...(options.presentation === undefined
+          ? {}
+          : { presentation: options.presentation })}
+      />
+    </div>
   );
 }

@@ -78,6 +78,7 @@ export interface GitReviewDocumentGenerationMountOptions {
   readonly firstSectionIdByEntryKeyRef: RefObject<ReadonlyMap<string, string>>;
   readonly generationCallbacksRef: RefObject<GitReviewGenerationCallbacks>;
   readonly indexGeneration: number;
+  readonly indexRevision: string | null;
   readonly itemCacheKeysRef: RefObject<Map<string, string>>;
   readonly itemIdsRef: RefObject<readonly string[]>;
   readonly loaderRef: RefObject<GitReviewDocumentLoader | null>;
@@ -119,6 +120,7 @@ export function mountGitReviewDocumentGeneration(
     firstSectionIdByEntryKeyRef,
     generationCallbacksRef,
     indexGeneration,
+    indexRevision,
     itemCacheKeysRef,
     itemIdsRef,
     loaderRef,
@@ -246,7 +248,8 @@ export function mountGitReviewDocumentGeneration(
         scope,
         previousByEntryKey,
         entry,
-        operationId
+        operationId,
+        indexRevision ?? undefined
       ),
     loadBatch: (batchEntries, operationId) =>
       loadReviewExcerptBatch(
@@ -254,7 +257,8 @@ export function mountGitReviewDocumentGeneration(
         scope,
         previousByEntryKey,
         batchEntries,
-        operationId
+        operationId,
+        indexRevision ?? undefined
       ),
     maxConcurrent: GIT_REVIEW_EXCERPT_MAX_IN_FLIGHT,
   });

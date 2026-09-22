@@ -4,7 +4,10 @@ import type {
   PierUnresolvedConflictLabels,
 } from "@pier/ui/diff-view/index.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { GitReviewMutationOk } from "@shared/contracts/git/review.ts";
+import {
+  type GitReviewMutationOk,
+  gitReviewConflictCanOpen,
+} from "@shared/contracts/git/review.ts";
 import { useCallback, useMemo, useState } from "react";
 import { pluginText } from "../../plugin-text.ts";
 import { usePluginLanguage } from "../../use-plugin-language.ts";
@@ -22,6 +25,7 @@ export function useReviewUnresolvedConflictHost(options: {
     result: GitReviewMutationOk | null,
     transition?: GitReviewMutationTransition
   ) => Promise<void>;
+  readonly onOpenFile?: (path: string) => void;
 }): PierUnresolvedConflictHost | undefined {
   const {
     context,
@@ -30,6 +34,7 @@ export function useReviewUnresolvedConflictHost(options: {
     items,
     mutationLocked,
     onMutationCommitted,
+    onOpenFile,
   } = options;
   const language = usePluginLanguage();
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
@@ -185,18 +190,23 @@ export function useReviewUnresolvedConflictHost(options: {
       readonly busy: boolean;
       readonly conflict: NonNullable<PierDiffViewItem["conflict"]>;
       readonly itemId: string;
+      readonly path: string;
     }) => (
       <FileLevelConflictCard
         busy={input.busy}
         conflict={input.conflict}
         context={context}
         itemId={input.itemId}
+        {...(onOpenFile !== undefined &&
+        gitReviewConflictCanOpen(input.conflict.xy)
+          ? { onOpen: () => onOpenFile(input.path) }
+          : {})}
         onResolve={(action) => {
           onResolveFile(input.itemId, action).catch(() => undefined);
         }}
       />
     ),
-    [context, onResolveFile]
+    [context, onOpenFile, onResolveFile]
   );
 
   return useMemo(() => {
@@ -213,6 +223,7 @@ export function useReviewUnresolvedConflictHost(options: {
       onResolveFile: (itemId, action) => {
         onResolveFile(itemId, action).catch(() => undefined);
       },
+      ...(onOpenFile === undefined ? {} : { onOpenFile }),
       onWriteResolved,
       renderFileLevel,
     } satisfies PierUnresolvedConflictHost;
@@ -222,6 +233,7 @@ export function useReviewUnresolvedConflictHost(options: {
     hasConflict,
     labels,
     mutationLocked,
+    onOpenFile,
     onResolveFile,
     onWriteResolved,
     renderFileLevel,

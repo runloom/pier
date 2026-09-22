@@ -32,6 +32,10 @@ const FAILURE_TEXT = {
       "Another program is updating the git staging area. Try again in a moment.",
     key: "reviewFailureIndexLocked",
   },
+  indexMoved: {
+    fallback: "This review moved on. Wait for the list to refresh.",
+    key: "reviewFailureIndexMoved",
+  },
   internal: {
     fallback: "An internal error occurred while processing the change.",
     key: "reviewFailureInternal",

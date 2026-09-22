@@ -53,6 +53,11 @@ interface BuildGitReviewDocumentOptions {
   readonly budget: GitReviewIndexExecutionBudget;
   readonly entry: GitReviewIndexEntry;
   readonly execGitRaw: ExecGitRaw;
+  /**
+   * Tree click paints hunks first. Full old/new text is only for expanding
+   * collapsed unmodified lines, so the default read skips it.
+   */
+  readonly includeDiffSides?: boolean;
   readonly metadata: GitReviewIndexMetadata;
   readonly resolvedEntry: GitReviewIndexResolvedEntry;
   readonly signal?: AbortSignal;
@@ -100,6 +105,7 @@ export async function buildGitReviewDocumentWithEvidence(
     if (group === "conflict") {
       const material = await readGitReviewConflictMaterial({
         budget: options.budget,
+        execGitRaw: options.execGitRaw,
         fact,
         gitRootPath: options.metadata.canonicalRoot,
         ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -376,6 +382,7 @@ function createPatchReadOptions(
     gitRootPath: options.metadata.canonicalRoot,
     group,
     headOid: options.metadata.headOid,
+    includeDiffSides: options.includeDiffSides ?? false,
     rangeBounds: options.metadata.rangeBounds,
     ...(group === "working" ? { backing: workingSectionBacking(options) } : {}),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
