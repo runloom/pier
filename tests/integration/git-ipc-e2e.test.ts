@@ -231,7 +231,7 @@ describe("git IPC 端到端(命令路由 + capability 守门)", () => {
     const services = {
       ...makeServices(),
       gitReview: new GitReviewService({
-        indexReader: { read, resolve: vi.fn() },
+        indexReader: { read, recallFullSnapshot: () => null, resolve: vi.fn() },
       }),
       panelContexts: createPanelContextService(),
     };

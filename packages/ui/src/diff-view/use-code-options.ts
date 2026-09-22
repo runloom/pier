@@ -38,7 +38,10 @@ import type { PierDiffViewImageDiff } from "./image-diff/types.ts";
 import type { DiffViewInputStore } from "./input-store.ts";
 import type { PierDiffReviewCommentThread } from "./items.ts";
 import { installDiffVirtualHeightReconciler } from "./layout-apply.ts";
-import { syncPathTitleChrome } from "./path-title-chrome.ts";
+import {
+  syncPartialExpandChrome,
+  syncPathTitleChrome,
+} from "./path-title-chrome.ts";
 import { PIER_DIFF_LINE_DIFF_TYPE } from "./render-profile.ts";
 import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 import type {
@@ -250,6 +253,7 @@ export function useDiffViewCodeOptions(options: {
           fileHoverCleanupsRef.current.delete(itemId);
           fileHoverHostsRef.current.delete(itemId);
           syncEstimateSkeleton(element, false);
+          syncPartialExpandChrome(element, true);
           syncPathTitleChrome(element, true);
           clearImageDiffHost(element);
           clearUnresolvedConflictHost(element);
@@ -289,6 +293,7 @@ export function useDiffViewCodeOptions(options: {
           const showSkeleton = isEstimate && !isUserCollapsed(itemId);
           syncEstimateSkeleton(element, showSkeleton);
           // 路径 mono + hover 下划线（shadow 内 DOM，不依赖可能过期的 unsafeCSS）
+          syncPartialExpandChrome(element);
           syncPathTitleChrome(element);
           if (fileHoverHostsRef.current.get(itemId) !== element) {
             fileHoverCleanupsRef.current.get(itemId)?.();
@@ -311,6 +316,7 @@ export function useDiffViewCodeOptions(options: {
               clearImageDiffHost(element);
               clearUnresolvedConflictHost(element);
               syncEstimateSkeleton(element, false);
+              syncPartialExpandChrome(element, true);
               syncPathTitleChrome(element, true);
             });
           }

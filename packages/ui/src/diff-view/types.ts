@@ -112,6 +112,14 @@ export interface PierDiffViewProps {
   readonly onOpenFile?: (itemId: string) => void;
   readonly onRenderWindowChange?: (window: PierDiffViewRenderWindow) => void;
   /**
+   * Partial diffs cannot expand collapsed context until both sides arrive.
+   * Resolve `"accepted"` after the item is non-partial, or `"failed"` to drop
+   * the pending expand.
+   */
+  readonly onRequestDiffSides?: (
+    itemId: string
+  ) => Promise<"accepted" | "failed"> | "accepted" | "failed";
+  /**
    * error 槽行内重试（document materialize 失败等）；
    * 与 `labels.retry` 同时提供时 header 显示 Retry。
    */
@@ -163,11 +171,17 @@ export type PierDiffViewConflictXy =
 export interface PierDiffViewConflictBody {
   readonly contents: string | null;
   readonly contentsDigest: string;
+  /**
+   * Stage texts for a file-level conflict with no worktree body.
+   * Null means that side has no blob. Omit the pair otherwise.
+   */
+  readonly oursContents?: string | null;
   readonly presentation: PierDiffViewConflictPresentation;
   readonly stages: {
     readonly baseOid: string | null;
     readonly oursOid: string | null;
     readonly theirsOid: string | null;
   };
+  readonly theirsContents?: string | null;
   readonly xy: PierDiffViewConflictXy;
 }

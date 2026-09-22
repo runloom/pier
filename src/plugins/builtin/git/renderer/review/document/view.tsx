@@ -94,6 +94,7 @@ interface GitReviewDocumentViewProps {
   ) => Promise<void>;
   readonly onOpenPath: (path: string) => void;
   readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
+  readonly onRequestDiffSides?: PierDiffViewProps["onRequestDiffSides"];
   readonly onRetryFailure: (entryKey: string) => void;
   readonly onRetryIndex: () => void;
   readonly onScroll: () => void;
@@ -155,6 +156,7 @@ export function GitReviewDocumentView({
   onMutationCommitted,
   mutationAuthorityBlocked,
   onOpenPath,
+  onRequestDiffSides,
   isActiveOpenPath,
   onContextMenuSession,
   onRenderWindowChange,
@@ -224,6 +226,8 @@ export function GitReviewDocumentView({
         : { inlineReviewThreadById }),
       renderErrorVisible: renderFeedback !== null,
       renderWindowReady,
+      onOpenPath,
+      ...(onRequestDiffSides === undefined ? {} : { onRequestDiffSides }),
       ...(selectedSectionKey === undefined ? {} : { selectedSectionKey }),
       settled: viewState.settled,
       ...(sourcePanelId === undefined ? {} : { sourcePanelId }),

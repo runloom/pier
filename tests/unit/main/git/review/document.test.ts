@@ -769,7 +769,7 @@ describe("GitReviewService document", () => {
     );
   });
 
-  it("中段未暂存改动的 patch section 附带两侧全文", async () => {
+  it("中段未暂存改动先返回 hunk，不阻塞读两侧全文", async () => {
     const root = await createRepository();
     const prefix = Array.from(
       { length: 40 },
@@ -800,9 +800,8 @@ describe("GitReviewService document", () => {
     );
     expect(patches.length).toBeGreaterThan(0);
     for (const section of patches) {
-      expect(section.oldContents).toContain("keep-0");
-      expect(section.oldContents).toContain("change-old");
-      expect(section.newContents).toContain("change-new");
+      expect(section.oldContents).toBeUndefined();
+      expect(section.newContents).toBeUndefined();
       expect(section.patch).toContain("change-new");
       expect(section.patch).not.toContain("keep-0");
     }
@@ -822,10 +821,13 @@ describe("GitReviewService document", () => {
     expect(contents(deleted)).toEqual([
       expect.objectContaining({
         kind: "patch",
-        newContents: "",
-        oldContents: "deleted\n",
+        patch: expect.stringContaining("-deleted"),
       }),
     ]);
+    const deletedSection = contents(deleted)[0];
+    expect(deletedSection?.kind === "patch" && deletedSection.oldContents).toBe(
+      undefined
+    );
   });
 
   it("symlink 返回类型化 state", async () => {
@@ -946,8 +948,12 @@ describe("GitReviewService document", () => {
     const delegate = new GitReviewIndexReader();
     let generation = 0;
     const includeGroupSummaries: Array<boolean | undefined> = [];
-    const indexReader: Pick<GitReviewIndexReader, "read" | "resolve"> = {
+    const indexReader: Pick<
+      GitReviewIndexReader,
+      "read" | "recallFullSnapshot" | "resolve"
+    > = {
       read: delegate.read.bind(delegate),
+      recallFullSnapshot: () => null,
       resolve: async (indexRequest, options) => {
         includeGroupSummaries.push(indexRequest.includeGroupSummaries);
         const result = await delegate.resolve(indexRequest, options);
@@ -966,8 +972,8 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(result);
-    expect(generation).toBe(2);
-    expect(includeGroupSummaries).toEqual([false, false]);
+    expect(generation).toBe(1);
+    expect(includeGroupSummaries).toEqual([false]);
   });
 
   it("conflict 不伪造文本统计", async () => {
@@ -1007,6 +1013,161 @@ describe("GitReviewService document", () => {
     expect(
       conflictSection?.kind === "conflict" && conflictSection.contents
     ).toEqual(expect.stringContaining(">>>>>>>"));
+    expect(
+      conflictSection?.kind === "conflict" && conflictSection.oursContents
+    ).toBeUndefined();
+  });
+
+  it("工作区缺失的冲突用两侧 blob，有正文时不读 stage", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "gone.ts"), "base\n", "utf8");
+    await commitAll(root, "base");
+    const mainBranch = (
+      await execGit(["branch", "--show-current"], { cwd: root })
+    ).trim();
+    await execGit(["switch", "-c", "other"], { cwd: root });
+    await writeFile(join(root, "gone.ts"), "incoming\n", "utf8");
+    await commitAll(root, "incoming");
+    await execGit(["switch", mainBranch], { cwd: root });
+    await rm(join(root, "gone.ts"));
+    await commitAll(root, "delete");
+    await execGit(["merge", "other"], { cwd: root }).catch(() => undefined);
+    await rm(join(root, "gone.ts"), { force: true });
+
+    const deleted = await new GitReviewService().getFileDocument(
+      request(source(root, "gone.ts"))
+    );
+    expectOk(deleted);
+    const deletedSection = contents(deleted).find(
+      (section) => section.kind === "conflict"
+    );
+    expect(deletedSection).toMatchObject({
+      contents: null,
+      kind: "conflict",
+      oursContents: null,
+      presentation: "file-level",
+      theirsContents: "incoming\n",
+    });
+
+    const textRoot = await createRepository();
+    await writeFile(join(textRoot, "conflict-text.ts"), "base\n", "utf8");
+    await commitAll(textRoot, "text base");
+    const textMain = (
+      await execGit(["branch", "--show-current"], { cwd: textRoot })
+    ).trim();
+    await execGit(["switch", "-c", "text-other"], { cwd: textRoot });
+    await writeFile(join(textRoot, "conflict-text.ts"), "other\n", "utf8");
+    await commitAll(textRoot, "text other");
+    await execGit(["switch", textMain], { cwd: textRoot });
+    await writeFile(join(textRoot, "conflict-text.ts"), "main\n", "utf8");
+    await commitAll(textRoot, "text main");
+    await execGit(["merge", "text-other"], { cwd: textRoot }).catch(
+      () => undefined
+    );
+    await writeFile(join(textRoot, "conflict-text.ts"), "resolved\n", "utf8");
+    const resolved = await new GitReviewService().getFileDocument(
+      request(source(textRoot, "conflict-text.ts"))
+    );
+    expectOk(resolved);
+    const resolvedSection = contents(resolved).find(
+      (section) => section.kind === "conflict"
+    );
+    expect(resolvedSection).toMatchObject({
+      contents: "resolved\n",
+      kind: "conflict",
+      presentation: "file-level",
+    });
+    expect(
+      resolvedSection?.kind === "conflict" && resolvedSection.oursContents
+    ).toBeUndefined();
+  });
+
+  it("展开请求才附带两侧全文", async () => {
+    const root = await createRepository();
+    const prefix = Array.from(
+      { length: 40 },
+      (_, index) => `keep-${index}`
+    ).join("\n");
+    await writeFile(join(root, "mid.ts"), `${prefix}\nchange-old\n`, "utf8");
+    await commitAll(root, "base");
+    await writeFile(join(root, "mid.ts"), `${prefix}\nchange-new\n`, "utf8");
+    const result = await new GitReviewService().getFileDocument({
+      ...request(source(root, "mid.ts")),
+      includeDiffSides: true,
+    });
+    expectOk(result);
+    const section = result.sections.find((item) => item.kind === "patch");
+    expect(section?.kind === "patch" && section.oldContents).toContain(
+      "keep-0"
+    );
+    expect(section?.kind === "patch" && section.newContents).toContain(
+      "change-new"
+    );
+  });
+
+  it("已绘制的索引修订命中快照，未命中不再重新发现", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "file.ts"), "base\n", "utf8");
+    await commitAll(root, "base");
+    await writeFile(join(root, "file.ts"), "next\n", "utf8");
+    const reader = new GitReviewIndexReader();
+    let resolves = 0;
+    const service = new GitReviewService({
+      indexReader: {
+        read: (indexRequest, options) => reader.read(indexRequest, options),
+        recallFullSnapshot: (scope, revision) =>
+          reader.recallFullSnapshot(scope, revision),
+        resolve: (indexRequest, options) => {
+          resolves += 1;
+          return reader.resolve(indexRequest, options);
+        },
+      },
+    });
+    const scopeSource = {
+      contextId: "worktree:test",
+      gitRootPath: root,
+      target: { kind: "uncommitted" as const },
+    };
+    const index = await service.getIndex({
+      operationId: randomUUID(),
+      source: scopeSource,
+    });
+    expect(index.kind).toBe("ok");
+    if (index.kind !== "ok" || index.indexRevision === undefined) {
+      throw new Error("expected a painted index revision");
+    }
+    expect(resolves).toBe(0);
+
+    const painted = await service.getFileDocument({
+      ...request(source(root, "file.ts")),
+      indexRevision: index.indexRevision,
+    });
+    expectOk(painted);
+    expect(resolves).toBe(0);
+
+    const missed = await service.getFileDocument({
+      ...request(source(root, "file.ts")),
+      indexRevision: "index:not-painted",
+    });
+    expect(missed).toMatchObject({
+      kind: "error",
+      reason: "indexMoved",
+      retryable: false,
+    });
+    expect(resolves).toBe(0);
+
+    const batch = await service.getExcerptBatch({
+      files: [{ oldPaths: [], path: "file.ts" }],
+      indexRevision: "index:not-painted",
+      operationId: randomUUID(),
+      source: scopeSource,
+    });
+    expect(batch).toMatchObject({
+      kind: "error",
+      reason: "indexMoved",
+      retryable: false,
+    });
+    expect(resolves).toBe(0);
   });
 
   it("submodule 不伪造文本统计", async () => {

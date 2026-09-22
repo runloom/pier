@@ -36,6 +36,7 @@ import {
 } from "./loader-runtime.ts";
 import {
   collectHydrateCandidates,
+  replaceLoadedReviewDocument,
   sameEntries,
   validateReviewDocumentDemand,
 } from "./loader-utils.ts";
@@ -118,6 +119,18 @@ export class GitReviewDocumentLoader {
     return this.#disposed ? undefined : this.#resources.get(entryKey);
   }
 
+  replaceLoadedDocument(
+    entryKey: string,
+    document: GitReviewFileDocumentOk
+  ): boolean {
+    const next = this.#disposed
+      ? null
+      : replaceLoadedReviewDocument(this.#resources, entryKey, document);
+    if (next === null) return false;
+    this.#setResource(entryKey, next);
+    this.#emit();
+    return true;
+  }
   isSettled(): boolean {
     return this.#disposed || this.#isSettled();
   }

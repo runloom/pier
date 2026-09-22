@@ -19,6 +19,11 @@ import {
   useUserCollapsedPredicate,
 } from "../collapse-intent.ts";
 import { diffMetrics } from "../geometry.ts";
+import {
+  beginPartialDiffSideRequest,
+  expandPendingPartialDiffs,
+  findPartialCollapsedSeparatorItemId,
+} from "../header-events.ts";
 import { useDiffViewInputStore } from "../input-store.ts";
 import {
   type ParsedItemCacheEntry,
@@ -68,6 +73,7 @@ export function PierDiffView({
   onItemError,
   onGutterReviewActivate,
   onOpenFile,
+  onRequestDiffSides,
   onRenderWindowChange,
   onRetryItem,
   onScroll,
@@ -81,6 +87,7 @@ export function PierDiffView({
   const diffStyle = presentation?.diffStyle ?? "split";
   const overflow = presentation?.wrapLines === true ? "wrap" : "scroll";
   const codeViewRef = useRef<CodeViewHandle<PierDiffAnnotationMetadata>>(null);
+  const pendingSideExpandRef = useRef(new Set<string>());
   // Light-DOM portal pills need document CSS (shadow unsafeCSS cannot reach them).
   useEffect(() => {
     ensurePierDiffLightDomStyles();
@@ -331,6 +338,16 @@ export function PierDiffView({
     suppressMembershipScrollRestore,
   });
 
+  useLayoutEffect(() => {
+    if (codeViewItems.length === 0) {
+      return;
+    }
+    expandPendingPartialDiffs(
+      pendingSideExpandRef.current,
+      codeViewRef.current?.getInstance()?.getRenderedItems() ?? []
+    );
+  }, [codeViewItems]);
+
   // 行内评论激活态：apply 层推 base（hunk-only）后，命令式 updateItem 合并
   // review annotation（合并 effect 见 useDiffViewReviewAnnotationMerge）。
   useDiffViewReviewAnnotationMerge({
@@ -415,6 +432,30 @@ export function PierDiffView({
     itemErrorIdsRef.current = nextIds;
   }, [onItemError, parsed.errors]);
 
+  const handleRootClickCapture = useCallback(
+    (event: Parameters<typeof handleHeaderClickCapture>[0]) => {
+      const viewer = codeViewRef.current?.getInstance();
+      if (viewer != null && onRequestDiffSides !== undefined) {
+        const itemId = findPartialCollapsedSeparatorItemId(
+          event.nativeEvent.composedPath(),
+          viewer.getRenderedItems()
+        );
+        if (itemId !== null) {
+          event.preventDefault();
+          event.stopPropagation();
+          beginPartialDiffSideRequest(
+            pendingSideExpandRef.current,
+            itemId,
+            onRequestDiffSides
+          );
+          return;
+        }
+      }
+      handleHeaderClickCapture(event);
+    },
+    [handleHeaderClickCapture, onRequestDiffSides]
+  );
+
   if (inlineRenderFailed) {
     return null;
   }
@@ -426,7 +467,7 @@ export function PierDiffView({
       codeViewRef={codeViewRef}
       handleCodeViewScroll={handleCodeViewScroll}
       handleContextMenuCapture={handleContextMenuCapture}
-      handleHeaderClickCapture={handleHeaderClickCapture}
+      handleHeaderClickCapture={handleRootClickCapture}
       handlePointerDownCapture={handlePointerDownCapture}
       handleUserScrollIntent={handleUserScrollIntent}
       handleUserScrollKey={handleUserScrollKey}

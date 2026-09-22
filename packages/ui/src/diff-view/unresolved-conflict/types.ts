@@ -11,12 +11,14 @@ export type PierConflictXy = "DD" | "AU" | "UD" | "UA" | "DU" | "AA" | "UU";
 export interface PierConflictFileBody {
   readonly contents: string | null;
   readonly contentsDigest: string;
+  readonly oursContents?: string | null;
   readonly presentation: PierConflictPresentation;
   readonly stages: {
     readonly baseOid: string | null;
     readonly oursOid: string | null;
     readonly theirsOid: string | null;
   };
+  readonly theirsContents?: string | null;
   readonly xy: PierConflictXy;
 }
 

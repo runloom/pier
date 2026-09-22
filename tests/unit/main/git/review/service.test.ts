@@ -89,7 +89,7 @@ describe("GitReviewService boundary", () => {
   it("授权器尚未完成时取消，旧请求不会进入索引", async () => {
     const resolve = vi.fn();
     const service = new GitReviewService({
-      indexReader: { read: vi.fn(), resolve },
+      indexReader: { read: vi.fn(), recallFullSnapshot: () => null, resolve },
     });
     let markStarted: () => void = () => undefined;
     const started = new Promise<void>((resolveStarted) => {
@@ -132,7 +132,7 @@ describe("GitReviewService boundary", () => {
   it("授权结果仍须通过同一请求 schema", async () => {
     const resolve = vi.fn();
     const service = new GitReviewService({
-      indexReader: { read: vi.fn(), resolve },
+      indexReader: { read: vi.fn(), recallFullSnapshot: () => null, resolve },
     });
     const options = gitReviewRequestOptions();
 
@@ -170,7 +170,11 @@ describe("GitReviewService boundary", () => {
       result,
     };
     const service = new GitReviewService({
-      indexReader: { read: vi.fn(), resolve: async () => resolution },
+      indexReader: {
+        read: vi.fn(),
+        recallFullSnapshot: () => null,
+        resolve: async () => resolution,
+      },
     });
 
     await expect(
@@ -236,7 +240,11 @@ describe("GitReviewService boundary", () => {
     })) satisfies ExecGitRaw;
     const service = new GitReviewService({
       execGitRaw: exec,
-      indexReader: { read: vi.fn(), resolve: async () => resolution },
+      indexReader: {
+        read: vi.fn(),
+        recallFullSnapshot: () => null,
+        resolve: async () => resolution,
+      },
     });
 
     await expect(

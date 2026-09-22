@@ -5,6 +5,24 @@ import type {
 } from "@shared/contracts/git/review.ts";
 import type { GitReviewDocumentResource } from "./resource.ts";
 
+export function isGitReviewIndexMoved(
+  result: GitReviewFileDocumentResult
+): boolean {
+  return result.kind === "error" && result.reason === "indexMoved";
+}
+
+export function replaceLoadedReviewDocument(
+  resources: ReadonlyMap<string, GitReviewDocumentResource>,
+  entryKey: string,
+  document: GitReviewFileDocumentOk
+): Extract<GitReviewDocumentResource, { kind: "loaded" }> | null {
+  const current = resources.get(entryKey);
+  if (current?.kind !== "loaded" || current.entry.entryKey !== entryKey) {
+    return null;
+  }
+  return { document, entry: current.entry, kind: "loaded" };
+}
+
 function documentMatchesEntry(
   entry: GitReviewIndexEntry,
   document: GitReviewFileDocumentOk

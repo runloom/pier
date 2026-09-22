@@ -50,4 +50,17 @@ export const UNRESOLVED_CONFLICT_CODE_VIEW_CSS = `
     left: auto;
     position: relative;
   }
+
+  [data-pier-partial-expand] {
+    cursor: pointer;
+  }
+
+  [data-pier-partial-expand]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+
+  [data-pier-partial-expand]:focus:not(:focus-visible) {
+    outline: none;
+  }
 `;

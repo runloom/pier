@@ -159,11 +159,13 @@ describe("comment navigator layout governance", () => {
 
   it("keeps git review chrome on a clipped surface frame", () => {
     const content = read("src/plugins/builtin/git/renderer/review/content.tsx");
+    const surface = read(
+      "src/plugins/builtin/git/renderer/review/surface-view.tsx"
+    );
     expect(content).toContain(
       'className="relative h-full min-h-0 overflow-hidden"'
     );
-    expect(content).toMatch(
-      /<GitReviewSurfaceView[\s\S]*?<ReviewCommentsChrome/
-    );
+    expect(content).toContain("<GitReviewSurfaceView");
+    expect(surface).toContain("<ReviewCommentsChrome");
   });
 });

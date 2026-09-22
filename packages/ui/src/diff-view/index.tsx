@@ -61,8 +61,10 @@ export type {
 } from "./types.ts";
 export type { PierUnresolvedConflictHost } from "./unresolved-conflict/host-types.ts";
 export {
+  conflictStageTexts,
   type PierConflictFileBody,
   type PierConflictPresentation,
+  PierConflictStageDiff,
   type PierConflictXy,
   type PierUnresolvedConflictLabels,
   type PierUnresolvedConflictProps,

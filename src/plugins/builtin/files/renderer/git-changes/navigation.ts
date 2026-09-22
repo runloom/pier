@@ -31,6 +31,10 @@ export async function openSavedFileChanges(input: {
   const entry = index.entries.find((item) => item.path === input.path);
   if (!entry) return snapshot.dirty ? "save-first" : "unavailable";
   const document = await context.git.getReviewFileDocument({
+    includeDiffSides: true,
+    ...(index.indexRevision === undefined
+      ? {}
+      : { indexRevision: index.indexRevision }),
     source: { ...source, oldPaths: entry.oldPaths },
     operationId: crypto.randomUUID(),
   });

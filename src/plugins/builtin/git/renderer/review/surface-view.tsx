@@ -7,9 +7,16 @@ import type {
   GitReviewMutationOk,
   GitReviewScope,
 } from "@shared/contracts/git/review.ts";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ComponentProps,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { pluginText } from "../plugin-text.ts";
 import type { ReviewRenderFeedback } from "./code-view.tsx";
+import { ReviewCommentsChrome } from "./comments/chrome.tsx";
 import { reviewEntryHasBodyContent } from "./document/body-class.ts";
 import type {
   ReviewDocumentProjection,
@@ -43,6 +50,7 @@ interface GitReviewSurfaceViewProps {
   readonly authoritativeEmpty: boolean;
   readonly clearForUserIntent: () => void;
   readonly collidingFileLabel?: (name: string) => string;
+  readonly comments: ComponentProps<typeof ReviewCommentsChrome>["comments"];
   readonly context: RendererPluginContext;
   readonly diffHandleRef: React.RefObject<PierDiffViewHandle | null>;
   readonly driftCommentLabels?: React.ComponentProps<
@@ -88,6 +96,12 @@ interface GitReviewSurfaceViewProps {
   readonly onGutterReviewActivate?: React.ComponentProps<
     typeof GitReviewDocumentView
   >["onGutterReviewActivate"];
+  readonly onRequestDiffSides?: React.ComponentProps<
+    typeof GitReviewDocumentView
+  >["onRequestDiffSides"];
+  readonly onRequestTreeOpen: ComponentProps<
+    typeof ReviewCommentsChrome
+  >["onRequestTreeOpen"];
   readonly onRetryIndex: () => void;
   readonly onUserReleasedReadingPin: () => void;
   readonly openTreeNode: React.ComponentProps<
@@ -114,6 +128,7 @@ interface GitReviewSurfaceViewProps {
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
   readonly targetSelectionPending: boolean;
+  readonly threads: ComponentProps<typeof ReviewCommentsChrome>["threads"];
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
   readonly updateRenderFeedback: (
     feedback: ReviewRenderFeedback | null
@@ -137,6 +152,7 @@ export function GitReviewSurfaceView({
   authoritativeEmpty,
   clearForUserIntent,
   collidingFileLabel,
+  comments,
   context,
   diffHandleRef,
   entries,
@@ -160,9 +176,11 @@ export function GitReviewSurfaceView({
   onGutterReviewActivate,
   onDriftCommentActivate,
   onAcquireMutationAuthority,
+  onRequestTreeOpen,
   onRetryIndex,
   onUserReleasedReadingPin,
   openTreeNode,
+  onRequestDiffSides,
   panelId,
   projection,
   reviewCommentsById,
@@ -178,6 +196,7 @@ export function GitReviewSurfaceView({
   setSidebarCollapsed,
   sidebarCollapsed,
   targetSelectionPending,
+  threads,
   treeModel,
   updateRenderFeedback,
   updateRenderItemError,
@@ -253,74 +272,92 @@ export function GitReviewSurfaceView({
       ? gitReviewSurfaceMetaOnlyEmptyText(context)
       : gitReviewSurfaceEmptyText(context, activeSurface);
   return (
-    <GitReviewDocumentView
-      appearance={appearance}
-      authoritativeEmpty={authoritativeEmpty}
-      {...(collidingFileLabel === undefined ? {} : { collidingFileLabel })}
-      contentOnly
-      context={context}
-      contextId={scope.contextId}
-      diffRef={setDiffHandle}
-      emptyDescription={emptyText.description}
-      emptySurface={activeSurface}
-      emptyTitle={emptyText.title}
-      {...(scope.target.kind === "uncommitted" ? { entries } : {})}
-      failureSummary={failureSummary}
-      feedbackEnabled={active}
-      getSuppressMembershipScrollRestore={hasPendingNavigation}
-      gitRootPath={scope.gitRootPath}
-      {...(driftCommentLabels === undefined ? {} : { driftCommentLabels })}
-      indexFailure={indexRefreshFailure}
-      {...(isActiveOpenPath === undefined ? {} : { isActiveOpenPath })}
-      {...(onContextMenuSession === undefined ? {} : { onContextMenuSession })}
-      mutationAuthorityBlocked={mutationAuthorityBlocked}
-      onAcquireMutationAuthority={onAcquireMutationAuthority}
-      onFeedbackChange={updateRenderFeedback}
-      {...(onGutterReviewActivate === undefined
-        ? {}
-        : { onGutterReviewActivate })}
-      {...(onDriftCommentActivate === undefined
-        ? {}
-        : { onDriftCommentActivate })}
-      onItemError={handleRenderItemError}
-      onMutationCommitted={handleMutationCommitted}
-      onOpenPath={openTreeNode}
-      onRenderWindowChange={handleRenderWindowChange}
-      onRetryFailure={retryFailure}
-      onRetryIndex={onRetryIndex}
-      onScroll={handleReviewScroll}
-      presentation={{
-        diffStyle: viewOptions.diffStyle,
-        wrapLines: viewOptions.wrapLines,
-      }}
-      projection={projection}
-      {...(reviewCommentsById === undefined ? {} : { reviewCommentsById })}
-      {...(activeReviewEpoch === undefined ? {} : { activeReviewEpoch })}
-      {...(activeReviewSlotsByItem === undefined
-        ? {}
-        : { activeReviewSlotsByItem })}
-      {...(inlineReviewHandlers === undefined ? {} : { inlineReviewHandlers })}
-      {...(inlineReviewLabels === undefined ? {} : { inlineReviewLabels })}
-      {...(inlineReviewThreadById === undefined
-        ? {}
-        : { inlineReviewThreadById })}
-      renderFeedback={
-        renderFeedback ??
-        (replayFailure
-          ? { error: replayFailure, retry: retryLatestItemUpdates }
-          : null)
-      }
-      renderWindowReady={renderWindowReady}
-      selectedSectionKey={selectedSectionKey}
-      setSidebarCollapsed={setSidebarCollapsed}
-      sidebarCollapsed={sidebarCollapsed}
-      sourcePanelId={panelId}
-      suppressMembershipScrollRestore={navigationPending}
-      targetSelectionPending={targetSelectionPending}
-      treeModel={treeModel}
-      viewState={viewState}
-      warnings={warnings}
-    />
+    <>
+      <GitReviewDocumentView
+        appearance={appearance}
+        authoritativeEmpty={authoritativeEmpty}
+        {...(collidingFileLabel === undefined ? {} : { collidingFileLabel })}
+        contentOnly
+        context={context}
+        contextId={scope.contextId}
+        diffRef={setDiffHandle}
+        emptyDescription={emptyText.description}
+        emptySurface={activeSurface}
+        emptyTitle={emptyText.title}
+        {...(scope.target.kind === "uncommitted" ? { entries } : {})}
+        failureSummary={failureSummary}
+        feedbackEnabled={active}
+        getSuppressMembershipScrollRestore={hasPendingNavigation}
+        gitRootPath={scope.gitRootPath}
+        {...(driftCommentLabels === undefined ? {} : { driftCommentLabels })}
+        indexFailure={indexRefreshFailure}
+        {...(isActiveOpenPath === undefined ? {} : { isActiveOpenPath })}
+        {...(onContextMenuSession === undefined
+          ? {}
+          : { onContextMenuSession })}
+        mutationAuthorityBlocked={mutationAuthorityBlocked}
+        onAcquireMutationAuthority={onAcquireMutationAuthority}
+        onFeedbackChange={updateRenderFeedback}
+        {...(onGutterReviewActivate === undefined
+          ? {}
+          : { onGutterReviewActivate })}
+        {...(onDriftCommentActivate === undefined
+          ? {}
+          : { onDriftCommentActivate })}
+        onItemError={handleRenderItemError}
+        onMutationCommitted={handleMutationCommitted}
+        onOpenPath={openTreeNode}
+        {...(onRequestDiffSides === undefined ? {} : { onRequestDiffSides })}
+        onRenderWindowChange={handleRenderWindowChange}
+        onRetryFailure={retryFailure}
+        onRetryIndex={onRetryIndex}
+        onScroll={handleReviewScroll}
+        presentation={{
+          diffStyle: viewOptions.diffStyle,
+          wrapLines: viewOptions.wrapLines,
+        }}
+        projection={projection}
+        {...(reviewCommentsById === undefined ? {} : { reviewCommentsById })}
+        {...(activeReviewEpoch === undefined ? {} : { activeReviewEpoch })}
+        {...(activeReviewSlotsByItem === undefined
+          ? {}
+          : { activeReviewSlotsByItem })}
+        {...(inlineReviewHandlers === undefined
+          ? {}
+          : { inlineReviewHandlers })}
+        {...(inlineReviewLabels === undefined ? {} : { inlineReviewLabels })}
+        {...(inlineReviewThreadById === undefined
+          ? {}
+          : { inlineReviewThreadById })}
+        renderFeedback={
+          renderFeedback ??
+          (replayFailure
+            ? { error: replayFailure, retry: retryLatestItemUpdates }
+            : null)
+        }
+        renderWindowReady={renderWindowReady}
+        selectedSectionKey={selectedSectionKey}
+        setSidebarCollapsed={setSidebarCollapsed}
+        sidebarCollapsed={sidebarCollapsed}
+        sourcePanelId={panelId}
+        suppressMembershipScrollRestore={navigationPending}
+        targetSelectionPending={targetSelectionPending}
+        treeModel={treeModel}
+        viewState={viewState}
+        warnings={warnings}
+      />
+      <ReviewCommentsChrome
+        {...(collidingFileLabel === undefined ? {} : { collidingFileLabel })}
+        comments={comments}
+        context={context}
+        diffBase={activeSurface}
+        diffHandleRef={diffHandleRef}
+        entries={entries}
+        onRequestTreeOpen={onRequestTreeOpen}
+        threads={threads}
+        worktreeKey={scope.gitRootPath}
+      />
+    </>
   );
 }
 

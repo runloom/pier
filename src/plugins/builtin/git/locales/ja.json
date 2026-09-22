@@ -407,6 +407,7 @@
     "ui.reviewFailureChangeNotFound": "この変更は移動したか更新されました。再読み込みしてもう一度お試しください。",
     "ui.reviewFailureCommandFailed": "git はこの操作を完了できませんでした。もう一度お試しください。",
     "ui.reviewFailureDuplicateOperation": "このレビュー要求はすでに実行中です。",
+    "ui.reviewFailureIndexMoved": "この審査は更新されました。一覧の再読み込みを待ってください。",
     "ui.reviewFailureIndexLocked": "別のプログラムが git のステージ領域を更新中です。少し待ってもう一度お試しください。",
     "ui.reviewFailureInternal": "変更の処理中に内部エラーが発生しました。",
     "ui.reviewFailureInvalidSource": "git レビューの出典はもう有効ではありません。",

@@ -115,6 +115,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     onItemError,
     onMutationCommitted,
     onRenderWindowChange,
+    onRequestDiffSides,
     onRetryItem,
     onScroll,
     presentation,
@@ -145,6 +146,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       transition?: GitReviewMutationTransition
     ) => Promise<void>;
     readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
+    readonly onRequestDiffSides?: PierDiffViewProps["onRequestDiffSides"];
     /** error 槽行内重试（sectionKey → 宿主 entry retry） */
     readonly onRetryItem?: (itemId: string) => void;
     readonly onScroll: () => void;
@@ -404,6 +406,9 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                 {...(onItemError === undefined ? {} : { onItemError })}
                 {...(gitRootPath ? { onOpenFile } : {})}
                 onRenderWindowChange={onRenderWindowChange}
+                {...(onRequestDiffSides === undefined
+                  ? {}
+                  : { onRequestDiffSides })}
                 {...(onRetryItem === undefined ? {} : { onRetryItem })}
                 onScroll={onScroll}
                 {...(canMutate

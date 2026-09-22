@@ -27,13 +27,19 @@ const GIT_REVIEW_DOCUMENT_MAX_ATTEMPTS = 3;
 
 interface CreateGitReviewDocumentReaderOptions {
   readonly execGitRaw: ExecGitRaw;
-  readonly indexReader: Pick<GitReviewIndexReader, "resolve">;
+  readonly indexReader: Pick<
+    GitReviewIndexReader,
+    "recallFullSnapshot" | "resolve"
+  >;
 }
 
 export class GitReviewDocumentReader {
   readonly #evidenceByRevision = new Map<string, GitReviewDocumentEvidence>();
   readonly #execGitRaw: ExecGitRaw;
-  readonly #indexReader: Pick<GitReviewIndexReader, "resolve">;
+  readonly #indexReader: Pick<
+    GitReviewIndexReader,
+    "recallFullSnapshot" | "resolve"
+  >;
 
   constructor(options: CreateGitReviewDocumentReaderOptions) {
     this.#execGitRaw = options.execGitRaw;
@@ -106,6 +112,7 @@ export class GitReviewDocumentReader {
             budget,
             entry: selected.entry,
             execGitRaw: this.#execGitRaw,
+            includeDiffSides: request.includeDiffSides === true,
             metadata: before.metadata,
             resolvedEntry: selected.resolvedEntry,
             signal,
@@ -129,13 +136,6 @@ export class GitReviewDocumentReader {
             continue;
           }
           throw error;
-        }
-        const after = await this.#resolveSource(request, budget, signal);
-        if (after.kind !== "ok") {
-          return after;
-        }
-        if (after.metadata.indexRevision !== before.metadata.indexRevision) {
-          continue;
         }
         assertActive(budget, signal);
         if (request.previousRevision === document.revision) {
@@ -161,15 +161,30 @@ export class GitReviewDocumentReader {
     budget: GitReviewIndexExecutionBudget,
     signal: AbortSignal
   ): Promise<GitReviewIndexResolution> {
+    const scope = {
+      contextId: request.source.contextId,
+      gitRootPath: request.source.gitRootPath,
+      target: request.source.target,
+    };
+    if (request.indexRevision !== undefined) {
+      const recalled = this.#indexReader.recallFullSnapshot(
+        scope,
+        request.indexRevision
+      );
+      if (recalled !== null) {
+        return recalled;
+      }
+      return failure(
+        "indexMoved",
+        false,
+        "Git Review 侧栏索引修订已不在快照中"
+      );
+    }
     return this.#indexReader.resolve(
       {
         includeGroupSummaries: false,
         paths: [request.source.path, ...request.source.oldPaths],
-        scope: {
-          contextId: request.source.contextId,
-          gitRootPath: request.source.gitRootPath,
-          target: request.source.target,
-        },
+        scope,
       },
       { budget, signal }
     );
@@ -196,7 +211,7 @@ function assertActive(
 }
 
 function failure(
-  reason: "outputLimit" | "staleRevision",
+  reason: "indexMoved" | "outputLimit" | "staleRevision",
   retryable: boolean,
   message: string
 ): GitReviewFailure {
