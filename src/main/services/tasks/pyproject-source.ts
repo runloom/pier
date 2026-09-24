@@ -1,9 +1,17 @@
 import { join } from "node:path";
 import type { TaskCandidate } from "@shared/contracts/tasks.ts";
 import { taskCandidate as candidate } from "./candidate.ts";
-import { commandWithArgs, pathExists, readTextIfExists } from "./utils.ts";
+import {
+  type CommandExists,
+  commandWithArgs,
+  executableOnPath,
+  filterAvailableCommands,
+  pathExists,
+  readTextIfExists,
+} from "./utils.ts";
 
 export interface PyprojectSourceOptions {
+  commandExists?: CommandExists;
   projectRootPath: string;
 }
 
@@ -12,6 +20,8 @@ const SAFE_TOML_SECTION_RE = /^\[([^\]]+)\]$/;
 const SAFE_TOML_ENTRY_RE = /^([A-Za-z0-9_.-]+)\s*=\s*"([^"]+)"\s*$/;
 const PYTEST_TABLE_RE = /^\[tool\.pytest(?:\.[^\]]*)?\]$/;
 const RUFF_TABLE_RE = /^\[tool\.ruff(?:\.[^\]]*)?\]$/;
+const POETRY_BACKEND_RE =
+  /^build-backend\s*=\s*"poetry(?:\.[A-Za-z0-9_.]+)*"\s*$/;
 
 function uncommentedLines(text: string): string[] {
   return text.split(LINE_SPLIT_RE).flatMap((line) => {
@@ -63,6 +73,22 @@ function pyprojectTask(
   });
 }
 
+function pyprojectSetupTask(
+  projectRootPath: string,
+  kind: "install" | "sync",
+  label: string,
+  command: string
+): TaskCandidate {
+  return candidate({
+    commandSpec: { command, kind: "shell" },
+    cwd: projectRootPath,
+    idParts: ["pyproject", "setup", kind],
+    label,
+    source: "pyproject",
+    tags: ["python"],
+  });
+}
+
 async function wantsPytest(
   projectRootPath: string,
   text: string
@@ -80,7 +106,35 @@ function wantsRuff(text: string): boolean {
   return uncommentedLines(text).some((line) => RUFF_TABLE_RE.test(line));
 }
 
+function sectionName(line: string): string | null {
+  const match = line.match(/^\[(.*)\]$/);
+  const inner = match?.[1]?.trim().replace(/\s+/g, "");
+  return inner && inner.length > 0 ? inner : null;
+}
+
+function sectionIs(name: string, root: string): boolean {
+  return name === root || name.startsWith(`${root}.`);
+}
+
+function wantsPoetry(text: string): boolean {
+  return uncommentedLines(text).some((line) => {
+    const section = sectionName(line);
+    return (
+      (section !== null && sectionIs(section, "tool.poetry")) ||
+      POETRY_BACKEND_RE.test(line)
+    );
+  });
+}
+
+function wantsUv(text: string): boolean {
+  return uncommentedLines(text).some((line) => {
+    const section = sectionName(line);
+    return section !== null && sectionIs(section, "tool.uv");
+  });
+}
+
 export async function pyprojectSource({
+  commandExists,
   projectRootPath,
 }: PyprojectSourceOptions): Promise<TaskCandidate[]> {
   const text = await readTextIfExists(join(projectRootPath, "pyproject.toml"));
@@ -93,10 +147,37 @@ export async function pyprojectSource({
     ...tomlSectionEntries(text, "tool.pdm.scripts"),
   };
   const scriptNames = new Set(Object.keys(scripts));
-  const tasks = Object.entries(scripts).map(([name, target]) =>
+  const scriptsTasks = Object.entries(scripts).map(([name, target]) =>
     pyprojectTask(projectRootPath, name, name, name, target)
   );
-  const useUv = await pathExists(join(projectRootPath, "uv.lock"));
+  const builtins: TaskCandidate[] = [];
+  const useUv =
+    (await pathExists(join(projectRootPath, "uv.lock"))) ||
+    (await pathExists(join(projectRootPath, "uv.toml"))) ||
+    wantsUv(text);
+  const usePoetry =
+    (await pathExists(join(projectRootPath, "poetry.lock"))) ||
+    wantsPoetry(text);
+  if (useUv) {
+    builtins.push(
+      pyprojectSetupTask(
+        projectRootPath,
+        "sync",
+        "uv sync",
+        commandWithArgs("uv", ["sync"])
+      )
+    );
+  }
+  if (usePoetry) {
+    builtins.push(
+      pyprojectSetupTask(
+        projectRootPath,
+        "install",
+        "poetry install",
+        commandWithArgs("poetry", ["install"])
+      )
+    );
+  }
   if (
     (await wantsPytest(projectRootPath, text)) &&
     !scriptNames.has("pytest") &&
@@ -111,7 +192,7 @@ export async function pyprojectSource({
           command: commandWithArgs("python", ["-m", "pytest"]),
           label: "python -m pytest",
         };
-    tasks.push(
+    builtins.push(
       pyprojectTask(projectRootPath, "pytest", spec.label, spec.command)
     );
   }
@@ -134,7 +215,7 @@ export async function pyprojectSource({
           command: commandWithArgs("ruff", ["format", "."]),
           label: "ruff format .",
         };
-    tasks.push(
+    builtins.push(
       pyprojectTask(projectRootPath, "ruff-check", check.label, check.command),
       pyprojectTask(
         projectRootPath,
@@ -144,5 +225,11 @@ export async function pyprojectSource({
       )
     );
   }
-  return tasks;
+  return [
+    ...(await filterAvailableCommands(
+      builtins,
+      commandExists ?? executableOnPath
+    )),
+    ...scriptsTasks,
+  ];
 }

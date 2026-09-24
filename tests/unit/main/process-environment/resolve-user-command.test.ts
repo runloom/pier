@@ -13,6 +13,7 @@ import {
   PIER_CMD_END,
   PIER_CMD_START,
   parseUserCommandProbeOutput,
+  pathLookupNames,
   resolveAbsoluteOnPath,
   shellFamily,
 } from "@main/services/process-environment/resolve-user-command.ts";
@@ -168,6 +169,22 @@ describe("resolve-user-command helpers", () => {
     const fish = buildUserCommandProbeScript("codex", "fish");
     expect(fish).toContain("functions -q");
     expect(shellFamily("/opt/homebrew/bin/fish")).toBe("fish");
+  });
+
+  it("does not append PATHEXT onto a name that already has one", () => {
+    expect(
+      pathLookupNames("gradlew.bat", "win32", ".EXE;.CMD;.BAT;.COM")
+    ).toEqual(["gradlew.bat"]);
+    expect(pathLookupNames("mise", "win32", ".EXE;.CMD;.BAT;.COM")).toEqual([
+      "mise",
+      "mise.EXE",
+      "mise.CMD",
+      "mise.BAT",
+      "mise.COM",
+    ]);
+    expect(pathLookupNames("mise", "darwin", ".EXE;.CMD;.BAT;.COM")).toEqual([
+      "mise",
+    ]);
   });
 
   it("resolveAbsoluteOnPath finds executables on PATH", () => {

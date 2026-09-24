@@ -2,9 +2,17 @@ import { join } from "node:path";
 import type { TaskCandidate } from "@shared/contracts/tasks.ts";
 import { FVM_PROJECT_MARKERS } from "@shared/language-matrix/fvm.ts";
 import { taskCandidate as candidate } from "./candidate.ts";
-import { commandWithArgs, pathExists, readTextIfExists } from "./utils.ts";
+import {
+  type CommandExists,
+  commandWithArgs,
+  executableOnPath,
+  filterAvailableCommands,
+  pathExists,
+  readTextIfExists,
+} from "./utils.ts";
 
 export interface PubspecSourceOptions {
+  commandExists?: CommandExists;
   projectRootPath: string;
 }
 
@@ -84,6 +92,7 @@ function pubspecTask(
 }
 
 export async function pubspecSource({
+  commandExists,
   projectRootPath,
 }: PubspecSourceOptions): Promise<TaskCandidate[]> {
   const text = await readTextIfExists(join(projectRootPath, "pubspec.yaml"));
@@ -151,5 +160,5 @@ export async function pubspecSource({
       )
     );
   }
-  return tasks;
+  return filterAvailableCommands(tasks, commandExists ?? executableOnPath);
 }

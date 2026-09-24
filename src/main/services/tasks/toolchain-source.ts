@@ -2,9 +2,16 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { TaskCandidate, TaskSource } from "@shared/contracts/tasks.ts";
 import { taskCandidate as candidate } from "./candidate.ts";
-import { commandWithArgs, pathExists } from "./utils.ts";
+import {
+  type CommandExists,
+  commandWithArgs,
+  executableOnPath,
+  filterAvailableCommands,
+  pathExists,
+} from "./utils.ts";
 
 export interface ToolchainSourceOptions {
+  commandExists?: CommandExists;
   projectRootPath: string;
 }
 
@@ -319,50 +326,59 @@ async function dotnetTasks(projectRootPath: string): Promise<TaskCandidate[]> {
   );
 }
 
-export const goSource = ({
-  projectRootPath,
-}: ToolchainSourceOptions): Promise<TaskCandidate[]> =>
-  goTasks(projectRootPath);
+function available(
+  tasks: Promise<TaskCandidate[]>,
+  commandExists: CommandExists | undefined
+): Promise<TaskCandidate[]> {
+  return tasks.then((resolved) =>
+    filterAvailableCommands(resolved, commandExists ?? executableOnPath)
+  );
+}
 
-export const mavenSource = ({
-  projectRootPath,
-}: ToolchainSourceOptions): Promise<TaskCandidate[]> =>
-  mavenTasks(projectRootPath);
+export const goSource = (
+  options: ToolchainSourceOptions
+): Promise<TaskCandidate[]> =>
+  available(goTasks(options.projectRootPath), options.commandExists);
 
-export const gradleSource = ({
-  projectRootPath,
-}: ToolchainSourceOptions): Promise<TaskCandidate[]> =>
-  gradleTasks(projectRootPath);
+export const mavenSource = (
+  options: ToolchainSourceOptions
+): Promise<TaskCandidate[]> =>
+  available(mavenTasks(options.projectRootPath), options.commandExists);
 
-export const mixSource = ({
-  projectRootPath,
-}: ToolchainSourceOptions): Promise<TaskCandidate[]> =>
-  mixTasks(projectRootPath);
+export const gradleSource = (
+  options: ToolchainSourceOptions
+): Promise<TaskCandidate[]> =>
+  available(gradleTasks(options.projectRootPath), options.commandExists);
 
-export const swiftPmSource = ({
-  projectRootPath,
-}: ToolchainSourceOptions): Promise<TaskCandidate[]> =>
-  swiftPmTasks(projectRootPath);
+export const mixSource = (
+  options: ToolchainSourceOptions
+): Promise<TaskCandidate[]> =>
+  available(mixTasks(options.projectRootPath), options.commandExists);
 
-export const zigSource = ({
-  projectRootPath,
-}: ToolchainSourceOptions): Promise<TaskCandidate[]> =>
-  zigTasks(projectRootPath);
+export const swiftPmSource = (
+  options: ToolchainSourceOptions
+): Promise<TaskCandidate[]> =>
+  available(swiftPmTasks(options.projectRootPath), options.commandExists);
 
-export const dotnetSource = ({
-  projectRootPath,
-}: ToolchainSourceOptions): Promise<TaskCandidate[]> =>
-  dotnetTasks(projectRootPath);
+export const zigSource = (
+  options: ToolchainSourceOptions
+): Promise<TaskCandidate[]> =>
+  available(zigTasks(options.projectRootPath), options.commandExists);
 
-export const sbtSource = ({
-  projectRootPath,
-}: ToolchainSourceOptions): Promise<TaskCandidate[]> =>
-  sbtTasks(projectRootPath);
+export const dotnetSource = (
+  options: ToolchainSourceOptions
+): Promise<TaskCandidate[]> =>
+  available(dotnetTasks(options.projectRootPath), options.commandExists);
 
-export const cmakeSource = ({
-  projectRootPath,
-}: ToolchainSourceOptions): Promise<TaskCandidate[]> =>
-  cmakeTasks(projectRootPath);
+export const sbtSource = (
+  options: ToolchainSourceOptions
+): Promise<TaskCandidate[]> =>
+  available(sbtTasks(options.projectRootPath), options.commandExists);
+
+export const cmakeSource = (
+  options: ToolchainSourceOptions
+): Promise<TaskCandidate[]> =>
+  available(cmakeTasks(options.projectRootPath), options.commandExists);
 
 export const TOOLCHAIN_TASK_SOURCE_PROVIDERS = [
   { id: "go" as const, list: goSource },

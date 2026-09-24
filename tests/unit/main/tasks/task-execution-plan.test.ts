@@ -19,14 +19,12 @@ describe("resolveVariables", () => {
     projectRootPath: "/repo/project",
   };
 
-  it("expands Zed bare $ZED_WORKTREE_ROOT and braced forms to project root", () => {
-    expect(resolveVariables("$ZED_WORKTREE_ROOT", ctx)).toBe("/repo/project");
-    expect(resolveVariables("$ZED_WORKTREE", ctx)).toBe("/repo/project");
-    // Brace form is intentional product syntax; build without template literals.
-    const bracedWorktree = ["$", "{ZED_WORKTREE_ROOT}"].join("");
+  it("expands VS Code workspace folder tokens", () => {
     const bracedWorkspace = ["$", "{workspaceFolder}"].join("");
-    expect(resolveVariables(bracedWorktree, ctx)).toBe("/repo/project");
     expect(resolveVariables(bracedWorkspace, ctx)).toBe("/repo/project");
+    expect(resolveVariables("$ZED_WORKTREE_ROOT", ctx)).toBe(
+      "$ZED_WORKTREE_ROOT"
+    );
   });
 
   it("does not expand unknown bare $TOKENS (leave for shell)", () => {
@@ -36,11 +34,9 @@ describe("resolveVariables", () => {
 
 describe("task execution planning", () => {
   let projectRoot = "";
-  let homeDir = "";
 
   beforeEach(async () => {
     projectRoot = await mkdtemp(join(tmpdir(), "pier-task-plan-"));
-    homeDir = await mkdtemp(join(tmpdir(), "pier-task-plan-home-"));
     vi.stubEnv("PIER_TARGET", "local");
     vi.stubEnv("SHELL", "/bin/zsh");
   });
@@ -48,43 +44,6 @@ describe("task execution planning", () => {
   afterEach(async () => {
     vi.unstubAllEnvs();
     await rm(projectRoot, { force: true, recursive: true });
-    await rm(homeDir, { force: true, recursive: true });
-  });
-
-  it("expands Zed task cwd $ZED_WORKTREE_ROOT so spawn never sees a literal placeholder", async () => {
-    await mkdir(join(projectRoot, ".zed"));
-    await writeFile(
-      join(projectRoot, ".zed", "tasks.json"),
-      JSON.stringify([
-        {
-          command: "echo ok",
-          cwd: "$ZED_WORKTREE_ROOT",
-          label: "echo-in-worktree",
-        },
-      ])
-    );
-    const service = createTaskService({
-      homeDir,
-      readRecentState: async () => ({ entries: [], version: 1 }),
-      writeRecentState: async () => undefined,
-    });
-    const listed = await service.list({ projectRootPath: projectRoot });
-    const task = listed.tasks.find(
-      (candidate) =>
-        candidate.source === "zed" && candidate.label === "echo-in-worktree"
-    );
-    expect(task?.cwd).toBe("$ZED_WORKTREE_ROOT");
-
-    const plan = await service.prepareSpawn({
-      projectRootPath: projectRoot,
-      taskId: task?.id ?? "",
-    });
-    expect(plan).toMatchObject({ status: "ready" });
-    if (plan.status !== "ready") {
-      throw new Error("expected ready plan");
-    }
-    expect(plan.launches[0]?.cwd).toBe(projectRoot);
-    expect(plan.launches[0]?.cwd).not.toContain("$");
   });
 
   it("returns required input requests before building a plan", async () => {
@@ -111,7 +70,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -175,7 +133,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -251,7 +208,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -300,7 +256,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -344,7 +299,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -389,7 +343,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -438,7 +391,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -485,7 +437,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -524,7 +475,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({
         entries: [
           {
@@ -567,23 +517,34 @@ describe("task execution planning", () => {
   });
 
   it("prepares reusable panels only for non-concurrent running tasks", async () => {
-    await mkdir(join(projectRoot, ".zed"));
+    await mkdir(join(projectRoot, ".vscode"));
     await writeFile(
-      join(projectRoot, ".zed", "tasks.json"),
-      JSON.stringify([
-        {
-          allow_concurrent_runs: false,
-          command: "pnpm dev",
-          label: "dev",
-        },
-        {
-          allow_concurrent_runs: true,
-          command: "pnpm test",
-          label: "test",
-        },
-      ])
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "pnpm dev",
+            label: "dev",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
     );
-    const service = createTaskService({ homeDir });
+    const service = createTaskService({
+      readRecentState: async () => ({
+        entries: [
+          {
+            command: "pnpm test",
+            cwd: projectRoot,
+            label: "test",
+            source: "history",
+          },
+        ],
+        version: 1,
+      }),
+      writeRecentState: async () => undefined,
+    });
     const listed = await service.list({
       projectRootPath: projectRoot,
     });
@@ -620,18 +581,21 @@ describe("task execution planning", () => {
   });
 
   it("keeps a completed dedupe task panel reusable", async () => {
-    await mkdir(join(projectRoot, ".zed"));
+    await mkdir(join(projectRoot, ".vscode"));
     await writeFile(
-      join(projectRoot, ".zed", "tasks.json"),
-      JSON.stringify([
-        {
-          allow_concurrent_runs: false,
-          command: "pnpm dev",
-          label: "dev",
-        },
-      ])
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "pnpm dev",
+            label: "dev",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
     );
-    const service = createTaskService({ homeDir });
+    const service = createTaskService();
     const listed = await service.list({
       projectRootPath: projectRoot,
     });
@@ -659,18 +623,21 @@ describe("task execution planning", () => {
   });
 
   it("preserves reusable mapping when native close finalizes a relaunching panel", async () => {
-    await mkdir(join(projectRoot, ".zed"));
+    await mkdir(join(projectRoot, ".vscode"));
     await writeFile(
-      join(projectRoot, ".zed", "tasks.json"),
-      JSON.stringify([
-        {
-          allow_concurrent_runs: false,
-          command: "pnpm dev",
-          label: "dev",
-        },
-      ])
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "pnpm dev",
+            label: "dev",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
     );
-    const service = createTaskService({ homeDir });
+    const service = createTaskService();
     const listed = await service.list({
       projectRootPath: projectRoot,
     });
@@ -710,18 +677,21 @@ describe("task execution planning", () => {
   });
 
   it("forgets a dedicated dedupe task panel after explicit panel close", async () => {
-    await mkdir(join(projectRoot, ".zed"));
+    await mkdir(join(projectRoot, ".vscode"));
     await writeFile(
-      join(projectRoot, ".zed", "tasks.json"),
-      JSON.stringify([
-        {
-          allow_concurrent_runs: false,
-          command: "pnpm dev",
-          label: "dev",
-        },
-      ])
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "pnpm dev",
+            label: "dev",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
     );
-    const service = createTaskService({ homeDir });
+    const service = createTaskService();
     const listed = await service.list({
       projectRootPath: projectRoot,
     });
@@ -766,7 +736,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -844,7 +813,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -927,7 +895,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -1013,7 +980,6 @@ describe("task execution planning", () => {
       })
     );
     const service = createTaskService({
-      homeDir,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: async () => undefined,
     });
@@ -1061,7 +1027,6 @@ describe("task execution planning", () => {
     const writes: unknown[] = [];
     const now = 1_772_000_000_000;
     const service = createTaskService({
-      homeDir,
       now: () => now,
       readRecentState: async () => ({ entries: [], version: 1 }),
       writeRecentState: (state) => {
@@ -1126,7 +1091,6 @@ describe("task execution planning", () => {
     );
     await writeFile(join(projectRoot, "pnpm-lock.yaml"), "lockfileVersion: 9");
     const service = createTaskService({
-      homeDir,
       now: () => now,
       readRecentState: async () => ({
         entries: [
@@ -1160,7 +1124,11 @@ describe("task execution planning", () => {
 
     expect(
       listed.tasks
-        .filter((task) => task.source === "package-script")
+        .filter(
+          (task) =>
+            task.source === "package-script" &&
+            ["alpha", "beta", "gamma"].includes(task.label)
+        )
         .map((task) => task.label)
     ).toEqual(["beta", "alpha", "gamma"]);
   });

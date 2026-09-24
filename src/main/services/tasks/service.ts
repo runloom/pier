@@ -47,7 +47,6 @@ function runKey(projectRootPath: string, taskId: string): string {
 }
 
 export function createTaskService({
-  homeDir,
   now = () => Date.now(),
   onTaskOutputChanged,
   onTaskRunsChanged,
@@ -85,7 +84,7 @@ export function createTaskService({
     ...(writeRecentState ? { writeRecentState } : {}),
   });
 
-  const catalog = createTaskCatalog({ homeDir, now, recent });
+  const catalog = createTaskCatalog({ now, processEnvironment, recent });
   const collect = (projectRootPath: string) => catalog.list(projectRootPath);
   const invalidateCollectCache = (projectRootPath: string) => {
     catalog.invalidate(projectRootPath);
@@ -333,6 +332,7 @@ export function createTaskService({
       }
       return result;
     },
+    invalidateAll: () => catalog.invalidateAll(),
     async list({ projectRootPath }) {
       return await collect(projectRootPath);
     },

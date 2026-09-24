@@ -479,6 +479,7 @@ function createPierAppCore(): PierAppCore {
     onEnvironmentsChanged,
     onWorktreeCreateProgress: broadcastWorktreeCreateProgress,
     services,
+    waitForHostEnv,
   });
   remoteControlBoot.setCommandRouter(commandRouter);
   return {

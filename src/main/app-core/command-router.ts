@@ -83,6 +83,7 @@ export interface CreateCommandRouterArgs {
   onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void;
   onWorktreeCreateProgress?: (progress: WorktreeCreateProgress) => void;
   services: PierCoreServices;
+  waitForHostEnv?: () => Promise<void>;
 }
 
 function requestIdOf(rawEnvelope: unknown): string {
@@ -241,6 +242,7 @@ async function executeAppStateCommand(
       const diagnostics = await services.processEnvironment.invalidate({
         reapplyHost: true,
       });
+      services.tasks.invalidateAll();
       const prefs = await services.preferences.read();
       return success(
         requestId,
@@ -413,7 +415,11 @@ export function createCommandRouter({
   onEnvironmentsChanged,
   onWorktreeCreateProgress,
   services,
+  waitForHostEnv,
 }: CreateCommandRouterArgs): CommandRouter {
+  waitForHostEnv?.()
+    .catch(() => undefined)
+    .finally(() => services.tasks.invalidateAll());
   return {
     async execute(rawEnvelope, trustedContext = {}) {
       const requestStartedAtMs = Date.now();

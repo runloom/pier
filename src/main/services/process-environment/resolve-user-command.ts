@@ -40,6 +40,7 @@ export {
   buildStickyExportPrelude,
   hostColorPolicyUnsetPrelude,
   looksLikeShebangScript,
+  pathLookupNames,
   resolveAbsoluteOnPath,
   resolveManyAbsoluteOnPath,
 } from "./resolve-user-command-surface.ts";

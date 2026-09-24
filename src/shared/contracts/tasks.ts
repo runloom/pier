@@ -9,7 +9,6 @@ export const taskSourceSchema = z.enum([
   "deno",
   "composer",
   "vscode",
-  "zed",
   "cargo",
   "make",
   "pyproject",

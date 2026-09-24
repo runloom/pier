@@ -59,7 +59,6 @@ export interface TaskActivityCallbacks {
 }
 
 export interface CreateTaskServiceOptions {
-  homeDir?: string;
   now?: () => number;
   onTaskActivity?: TaskActivityCallbacks;
   onTaskOutputChanged?:
@@ -97,6 +96,8 @@ export interface TaskService {
     expectedRunId?: string | undefined
   ): Promise<TaskRunSnapshot | null>;
   dispose(): void;
+  /** Drop every cached task list. Used after the host PATH is reapplied. */
+  invalidateAll(): void;
   isStopRequested(panelId: string, windowId?: string | undefined): boolean;
   list(args: { projectRootPath: string }): Promise<TaskListResult>;
   markPanelClosed(panelId: string, windowId?: string | undefined): void;

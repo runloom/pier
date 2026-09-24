@@ -89,8 +89,6 @@ function localizedTooltipValue(
       return t("commandPalette.run.taskTab.source.taskfile");
     case "VS Code":
       return t("commandPalette.run.taskTab.source.vscode");
-    case "Zed":
-      return t("commandPalette.run.taskTab.source.zed");
     case "Zig":
       return t("commandPalette.run.taskTab.source.zig");
     default:

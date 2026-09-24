@@ -8,8 +8,9 @@ import {
   openSync,
   readSync,
   realpathSync,
+  statSync,
 } from "node:fs";
-import { delimiter, isAbsolute, join } from "node:path";
+import { delimiter, extname, isAbsolute, join } from "node:path";
 import { pickHostApplyEnv } from "./apply-host-env.ts";
 import {
   agentShellCommandFlags,
@@ -21,8 +22,47 @@ import {
   type ResolvedUserCommand,
 } from "./resolve-user-command-types.ts";
 
+const DEFAULT_WIN_PATHEXT = ".EXE;.CMD;.BAT;.COM";
+
+/**
+ * Names to try in one PATH directory. Windows tries the bare name first, then
+ * PATHEXT, and does not append a suffix the name already has (`gradlew.bat`).
+ */
+export function pathLookupNames(
+  name: string,
+  platform: NodeJS.Platform = process.platform,
+  pathext: string | undefined = process.env.PATHEXT
+): readonly string[] {
+  if (platform !== "win32") {
+    return [name];
+  }
+  const suffixes = (
+    pathext && pathext.length > 0 ? pathext : DEFAULT_WIN_PATHEXT
+  )
+    .split(";")
+    .filter((suffix) => suffix.length > 0);
+  const current = extname(name);
+  if (
+    current.length > 0 &&
+    suffixes.some((suffix) => suffix.toLowerCase() === current.toLowerCase())
+  ) {
+    return [name];
+  }
+  return [name, ...suffixes.map((suffix) => `${name}${suffix}`)];
+}
+
+function isExecutableFile(candidate: string): boolean {
+  try {
+    accessSync(candidate, constants.X_OK);
+    return statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Cheap PATH lookup using process env only (no shell spawn).
+ * Requires an executable file. Windows `X_OK` is existence.
  */
 export function resolveAbsoluteOnPath(
   commandName: string,
@@ -30,12 +70,7 @@ export function resolveAbsoluteOnPath(
 ): string | null {
   if (!commandName || commandName.includes("/") || commandName.includes("\\")) {
     if (isAbsolute(commandName)) {
-      try {
-        accessSync(commandName, constants.X_OK);
-        return commandName;
-      } catch {
-        return null;
-      }
+      return isExecutableFile(commandName) ? commandName : null;
     }
     return null;
   }
@@ -44,12 +79,11 @@ export function resolveAbsoluteOnPath(
     if (!segment) {
       continue;
     }
-    const candidate = join(segment, commandName);
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      // continue
+    for (const fileName of pathLookupNames(commandName)) {
+      const candidate = join(segment, fileName);
+      if (isExecutableFile(candidate)) {
+        return candidate;
+      }
     }
   }
   return null;
