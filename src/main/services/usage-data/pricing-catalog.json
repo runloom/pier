@@ -268,12 +268,26 @@
         "anthropic/claude-opus-5:batch"
       ]
     },
+    "claude-opus-5-5": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 4,
+      "outputMicrousd": 20
+    },
     "claude-opus-5-fast": {
       "cachedInputMicrousd": 1,
       "inputMicrousd": 10,
       "outputMicrousd": 50,
       "aliases": [
         "anthropic/claude-opus-5-fast"
+      ]
+    },
+    "claude-opus-5.5": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 4,
+      "outputMicrousd": 20,
+      "aliases": [
+        "anthropic/claude-opus-5.5",
+        "anthropic/claude-opus-5.5:batch"
       ]
     },
     "claude-sonnet-4": {
@@ -431,7 +445,7 @@
       ]
     },
     "deepseek-r1": {
-      "cachedInputMicrousd": 0.055,
+      "cachedInputMicrousd": 0.14,
       "inputMicrousd": 0.55,
       "outputMicrousd": 2.19,
       "aliases": [
@@ -551,7 +565,8 @@
       "inputMicrousd": 0.15,
       "outputMicrousd": 0.6,
       "aliases": [
-        "deepseek/deepseek-v4.1-flash"
+        "deepseek/deepseek-v4.1-flash",
+        "deepseek/deepseek-v4.1-flash:batch"
       ]
     },
     "doubao-seed-2-1-pro-260628": {
@@ -1738,6 +1753,42 @@
         "openai/gpt-6-astra-pro:batch"
       ]
     },
+    "gpt-6-luna": {
+      "cachedInputMicrousd": 0.01,
+      "inputMicrousd": 0.1,
+      "outputMicrousd": 0.5,
+      "aliases": [
+        "openai/gpt-6-luna",
+        "openai/gpt-6-luna:batch"
+      ]
+    },
+    "gpt-6-luna-pro": {
+      "cachedInputMicrousd": 0.01,
+      "inputMicrousd": 0.1,
+      "outputMicrousd": 0.5,
+      "aliases": [
+        "openai/gpt-6-luna-pro",
+        "openai/gpt-6-luna-pro:batch"
+      ]
+    },
+    "gpt-6-sol": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 2,
+      "outputMicrousd": 10,
+      "aliases": [
+        "openai/gpt-6-sol",
+        "openai/gpt-6-sol:batch"
+      ]
+    },
+    "gpt-6-sol-pro": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 2,
+      "outputMicrousd": 10,
+      "aliases": [
+        "openai/gpt-6-sol-pro",
+        "openai/gpt-6-sol-pro:batch"
+      ]
+    },
     "gpt-audio": {
       "cachedInputMicrousd": 0.25,
       "inputMicrousd": 2.5,
@@ -2102,6 +2153,20 @@
         "xai/grok-4.20"
       ]
     },
+    "grok-4.20-0309": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-0309"
+      ]
+    },
     "grok-4.20-0309-non-reasoning": {
       "cachedInputMicrousd": 0.2,
       "inputMicrousd": 1.25,
@@ -2130,6 +2195,35 @@
         "xai/grok-4.20-0309-reasoning"
       ]
     },
+    "grok-4.20-beta": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-beta",
+        "xai/grok-4.20-beta-latest"
+      ]
+    },
+    "grok-4.20-beta-0309": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-beta-0309"
+      ]
+    },
     "grok-4.20-beta-0309-non-reasoning": {
       "cachedInputMicrousd": 0.2,
       "inputMicrousd": 1.25,
@@ -2156,6 +2250,146 @@
       },
       "aliases": [
         "xai/grok-4.20-beta-0309-reasoning"
+      ]
+    },
+    "grok-4.20-beta-latest-non-reasoning": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-beta-latest-non-reasoning"
+      ]
+    },
+    "grok-4.20-beta-latest-reasoning": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-beta-latest-reasoning"
+      ]
+    },
+    "grok-4.20-beta-non-reasoning": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-beta-non-reasoning"
+      ]
+    },
+    "grok-4.20-beta-reasoning": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-beta-reasoning"
+      ]
+    },
+    "grok-4.20-experimental-beta": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-experimental-beta-latest"
+      ]
+    },
+    "grok-4.20-experimental-beta-0304": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-experimental-beta-0304"
+      ]
+    },
+    "grok-4.20-experimental-beta-0304-non-reasoning": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-experimental-beta-0304-non-reasoning"
+      ]
+    },
+    "grok-4.20-experimental-beta-0304-reasoning": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-experimental-beta-0304-reasoning"
+      ]
+    },
+    "grok-4.20-experimental-beta-non-reasoning": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-experimental-beta-non-reasoning-latest"
+      ]
+    },
+    "grok-4.20-experimental-beta-reasoning": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-experimental-beta-reasoning-latest"
       ]
     },
     "grok-4.20-multi-agent": {
@@ -2209,6 +2443,20 @@
         "xai/grok-4.20-non-reasoning-latest"
       ]
     },
+    "grok-4.20-non-reasoning-gv2": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-non-reasoning-gv2"
+      ]
+    },
     "grok-4.20-reasoning": {
       "cachedInputMicrousd": 0.2,
       "inputMicrousd": 1.25,
@@ -2222,6 +2470,20 @@
       "aliases": [
         "xai/grok-4.20-reasoning",
         "xai/grok-4.20-reasoning-latest"
+      ]
+    },
+    "grok-4.20-reasoning-gv2": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 1.25,
+      "outputMicrousd": 2.5,
+      "longContext": {
+        "cachedInputMicrousd": 0.4,
+        "inputMicrousd": 2.5,
+        "outputMicrousd": 5,
+        "threshold": 200000
+      },
+      "aliases": [
+        "xai/grok-4.20-reasoning-gv2"
       ]
     },
     "grok-4.3": {
@@ -2271,6 +2533,21 @@
       "aliases": [
         "x-ai/grok-4.6",
         "xai/grok-4.6"
+      ]
+    },
+    "grok-4.7": {
+      "cachedInputMicrousd": 0.5,
+      "inputMicrousd": 2,
+      "outputMicrousd": 6,
+      "longContext": {
+        "cachedInputMicrousd": 1,
+        "inputMicrousd": 4,
+        "outputMicrousd": 12,
+        "threshold": 200000
+      },
+      "aliases": [
+        "x-ai/grok-4.7",
+        "xai/grok-4.7"
       ]
     },
     "grok-beta": {
@@ -3325,7 +3602,8 @@
       "inputMicrousd": 0.15,
       "outputMicrousd": 0.47,
       "aliases": [
-        "dashscope/qwen3.8-omni-flash"
+        "dashscope/qwen3.8-omni-flash",
+        "qwen/qwen3.8-omni-flash"
       ]
     },
     "qwq-plus": {
