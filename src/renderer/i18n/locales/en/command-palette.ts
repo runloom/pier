@@ -127,7 +127,6 @@ export const commandPalette = {
         swiftpm: "Swift Package",
         taskfile: "Taskfile",
         vscode: "VS Code",
-        zed: "Zed",
         zig: "Zig",
       },
       state: {

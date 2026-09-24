@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
   TaskCandidate,
@@ -7,30 +6,28 @@ import type {
   TaskSource,
   TaskSourceError,
 } from "@shared/contracts/tasks.ts";
-import {
-  taskCandidate as candidate,
-  optionalEnv,
-  optionalTags,
-} from "./candidate.ts";
+import { taskCandidate as candidate } from "./candidate.ts";
 import { composerSource } from "./composer-source.ts";
 import { denoSource } from "./deno-source.ts";
 import { pubspecSource } from "./pubspec-source.ts";
 import { pyprojectSource } from "./pyproject-source.ts";
+import { miseSetupTasks, packageManagerSetupTasks } from "./setup-commands.ts";
 import { TOOLCHAIN_TASK_SOURCE_PROVIDERS } from "./toolchain-source.ts";
 import {
   asRecord,
-  asString,
-  asStringArray,
+  type CommandExists,
   commandWithArgs,
+  executableOnPath,
+  filterAvailableCommands,
   packageManagerFor,
-  parseJsonc,
   pathExists,
   readTextIfExists,
 } from "./utils.ts";
 import { vscodeSource } from "./vscode-source.ts";
 
 export interface CollectTaskCandidatesOptions {
-  homeDir?: string;
+  /** 合成命令的可执行文件探测。缺省查宿主 PATH。 */
+  commandExists?: CommandExists;
   /** filesystem path of the project root（与契约层 `TaskListResult.projectRootPath` 同源）。 */
   projectRootPath: string;
   recentTasks?: readonly TaskRecentEntry[];
@@ -55,6 +52,7 @@ const JUST_PRIVATE_ATTR_RE = /^\[[^\]]*private[^\]]*\]$/;
 const JUST_RECIPE_RE = /^([A-Za-z0-9_.-]+)(?:\s+[^:=]+)?\s*:(?!=)/;
 
 async function packageScriptSource({
+  commandExists,
   projectRootPath,
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
   const packageJson = await readTextIfExists(
@@ -64,12 +62,12 @@ async function packageScriptSource({
     return [];
   }
   const parsed = asRecord(JSON.parse(packageJson));
-  const scripts = asRecord(parsed?.scripts);
-  if (!scripts) {
+  if (!parsed) {
     return [];
   }
+  const scripts = asRecord(parsed.scripts) ?? {};
   const manager = await packageManagerFor(projectRootPath);
-  return Object.entries(scripts)
+  const declared = Object.entries(scripts)
     .filter((entry): entry is [string, string] => typeof entry[1] === "string")
     .map(([name, script]) =>
       candidate({
@@ -85,117 +83,53 @@ async function packageScriptSource({
         tags: ["package", manager],
       })
     );
-}
-
-function zedTaskFromRecord(
-  record: Record<string, unknown>,
-  projectRootPath: string,
-  sourceKey: string
-): TaskCandidate | null {
-  const label = asString(record.label);
-  const command = asString(record.command);
-  if (!(label && command)) {
-    return null;
-  }
-  const args = asStringArray(record.args);
-  const cwd = asString(record.cwd) ?? projectRootPath;
-  const reveal = asString(record.reveal);
-  const hide = record.hide === true;
-  const allowConcurrent = record.allow_concurrent_runs === true;
-  const env = optionalEnv(record.env);
-  const tags = optionalTags(record.tags);
-  return candidate({
-    commandSpec: { command: commandWithArgs(command, args), kind: "shell" },
-    concurrencyPolicy: allowConcurrent ? "allow-concurrent" : "dedupe",
-    cwd,
-    ...(env ? { env } : {}),
-    hidden: hide,
-    idParts: ["zed", sourceKey, label],
-    label,
-    presentation: {
-      ...(record.show_command === true ? { showCommand: true } : {}),
-      ...(record.show_summary === true ? { showSummary: true } : {}),
-      ...(hide ? { focus: false } : {}),
-      ...(reveal === "always" || reveal === "silent" || reveal === "never"
-        ? { reveal }
-        : {}),
-    },
-    source: "zed",
-    ...(tags ? { tags } : {}),
+  const setup = await packageManagerSetupTasks({
+    ...(commandExists ? { commandExists } : {}),
+    declaredLabels: new Set(declared.map((task) => task.label)),
+    manager,
+    projectRootPath,
   });
-}
-
-async function zedFileTasks(
-  filePath: string,
-  projectRootPath: string,
-  sourceKey: string
-): Promise<TaskCandidate[]> {
-  const text = await readTextIfExists(filePath);
-  if (!text) {
-    return [];
-  }
-  const parsed = parseJsonc(text);
-  const list = Array.isArray(parsed) ? parsed : asRecord(parsed)?.tasks;
-  if (!Array.isArray(list)) {
-    return [];
-  }
-  return list.flatMap((item) => {
-    const record = asRecord(item);
-    const task = record
-      ? zedTaskFromRecord(record, projectRootPath, sourceKey)
-      : null;
-    return task ? [task] : [];
-  });
-}
-
-async function zedSource(
-  options: CollectTaskCandidatesOptions
-): Promise<TaskCandidate[]> {
-  const home = options.homeDir ?? homedir();
-  const projectTasks = await zedFileTasks(
-    join(options.projectRootPath, ".zed", "tasks.json"),
-    options.projectRootPath,
-    "project"
-  );
-  const globalTasks = await zedFileTasks(
-    join(home, ".config", "zed", "tasks.json"),
-    options.projectRootPath,
-    "global"
-  );
-  return [...projectTasks, ...globalTasks];
+  return [...setup, ...declared];
 }
 
 async function cargoSource({
+  commandExists,
   projectRootPath,
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
   if (!(await pathExists(join(projectRootPath, "Cargo.toml")))) {
     return [];
   }
-  const builtin = ["build", "test", "check", "run"].map((name) =>
-    candidate({
-      commandSpec: { command: `cargo ${name}`, kind: "shell" },
-      cwd: projectRootPath,
-      idParts: ["cargo", name],
-      label: `cargo ${name}`,
-      source: "cargo",
-      tags: ["rust"],
-    })
+  const builtin = await filterAvailableCommands(
+    ["build", "test", "check", "run"].map((name) =>
+      candidate({
+        commandSpec: { command: `cargo ${name}`, kind: "shell" },
+        cwd: projectRootPath,
+        idParts: ["cargo", name],
+        label: `cargo ${name}`,
+        source: "cargo",
+        tags: ["rust"],
+      })
+    ),
+    commandExists ?? executableOnPath
   );
   // .cargo/config.toml 的 [alias] 自定义子命令 (cargo <alias>)。
   const config =
     (await readTextIfExists(join(projectRootPath, ".cargo", "config.toml"))) ??
     (await readTextIfExists(join(projectRootPath, ".cargo", "config")));
   const aliases = config ? tomlSectionEntries(config, "alias") : {};
-  const aliasTasks = Object.entries(aliases).map(([name, expansion]) =>
-    candidate({
-      commandSpec: { command: `cargo ${name}`, kind: "shell" },
-      cwd: projectRootPath,
-      description: `cargo ${expansion}`,
-      idParts: ["cargo", "alias", name],
-      label: `cargo ${name}`,
-      source: "cargo",
-      tags: ["rust"],
-    })
+  const aliasTasks = await filterAvailableCommands(
+    Object.entries(aliases).map(([name, expansion]) =>
+      candidate({
+        commandSpec: { command: `cargo ${name}`, kind: "shell" },
+        cwd: projectRootPath,
+        description: `cargo ${expansion}`,
+        idParts: ["cargo", "alias", name],
+        label: `cargo ${name}`,
+        source: "cargo",
+        tags: ["rust"],
+      })
+    ),
+    commandExists ?? executableOnPath
   );
   return [...builtin, ...aliasTasks];
 }
@@ -255,6 +189,7 @@ function tomlSectionEntries(
 }
 
 async function miseSource({
+  commandExists,
   projectRootPath,
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
   const text =
@@ -269,7 +204,7 @@ async function miseSource({
     ...text.matchAll(/^\[tasks\."([^"]+)"\]\s*$/gm),
   ].flatMap((match) => (match[1] ? [match[1]] : []));
   const inlineTasks = Object.keys(tomlSectionEntries(text, "tasks"));
-  return [...new Set([...names, ...inlineTasks])]
+  const declared = [...new Set([...names, ...inlineTasks])]
     .filter((name): name is string => typeof name === "string")
     .map((name) =>
       candidate({
@@ -283,6 +218,12 @@ async function miseSource({
         source: "mise",
       })
     );
+  const setup = await miseSetupTasks({
+    ...(commandExists ? { commandExists } : {}),
+    declaredLabels: new Set(declared.map((task) => task.label)),
+    projectRootPath,
+  });
+  return [...setup, ...declared];
 }
 
 async function justSource({
@@ -423,7 +364,6 @@ export const taskSourceProviders: readonly TaskSourceProvider[] = [
   { id: "deno", list: denoSource },
   { id: "composer", list: composerSource },
   { id: "vscode", list: vscodeSource },
-  { id: "zed", list: zedSource },
   { id: "cargo", list: cargoSource },
   { id: "make", list: makeSource },
   { id: "pyproject", list: pyprojectSource },

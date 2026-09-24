@@ -105,7 +105,6 @@ const TASK_SOURCE_I18N_KEYS = {
   swiftpm: "commandPalette.run.taskTab.source.swiftpm",
   taskfile: "commandPalette.run.taskTab.source.taskfile",
   vscode: "commandPalette.run.taskTab.source.vscode",
-  zed: "commandPalette.run.taskTab.source.zed",
   zig: "commandPalette.run.taskTab.source.zig",
 } as const satisfies Record<TaskSource, string>;
 

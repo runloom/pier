@@ -1,9 +1,16 @@
 import { join } from "node:path";
 import type { TaskCandidate } from "@shared/contracts/tasks.ts";
 import { taskCandidate as candidate } from "./candidate.ts";
-import { asRecord, commandWithArgs, readTextIfExists } from "./utils.ts";
+import { composerSetupTasks } from "./setup-commands.ts";
+import {
+  asRecord,
+  type CommandExists,
+  commandWithArgs,
+  readTextIfExists,
+} from "./utils.ts";
 
 export interface ComposerSourceOptions {
+  commandExists?: CommandExists;
   projectRootPath: string;
 }
 
@@ -26,17 +33,15 @@ function composerScriptDescription(value: unknown): string | undefined {
 }
 
 export async function composerSource({
+  commandExists,
   projectRootPath,
 }: ComposerSourceOptions): Promise<TaskCandidate[]> {
   const text = await readTextIfExists(join(projectRootPath, "composer.json"));
   if (!text) {
     return [];
   }
-  const scripts = asRecord(asRecord(JSON.parse(text))?.scripts);
-  if (!scripts) {
-    return [];
-  }
-  return Object.entries(scripts)
+  const scripts = asRecord(asRecord(JSON.parse(text))?.scripts) ?? {};
+  const declared = Object.entries(scripts)
     .filter(([name]) => !COMPOSER_EVENT_HOOK_RE.test(name))
     .map(([name, value]) => {
       const description = composerScriptDescription(value);
@@ -53,4 +58,10 @@ export async function composerSource({
         tags: ["php"],
       });
     });
+  const setup = await composerSetupTasks({
+    ...(commandExists ? { commandExists } : {}),
+    declaredLabels: new Set(declared.map((task) => task.label)),
+    projectRootPath,
+  });
+  return [...setup, ...declared];
 }

@@ -1,27 +1,34 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveTaskListPathEnv } from "@main/services/tasks/command-path.ts";
 import { collectTaskCandidates } from "@main/services/tasks/sources.ts";
+import { executableOnPath } from "@main/services/tasks/utils.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+function collect(
+  options: Parameters<typeof collectTaskCandidates>[0]
+): ReturnType<typeof collectTaskCandidates> {
+  return collectTaskCandidates({
+    commandExists: () => true,
+    ...options,
+  });
+}
 
 describe("task sources", () => {
   let projectRootPath = "";
-  let homeDir = "";
 
   beforeEach(async () => {
     projectRootPath = await mkdtemp(join(tmpdir(), "pier-task-sources-"));
-    homeDir = await mkdtemp(join(tmpdir(), "pier-task-home-"));
   });
 
   afterEach(async () => {
     await rm(projectRootPath, { force: true, recursive: true });
-    await rm(homeDir, { force: true, recursive: true });
   });
 
   it("normalizes supported task sources into task candidates", async () => {
     await mkdir(join(projectRootPath, ".vscode"));
     await mkdir(join(projectRootPath, ".zed"));
-    await mkdir(join(homeDir, ".config", "zed"), { recursive: true });
     await writeFile(
       join(projectRootPath, "package.json"),
       JSON.stringify({
@@ -59,10 +66,6 @@ describe("task sources", () => {
       ])
     );
     await writeFile(
-      join(homeDir, ".config", "zed", "tasks.json"),
-      JSON.stringify([{ command: "echo global", label: "global task" }])
-    );
-    await writeFile(
       join(projectRootPath, "Cargo.toml"),
       '[package]\nname = "pier_native"\n'
     );
@@ -84,8 +87,7 @@ describe("task sources", () => {
       "tasks:\n  clean:\n    cmd: rm -rf out\n"
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
       recentTasks: [
         {
@@ -108,8 +110,6 @@ describe("task sources", () => {
           { command: "pnpm run build", kind: "shell" },
         ],
         ["vscode", "lint", { command: "pnpm lint", kind: "shell" }],
-        ["zed", "test", { command: "pnpm test", kind: "shell" }],
-        ["zed", "global task", { command: "echo global", kind: "shell" }],
         ["cargo", "cargo build", { command: "cargo build", kind: "shell" }],
         ["make", "serve", { command: "make serve", kind: "shell" }],
         ["pyproject", "pier-tool", { command: "pier-tool", kind: "shell" }],
@@ -119,6 +119,12 @@ describe("task sources", () => {
         ["history", "pnpm check", { command: "pnpm check", kind: "shell" }],
       ])
     );
+    expect(result.tasks.map((task) => task.label)).not.toContain("test");
+    expect(
+      result.tasks.map((task) =>
+        task.commandSpec.kind === "shell" ? task.commandSpec.command : ""
+      )
+    ).not.toContain("pnpm test");
   });
 
   it("collects deno.json(c) tasks including object-form tasks", async () => {
@@ -133,8 +139,7 @@ describe("task sources", () => {
       }`
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -164,8 +169,7 @@ describe("task sources", () => {
       })
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -175,6 +179,7 @@ describe("task sources", () => {
         .filter((task) => task.source === "composer")
         .map((task) => [task.label, task.commandSpec, task.description])
     ).toEqual([
+      ["install", { command: "composer install", kind: "shell" }, undefined],
       [
         "test",
         { command: "composer run-script test", kind: "shell" },
@@ -194,8 +199,7 @@ describe("task sources", () => {
       '[alias]\nlint = "clippy --all-targets"\n'
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -230,8 +234,7 @@ describe("task sources", () => {
       ].join("\n")
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -262,8 +265,7 @@ describe("task sources", () => {
       ].join("\n")
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -280,8 +282,7 @@ describe("task sources", () => {
       '[tasks."docs:build"]\nrun = "mkdocs build"\n\n[tasks.dev]\nrun = "pnpm dev"\n'
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -290,7 +291,7 @@ describe("task sources", () => {
         .filter((task) => task.source === "mise")
         .map((task) => task.label)
         .sort()
-    ).toEqual(["dev", "docs:build"]);
+    ).toEqual(["dev", "docs:build", "install", "trust"]);
   });
 
   it("collects flutter pubspec builtins and skips commented sdk lines", async () => {
@@ -307,8 +308,7 @@ describe("task sources", () => {
       ].join("\n")
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -355,8 +355,7 @@ describe("task sources", () => {
       '{ "flutter": "3.24.0" }\n'
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -375,8 +374,7 @@ describe("task sources", () => {
   it("collects go builtins from go.work without go.mod", async () => {
     await writeFile(join(projectRootPath, "go.work"), "go 1.22\n");
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -395,8 +393,7 @@ describe("task sources", () => {
       'rootProject.name = "demo"\n'
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -441,8 +438,7 @@ describe("task sources", () => {
     );
     await writeFile(join(projectRootPath, "build.sbt"), 'name := "demo"\n');
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -475,8 +471,7 @@ describe("task sources", () => {
       "cmake_minimum_required(VERSION 3.20)\n"
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -509,8 +504,7 @@ describe("task sources", () => {
       )
     );
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -528,8 +522,7 @@ describe("task sources", () => {
     );
     await writeFile(join(projectRootPath, "uv.lock"), "version = 1\n");
 
-    const result = await collectTaskCandidates({
-      homeDir,
+    const result = await collect({
       projectRootPath,
     });
 
@@ -537,6 +530,238 @@ describe("task sources", () => {
       result.tasks
         .filter((task) => task.source === "pyproject")
         .map((task) => task.label)
-    ).toEqual(["uv run pytest"]);
+    ).toEqual(["uv sync", "uv run pytest"]);
+  });
+
+  it("adds poetry install when the project uses poetry", async () => {
+    await writeFile(
+      join(projectRootPath, "pyproject.toml"),
+      '[tool.poetry]\nname = "demo"\n'
+    );
+
+    const result = await collect({ projectRootPath });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "pyproject")
+        .map((task) => task.label)
+    ).toEqual(["poetry install"]);
+  });
+
+  it("adds package-manager install and keeps it beside scripts", async () => {
+    await writeFile(
+      join(projectRootPath, "package.json"),
+      JSON.stringify({ scripts: { dev: "vite" } })
+    );
+    await writeFile(join(projectRootPath, "yarn.lock"), "");
+
+    const result = await collect({ projectRootPath });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "package-script")
+        .map((task) => [task.label, task.commandSpec])
+    ).toEqual([
+      ["install", { command: "yarn install", kind: "shell" }],
+      ["dev", { command: "yarn run dev", kind: "shell" }],
+    ]);
+  });
+
+  it("uses the full install command when a script is already named install", async () => {
+    await writeFile(
+      join(projectRootPath, "package.json"),
+      JSON.stringify({ scripts: { install: "node scripts/install.js" } })
+    );
+
+    const result = await collect({ projectRootPath });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "package-script")
+        .map((task) => [task.label, task.commandSpec.command])
+    ).toEqual([
+      ["npm install", "npm install"],
+      ["install", "npm run install"],
+    ]);
+  });
+
+  it("lists mise trust and install even when the config has no tasks", async () => {
+    await writeFile(
+      join(projectRootPath, "mise.toml"),
+      '[tools]\nnode = "22"\n'
+    );
+
+    const result = await collect({ projectRootPath });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "mise")
+        .map((task) => [task.label, task.commandSpec.command])
+    ).toEqual([
+      ["trust", "mise trust"],
+      ["install", "mise install"],
+    ]);
+  });
+
+  it("drops setup commands and toolchain builtins whose executable is missing", async () => {
+    await writeFile(
+      join(projectRootPath, "package.json"),
+      JSON.stringify({ scripts: { dev: "vite" } })
+    );
+    await writeFile(
+      join(projectRootPath, "pnpm-lock.yaml"),
+      "lockfileVersion: 9\n"
+    );
+    await writeFile(
+      join(projectRootPath, "mise.toml"),
+      '[tasks.dev]\nrun = "vite"\n'
+    );
+    await writeFile(
+      join(projectRootPath, "go.mod"),
+      "module example.com/app\n"
+    );
+    await writeFile(
+      join(projectRootPath, "CMakeLists.txt"),
+      "cmake_minimum_required(VERSION 3.20)\n"
+    );
+    await writeFile(join(projectRootPath, "pom.xml"), "<project></project>\n");
+    await writeFile(join(projectRootPath, "mvnw"), "#!/bin/sh\n");
+    await writeFile(
+      join(projectRootPath, "Cargo.toml"),
+      '[package]\nname = "demo"\n'
+    );
+    await mkdir(join(projectRootPath, ".cargo"));
+    await writeFile(
+      join(projectRootPath, ".cargo", "config.toml"),
+      '[alias]\nlint = "clippy"\n'
+    );
+
+    const result = await collect({
+      commandExists: (name) => name === "cmake",
+      projectRootPath,
+    });
+    const labels = (source: string) =>
+      result.tasks
+        .filter((task) => task.source === source)
+        .map((task) => task.label);
+
+    expect(labels("package-script")).toEqual(["dev"]);
+    expect(labels("mise")).toEqual(["dev"]);
+    expect(labels("go")).toEqual([]);
+    expect(labels("cargo")).toEqual([]);
+    expect(labels("cmake")).toEqual([
+      "cmake -S . -B build",
+      "cmake --build build",
+    ]);
+    expect(labels("maven")).toEqual(["./mvnw test", "./mvnw package"]);
+  });
+
+  it("resolves an executable file from the given PATH", async () => {
+    const bin = join(projectRootPath, "mise");
+    await writeFile(bin, "");
+    if (process.platform === "win32") {
+      expect(executableOnPath("mise", projectRootPath)).toBe(true);
+    } else {
+      expect(executableOnPath("mise", projectRootPath)).toBe(false);
+      await chmod(bin, 0o755);
+      expect(executableOnPath("mise", projectRootPath)).toBe(true);
+    }
+    expect(executableOnPath("missing-bin", projectRootPath)).toBe(false);
+  });
+
+  it("keeps windows maven and gradle wrappers that are not on PATH", async () => {
+    await writeFile(join(projectRootPath, "pom.xml"), "<project></project>\n");
+    await writeFile(join(projectRootPath, "mvnw.cmd"), "@echo off\n");
+    await writeFile(join(projectRootPath, "build.gradle"), "");
+    await writeFile(join(projectRootPath, "gradlew.bat"), "@echo off\n");
+
+    const result = await collectTaskCandidates({ projectRootPath });
+    const labels = (source: string) =>
+      result.tasks
+        .filter((task) => task.source === source)
+        .map((task) => task.label);
+
+    expect(labels("maven")).toEqual(["mvnw.cmd test", "mvnw.cmd package"]);
+    expect(labels("gradle")).toEqual(["gradlew.bat test", "gradlew.bat build"]);
+  });
+
+  it("does not let a pyproject script share the uv sync id", async () => {
+    await writeFile(
+      join(projectRootPath, "pyproject.toml"),
+      '[project.scripts]\nsetup-sync = "demo:main"\n'
+    );
+    await writeFile(join(projectRootPath, "uv.lock"), "version = 1\n");
+
+    const result = await collect({ projectRootPath });
+    const tasks = result.tasks.filter((task) => task.source === "pyproject");
+
+    expect(tasks.map((task) => task.label)).toEqual(["uv sync", "setup-sync"]);
+    expect(tasks.map((task) => task.id)).toEqual([
+      "pyproject:setup:sync",
+      "pyproject:setup-sync",
+    ]);
+    expect(tasks.map((task) => task.commandSpec.command)).toEqual([
+      "uv sync",
+      "setup-sync",
+    ]);
+  });
+
+  it("detects uv and poetry setup commands beyond a single lockfile", async () => {
+    await writeFile(
+      join(projectRootPath, "pyproject.toml"),
+      [
+        "[build-system]",
+        'build-backend = "poetry.core.masonry.api"',
+        "[ tool.uv ]",
+        "package = true",
+      ].join("\n")
+    );
+
+    const result = await collect({ projectRootPath });
+
+    expect(
+      result.tasks
+        .filter((task) => task.source === "pyproject")
+        .map((task) => task.label)
+    ).toEqual(["uv sync", "poetry install"]);
+  });
+
+  it("uses the project shell PATH when the dump succeeded", async () => {
+    const pathEnv = await resolveTaskListPathEnv(
+      {
+        resolve: async () => ({
+          diagnostics: {
+            cacheHit: true,
+            pathChanged: true,
+            shellEnvStatus: "cached",
+            source: "task",
+          },
+          env: { PATH: "/project/bin" },
+          shellEnv: { PATH: "/project/bin" },
+        }),
+      },
+      projectRootPath
+    );
+    expect(pathEnv).toBe("/project/bin");
+  });
+
+  it("falls back to the host PATH when the project shell dump did not run", async () => {
+    const pathEnv = await resolveTaskListPathEnv(
+      {
+        resolve: async () => ({
+          diagnostics: {
+            cacheHit: false,
+            pathChanged: false,
+            shellEnvStatus: "skipped",
+            skipReason: "windows",
+            source: "task",
+          },
+          env: { PATH: "/stale" },
+          shellEnv: {},
+        }),
+      },
+      projectRootPath
+    );
+    expect(pathEnv).toBeUndefined();
   });
 });

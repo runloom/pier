@@ -5,7 +5,7 @@ import type {
   TaskInputRequest,
   TaskSource,
 } from "@shared/contracts/tasks.ts";
-import { asRecord, asStringArray, stableId } from "./utils.ts";
+import { asRecord, stableId } from "./utils.ts";
 
 export function optionalEnv(
   value: unknown
@@ -18,11 +18,6 @@ export function optionalEnv(
     (entry): entry is [string, string] => typeof entry[1] === "string"
   );
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-}
-
-export function optionalTags(value: unknown): string[] | undefined {
-  const tags = asStringArray(value);
-  return tags.length > 0 ? tags : undefined;
 }
 
 export function taskCandidate(opts: {

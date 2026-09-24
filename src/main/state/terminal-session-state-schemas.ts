@@ -11,6 +11,19 @@ import { taskPanelMetadataSchema } from "@shared/contracts/tasks.ts";
 import { terminalAgentRestoreLaunchOptionsSchema } from "@shared/contracts/terminal/launch.ts";
 import { z } from "zod";
 
+/** 已退役的 Zed 任务来源。旧会话里只丢掉任务元数据，避免整份终端会话解析失败。 */
+function omitRetiredZedTask(value: unknown): unknown {
+  if (
+    value &&
+    typeof value === "object" &&
+    "source" in value &&
+    value.source === "zed"
+  ) {
+    return;
+  }
+  return value;
+}
+
 function stripLaunchEnv(value: unknown): unknown {
   if (!(value && typeof value === "object" && !Array.isArray(value))) {
     return value;
@@ -94,7 +107,7 @@ export const terminalPanelSessionSchema = z.preprocess(
       normalizePanelTabChromeInput,
       panelTabChromeSchema.optional()
     ),
-    task: taskPanelMetadataSchema.optional(),
+    task: z.preprocess(omitRetiredZedTask, taskPanelMetadataSchema.optional()),
     /** OSC / 终端装饰标题（≠ 产品 sessionTitle）。 */
     title: z.string().optional(),
     /** 产品会话名：仅 provider / user。 */

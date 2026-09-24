@@ -1,5 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { resolveAbsoluteOnPath } from "../process-environment/resolve-user-command-surface.ts";
 
 const SHELL_SAFE_RE = /^[A-Za-z0-9_./:@%+=,-]+$/;
 
@@ -63,6 +64,68 @@ export function commandWithArgs(
     return command;
   }
   return `${command} ${args.map(shellQuote).join(" ")}`;
+}
+
+export type CommandExists = (name: string) => boolean | Promise<boolean>;
+
+/** 仓库里的包装脚本，从任务 cwd 启动，不要求出现在 PATH 上。 */
+const PROJECT_LOCAL_WRAPPERS = new Set([
+  "gradlew",
+  "gradlew.bat",
+  "mvnw",
+  "mvnw.cmd",
+]);
+
+/** 命令行首个词。路径和项目包装脚本返回 null，表示不查 PATH。 */
+export function commandExecutable(command: string): string | null {
+  const token = command.trim().split(/\s+/u)[0];
+  if (
+    !token ||
+    token.startsWith(".") ||
+    token.includes("/") ||
+    token.includes("\\") ||
+    PROJECT_LOCAL_WRAPPERS.has(token.toLowerCase())
+  ) {
+    return null;
+  }
+  return token;
+}
+
+/**
+ * 合成命令的可执行文件是否存在。
+ * `pathEnv` 缺省是宿主进程 PATH；任务列表会传入项目 shell dump 的 PATH。
+ */
+export function executableOnPath(
+  name: string,
+  pathEnv: string = process.env.PATH ?? ""
+): boolean {
+  if (name.length === 0) {
+    return false;
+  }
+  return resolveAbsoluteOnPath(name, pathEnv) !== null;
+}
+
+export async function filterAvailableCommands<
+  T extends { commandSpec: { command: string } },
+>(tasks: readonly T[], exists: CommandExists = executableOnPath): Promise<T[]> {
+  const names = [
+    ...new Set(
+      tasks.flatMap((task) => {
+        const name = commandExecutable(task.commandSpec.command);
+        return name ? [name] : [];
+      })
+    ),
+  ];
+  const available = new Map<string, boolean>();
+  await Promise.all(
+    names.map(async (name) => {
+      available.set(name, await exists(name));
+    })
+  );
+  return tasks.filter((task) => {
+    const name = commandExecutable(task.commandSpec.command);
+    return name == null || available.get(name) === true;
+  });
 }
 
 export async function packageManagerFor(

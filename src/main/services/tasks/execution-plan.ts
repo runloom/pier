@@ -11,10 +11,7 @@ import { commandWithArgs, projectBasename } from "./utils.ts";
 
 const VARIABLE_RE = /\$\{([^}]+)\}/g;
 
-/** Zed bare `$ZED_*` tokens (no braces); only known keys are expanded. */
-const ZED_BARE_VARIABLE_RE = /\$([A-Z][A-Z0-9_]*)/g;
-
-/** Map Zed / VS Code path tokens → project root. */
+/** Map VS Code path tokens → project root. */
 function workspaceRootForToken(
   token: string,
   projectRootPath: string
@@ -22,9 +19,7 @@ function workspaceRootForToken(
   if (
     token === "workspaceFolder" ||
     token === "workspaceRoot" ||
-    token === "cwd" ||
-    token === "ZED_WORKTREE_ROOT" ||
-    token === "ZED_WORKTREE"
+    token === "cwd"
   ) {
     return projectRootPath;
   }
@@ -55,7 +50,6 @@ const TASK_SOURCE_LABELS: Record<TaskSource, string> = {
   swiftpm: "Swift Package",
   taskfile: "Taskfile",
   vscode: "VS Code",
-  zed: "Zed",
   zig: "Zig",
 };
 
@@ -172,8 +166,7 @@ export function requiredInputsForTask(
 
 /**
  * Expand task string variables.
- * - VS Code style: `${workspaceFolder}`, `${env:FOO}`, `${input:id}`
- * - Zed style: `$ZED_WORKTREE_ROOT`, `$ZED_WORKTREE` (and braced forms)
+ * VS Code style: `${workspaceFolder}`, `${env:FOO}`, `${input:id}`.
  */
 export function resolveVariables(
   value: string,
@@ -202,11 +195,7 @@ export function resolveVariables(
     }
     return "";
   });
-  // Zed tasks.json commonly uses bare `$ZED_WORKTREE_ROOT` as cwd.
-  return braced.replace(ZED_BARE_VARIABLE_RE, (full, token: string) => {
-    const workspace = workspaceRootForToken(token, context.projectRootPath);
-    return workspace ?? full;
-  });
+  return braced;
 }
 
 function resolvedEnv(
