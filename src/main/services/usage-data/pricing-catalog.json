@@ -883,6 +883,11 @@
         "google/gemini-3.8-flash:batch"
       ]
     },
+    "gemini-3.8-flash-cyber": {
+      "cachedInputMicrousd": 0.15,
+      "inputMicrousd": 1.5,
+      "outputMicrousd": 7.5
+    },
     "gemini-exp-1206": {
       "cachedInputMicrousd": 0.03,
       "inputMicrousd": 0.3,
@@ -1097,6 +1102,14 @@
       "outputMicrousd": 1.25,
       "aliases": [
         "z-ai/glm-5.3-flashx"
+      ]
+    },
+    "glm-5.3-prime": {
+      "cachedInputMicrousd": 0.56,
+      "inputMicrousd": 2.8,
+      "outputMicrousd": 8.8,
+      "aliases": [
+        "z-ai/glm-5.3-prime"
       ]
     },
     "glm-5v-turbo": {
