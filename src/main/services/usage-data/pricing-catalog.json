@@ -394,6 +394,20 @@
         "anthropic/claude-sonnet-5:batch"
       ]
     },
+    "claude-sonnet-5-5": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 2,
+      "outputMicrousd": 10
+    },
+    "claude-sonnet-5.5": {
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 2,
+      "outputMicrousd": 10,
+      "aliases": [
+        "anthropic/claude-sonnet-5.5",
+        "anthropic/claude-sonnet-5.5:batch"
+      ]
+    },
     "codestral-2508": {
       "cachedInputMicrousd": 0.03,
       "inputMicrousd": 0.3,
