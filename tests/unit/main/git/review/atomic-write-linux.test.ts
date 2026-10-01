@@ -1,8 +1,9 @@
 import type { BigIntStats } from "node:fs";
-import type * as FsPromises from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import {
   lstat,
   mkdtemp,
+  open,
   readFile,
   readlink,
   rm,
@@ -20,43 +21,51 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 type CandidateHook = (path: string) => Promise<void>;
 
-const hooks = vi.hoisted(() => ({
-  afterMetadata: undefined as CandidateHook | undefined,
-  afterSync: undefined as CandidateHook | undefined,
-}));
-
-vi.mock("node:fs/promises", async (importOriginal) => {
-  const actual = await importOriginal<typeof FsPromises>();
-  return {
-    ...actual,
-    open: async (...args: Parameters<typeof actual.open>) => {
-      const handle = await actual.open(...args);
-      const candidate = String(args[0]);
-      if (!basename(candidate).startsWith(".pier-conflict-")) return handle;
-      const chmod = handle.chmod.bind(handle);
-      handle.chmod = async (mode) => {
-        await chmod(mode);
-        await hooks.afterMetadata?.(candidate);
-      };
-      const sync = handle.sync.bind(handle);
-      handle.sync = async () => {
-        await sync();
-        await hooks.afterSync?.(candidate);
-      };
-      return handle;
-    },
-  };
-});
+const hooks: {
+  afterMetadata: CandidateHook | undefined;
+  afterSync: CandidateHook | undefined;
+} = { afterMetadata: undefined, afterSync: undefined };
 
 const roots: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   hooks.afterMetadata = undefined;
   hooks.afterSync = undefined;
   await Promise.all(
     roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))
   );
 });
+
+async function installCandidateHooks(path: string): Promise<void> {
+  const probe = await open(path, "r");
+  const prototype = Object.getPrototypeOf(probe) as Pick<
+    FileHandle,
+    "chmod" | "sync"
+  >;
+  await probe.close();
+  const chmod = prototype.chmod;
+  vi.spyOn(prototype, "chmod").mockImplementation(async function (
+    this: FileHandle,
+    mode
+  ) {
+    await chmod.call(this, mode);
+    const candidate = await readlink(`/proc/self/fd/${this.fd}`);
+    if (basename(candidate).startsWith(".pier-conflict-")) {
+      await hooks.afterMetadata?.(candidate);
+    }
+  });
+  const sync = prototype.sync;
+  vi.spyOn(prototype, "sync").mockImplementation(async function (
+    this: FileHandle
+  ) {
+    await sync.call(this);
+    const candidate = await readlink(`/proc/self/fd/${this.fd}`);
+    if (basename(candidate).startsWith(".pier-conflict-")) {
+      await hooks.afterSync?.(candidate);
+    }
+  });
+}
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "pier-linux-publication-"));
@@ -68,6 +77,7 @@ async function fixture() {
     gitRootPath: root,
     path: "conflict.ts",
   });
+  await installCandidateHooks(path);
   return { original, path, root, snapshot };
 }
 
