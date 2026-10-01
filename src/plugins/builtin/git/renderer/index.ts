@@ -80,7 +80,7 @@ export function registerGitPluginContributions(
     registerWorktreeActions(context),
     registerGitActions(context),
     registerGitReviewTreeActions(context, mutationAuthority),
-    registerGitReviewDiffActions(context),
+    registerGitReviewDiffActions(context, mutationAuthority),
     registerGitStatusItem(context),
   ];
   return () => {

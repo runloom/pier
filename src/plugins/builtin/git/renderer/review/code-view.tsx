@@ -216,6 +216,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       contextId,
       items: displayItems,
       mutationLocked: mutationAuthorityBlocked,
+      onMutationStart: onAcquireMutationAuthority,
       ...(gitRootPath === undefined ? {} : { gitRootPath }),
       ...(onMutationCommitted === undefined ? {} : { onMutationCommitted }),
     });
@@ -240,12 +241,13 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
           gitRootPath,
           handle: handleRef.current,
           items: displayItems,
+          ...(entries === undefined ? {} : { entries }),
           sourcePanelComponent: GIT_CHANGES_PANEL_ID,
           sourcePanelContext: context.panels.getActiveContext(),
           ...(sourcePanelId === undefined ? {} : { sourcePanelId }),
         });
       },
-      [context, contextId, displayItems, gitRootPath, sourcePanelId]
+      [context, contextId, displayItems, entries, gitRootPath, sourcePanelId]
     );
 
     useEffect(() => {

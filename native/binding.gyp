@@ -2,7 +2,7 @@
   "targets": [
     {
       "target_name": "ghostty_native",
-      "sources": ["src/addon.mm"],
+      "sources": ["src/addon.mm", "src/atomic-file.mm"],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"
       ],

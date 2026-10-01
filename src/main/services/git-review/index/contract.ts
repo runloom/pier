@@ -14,8 +14,11 @@ export type GitReviewIndexExecutionBudget = GitExecExecutionBudget;
  * base = stage 1, ours = stage 2, theirs = stage 3.
  */
 export interface GitReviewIndexConflictStages {
+  readonly baseMode: string;
   readonly baseOid: string | null;
+  readonly oursMode: string;
   readonly oursOid: string | null;
+  readonly theirsMode: string;
   readonly theirsOid: string | null;
   readonly xy: GitReviewConflictXy;
 }

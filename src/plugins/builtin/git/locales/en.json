@@ -186,6 +186,26 @@
       "description": "Discard local changes, or move new files to Trash.",
       "title": "GIT: Discard Changes"
     },
+    "pier.git.review.resolveConflictDelete": {
+      "category": "git",
+      "title": "GIT: Confirm Delete"
+    },
+    "pier.git.review.resolveConflictKeepDeleted": {
+      "category": "git",
+      "title": "GIT: Keep Deleted"
+    },
+    "pier.git.review.resolveConflictKeepCurrent": {
+      "category": "git",
+      "title": "GIT: Keep Current File"
+    },
+    "pier.git.review.resolveConflictTakeIncoming": {
+      "category": "git",
+      "title": "GIT: Use Incoming Version"
+    },
+    "pier.git.review.resolveConflictStageCurrent": {
+      "category": "git",
+      "title": "GIT: Stage Current File"
+    },
     "pier.git.review.toggleTree": {
       "category": "git",
       "description": "Show or hide the changed-files tree sidebar.",

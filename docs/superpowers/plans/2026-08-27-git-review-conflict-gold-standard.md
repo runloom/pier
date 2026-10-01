@@ -1,5 +1,7 @@
 # Git Review 冲突阅读面金标准修复计划
 
+> **历史计划，阅读面模型已废止（2026-09-30）。** 本文的「一文一屏 / 不进 CodeView」不再作为实现依据。冲突与普通 diff 共用连续多文件正文；现行规则见 [冲突详情规格 §3、§6](../../archive/superpowers/specs/2026-08-12-git-review-merge-conflict-unresolved-file-design.md)。文件级动作与防覆盖契约保持不变。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 合并更改面做到：侧栏全量冲突文件、徽标与工作区一致、正文只展示当前选中的那一个冲突（标记编辑器或文件级动作卡），且文件级动作能真正解决冲突、不会冲掉已改好的工作区。

@@ -1,16 +1,16 @@
 # Git Review 冲突详情：官方 UnresolvedFile 标准接法
 
 日期：2026-08-12  
-状态：**已落地终态实现**（官方 `UnresolvedFile` + write/`ours`/`theirs` 闭环；2026-08-12）  
+状态：**终态契约**（2026-09-30 修订：冲突与普通 diff 共用连续多文件审查；废止单文件冲突例外）  
 引擎依据：`@pierre/diffs@1.2.12`（`UnresolvedFile`、`parseMergeConflictDiffFromFile`、`resolveConflict`）；官方文档 [diffs.com](https://diffs.com/) / [docs](https://diffs.com/docs)  
-与金标准关系：补全 `conflicted` 的 **content 正文**；**不**改写多文件 CodeView 为默认整页单文件。冲突详情走 **专用原语**，与普通 diff 并列，而非塞进 `CodeView` 假扮。
+与金标准关系：补全 `conflicted` 的 **content 正文**；冲突保留在多文件 CodeView 账本，文件头、折叠、导航和纵向滚动由同一个 CodeView 拥有。标记正文仍使用专用 `UnresolvedFile`，通过文件级 annotation 挂载，不将标记解析结果伪装成普通 patch。
 
 ### 文档层级（冲突时）
 
 | 文档 | 角色 | 与本文关系 |
 |------|------|------------|
 | `../../../superpowers/specs/2026-07-31-git-review-gold-standard-endstate-design.md` | SCM Review 终态权威（多文件、bodyClass、ledger） | **继承**；冲突文件 bodyClass=content 的正文由本文定义 |
-| `../../../superpowers/specs/2026-07-27-diffshub-full-alignment-design.md` | CodeView 单实例 / scroll 单写者 | **普通 diff 仍遵守**；冲突 **不**并入 CodeView 成员 id 集 |
+| `../../../superpowers/specs/2026-07-27-diffshub-full-alignment-design.md` | CodeView 单实例 / scroll 单写者 | 普通 diff 与冲突共用正文账本；冲突正文作为 annotation |
 | **本文** | 冲突详情 + 解析 UI 的唯一实现权威 | 冲突渲染 / 契约 / 写盘闭环 |
 
 **实现禁令：**
@@ -18,13 +18,13 @@
 1. 禁止把 conflict 当 `git diff` patch 再 `processFile`。
 2. 禁止用 `CodeView` 的 `type: "diff"` 塞 `parseMergeConflictDiffFromFile` 结果，却宣称「已接官方 conflict UI」。
 3. 禁止继续用唯一 `ready-notice: Merge conflict — resolve in the editor` 充当详情终态（过渡 PR 可并存，G2 后必须撤）。
-4. 禁止在 multi-file `CodeView` 内硬接 `UnresolvedFile` 实例当 item（上游无此 item type）。
+4. 禁止为每个冲突创建独立 CodeView 或纵向滚动区；`UnresolvedFile` 只挂在共享 CodeView 的文件级 annotation 中，隐藏自身文件头。
 
 ---
 
 ## 0. 一句话
 
-> **冲突正文的官方标准入口是 `UnresolvedFile`：输入 = worktree 带 markers 的 `FileContents`；展示 / Accept = Pierre 内置 conflict 原语；写盘与 `git add` 是宿主义务。普通变更仍走 CodeView 多文件流。**
+> **冲突与普通 diff 都是连续多文件审查：CodeView 拥有文件列表与滚动，`UnresolvedFile` 拥有标记展示和 Accept；写盘与 `git add` 是宿主义务。**
 
 ---
 
@@ -73,10 +73,10 @@ resolveConflict → 更新 FileDiffMetadata（预览）
 - `type: "diff"` → `VirtualizedFileDiff`
 - `type: "file"` → `VirtualizedFile`
 
-**没有** unresolved 槽位。因此：
+**没有** unresolved 槽位，因此不扩展上游 item type：
 
-- **官方标准接法 = 独立 `UnresolvedFile` 宿主**，不是 CodeView 成员。
-- 多文件金标准：**普通 content 槽仍在 CodeView**；**当前聚焦的冲突文件**切到 Unresolved 表面（或同 panel 内替换正文区）。
+- CodeView item 保留文件头和文件级 annotation；annotation 内挂官方 `UnresolvedFile`。
+- 文件级正文按真实高度参与既有 annotation 测量；不创建第二个 CodeView，不新增纵向滚动所有者。
 
 ---
 
@@ -100,28 +100,27 @@ resolveConflict → 更新 FileDiffMetadata（预览）
 | 场景 | UI |
 |------|-----|
 | unstaged / staged / committed 普通文本变更 | 现有 multi-file `CodeView`（不变） |
-| conflict 组列表 + 多文件导航 | 侧栏仍全量；**正文默认不把冲突当 CodeView item** |
-| 选中 **可结构化** 冲突文件 | 正文区 = **`UnresolvedFile` 单文件**（官方标准） |
-| 选中 **不可结构化** 冲突 | 说明卡 + 文件级动作（ours / theirs / 打开） |
-| 冲突 + 同 entry 其它组 | 按现有 surface；conflict 槽优先走 Unresolved 宿主 |
+| conflict 组列表 + 多文件导航 | 侧栏全量，正文保留所有 content 冲突槽；点击文件只定位该文件头 |
+| **可结构化** 冲突文件 | 文件级 annotation = **`UnresolvedFile`**；共用 CodeView 文件头，不重复标题 |
+| **不可结构化** 冲突 | 同一文件槽内展示工作区文本、两侧 stage diff 或说明，并保留文件级动作 |
+| 冲突 + 同 entry 其它组 | 按现有 surface 过滤；不因选中冲突而裁掉其他正文成员 |
 
 ### 3.2 与「始终多文件」的关系
 
-金标准禁止 **默认** Codex 式「整页只开一个文件」当 **普通 diff** 终态。  
-冲突例外：
+冲突不再是单文件例外：
 
-- 官方原语本身是单文件。
-- 侧栏仍可浏览全部冲突文件；切换 path 即换 `UnresolvedFile` 的 `file` prop。
-- **不**要求把多个 Unresolved 实例虚拟进同一滚动容器（上游不支持）。
+- 一组冲突共享一个 CodeView 正文，保持 index 顺序、文件折叠与树导航。
+- `UnresolvedFile` 是每个标记冲突的正文原语，不是整页布局所有者。
+- 水合、选中和刷新均不得将冲突列表裁成当前文件；解决后只移除已解决的槽。
 
 ### 3.3 冲突分类
 
 | 类 | 判定 | 渲染 |
 |----|------|------|
 | **markers-text** | worktree UTF-8 文本，含完整 conflict marker 栈 | `UnresolvedFile` |
-| **file-level** | XY ∈ {DD, AU, UD, UA, DU} 等无可靠 markers，或解析失败 | 工作区仍有可读文本：说明卡 + 动作，正文是工作区 `File`。工作区文件不存在、且当前侧与传入侧都能读成文本（缺 blob 的一侧为空）：两侧 diff 是**唯一正文**，不再叠在 `File` 下，也不做成有高度上限的摘录。任一侧二进制、超限或读失败：不画 diff |
-| **binary** | 含 `\0` / 非文本 | binary notice + 选版本（后期） |
-| **too-large / encoding / readError** | 沿用 snapshot 上限，或读失败 | 说明 + 打开文件。文件还在工作区时，「打开文件」是主按钮，放在动作右侧 |
+| **file-level** | XY ∈ {DD, AU, UD, UA, DU} 等无可靠 markers，或解析失败 | 工作区仍有可读文本：只显示工作区 `File` 正文。工作区文件不存在、且当前侧与传入侧都能读成文本（缺 blob 的一侧为空）：直接投影为与普通 diff 相同的 CodeView FileDiff 项。任一侧二进制、超限或读失败：只在共享文件头显示说明 |
+| **binary** | 含 `\0` / 非文本 | 共享文件头显示说明；版本选择走既有右键菜单 |
+| **too-large / encoding / readError** | 沿用 snapshot 上限，或读失败 | 共享文件头显示说明；文件仍在时沿用打开文件入口，文件级解决动作走既有右键菜单 |
 
 `parseMergeConflictDiffFromFile` 在未闭合 marker 栈时 **throw** → 降级 file-level 或 raw 打开，禁止白屏。
 
@@ -182,9 +181,9 @@ P0 即「官方标准展示」；P1 才是完整 resolution 闭环。
 `origin: "conflict"` 的 group fact 应携带：
 
 - `xy`
-- stage OIDs / modes（porcelain `u` 已有，parser 今日丢弃）
+- stage OIDs / modes（保留 porcelain `u` 的三个 stage 身份；缺席 mode 为 `000000`）
 
-digest 投影必须纳入 xy + oids，避免只改 stage 不刷 index。
+index 与 contentsDigest 投影必须纳入 xy + 三个 stage 的 OID / mode，避免相同 blob 的权限或类型改变逃过 freshness 校验；所有 presentation 使用同一规则，公开 stage DTO 仍只携带 OID。
 
 ### 4.3 体积与 IPC
 
@@ -247,7 +246,7 @@ if (group === "conflict") {
 
 ### 5.3 Parser
 
-`#acceptConflict`：解析并冻结 `xy`、三个 OID；写入 fact / digest。
+`#acceptConflict`：解析并冻结 `xy`、三个 OID 及对应 mode；写入私有 fact / digest。
 
 ---
 
@@ -256,80 +255,79 @@ if (group === "conflict") {
 ### 6.1 架构
 
 ```
-Review 正文区
-├── 普通 content slots → PierDiffView (CodeView)   // 现路径
-└── 当前 conflict focus → PierUnresolvedConflictView
-        └── @pierre/diffs/react UnresolvedFile
+Review 正文区 → PierDiffView（一个 CodeView、一个纵向滚动区）
+├── 普通 content slots → 原有 diff 正文
+└── conflict slots → 同一个 CodeView 文件头
+        ├── markers-text → annotation 内的官方 UnresolvedFile
+        ├── 可读工作区 → annotation 内的官方 File
+        ├── 工作区缺席且 stage 可读 → 原生 FileDiff 正文（不嵌套第二个 diff）
+        └── 不可读 → 仅共享文件头说明
 ```
 
-**切换规则（P0）：**
-
-1. 当前选中 section / path 的 group === `conflict` 且 section 为 `markers-text`  
-   → 隐藏（或卸载）该 path 在 CodeView 中的 item，正文挂 `UnresolvedFile`。
-2. 其它情况 → 现有 CodeView。
-3. **冲突文件不得**再投影为 CodeView 的 `ready-notice` 假正文（G2）。
-
-可选：冲突文件仍占 ledger 一条 estimate 高度 **仅在「多冲突连续滚」未来需求**；P0 **不做**，单文件切换即可。
+1. 全部冲突 content 槽进入共享账本；`selectedSectionKey` 只服务定位，不决定成员集。
+2. annotation 内的 UnresolvedFile / File 隐藏文件头、按正文自然高度测量；stage 比较直接进入普通 diff 正文，不嵌套 FileDiff。
+3. 冲突不得再投影为 `ready-notice` 假正文，也不得切换到整页单文件阅读面。
+4. 加载与失败沿用普通 diff 的 estimate / error 槽和重试反馈。
 
 ### 6.2 Adapter（强制）
 
-`packages/ui` 或 git plugin 内单一边界，例如：
-
-```ts
-// packages/ui/src/diff-view/unresolved-conflict.tsx（建议）
-export function PierUnresolvedConflictView(props: {
-  file: { name: string; contents: string; cacheKey: string };
-  appearance: PierDiffViewAppearance;
-  presentation: PierDiffViewPresentation;
-  labels: { openFile: string; /* … */ };
-  mergeConflictActionsType: "none" | "default" | custom;
-  onOpenFile?: () => void;
-  onMergeConflictAction?: ...; // P1
-  onError?: (error: Error) => void;
-}): JSX.Element;
-```
+适配器唯一位于 `packages/ui/src/diff-view/unresolved-conflict/host.tsx`。业务通过
+`PierDiffView` 的 `unresolvedConflict` host 接入；冲突数据来自同一份 `items`，不再提供
+独立的单文件阅读组件。只有标记正文与工作区正文使用文件级 annotation；stage 比较直接复用普通 FileDiff 项。
 
 职责：
 
 - 主题 / 字体 / overflow 与 `PierDiffView` 对齐（复用 appearance tokens）。
+- 主题与写入锁通过实时共享上下文传入；Pierre 缓存的 annotation 不得保留初始主题或操作状态。
+- Accept 与右键文件级解决共用 repository mutation authority；成功与失败均等待权威刷新后释放，禁止只靠正文局部 busy 状态隔离两条入口。
 - 捕获 parse 失败 → 友好降级。
 - **禁止**业务组件直接 `import { UnresolvedFile }` 散落（可治理测试锁 import 边界）。
 
 ### 6.3 Header / 动作
 
 - 状态：冲突 · markers-text | 文件级 · XY 白话。
-- 主按钮：打开文件（已有 `openGitReviewPathInEditor`）。
-- P0：可不显示 Accept，或 default 仅预览并 toast「请保存后标记已解决」若未接写盘。
+- 打开文件沿用共享文件头路径及既有右键入口；工作区文件缺席时不得打开不存在的文件。
+- 窄窗共享文件头先截断状态说明，保留现有标题槽上限内的完整文件名；文件名仅超过该上限时截断。此优先级在普通差异与冲突共用的文件头实现，不改变字体、行高或间距。
+- 文件级确认删除 / 保留当前 / 采用传入 / 暂存当前等动作只出现在既有正文右键菜单，按现有复制与源码入口之后的稳定分组呈现；不增加文件头图标，不在正文渲染按钮条或卡片。
 - P1：Accept 后写盘成功 → toast / 自然 UI（列表离开 conflict 组）；失败 `showAppAlert`。
 
 ### 6.4 Projection
 
 `resource-projection`：
 
-- `section.kind === "conflict" && markers-text` → 专用 item / 或 document 旁路字段供 Unresolved 宿主，**不是** `PierDiffViewItem.patch`。
-- file-level / binary → `ready-notice` **具体** i18n（双方删除 / 修改与删除冲突 / …），禁止笼统一句。
+- 标记与可读工作区正文使用 `kind: "conflict"` 文件槽内的 annotation；可读 stage 比较直接生成真实 FileDiffMetadata，不隐藏真实差异行。
+- 不可读说明只在共享文件头出现一次，文件级解决动作来自该次右键目标，不能落到其他文件。
 
 ### 6.5 样式
 
 - 复用 Pierre `[data-has-merge-conflict]`；appearance 已注释对齐「压平批注行」同源做法。
 - 产品语义色走 token；不在业务写死 hex。
+- 正文不得有独立操作条、“当前→传入”说明行或为它们保留的空白。
+- 标记 / 工作区正文复用普通 diff 的 `CODE_VIEW_CUSTOM_CSS`、`diffMetrics` 行高与字体变量；嵌套正文不叠加原生 File 顶距或第二份文件底垫。
+- 文件头、折叠、行号、增删色条、选区、滚动条与普通 diff 同源；允许的差异只限官方冲突标记与回合内 Accept 交互。
 
 ---
 
-## 7. 写盘闭环（P1，摘要）
+## 7. 写盘闭环
 
-1. 用户 Accept → adapter 得更新后 contents（需从 resolved `FileDiffMetadata` 还原文本；若上游只给 diff 结构，用官方 `onMergeConflictResolve(file, payload)` 路径取最终 `FileContents`）。
-2. main 命令（建议）：`git.review.conflict.writeResolved`  
-   - path + expectedDigest + contents  
-   - 校验 fingerprint → 原子写  
-   - 可选 auto `git add -- path`
-3. 失败：`stale` / `busy` / `commandFailed` → 契约 failure + 用户 alert。
-4. 成功：mutation 提交 → index refresh → conflict 槽消失。
+1. 用户 Accept → adapter 经官方 `onMergeConflictResolve` 路径还原已解决的完整 contents。
+2. 唯一 main 命令 `git.resolveReviewConflict`：
+   - `source` + 必填 `expectedContentsDigest` + `action`；`write` 另带 `resolvedContents`。
+   - digest 同时覆盖工作区正文与文件身份、XY、base/ours/theirs stage 的 OID / mode；`write` / `ours` / `theirs` / `stage` 一律复核，拒绝旧正文或旧索引事实。
+   - 冲突工作区身份同样进入 `indexRevision`，外部修改必须触发正文更新；普通 numstat 不读取冲突文件，不能让一个不可读冲突阻断整份索引。存在冲突时只查询普通 tracked fact 的精确路径，按字节 / 路径数量分批，并让 rename / copy 的旧新路径同批；禁止把全量冲突排除项展开到一次 argv。
+   - `write` 不接受残留（含未闭合）标记或超过 8MiB 的 UTF-8 字节；写入前再验证原文件身份与内容。
+   - 同目录临时文件完整写入、保留 owner / mode，持有临时 fd 到发布完成；flush 前记录 stat，flush 后对比请求字节，并再次校验 fd 与 no-follow 临时目录项的普通文件类型、身份与内容相关 stat。macOS 以 `O_NOFOLLOW_ANY` 打开父目录并用 `openat` / `renameat` 锚定，Linux 走既有无符号链接 fd walk 与 `/proc/self/fd`。失败不得先截断原文；只清理仍属自身 inode 的临时目录项，禁止删除其他进程的替换文件。最终 stat 校验不宣称与 rename 构成内核 compare-and-swap。
+   - 成功写入后执行 `git add -- path`；不能把写盘失败或残留标记当成已解决。
+3. 失败：`staleRevision` / `busy` / `commandFailed` 等契约 failure → 复用本地化下一步提示与技术详情的宿主 alert。
+4. 成功或失败都保持共享 mutation 权限占用，直到权威 index refresh 完成；成功只移除对应 conflict 槽。
 
-文件级 ours/theirs（P2）：
+文件级解决：
 
-- `git checkout --ours|--theirs -- path` + `git add`  
-- 与 markers 路径分离，避免误用 UnresolvedFile。
+- 有所选 stage：`git checkout --ours|--theirs -- path` + `git add`。仅 `100644` / `100755` 普通文件用原生 `git grep --no-textconv -I -q` 检查残留行首标记；仅退出码 1 表示无匹配，其他失败传播。二进制跳过文本匹配，不把完整 blob 传入审查输出预算；symlink 的目标路径不作正文标记检查。
+- `160000` gitlink 不在主仓库读取子模块 commit；checkout 加 `--recurse-submodules`，使子模块 HEAD 与所选 stage 一致后再暂存，不能把旧子模块 HEAD 当作所选版本。
+- 所选 stage 缺席：`git rm -- path` 完成删除与索引解决，不再对消失路径重复 `git add`。
+- 已人工解决的正文：`stage` 复核同一 digest，拒绝残留标记，然后 `git add`。
+- 与 markers 路径分离，避免误用 UnresolvedFile；五个右键命令必须在插件 manifest 声明 `git:write` 并提供四语标题，真实宿主声明校验不得被测试替身绕开。
 
 ---
 
@@ -359,7 +357,12 @@ export function PierUnresolvedConflictView(props: {
 | fixtures：未闭合 marker | 降级 file-level / error，不 throw 到 UI 白屏 |
 | fixtures：DD / UD | file-level presentation，无 contents 强依赖 |
 | binary | binary presentation |
-| parser 保留 xy + oids | digest 稳定、字段存在 |
+| stage OID / mode-only 外部变更 | 所有解决动作拒绝旧 digest；工作区与索引不变，缺席工作区同样受保护 |
+| 临时目录项换成 symlink / 普通文件，或同 inode 内容篡改 | 发布拒绝、原文件身份与内容不变；保留其他进程的替换目录项 |
+| 5,000 个长路径冲突 + 普通双组变更 / rename / 共享源 copy | 索引可读，普通计数与移动身份正确；精确路径同样支持文件名前缀、目录内重命名、Unicode / glob 字符，不读取冲突后代 |
+| 主仓库无子模块 commit 的 gitlink | 当前 / 传入选择均成功，子模块 HEAD 与 stage 0 匹配所选 commit |
+| 65MiB binary 含标记样字节 | 可选择并暂存，stage 0 与文件 hash 匹配所选 blob |
+| 超大普通文本尾部未闭合标记 | 拒绝选择版本，原工作区与未合并索引不变 |
 | projection | markers → Unresolved 宿主输入；禁止 ready-notice 主路径 |
 | adapter 主题 | light/dark 切换不丢 file cacheKey 纪律 |
 | 治理 | 业务禁止直接 import UnresolvedFile（仅 adapter） |
@@ -370,6 +373,10 @@ export function PierUnresolvedConflictView(props: {
 2. Open File → 编辑器打开同 path。
 3. P1：Accept Incoming → 磁盘无 markers → 文件离开 conflict 组。
 4. 外部改文件中 → Accept 写盘 → stale 友好失败。
+
+自动场景在 `tests/e2e/git/conflicts.spec.ts`：保留现有 conflict / index surface 过滤，验证多冲突导航与独立折叠、真实 Accept 写盘与 stage、文件级删除确认 / 版本选择 / 暂存、Files 同路径打开，以及外部编辑后的 stale 防覆盖。必须附 light / dark / narrow 与失败态截图。
+
+原生菜单自动化观察真实 `Menu.popup`，仍调用原 popup，并选择其真实启用 `MenuItem` 回调；不替换宿主声明、菜单结果或 GIT。stale 场景通过 CDP 暂停已派发的 Accept 点击后改磁盘，避免靠 watcher 延迟碰运气。
 
 ### 9.3 DoD（G0–G3）
 
@@ -401,10 +408,10 @@ export function PierUnresolvedConflictView(props: {
 
 ### PR2 — 官方 UnresolvedFile 宿主（P0 展示）
 
-**目标：** 选中 markers-text 冲突 = `PierUnresolvedConflictView`。
+**目标：** markers-text 冲突在连续多文件列表的 annotation 内挂官方 `UnresolvedFile`。
 
 - `packages/ui` adapter + appearance 对齐  
-- git review 正文区切换：conflict focus ↔ CodeView  
+- git review 所有正文共用 CodeView，不再按 conflict focus 替换整页
 - i18n、Open File  
 - `mergeConflictActionsType: "none"` 或 default 不写盘  
 - component 测试：挂载 Unresolved、parse 失败降级  
@@ -443,7 +450,7 @@ export function PierUnresolvedConflictView(props: {
 | parse 结果塞 CodeView 当官方 UI | 无 marker 行 / Accept / 专用 renderer |
 | worktree 当 `type: "file"` 展示 raw markers | 非官方 conflict UI |
 | `git diff` 当**带标记**冲突详情 | 语义错误；标记正文只走 `UnresolvedFile`。工作区文件已不存在时的两侧 stage 文本 diff 是文件级唯一正文，见 §3.3 |
-| 默认多 Unresolved 虚拟进 CodeView | 上游不支持 |
+| 每个冲突独立 CodeView / 独立纵向滚动区 | 破坏共享列表、折叠与树导航；只允许在外层 CodeView annotation 内挂正文原语 |
 | 业务直接调 `parseMergeConflictDiffFromFile` 散落 | API beta，必须 adapter |
 
 ---
@@ -454,7 +461,7 @@ export function PierUnresolvedConflictView(props: {
 |------|------|
 | UnresolvedFile experimental | adapter 隔离；锁 `@pierre/diffs` 版本；升级跑 fixtures |
 | 大文件 IPC | snapshot 上限；tooLarge |
-| 多文件金标准 vs 单文件冲突 | 侧栏多文件 + 正文单 Unresolved；文档写明例外 |
+| annotation 正文高度变化 | 复用 CodeView annotation 测量；验收多个冲突连续浏览、折叠、树定位与单点解决后的成员稳定 |
 | 半解决状态（部分 region Accept 未写盘） | P0 不写盘；P1 明确「全部解决后写」或每次 Accept 写全文件 |
 | 与行内评论 | P0 冲突面可不挂 review comments；P1 再评估坐标空间 |
 
@@ -465,4 +472,4 @@ export function PierUnresolvedConflictView(props: {
 - **官方标准方案 = `UnresolvedFile` + worktree markers `FileContents`。**  
 - Pier 缺口在 document 不读正文 + UI 未挂该原语，不在 Pierre 缺能力。  
 - 执行序：**PR1 materialize → PR2 Unresolved 宿主（标准展示）→ PR3 清 notice → PR4 写盘。**  
-- CodeView 降级路径 **不作为** 主方案，不写进 DoD。
+- CodeView 只拥有列表 chrome 与滚动；标记详情始终由官方 UnresolvedFile 展示，不以普通 diff 或 raw markers 降级冒充。

@@ -1,5 +1,6 @@
 import type { PierDiffViewItem } from "@pier/ui/diff-view/index.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { gitReviewConflictCanOpen } from "@shared/contracts/git/review.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { type RefObject, useCallback } from "react";
 import { pluginText } from "../plugin-text.ts";
@@ -25,6 +26,12 @@ export function useGitReviewOpenFile(options: {
         return;
       }
       const item = itemsRef.current.find((entry) => entry.id === itemId);
+      if (
+        item?.conflict !== undefined &&
+        !gitReviewConflictCanOpen(item.conflict.xy)
+      ) {
+        return;
+      }
       const path = item?.fileDisplay?.path;
       if (!path) {
         return;

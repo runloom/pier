@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { execGit } from "@main/services/git/exec.ts";
 import { createGitService } from "@main/services/git/service.ts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  conflictSection,
+  createConflictRepository,
+  createDuConflict,
+  createUuConflict,
+  fileSource,
   TestGitReviewService as GitReviewService,
   gitReviewRequestOptions,
 } from "./test-fixtures.ts";
@@ -19,77 +23,9 @@ afterEach(async () => {
 });
 
 async function createRepository(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "pier-review-conflict-resolve-"));
+  const root = await createConflictRepository();
   roots.push(root);
-  await execGit(["init"], { cwd: root });
-  await execGit(["config", "user.name", "Pier Test"], { cwd: root });
-  await execGit(["config", "user.email", "pier@example.invalid"], {
-    cwd: root,
-  });
   return root;
-}
-
-async function commitAll(root: string, message: string): Promise<void> {
-  await execGit(["add", "-A", "--"], { cwd: root });
-  await execGit(["commit", "-m", message], { cwd: root });
-}
-
-async function createUuConflict(root: string): Promise<void> {
-  await writeFile(join(root, "conflict.ts"), "base\n", "utf8");
-  await commitAll(root, "base");
-  const mainBranch = (
-    await execGit(["branch", "--show-current"], { cwd: root })
-  ).trim();
-  await execGit(["switch", "-c", "other"], { cwd: root });
-  await writeFile(join(root, "conflict.ts"), "other\n", "utf8");
-  await commitAll(root, "other");
-  await execGit(["switch", mainBranch], { cwd: root });
-  await writeFile(join(root, "conflict.ts"), "main\n", "utf8");
-  await commitAll(root, "main");
-  await execGit(["merge", "other"], { cwd: root }).catch(() => undefined);
-}
-
-async function createDuConflict(root: string): Promise<void> {
-  await writeFile(join(root, "gone.ts"), "base\n", "utf8");
-  await commitAll(root, "base");
-  const mainBranch = (
-    await execGit(["branch", "--show-current"], { cwd: root })
-  ).trim();
-  await execGit(["switch", "-c", "other"], { cwd: root });
-  await writeFile(join(root, "gone.ts"), "other\n", "utf8");
-  await commitAll(root, "other");
-  await execGit(["switch", mainBranch], { cwd: root });
-  await execGit(["rm", "--", "gone.ts"], { cwd: root });
-  await commitAll(root, "delete on main");
-  await execGit(["merge", "other"], { cwd: root }).catch(() => undefined);
-}
-
-function fileSource(root: string, path = "conflict.ts") {
-  return {
-    contextId: "worktree:test",
-    gitRootPath: root,
-    oldPaths: [] as string[],
-    path,
-    target: { kind: "uncommitted" as const },
-  };
-}
-
-async function conflictSection(root: string, path = "conflict.ts") {
-  const service = new GitReviewService();
-  const document = await service.getFileDocument({
-    operationId: randomUUID(),
-    source: fileSource(root, path),
-  });
-  expect(document.kind).toBe("ok");
-  if (document.kind !== "ok") {
-    throw new Error("expected ok document");
-  }
-  const section = document.sections.find((item) => item.kind === "conflict");
-  expect(section?.kind).toBe("conflict");
-  if (section?.kind !== "conflict") {
-    throw new Error("expected conflict section");
-  }
-  return { service, section };
 }
 
 describe("git.resolveReviewConflict", () => {
@@ -117,6 +53,9 @@ describe("git.resolveReviewConflict", () => {
 
     expect(result.kind).toBe("ok");
     expect(await readFile(join(root, "conflict.ts"), "utf8")).toBe(
+      resolvedBody
+    );
+    expect(await execGit(["show", ":conflict.ts"], { cwd: root })).toBe(
       resolvedBody
     );
     const status = await execGit(
@@ -165,10 +104,11 @@ describe("git.resolveReviewConflict", () => {
   it("keeps theirs for a UU conflict via checkout", async () => {
     const root = await createRepository();
     await createUuConflict(root);
-    const service = new GitReviewService();
+    const { service, section } = await conflictSection(root);
     const result = await service.resolveConflict(
       {
         action: "theirs",
+        expectedContentsDigest: section.contentsDigest,
         operationId: randomUUID(),
         source: fileSource(root),
       },
@@ -180,15 +120,22 @@ describe("git.resolveReviewConflict", () => {
     expect(result.kind).toBe("ok");
     const body = await readFile(join(root, "conflict.ts"), "utf8");
     expect(body).toBe("other\n");
+    expect(
+      await execGit(["ls-files", "-u", "--", "conflict.ts"], { cwd: root })
+    ).toBe("");
+    expect(await execGit(["show", ":conflict.ts"], { cwd: root })).toBe(
+      "other\n"
+    );
   });
 
   it("keeps ours for a UU conflict via checkout", async () => {
     const root = await createRepository();
     await createUuConflict(root);
-    const service = new GitReviewService();
+    const { service, section } = await conflictSection(root);
     const result = await service.resolveConflict(
       {
         action: "ours",
+        expectedContentsDigest: section.contentsDigest,
         operationId: randomUUID(),
         source: fileSource(root),
       },
@@ -200,6 +147,12 @@ describe("git.resolveReviewConflict", () => {
     expect(result.kind).toBe("ok");
     const body = await readFile(join(root, "conflict.ts"), "utf8");
     expect(body).toBe("main\n");
+    expect(
+      await execGit(["ls-files", "-u", "--", "conflict.ts"], { cwd: root })
+    ).toBe("");
+    expect(await execGit(["show", ":conflict.ts"], { cwd: root })).toBe(
+      "main\n"
+    );
   });
 
   it("rejects stale expectedContentsDigest on write", async () => {
@@ -234,6 +187,7 @@ describe("git.resolveReviewConflict", () => {
     const result = await service.resolveConflict(
       {
         action: "ours",
+        expectedContentsDigest: "sha256:uncommitted",
         operationId: randomUUID(),
         source: {
           ...fileSource(root),
@@ -254,10 +208,11 @@ describe("git.resolveReviewConflict", () => {
   it("restores theirs for a DU conflict", async () => {
     const root = await createRepository();
     await createDuConflict(root);
-    const service = new GitReviewService();
+    const { service, section } = await conflictSection(root, "gone.ts");
     const result = await service.resolveConflict(
       {
         action: "theirs",
+        expectedContentsDigest: section.contentsDigest,
         operationId: randomUUID(),
         source: fileSource(root, "gone.ts"),
       },
@@ -268,15 +223,20 @@ describe("git.resolveReviewConflict", () => {
     );
     expect(result.kind).toBe("ok");
     expect(await readFile(join(root, "gone.ts"), "utf8")).toBe("other\n");
+    expect(
+      await execGit(["ls-files", "-u", "--", "gone.ts"], { cwd: root })
+    ).toBe("");
+    expect(await execGit(["show", ":gone.ts"], { cwd: root })).toBe("other\n");
   });
 
   it("keeps deletion for a DU conflict", async () => {
     const root = await createRepository();
     await createDuConflict(root);
-    const service = new GitReviewService();
+    const { service, section } = await conflictSection(root, "gone.ts");
     const result = await service.resolveConflict(
       {
         action: "ours",
+        expectedContentsDigest: section.contentsDigest,
         operationId: randomUUID(),
         source: fileSource(root, "gone.ts"),
       },
@@ -292,16 +252,20 @@ describe("git.resolveReviewConflict", () => {
       { cwd: root }
     );
     expect(status).not.toMatch(/^(?:DU|UU) /mu);
+    expect(
+      await execGit(["ls-files", "--stage", "--", "gone.ts"], { cwd: root })
+    ).toBe("");
   });
 
   it("stages an already-resolved UU worktree without rewriting it", async () => {
     const root = await createRepository();
     await createUuConflict(root);
     await writeFile(join(root, "conflict.ts"), "resolved\n", "utf8");
-    const service = new GitReviewService();
+    const { service, section } = await conflictSection(root);
     const result = await service.resolveConflict(
       {
         action: "stage",
+        expectedContentsDigest: section.contentsDigest,
         operationId: randomUUID(),
         source: fileSource(root),
       },
@@ -312,6 +276,12 @@ describe("git.resolveReviewConflict", () => {
     );
     expect(result.kind).toBe("ok");
     expect(await readFile(join(root, "conflict.ts"), "utf8")).toBe(
+      "resolved\n"
+    );
+    expect(
+      await execGit(["ls-files", "-u", "--", "conflict.ts"], { cwd: root })
+    ).toBe("");
+    expect(await execGit(["show", ":conflict.ts"], { cwd: root })).toBe(
       "resolved\n"
     );
     const status = await execGit(

@@ -1,43 +1,6 @@
 import { findPartialCollapsedSeparatorItemId } from "@pier/ui/diff-view/header-events.ts";
 import { bindPartialExpandSeparators } from "@pier/ui/diff-view/path-title-chrome.ts";
-import { conflictStageTexts } from "@pier/ui/diff-view/unresolved-conflict/stage-diff.tsx";
 import { describe, expect, it, vi } from "vitest";
-
-const conflict = {
-  contents: null,
-  contentsDigest: "sha256:test",
-  presentation: "file-level" as const,
-  stages: { baseOid: null, oursOid: null, theirsOid: null },
-  xy: "DU" as const,
-};
-
-describe("conflictStageTexts", () => {
-  it("uses stage blobs only when the worktree body is missing", () => {
-    expect(
-      conflictStageTexts({
-        ...conflict,
-        oursContents: null,
-        theirsContents: "incoming\n",
-      })
-    ).toEqual({ ours: "", theirs: "incoming\n" });
-    expect(
-      conflictStageTexts({
-        ...conflict,
-        contents: "resolved\n",
-        oursContents: "ours\n",
-        theirsContents: "incoming\n",
-      })
-    ).toBeNull();
-    expect(
-      conflictStageTexts({
-        ...conflict,
-        oursContents: null,
-        theirsContents: null,
-      })
-    ).toBeNull();
-    expect(conflictStageTexts(conflict)).toBeNull();
-  });
-});
 
 describe("findPartialCollapsedSeparatorItemId", () => {
   it("maps a non-expandable unmodified row to the rendered file", () => {

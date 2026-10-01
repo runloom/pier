@@ -21,7 +21,7 @@ export class GitSafePathOpenError extends Error {
 
 export interface OpenGitPathNoSymlinksOptions {
   /**
-   * Open mode. `write` truncates and opens for writing; default `read`.
+   * Open mode. `write` opens read/write without truncating; default `read`.
    * Both modes refuse symlink races (darwin `O_NOFOLLOW_ANY`, linux fd walk).
    */
   readonly access?: "read" | "write";
@@ -112,9 +112,7 @@ function fileFlags(
   noFollow = constants.O_NOFOLLOW
 ): number {
   if (access === "write") {
-    return (
-      constants.O_WRONLY + constants.O_TRUNC + constants.O_NONBLOCK + noFollow
-    );
+    return constants.O_RDWR + constants.O_NONBLOCK + noFollow;
   }
   return constants.O_RDONLY + constants.O_NONBLOCK + noFollow;
 }

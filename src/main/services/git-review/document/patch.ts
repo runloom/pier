@@ -9,10 +9,7 @@ import {
 import { parseGitSinglePathOutput } from "../../git/path-output.ts";
 import type { GitReviewIndexExecutionBudget } from "../index/contract.ts";
 import type { GitReviewFileFingerprint } from "../path/guard.ts";
-import {
-  createGitReviewExactPathspecs,
-  hasGitReviewExactPathspecConflict,
-} from "../path/spec.ts";
+import { createGitReviewExactPathspecs } from "../path/spec.ts";
 import { createGitReviewTemporaryRoot } from "../temporary-root.ts";
 import {
   cleanupGitReviewTemporaryRoot,
@@ -381,10 +378,7 @@ async function createTrackedPatchArgs(
   options: ReadGitReviewPatchOptions
 ): Promise<readonly string[]> {
   const paths = uniquePaths(options.fact.oldPath, options.fact.targetPath);
-  const pathspecConflict = hasGitReviewExactPathspecConflict(paths);
-  const pathspecs = pathspecConflict
-    ? paths.map((path) => `:(top,literal)${path}`)
-    : createGitReviewExactPathspecs(paths);
+  const pathspecs = createGitReviewExactPathspecs(paths);
   const movementFilter =
     options.fact.movement === null
       ? []

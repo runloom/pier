@@ -229,6 +229,36 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "git",
+      id: "pier.git.review.resolveConflictDelete",
+      permissions: ["git:write"],
+      title: "GIT: Confirm Deletion",
+    },
+    {
+      category: "git",
+      id: "pier.git.review.resolveConflictKeepDeleted",
+      permissions: ["git:write"],
+      title: "GIT: Keep Deleted",
+    },
+    {
+      category: "git",
+      id: "pier.git.review.resolveConflictKeepCurrent",
+      permissions: ["git:write"],
+      title: "GIT: Keep Current Version",
+    },
+    {
+      category: "git",
+      id: "pier.git.review.resolveConflictTakeIncoming",
+      permissions: ["git:write"],
+      title: "GIT: Use Incoming Version",
+    },
+    {
+      category: "git",
+      id: "pier.git.review.resolveConflictStageCurrent",
+      permissions: ["git:write"],
+      title: "GIT: Stage Current File",
+    },
+    {
+      category: "git",
       id: "pier.git.review.toggleTree",
       permissions: [],
       title: "Toggle Changed Files Tree",

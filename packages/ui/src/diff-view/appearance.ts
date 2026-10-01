@@ -90,7 +90,8 @@ ${SCROLLBAR_SYSTEM_CSS}
   }
 
   [data-diffs-header="default"] > [data-header-content] {
-    flex: 0 1 auto;
+    /* Status text yields before the filename; long paths still use the cap below. */
+    flex: 0 0 auto;
     min-width: 0;
     /* Leave room for stats + icon actions on the right. */
     max-width: calc(100% - 8.5rem);

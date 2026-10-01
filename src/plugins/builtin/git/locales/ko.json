@@ -168,6 +168,26 @@
       "description": "로컬 변경을 버리거나, 새 파일을 휴지통으로 옮깁니다.",
       "title": "GIT: 변경 버리기"
     },
+    "pier.git.review.resolveConflictDelete": {
+      "category": "git",
+      "title": "GIT: 삭제 확인"
+    },
+    "pier.git.review.resolveConflictKeepDeleted": {
+      "category": "git",
+      "title": "GIT: 삭제 유지"
+    },
+    "pier.git.review.resolveConflictKeepCurrent": {
+      "category": "git",
+      "title": "GIT: 현재 파일 유지"
+    },
+    "pier.git.review.resolveConflictTakeIncoming": {
+      "category": "git",
+      "title": "GIT: 들어오는 버전 사용"
+    },
+    "pier.git.review.resolveConflictStageCurrent": {
+      "category": "git",
+      "title": "GIT: 현재 파일 스테이징"
+    },
     "pier.git.review.toggleTree": {
       "category": "git",
       "description": "변경 파일 트리 사이드바를 보이거나 숨깁니다.",

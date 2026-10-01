@@ -4,6 +4,8 @@ import { FileText } from "lucide-react";
 import { pluginText } from "../plugin-text.ts";
 import { reviewMutationBasename } from "./code-mutation-helpers.ts";
 import { panelContextFromReviewGitRoot } from "./context/from-git-root.ts";
+import { registerGitReviewDiffConflictActions } from "./diff-conflict-actions.ts";
+import { GitReviewMutationAuthority } from "./mutation-authority.ts";
 
 export const GIT_REVIEW_DIFF_SURFACE = "git/review-diff";
 export const GIT_REVIEW_OPEN_IN_EDITOR_COMMAND_ID =
@@ -24,7 +26,7 @@ export function parseGitReviewDiffOpenMetadata(
   invocation: { metadata?: Record<string, unknown> } | undefined
 ): GitReviewDiffOpenMetadata | null {
   const metadata = invocation?.metadata;
-  if (!isRecord(metadata)) {
+  if (!isRecord(metadata) || metadata.openable === false) {
     return null;
   }
   const path = metadata.path;
@@ -77,9 +79,10 @@ export function openGitReviewPathInEditor(options: {
 }
 
 export function registerGitReviewDiffActions(
-  context: RendererPluginContext
+  context: RendererPluginContext,
+  authority = new GitReviewMutationAuthority()
 ): () => void {
-  return context.actions.register({
+  const disposeOpen = context.actions.register({
     category: "git",
     enabled: (invocation) => parseGitReviewDiffOpenMetadata(invocation) != null,
     handler: (invocation) => {
@@ -115,4 +118,13 @@ export function registerGitReviewDiffActions(
     surfaces: [GIT_REVIEW_DIFF_SURFACE],
     title: () => pluginText(context, "reviewOpenInEditor", "Jump to Source"),
   });
+  const disposeConflict = registerGitReviewDiffConflictActions(
+    context,
+    authority,
+    GIT_REVIEW_DIFF_SURFACE
+  );
+  return () => {
+    disposeOpen();
+    disposeConflict();
+  };
 }

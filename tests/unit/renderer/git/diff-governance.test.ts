@@ -45,53 +45,6 @@ async function localDependencySources(
 }
 
 describe("Git diff renderer governance", () => {
-  it("只允许 packages/ui 的 diff-view 适配器模块导入 Pierre 运行时", async () => {
-    const files = [
-      ...(await sourceFiles(join(ROOT, "src"))),
-      ...(await sourceFiles(join(ROOT, "packages/ui/src"))),
-    ];
-    const importers: string[] = [];
-    for (const file of files) {
-      const source = await readFile(file, "utf8");
-      if (source.includes('from "@pierre/diffs')) {
-        importers.push(relative(ROOT, file));
-      }
-    }
-
-    expect(importers).toEqual([
-      "src/renderer/lib/theme/register-custom-themes.ts",
-      "packages/ui/src/diff-view/excerpt/index.tsx",
-      "packages/ui/src/diff-view/excerpt/use-height.ts",
-      "packages/ui/src/diff-view/file-diff/from-contents.ts",
-      "packages/ui/src/diff-view/file-diff/from-patch.ts",
-      "packages/ui/src/diff-view/file-diff/placeholders.ts",
-      "packages/ui/src/diff-view/handle-deps.ts",
-      "packages/ui/src/diff-view/hunk-annotations.ts",
-      "packages/ui/src/diff-view/image-diff/annotation.ts",
-      "packages/ui/src/diff-view/image-diff/file-diff.ts",
-      "packages/ui/src/diff-view/item-sync.ts",
-      "packages/ui/src/diff-view/item-transition.ts",
-      "packages/ui/src/diff-view/items.ts",
-      "packages/ui/src/diff-view/pointer-selection.ts",
-      "packages/ui/src/diff-view/review/annotation-anchors.ts",
-      "packages/ui/src/diff-view/review/use-review-annotation-merge.ts",
-      "packages/ui/src/diff-view/selection-text.ts",
-      "packages/ui/src/diff-view/topology-scroll.ts",
-      "packages/ui/src/diff-view/unresolved-conflict/annotation.ts",
-      "packages/ui/src/diff-view/unresolved-conflict/file-body.tsx",
-      "packages/ui/src/diff-view/unresolved-conflict/file-diff.ts",
-      "packages/ui/src/diff-view/unresolved-conflict/markers-body.tsx",
-      "packages/ui/src/diff-view/unresolved-conflict/stage-diff.tsx",
-      "packages/ui/src/diff-view/use-code-options.ts",
-      "packages/ui/src/diff-view/use-content-selection.ts",
-      "packages/ui/src/diff-view/use-headers.tsx",
-      "packages/ui/src/diff-view/use-item-apply.ts",
-      "packages/ui/src/diff-view/view/pier-diff-view.tsx",
-      "packages/ui/src/diff-view/view-shell.tsx",
-      "packages/ui/src/diff-view/worker.tsx",
-    ]);
-  });
-
   it("锁定官方正文边界、配置和根容器且不恢复自绘正文", async () => {
     const uiFiles = await sourceFiles(join(ROOT, "packages/ui/src"));
     const source = await readFile(

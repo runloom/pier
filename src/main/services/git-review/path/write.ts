@@ -1,11 +1,15 @@
-import type { FileHandle } from "node:fs/promises";
-import { resolve } from "node:path";
+import { type FileHandle, lstat } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import {
   gitReviewRelativePathSchema,
   gitReviewRootPathSchema,
 } from "../../../../shared/contracts/git/review.ts";
+import { publishGitReviewFile } from "./atomic-write.ts";
 import { GitReviewPathError } from "./contract.ts";
-import type { ReadGitReviewFileSnapshotOptions } from "./guard.ts";
+import type {
+  GitReviewFileSnapshot,
+  ReadGitReviewFileSnapshotOptions,
+} from "./guard.ts";
 import { openGitReviewFileNoSymlinks } from "./open.ts";
 import {
   assertGitReviewPathActive,
@@ -16,8 +20,10 @@ import {
   assertContained,
   inspectAncestors,
   mapFileSystemError,
+  readAndHash,
   resolveCanonicalRoot,
   revalidateAncestors,
+  statToken,
 } from "./path-helpers.ts";
 
 /**
@@ -27,6 +33,10 @@ import {
 export async function writeGitReviewFileContents(
   options: ReadGitReviewFileSnapshotOptions & {
     readonly contents: string;
+    readonly expectedSnapshot: Pick<
+      GitReviewFileSnapshot,
+      "digest" | "identityToken"
+    >;
   }
 ): Promise<void> {
   assertGitReviewPathActive(options.signal);
@@ -75,9 +85,42 @@ export async function writeGitReviewFileContents(
         "Git Review 只允许写入普通文件"
       );
     }
-    const bytes = Buffer.from(options.contents, "utf8");
-    await raceGitReviewPathOperation(
-      () => openedHandle.writeFile(bytes),
+    if (statToken(before) !== options.expectedSnapshot.identityToken) {
+      throw new GitReviewPathError(
+        "changed",
+        "The conflict file changed before writing"
+      );
+    }
+    const content = await readAndHash(
+      openedHandle,
+      Number(before.size),
+      false,
+      options.signal
+    );
+    const afterRead = await raceGitReviewPathOperation(
+      () => openedHandle.stat({ bigint: true }),
+      options.signal,
+      undefined,
+      options.budget
+    );
+    const currentPath = await raceGitReviewPathOperation(
+      () => lstat(target, { bigint: true }),
+      options.signal,
+      undefined,
+      options.budget
+    );
+    if (
+      `sha256:${content.digest}` !== options.expectedSnapshot.digest ||
+      statToken(afterRead) !== options.expectedSnapshot.identityToken ||
+      statToken(currentPath) !== options.expectedSnapshot.identityToken
+    ) {
+      throw new GitReviewPathError(
+        "changed",
+        "The conflict file changed before writing"
+      );
+    }
+    const parent = await raceGitReviewPathOperation(
+      () => lstat(dirname(target), { bigint: true }),
       options.signal,
       undefined,
       options.budget
@@ -88,6 +131,16 @@ export async function writeGitReviewFileContents(
       options.signal,
       options.budget
     );
+    await publishGitReviewFile({
+      canonicalRoot,
+      contents: Buffer.from(options.contents, "utf8"),
+      expectedIdentity: options.expectedSnapshot.identityToken,
+      parent,
+      segments,
+      signal: options.signal,
+      source: openedHandle,
+      target,
+    });
   } catch (error) {
     if (error instanceof GitReviewPathError) {
       throw error;

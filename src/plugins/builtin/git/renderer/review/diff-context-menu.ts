@@ -10,6 +10,10 @@ import {
   pinDiffCopyStickyText,
 } from "@pier/ui/diff-view/selection/copy-sticky.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import {
+  type GitReviewIndexEntry,
+  gitReviewConflictCanOpen,
+} from "@shared/contracts/git/review.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { pluginText } from "../plugin-text.ts";
@@ -28,6 +32,7 @@ export function openGitReviewDiffContextMenu(options: {
   readonly contextId: string;
   readonly event: ReactMouseEvent;
   readonly gitRootPath: string;
+  readonly entries?: readonly GitReviewIndexEntry[];
   readonly handle: PierDiffViewHandle | null | undefined;
   readonly items: readonly PierDiffViewItem[];
   readonly sourcePanelComponent?: string;
@@ -38,6 +43,7 @@ export function openGitReviewDiffContextMenu(options: {
     context,
     contextId,
     event,
+    entries,
     gitRootPath,
     handle,
     items,
@@ -66,18 +72,66 @@ export function openGitReviewDiffContextMenu(options: {
     handle,
     items,
   });
+  // Header and nested conflict bodies share the native CodeView host identity.
+  // Never substitute a previous line selection for a file-level command.
+  const pointerHit = handle?.resolvePointerLineHit(event.nativeEvent);
+  const pointerHost = event.nativeEvent
+    .composedPath()
+    .find(
+      (node) =>
+        node instanceof Element && node.hasAttribute("data-pier-file-host")
+    );
+  const pointerItemId =
+    pointerHost instanceof Element
+      ? pointerHost.getAttribute("data-pier-file-host")
+      : pointerHit?.id;
+  const pointerItem = items.find((item) => item.id === pointerItemId);
+  const pointerPath = pointerItem?.fileDisplay?.path;
+  const conflict = pointerItem?.conflict;
+  const conflictEntry = pointerPath
+    ? entries?.find((entry) =>
+        entry.renderSlots.some(
+          (slot) =>
+            slot.group === "conflict" &&
+            slot.targetPath === pointerPath &&
+            slot.xy === conflict?.xy
+        )
+      )
+    : undefined;
+  const conflictMetadata =
+    conflictEntry &&
+    conflict &&
+    pointerItem?.kind !== "estimate" &&
+    !conflict.contentsDigest.startsWith("estimate:")
+      ? {
+          source: {
+            contextId,
+            gitRootPath,
+            oldPaths: conflictEntry.oldPaths,
+            path: pointerPath,
+            target: { kind: "uncommitted" },
+          },
+          xy: conflict.xy,
+          presentation: conflict.presentation,
+          contentsDigest: conflict.contentsDigest,
+          readable: conflict.contents !== null,
+        }
+      : undefined;
 
-  const openMetadata: GitReviewDiffOpenMetadata | null = target
+  const path = pointerPath ?? target?.path;
+  const pointerLine =
+    pointerPath && pointerPath !== target?.path
+      ? pointerHit?.lineNumber
+      : (target?.line ?? pointerHit?.lineNumber);
+  const openMetadata: GitReviewDiffOpenMetadata | null = path
     ? {
         contextId,
         gitRootPath,
-        path: target.path,
-        ...(target.line === undefined ? {} : { line: target.line }),
+        path,
+        ...(pointerLine === undefined ? {} : { line: pointerLine }),
       }
     : null;
-  const hit = handle?.resolvePointerLineHit(event.nativeEvent);
-  const itemId = hit?.id ?? handle?.getSelectedLines()?.id;
-  const pointerLine = target?.line ?? hit?.lineNumber;
+  const itemId = pointerItemId ?? handle?.getSelectedLines()?.id;
   const copyRange = resolveGitReviewDiffCopyRange({
     handle,
     ...(itemId ? { itemId } : {}),
@@ -92,6 +146,10 @@ export function openGitReviewDiffContextMenu(options: {
         metadata: {
           ...(selectedText.length > 0 ? { selectedText } : {}),
           ...(openMetadata ?? {}),
+          ...(pointerItem?.conflict
+            ? { openable: gitReviewConflictCanOpen(pointerItem.conflict.xy) }
+            : {}),
+          ...(conflictMetadata ? { conflict: conflictMetadata } : {}),
           ...(copyRange
             ? {
                 selectionEndLine: copyRange.endLine,
