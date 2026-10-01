@@ -104,10 +104,17 @@ export function createTranscriptTailReconciler(
     config,
     createLineClassifier: createEntryLineClassifier,
     isDisposed: () => disposed,
-    hasPendingPrompt: (path) =>
-      [...pendingScopeTokens.values()].some(
-        (pending) => pending.prompt && pending.path === path
-      ),
+    hasPendingPrompt: (path) => {
+      for (const [key, pending] of pendingScopeTokens) {
+        if (
+          pending.prompt &&
+          (pending.path === path ||
+            (!pending.path && entries.get(path)?.owners.has(key)))
+        )
+          return true;
+      }
+      return false;
+    },
     isCurrentEntry: (path, entry) => entries.get(path) === entry,
   });
 
