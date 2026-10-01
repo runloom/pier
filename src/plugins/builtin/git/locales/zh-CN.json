@@ -230,6 +230,26 @@
       "description": "放弃本地修改；新增文件会移到废纸篓。",
       "title": "GIT: 放弃更改"
     },
+    "pier.git.review.resolveConflictDelete": {
+      "category": "git",
+      "title": "GIT: 确认删除"
+    },
+    "pier.git.review.resolveConflictKeepDeleted": {
+      "category": "git",
+      "title": "GIT: 保持删除"
+    },
+    "pier.git.review.resolveConflictKeepCurrent": {
+      "category": "git",
+      "title": "GIT: 保留当前文件"
+    },
+    "pier.git.review.resolveConflictTakeIncoming": {
+      "category": "git",
+      "title": "GIT: 采用传入版本"
+    },
+    "pier.git.review.resolveConflictStageCurrent": {
+      "category": "git",
+      "title": "GIT: 暂存当前文件"
+    },
     "pier.git.review.toggleTree": {
       "category": "git",
       "description": "显示或隐藏目录树侧栏。",

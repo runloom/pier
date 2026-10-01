@@ -29,9 +29,6 @@ import type {
   GitReviewMutationTransition,
   GitReviewReadingSurface,
 } from "../reading-surface.ts";
-import { resolveReviewDocumentBody } from "./conflict-focus.ts";
-import { useReviewUnresolvedConflictHost } from "./conflict-host.tsx";
-import { ReviewConflictView } from "./conflict-view.tsx";
 import type { ReviewDocumentProjection } from "./projection.ts";
 import { projectReviewLedger } from "./projection.ts";
 
@@ -128,32 +125,6 @@ export function documentContent(options: {
             options.getSuppressMembershipScrollRestore,
         };
   if (displayProjection.items.length > 0) {
-    const body = resolveReviewDocumentBody(
-      displayProjection.items,
-      options.emptySurface,
-      options.selectedSectionKey
-    );
-    if (body.conflictItem !== null) {
-      return (
-        <ConflictReadingSurface
-          appearance={options.appearance}
-          context={options.context}
-          contextId={options.contextId}
-          gitRootPath={options.gitRootPath}
-          item={body.conflictItem}
-          items={displayProjection.items}
-          mutationAuthorityBlocked={options.mutationAuthorityBlocked}
-          onMutationCommitted={options.onMutationCommitted}
-          {...(options.onOpenPath === undefined
-            ? {}
-            : { onOpenFile: options.onOpenPath })}
-          {...(options.presentation === undefined
-            ? {}
-            : { presentation: options.presentation })}
-        />
-      );
-    }
-
     return (
       <div
         className="relative min-h-0 flex-1"
@@ -178,7 +149,7 @@ export function documentContent(options: {
             {...(options.driftCommentLabels === undefined
               ? {}
               : { driftCommentLabels: options.driftCommentLabels })}
-            items={body.items}
+            items={displayProjection.items}
             {...(options.reviewCommentsById === undefined
               ? {}
               : { reviewCommentsById: options.reviewCommentsById })}
@@ -252,54 +223,5 @@ export function documentContent(options: {
         <EmptyDescription>{options.emptyDescription}</EmptyDescription>
       </EmptyHeader>
     </Empty>
-  );
-}
-
-function ConflictReadingSurface(options: {
-  readonly appearance: RendererPluginAppearance;
-  readonly context: RendererPluginContext;
-  readonly contextId: string;
-  readonly gitRootPath: string;
-  readonly item: ReviewDocumentProjection["items"][number];
-  readonly items: ReviewDocumentProjection["items"];
-  readonly mutationAuthorityBlocked: boolean;
-  readonly onMutationCommitted: (
-    result: GitReviewMutationOk | null,
-    transition?: GitReviewMutationTransition
-  ) => Promise<void>;
-  readonly onOpenFile?: (path: string) => void;
-  readonly presentation?: PierDiffViewPresentation;
-}): React.JSX.Element {
-  const host = useReviewUnresolvedConflictHost({
-    context: options.context,
-    contextId: options.contextId,
-    gitRootPath: options.gitRootPath,
-    items: options.items,
-    mutationLocked: options.mutationAuthorityBlocked,
-    onMutationCommitted: options.onMutationCommitted,
-    ...(options.onOpenFile === undefined
-      ? {}
-      : { onOpenFile: options.onOpenFile }),
-  });
-  if (host === undefined) {
-    return <ReviewLoading context={options.context} />;
-  }
-  return (
-    <div
-      className="relative min-h-0 flex-1"
-      data-git-review-document-content="conflict"
-    >
-      <ReviewConflictView
-        appearance={options.appearance}
-        host={host}
-        item={options.item}
-        {...(options.onOpenFile === undefined
-          ? {}
-          : { onOpenFile: options.onOpenFile })}
-        {...(options.presentation === undefined
-          ? {}
-          : { presentation: options.presentation })}
-      />
-    </div>
   );
 }

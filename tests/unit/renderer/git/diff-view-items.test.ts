@@ -368,4 +368,198 @@ describe("toCodeViewItem conflict slots", () => {
     );
     expect(entry.item.annotations).toBeUndefined();
   });
+
+  it.each([
+    {
+      additions: ["incoming\n"],
+      deletions: [],
+      oursContents: null,
+      theirsContents: "incoming\n",
+      type: "new",
+    },
+    {
+      additions: [],
+      deletions: ["current\n"],
+      oursContents: "current\n",
+      theirsContents: null,
+      type: "deleted",
+    },
+  ] as const)("compares an absent stage as an empty $type side", ({
+    additions,
+    deletions,
+    oursContents,
+    theirsContents,
+    type,
+  }) => {
+    const { entry, error } = toCodeViewItem(
+      {
+        cacheKey: `conflict:missing:${type}`,
+        conflict: {
+          contents: null,
+          contentsDigest: `sha256:missing:${type}`,
+          oursContents,
+          presentation: "file-level",
+          stages,
+          theirsContents,
+          xy: "DU",
+        },
+        fileDisplay: { path: "src/missing.ts", status: "conflicted" },
+        id: "section:missing",
+        kind: "conflict",
+        patch: null,
+      },
+      undefined
+    );
+    expect(error).toBeNull();
+    if (entry.item.type !== "diff") {
+      throw new Error("expected diff item");
+    }
+    expect(entry.item.id).toBe("section:missing");
+    expect(entry.item.collapsed).toBeUndefined();
+    expect(entry.item.annotations).toBeUndefined();
+    expect(entry.item.fileDiff.type).toBe(type);
+    expect(entry.item.fileDiff.additionLines).toEqual(additions);
+    expect(entry.item.fileDiff.deletionLines).toEqual(deletions);
+    expect(entry.item.fileDiff.isPartial).toBe(false);
+    expect(entry.item.fileDiff.cacheKey).not.toMatch(/^unresolved-conflict:/u);
+  });
+
+  it("keeps complete stage buffers for expanding unmodified context", () => {
+    const prefix = Array.from({ length: 30 }, (_, index) => `keep-${index}\n`);
+    const oursContents = `${prefix.join("")}current\n`;
+    const theirsContents = `${prefix.join("")}incoming\n`;
+    const { entry, error } = toCodeViewItem(
+      {
+        cacheKey: "conflict:stage-context",
+        conflict: {
+          contents: null,
+          contentsDigest: "sha256:stage-context",
+          oursContents,
+          presentation: "file-level",
+          stages,
+          theirsContents,
+          xy: "DU",
+        },
+        fileDisplay: { path: "src/missing.ts", status: "conflicted" },
+        id: "section:stage-context",
+        kind: "conflict",
+        patch: null,
+      },
+      undefined
+    );
+    expect(error).toBeNull();
+    if (entry.item.type !== "diff") {
+      throw new Error("expected diff item");
+    }
+    expect(entry.item.fileDiff.isPartial).toBe(false);
+    expect(entry.item.fileDiff.hunks[0]?.collapsedBefore).toBe(27);
+    expect(entry.item.fileDiff.additionLines).toEqual([
+      ...prefix,
+      "incoming\n",
+    ]);
+    expect(entry.item.fileDiff.deletionLines).toEqual([...prefix, "current\n"]);
+    expect(fileDiffLineStats(entry.item.fileDiff)).toEqual({
+      additions: 1,
+      deletions: 1,
+    });
+    expect(entry.item.annotations).toBeUndefined();
+  });
+
+  it.each([
+    {
+      oursContents: null,
+      presentation: "file-level",
+      theirsContents: null,
+    },
+    {
+      oursContents: undefined,
+      presentation: "file-level",
+      theirsContents: "incoming\n",
+    },
+    {
+      oursContents: "current\n",
+      presentation: "file-level",
+      theirsContents: undefined,
+    },
+    {
+      oursContents: "current\n",
+      presentation: "binary",
+      theirsContents: undefined,
+    },
+    {
+      oursContents: undefined,
+      presentation: "readError",
+      theirsContents: "incoming\n",
+    },
+  ] as const)("leaves unavailable stage material header-only ($presentation, $oursContents, $theirsContents)", ({
+    oursContents,
+    presentation,
+    theirsContents,
+  }) => {
+    const { entry, error } = toCodeViewItem(
+      {
+        cacheKey: "conflict:unavailable",
+        conflict: {
+          contents: null,
+          contentsDigest: "sha256:unavailable",
+          ...(oursContents === undefined ? {} : { oursContents }),
+          presentation,
+          stages,
+          ...(theirsContents === undefined ? {} : { theirsContents }),
+          xy: "DU",
+        },
+        fileDisplay: { path: "src/missing.ts", status: "conflicted" },
+        id: "section:unavailable",
+        kind: "conflict",
+        patch: null,
+        stateNotice: "Cannot preview this file.",
+      },
+      undefined
+    );
+    expect(error).toBeNull();
+    if (entry.item.type !== "diff") {
+      throw new Error("expected diff item");
+    }
+    expect(entry.item.collapsed).toBe(true);
+    expect(entry.item.annotations).toBeUndefined();
+    expect(entry.item.fileDiff.hunks).toEqual([]);
+    expect(entry.item.fileDiff.additionLines).toEqual([]);
+    expect(entry.item.fileDiff.deletionLines).toEqual([]);
+    expect(entry.item.fileDiff.splitLineCount).toBe(0);
+    expect(entry.item.fileDiff.unifiedLineCount).toBe(0);
+  });
+
+  it.each([
+    "",
+    "unchanged\n",
+  ])("collapses an empty native stage comparison (%j)", (contents) => {
+    const { entry, error } = toCodeViewItem(
+      {
+        cacheKey: "conflict:equal-stages",
+        conflict: {
+          contents: null,
+          contentsDigest: "sha256:equal-stages",
+          oursContents: contents,
+          presentation: "file-level",
+          stages,
+          theirsContents: contents,
+          xy: "DD",
+        },
+        fileDisplay: { path: "src/missing.ts", status: "conflicted" },
+        id: "section:equal-stages",
+        kind: "conflict",
+        patch: null,
+      },
+      undefined
+    );
+    expect(error).toBeNull();
+    if (entry.item.type !== "diff") {
+      throw new Error("expected diff item");
+    }
+    expect(entry.item.collapsed).toBe(true);
+    expect(entry.item.annotations).toBeUndefined();
+    expect(entry.item.fileDiff.hunks).toEqual([]);
+    expect(entry.item.fileDiff.splitLineCount).toBe(0);
+    expect(entry.item.fileDiff.unifiedLineCount).toBe(0);
+  });
 });

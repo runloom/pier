@@ -1,3 +1,8 @@
+import { randomUUID } from "node:crypto";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { execGit, execGitRaw } from "@main/services/git/exec.ts";
 import { GitReviewBudget } from "@main/services/git-review/budget.ts";
 import {
   GitReviewIndexReader,
@@ -92,4 +97,121 @@ export class TestGitReviewIndexReader extends GitReviewIndexReader {
       signal: options?.signal ?? budget.signal,
     });
   }
+}
+
+export async function createConflictRepository(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "pier-review-conflict-"));
+  await execGit(["init"], { cwd: root });
+  await execGit(["config", "user.name", "Pier Test"], { cwd: root });
+  await execGit(["config", "user.email", "pier@example.invalid"], {
+    cwd: root,
+  });
+  return root;
+}
+
+async function commitConflictFixture(
+  root: string,
+  message: string
+): Promise<void> {
+  await execGit(["add", "-A", "--"], { cwd: root });
+  await execGit(["commit", "-m", message], { cwd: root });
+}
+
+export async function createUuConflict(root: string): Promise<void> {
+  await writeFile(join(root, "conflict.ts"), "base\n", "utf8");
+  await commitConflictFixture(root, "base");
+  const mainBranch = (
+    await execGit(["branch", "--show-current"], { cwd: root })
+  ).trim();
+  await execGit(["switch", "-c", "other"], { cwd: root });
+  await writeFile(join(root, "conflict.ts"), "other\n", "utf8");
+  await commitConflictFixture(root, "other");
+  await execGit(["switch", mainBranch], { cwd: root });
+  await writeFile(join(root, "conflict.ts"), "main\n", "utf8");
+  await commitConflictFixture(root, "main");
+  await execGit(["merge", "other"], { cwd: root }).catch(() => undefined);
+}
+
+export async function createDuConflict(root: string): Promise<void> {
+  await writeFile(join(root, "gone.ts"), "base\n", "utf8");
+  await commitConflictFixture(root, "base");
+  const mainBranch = (
+    await execGit(["branch", "--show-current"], { cwd: root })
+  ).trim();
+  await execGit(["switch", "-c", "other"], { cwd: root });
+  await writeFile(join(root, "gone.ts"), "other\n", "utf8");
+  await commitConflictFixture(root, "other");
+  await execGit(["switch", mainBranch], { cwd: root });
+  await execGit(["rm", "--", "gone.ts"], { cwd: root });
+  await commitConflictFixture(root, "delete on main");
+  await execGit(["merge", "other"], { cwd: root }).catch(() => undefined);
+}
+
+export async function createGitlinkConflict(root: string): Promise<{
+  readonly baseOid: string;
+  readonly oursOid: string;
+  readonly theirsOid: string;
+}> {
+  const source = join(root, ".git", "submodule-source");
+  await execGit(["init", "--initial-branch=main", source], { cwd: root });
+  await execGit(["config", "user.name", "Pier Test"], { cwd: source });
+  await execGit(["config", "user.email", "pier@example.invalid"], {
+    cwd: source,
+  });
+  await writeFile(join(source, "child.txt"), "base\n");
+  await commitConflictFixture(source, "child base");
+  const baseOid = (
+    await execGit(["rev-parse", "HEAD"], { cwd: source })
+  ).trim();
+  await writeFile(join(source, "child.txt"), "ours\n");
+  await commitConflictFixture(source, "child ours");
+  const oursOid = (
+    await execGit(["rev-parse", "HEAD"], { cwd: source })
+  ).trim();
+  await execGit(["switch", "-c", "incoming", baseOid], { cwd: source });
+  await writeFile(join(source, "child.txt"), "theirs\n");
+  await commitConflictFixture(source, "child theirs");
+  const theirsOid = (
+    await execGit(["rev-parse", "HEAD"], { cwd: source })
+  ).trim();
+  await execGit(["switch", "main"], { cwd: source });
+  await execGit(
+    ["-c", "protocol.file.allow=always", "submodule", "add", source, "child"],
+    { cwd: root }
+  );
+  await commitConflictFixture(root, "superproject base");
+  await execGitRaw(["update-index", "--index-info"], {
+    cwd: root,
+    mode: "collect",
+    stdin: Buffer.from(
+      `0 ${"0".repeat(40)}\tchild\n160000 ${baseOid} 1\tchild\n160000 ${oursOid} 2\tchild\n160000 ${theirsOid} 3\tchild\n`
+    ),
+  });
+  return { baseOid, oursOid, theirsOid };
+}
+
+export function fileSource(root: string, path = "conflict.ts") {
+  return {
+    contextId: "worktree:test",
+    gitRootPath: root,
+    oldPaths: [] as string[],
+    path,
+    target: { kind: "uncommitted" as const },
+  };
+}
+
+export async function conflictSection(root: string, path = "conflict.ts") {
+  const service = new TestGitReviewService();
+  const document = await service.getFileDocument({
+    operationId: randomUUID(),
+    source: fileSource(root, path),
+  });
+  if (document.kind !== "ok") {
+    throw new Error("expected ok conflict document");
+  }
+  const section = document.sections.find((item) => item.kind === "conflict");
+  if (section?.kind !== "conflict") {
+    throw new Error("expected conflict section");
+  }
+  return { service, section };
 }

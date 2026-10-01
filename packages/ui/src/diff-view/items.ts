@@ -1,5 +1,6 @@
 import type { FileDiffMetadata } from "@pierre/diffs";
 import type { CodeViewItem } from "@pierre/diffs/react";
+import { parseDiffFromFile } from "./file-diff/from-contents.ts";
 import { parsePatchFileDiff } from "./file-diff/from-patch.ts";
 import { estimateFileDiff, noticeFileDiff } from "./file-diff/placeholders.ts";
 import { buildHunkActionAnnotations } from "./hunk-annotations.ts";
@@ -13,7 +14,10 @@ import {
 import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 import { itemCacheKeyOf } from "./review/drift-cache-key.ts";
 import { buildUnresolvedConflictAnnotation } from "./unresolved-conflict/annotation.ts";
-import { createUnresolvedConflictFileDiff } from "./unresolved-conflict/file-diff.ts";
+import {
+  conflictStageTexts,
+  createUnresolvedConflictFileDiff,
+} from "./unresolved-conflict/file-diff.ts";
 
 export {
   estimateFileDiff,
@@ -229,15 +233,47 @@ export function toCodeViewItem(
         input.conflict?.contentsDigest.startsWith("estimate:") === true;
       if (estimated || !input.fileDisplay) {
         fileDiff = estimateFileDiff(input);
+      } else if (input.conflict === undefined) {
+        fileDiff = noticeFileDiff(input);
       } else {
-        fileDiff = createUnresolvedConflictFileDiff({
-          cacheKey: input.cacheKey,
-          name: input.fileDisplay.path,
-          type: fileDisplayType(input.fileDisplay.status),
-          ...(input.fileDisplay.previousPath === undefined
-            ? {}
-            : { prevName: input.fileDisplay.previousPath }),
-        });
+        const stageTexts = conflictStageTexts(input.conflict);
+        if (stageTexts !== null) {
+          fileDiff = {
+            ...parseDiffFromFile(
+              {
+                cacheKey: `${input.cacheKey}:ours`,
+                contents: stageTexts.ours,
+                name: input.fileDisplay.path,
+              },
+              {
+                cacheKey: `${input.cacheKey}:theirs`,
+                contents: stageTexts.theirs,
+                name: input.fileDisplay.path,
+              },
+              { context: 3 },
+              true
+            ),
+            cacheKey: input.cacheKey,
+            ...(input.fileDisplay.previousPath === undefined
+              ? {}
+              : { prevName: input.fileDisplay.previousPath }),
+          };
+        } else if (
+          input.conflict.contents !== null &&
+          (input.conflict.presentation === "markers-text" ||
+            input.conflict.presentation === "file-level")
+        ) {
+          fileDiff = createUnresolvedConflictFileDiff({
+            cacheKey: input.cacheKey,
+            name: input.fileDisplay.path,
+            type: fileDisplayType(input.fileDisplay.status),
+            ...(input.fileDisplay.previousPath === undefined
+              ? {}
+              : { prevName: input.fileDisplay.previousPath }),
+          });
+        } else {
+          fileDiff = noticeFileDiff(input);
+        }
       }
     } else if (kind === "loaded") {
       fileDiff = applyFileDisplay(
@@ -280,9 +316,6 @@ export function toCodeViewItem(
         ? buildUnresolvedConflictAnnotation(fileDiff.type, {
             conflict: input.conflict,
             path: input.fileDisplay.path,
-            ...(input.stateNotice === undefined
-              ? {}
-              : { stateNotice: input.stateNotice }),
           })
         : undefined;
     // 文件级 drift 折叠区 annotation（lineNumber: 0，首个 hunk 前渲染）。
@@ -315,7 +348,6 @@ export function toCodeViewItem(
       kind === "estimate" ||
       conflictEstimate ||
       (kind !== "image" &&
-        kind !== "conflict" &&
         fileDiff.splitLineCount === 0 &&
         fileDiff.unifiedLineCount === 0);
     const item: PierDiffCodeViewItem = {

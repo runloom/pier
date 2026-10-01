@@ -41,6 +41,7 @@ import {
   type TopologyScrollRestore,
 } from "../topology-scroll.ts";
 import type { PierDiffViewProps } from "../types.ts";
+import { UnresolvedConflictViewContext } from "../unresolved-conflict/host.tsx";
 import { useDiffViewCodeOptions } from "../use-code-options.ts";
 import { useDiffViewContentSelection } from "../use-content-selection.ts";
 import {
@@ -246,7 +247,6 @@ export function PierDiffView({
       ...(onHunkAction === undefined ? {} : { onHunkAction }),
       overflow,
       ...(imageDiff === undefined ? {} : { imageDiff }),
-      ...(onOpenFile === undefined ? {} : { onOpenFile }),
       ...(unresolvedConflict === undefined ? {} : { unresolvedConflict }),
       ...(reviewCommentsById === undefined ? {} : { reviewCommentsById }),
       scheduleRenderWindowReport,
@@ -460,31 +460,35 @@ export function PierDiffView({
     return null;
   }
   return (
-    <PierDiffViewShell
-      codeThemes={appearance.codeThemes}
-      codeViewItems={codeViewItems}
-      codeViewKey={codeViewKey}
-      codeViewRef={codeViewRef}
-      handleCodeViewScroll={handleCodeViewScroll}
-      handleContextMenuCapture={handleContextMenuCapture}
-      handleHeaderClickCapture={handleRootClickCapture}
-      handlePointerDownCapture={handlePointerDownCapture}
-      handleUserScrollIntent={handleUserScrollIntent}
-      handleUserScrollKey={handleUserScrollKey}
-      onError={onError}
-      onUnavailable={disableWorkerPool}
-      options={options}
-      {...(onHunkAction ||
-      inlineReviewHandlers !== undefined ||
-      onGutterReviewActivate ||
-      imageDiff !== undefined ||
-      unresolvedConflict !== undefined
-        ? { renderAnnotation }
-        : {})}
-      renderHeaderMetadata={renderHeaderMetadata}
-      renderHeaderPrefix={renderHeaderPrefix}
-      style={style}
-      workerUnavailable={workerUnavailable}
-    />
+    <UnresolvedConflictViewContext
+      value={{ appearance, host: unresolvedConflict, presentation }}
+    >
+      <PierDiffViewShell
+        codeThemes={appearance.codeThemes}
+        codeViewItems={codeViewItems}
+        codeViewKey={codeViewKey}
+        codeViewRef={codeViewRef}
+        handleCodeViewScroll={handleCodeViewScroll}
+        handleContextMenuCapture={handleContextMenuCapture}
+        handleHeaderClickCapture={handleRootClickCapture}
+        handlePointerDownCapture={handlePointerDownCapture}
+        handleUserScrollIntent={handleUserScrollIntent}
+        handleUserScrollKey={handleUserScrollKey}
+        onError={onError}
+        onUnavailable={disableWorkerPool}
+        options={options}
+        {...(onHunkAction ||
+        inlineReviewHandlers !== undefined ||
+        onGutterReviewActivate ||
+        imageDiff !== undefined ||
+        unresolvedConflict !== undefined
+          ? { renderAnnotation }
+          : {})}
+        renderHeaderMetadata={renderHeaderMetadata}
+        renderHeaderPrefix={renderHeaderPrefix}
+        style={style}
+        workerUnavailable={workerUnavailable}
+      />
+    </UnresolvedConflictViewContext>
   );
 }

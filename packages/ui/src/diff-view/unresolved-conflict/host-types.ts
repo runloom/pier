@@ -1,27 +1,10 @@
-import type { ReactNode } from "react";
-import type {
-  PierConflictFileBody,
-  PierUnresolvedConflictLabels,
-} from "./types.ts";
-
-export interface PierUnresolvedConflictFileLevelRender {
-  readonly busy: boolean;
-  readonly conflict: PierConflictFileBody;
-  readonly itemId: string;
-  readonly path: string;
-  readonly stateNotice?: string;
-}
+import type { PierUnresolvedConflictLabels } from "./types.ts";
 
 export interface PierUnresolvedConflictHost {
   readonly busyItemId?: string | null;
   readonly labels: PierUnresolvedConflictLabels;
   readonly mutationLocked?: boolean;
   readonly onError?: (error: Error) => void;
-  readonly onOpenFile?: (path: string) => void;
-  readonly onResolveFile?: (
-    itemId: string,
-    action: "ours" | "stage" | "theirs"
-  ) => void;
   readonly onWriteResolved: (
     itemId: string,
     payload: {
@@ -29,7 +12,4 @@ export interface PierUnresolvedConflictHost {
       readonly contentsDigest: string;
     }
   ) => void | Promise<void>;
-  readonly renderFileLevel?: (
-    input: PierUnresolvedConflictFileLevelRender
-  ) => ReactNode;
 }

@@ -108,7 +108,6 @@ export function useDiffViewCodeOptions(options: {
   readonly onHunkAction?: (event: PierHunkActionEvent) => void;
   readonly overflow: "wrap" | "scroll";
   readonly imageDiff?: PierDiffViewImageDiff;
-  readonly onOpenFile?: (itemId: string) => void;
   readonly unresolvedConflict?: PierUnresolvedConflictHost;
   /** itemId → 该文件 diff 行内评论线程（host 投影后注入）；缺省无评论入口。 */
   readonly reviewCommentsById?: ReadonlyMap<
@@ -154,7 +153,6 @@ export function useDiffViewCodeOptions(options: {
     onHunkAction,
     overflow,
     imageDiff,
-    onOpenFile,
     unresolvedConflict,
     reviewCommentsById,
     scheduleRenderWindowReport,
@@ -384,7 +382,6 @@ export function useDiffViewCodeOptions(options: {
         appearance,
         host: unresolvedConflict,
         itemId: item.id,
-        ...(onOpenFile === undefined ? {} : { onOpenFile }),
         presentation: {
           diffStyle,
           wrapLines: overflow === "wrap",
@@ -427,7 +424,6 @@ export function useDiffViewCodeOptions(options: {
       overflow,
       locale,
       onHunkAction,
-      onOpenFile,
       unresolvedConflict,
     ]
   );

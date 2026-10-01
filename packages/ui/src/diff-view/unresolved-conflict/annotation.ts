@@ -5,7 +5,6 @@ export interface PierUnresolvedConflictAnnotationMetadata {
   readonly conflict: PierConflictFileBody;
   readonly kind: "unresolved-conflict";
   readonly path: string;
-  readonly stateNotice?: string;
 }
 
 export function isUnresolvedConflictAnnotation(
@@ -23,9 +22,15 @@ export function buildUnresolvedConflictAnnotation(
   input: {
     readonly conflict: PierConflictFileBody;
     readonly path: string;
-    readonly stateNotice?: string;
   }
-): DiffLineAnnotation<PierUnresolvedConflictAnnotationMetadata>[] {
+): DiffLineAnnotation<PierUnresolvedConflictAnnotationMetadata>[] | undefined {
+  if (
+    input.conflict.contents === null ||
+    (input.conflict.presentation !== "markers-text" &&
+      input.conflict.presentation !== "file-level")
+  ) {
+    return;
+  }
   const side = fileType === "deleted" ? "deletions" : "additions";
   return [
     {
@@ -34,9 +39,6 @@ export function buildUnresolvedConflictAnnotation(
         conflict: input.conflict,
         kind: "unresolved-conflict",
         path: input.path,
-        ...(input.stateNotice === undefined
-          ? {}
-          : { stateNotice: input.stateNotice }),
       },
       side,
     },

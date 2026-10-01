@@ -169,7 +169,7 @@ function countTreeNodes(paths: readonly string[]): number {
 }
 
 describe("GitReviewIndexReader", () => {
-  it("以常数命令合并 staged/unstaged，并固定 literal NUL 协议", async () => {
+  it("合并同一路径的 staged/unstaged 事实与各自差异计数", async () => {
     const execGitRaw = createRecordExec((args) => {
       if (args.includes("status")) {
         return {
@@ -213,38 +213,6 @@ describe("GitReviewIndexReader", () => {
       ],
       kind: "ok",
     });
-    expect(execGitRaw).toHaveBeenCalledTimes(3);
-    const calls = vi.mocked(execGitRaw).mock.calls.map(([args]) => args);
-    expect(calls.every((args) => args.includes("--literal-pathspecs"))).toBe(
-      true
-    );
-    expect(
-      calls.every((args) => args.includes("--ignore-submodules=none"))
-    ).toBe(true);
-    expect(calls[0]).toContain("--porcelain=v2");
-    expect(calls[0]).toContain("status.renameLimit=0");
-    expect(calls.slice(1).every((args) => args.includes("--numstat"))).toBe(
-      true
-    );
-    expect(calls.slice(1).every((args) => args.includes("-l0"))).toBe(true);
-    expect(
-      calls.slice(1).every((args) => args.includes("--find-copies=50%"))
-    ).toBe(true);
-    const options = vi
-      .mocked(execGitRaw)
-      .mock.calls.map(([, callOptions]) => callOptions);
-    expect(options[0]).toMatchObject({
-      maxRecords: null,
-      mode: "stream",
-    });
-    expect(
-      options
-        .slice(1)
-        .every(
-          (callOptions) =>
-            callOptions.mode === "stream" && callOptions.maxRecords === null
-        )
-    ).toBe(true);
   });
 
   it("可直接消费 scheduler 提供的共享执行预算", async () => {

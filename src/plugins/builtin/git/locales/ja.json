@@ -185,6 +185,26 @@
       "description": "ローカル変更を破棄するか、新規ファイルをゴミ箱へ移します。",
       "title": "GIT: 変更を破棄"
     },
+    "pier.git.review.resolveConflictDelete": {
+      "category": "git",
+      "title": "GIT: 削除を確定"
+    },
+    "pier.git.review.resolveConflictKeepDeleted": {
+      "category": "git",
+      "title": "GIT: 削除のままにする"
+    },
+    "pier.git.review.resolveConflictKeepCurrent": {
+      "category": "git",
+      "title": "GIT: 現在のファイルを残す"
+    },
+    "pier.git.review.resolveConflictTakeIncoming": {
+      "category": "git",
+      "title": "GIT: 取り込み側の版を使う"
+    },
+    "pier.git.review.resolveConflictStageCurrent": {
+      "category": "git",
+      "title": "GIT: 現在のファイルをステージ"
+    },
     "pier.git.review.toggleTree": {
       "category": "git",
       "description": "変更ファイルツリーのサイドバーを表示または隠します。",

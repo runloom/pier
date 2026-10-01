@@ -34,8 +34,8 @@ export async function createGitReviewWorkingTreeRevision(
   const paths = [
     ...new Set(
       entries.flatMap((entry) => {
-        const unstaged = entry.groupFacts.unstaged;
-        return unstaged === undefined ? [] : [unstaged.targetPath];
+        const working = entry.groupFacts.unstaged ?? entry.groupFacts.conflict;
+        return working === undefined ? [] : [working.targetPath];
       })
     ),
   ].sort();

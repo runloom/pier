@@ -4,28 +4,27 @@ import type {
   PierUnresolvedConflictLabels,
 } from "@pier/ui/diff-view/index.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import {
-  type GitReviewMutationOk,
-  gitReviewConflictCanOpen,
-} from "@shared/contracts/git/review.ts";
+import type { GitReviewMutationOk } from "@shared/contracts/git/review.ts";
 import { useCallback, useMemo, useState } from "react";
 import { pluginText } from "../../plugin-text.ts";
 import { usePluginLanguage } from "../../use-plugin-language.ts";
-import type { GitReviewMutationTransition } from "../reading-surface.ts";
-import { FileLevelConflictCard } from "./conflict-file-level.tsx";
-import { isConflictSurfaceItem } from "./conflict-focus.ts";
+import { reviewMutationFailureBody } from "../code-mutation-helpers.ts";
+import type {
+  GitReviewMutationLease,
+  GitReviewMutationTransition,
+} from "../reading-surface.ts";
 
 export function useReviewUnresolvedConflictHost(options: {
   readonly context: RendererPluginContext;
   readonly contextId: string;
   readonly gitRootPath?: string;
   readonly items: readonly PierDiffViewItem[];
+  readonly onMutationStart: () => GitReviewMutationLease | null;
   readonly mutationLocked: boolean;
   readonly onMutationCommitted?: (
     result: GitReviewMutationOk | null,
     transition?: GitReviewMutationTransition
   ) => Promise<void>;
-  readonly onOpenFile?: (path: string) => void;
 }): PierUnresolvedConflictHost | undefined {
   const {
     context,
@@ -33,12 +32,12 @@ export function useReviewUnresolvedConflictHost(options: {
     gitRootPath,
     items,
     mutationLocked,
+    onMutationStart,
     onMutationCommitted,
-    onOpenFile,
   } = options;
   const language = usePluginLanguage();
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
-  const hasConflict = items.some(isConflictSurfaceItem);
+  const hasConflict = items.some((item) => item.conflict !== undefined);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: language drives i18n re-read
   const labels = useMemo(
@@ -131,6 +130,15 @@ export function useReviewUnresolvedConflictHost(options: {
       if (!(gitRootPath && path) || conflict === undefined) {
         return;
       }
+      if (onMutationStart() === null) {
+        throw new Error(
+          pluginText(
+            context,
+            "reviewFailureBusy",
+            "git review is busy. Try again."
+          )
+        );
+      }
       setBusyItemId(itemId);
       try {
         const result = await context.git.resolveReviewConflict({
@@ -141,72 +149,24 @@ export function useReviewUnresolvedConflictHost(options: {
           source: sourceFor(path),
         });
         if (result.kind === "error") {
-          throw new Error(result.message ?? result.reason);
-        }
-        await onMutationCommitted?.(result);
-      } finally {
-        setBusyItemId(null);
-      }
-    },
-    [context, gitRootPath, itemById, onMutationCommitted, sourceFor]
-  );
-
-  const onResolveFile = useCallback(
-    async (itemId: string, action: "ours" | "stage" | "theirs") => {
-      const target = itemById(itemId);
-      const path = target?.fileDisplay?.path;
-      if (!(gitRootPath && path)) {
-        return;
-      }
-      setBusyItemId(itemId);
-      try {
-        const result = await context.git.resolveReviewConflict({
-          action,
-          operationId: crypto.randomUUID(),
-          source: sourceFor(path),
-        });
-        if (result.kind === "error") {
-          throw new Error(result.message ?? result.reason);
+          throw new Error(reviewMutationFailureBody(context, result));
         }
         await onMutationCommitted?.(result);
       } catch (error) {
-        await alertResolveFailed(error);
+        await onMutationCommitted?.(null);
+        throw error;
       } finally {
         setBusyItemId(null);
       }
     },
     [
-      alertResolveFailed,
       context,
       gitRootPath,
       itemById,
       onMutationCommitted,
+      onMutationStart,
       sourceFor,
     ]
-  );
-
-  const renderFileLevel = useCallback(
-    (input: {
-      readonly busy: boolean;
-      readonly conflict: NonNullable<PierDiffViewItem["conflict"]>;
-      readonly itemId: string;
-      readonly path: string;
-    }) => (
-      <FileLevelConflictCard
-        busy={input.busy}
-        conflict={input.conflict}
-        context={context}
-        itemId={input.itemId}
-        {...(onOpenFile !== undefined &&
-        gitReviewConflictCanOpen(input.conflict.xy)
-          ? { onOpen: () => onOpenFile(input.path) }
-          : {})}
-        onResolve={(action) => {
-          onResolveFile(input.itemId, action).catch(() => undefined);
-        }}
-      />
-    ),
-    [context, onOpenFile, onResolveFile]
   );
 
   return useMemo(() => {
@@ -216,16 +176,11 @@ export function useReviewUnresolvedConflictHost(options: {
     return {
       busyItemId,
       labels,
-      mutationLocked,
+      mutationLocked: mutationLocked || busyItemId !== null,
       onError: (error: Error) => {
         alertResolveFailed(error).catch(() => undefined);
       },
-      onResolveFile: (itemId, action) => {
-        onResolveFile(itemId, action).catch(() => undefined);
-      },
-      ...(onOpenFile === undefined ? {} : { onOpenFile }),
       onWriteResolved,
-      renderFileLevel,
     } satisfies PierUnresolvedConflictHost;
   }, [
     alertResolveFailed,
@@ -233,9 +188,6 @@ export function useReviewUnresolvedConflictHost(options: {
     hasConflict,
     labels,
     mutationLocked,
-    onOpenFile,
-    onResolveFile,
     onWriteResolved,
-    renderFileLevel,
   ]);
 }

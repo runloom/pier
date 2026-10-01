@@ -1,35 +1,28 @@
 import type { FileContents } from "@pierre/diffs";
 import { File } from "@pierre/diffs/react";
-import { Plus } from "lucide-react";
 import {
   type CSSProperties,
   type ReactElement,
-  useCallback,
   useEffect,
   useMemo,
 } from "react";
-import { Button } from "../../button.tsx";
 import { ensurePierDiffLightDomStyles } from "../appearance.ts";
+import { diffMetrics } from "../geometry.ts";
 import type {
   PierDiffViewAppearance,
   PierDiffViewPresentation,
 } from "../types.ts";
 import { CONFLICT_HOST_UNSAFE_CSS } from "./host-css.ts";
-import type { PierUnresolvedConflictLabels } from "./types.ts";
 
-/** Marker-free worktree text: official Pierre File chrome, not a custom header. */
+/** Marker-free worktree text; the outer CodeView owns its header and actions. */
 export function FileConflictBody(options: {
   readonly appearance: PierDiffViewAppearance;
-  readonly busy: boolean;
   readonly contents: string;
   readonly contentsDigest: string;
-  readonly embedInCodeView?: boolean;
-  readonly labels: PierUnresolvedConflictLabels;
-  readonly onOpenFile?: () => void;
-  readonly onStageFile?: () => void;
   readonly path: string;
   readonly presentation?: PierDiffViewPresentation;
 }): ReactElement {
+  const metrics = diffMetrics(options.appearance.codeFontSize);
   useEffect(() => {
     ensurePierDiffLightDomStyles();
   }, []);
@@ -45,9 +38,7 @@ export function FileConflictBody(options: {
 
   const pierreOptions = useMemo(
     () => ({
-      ...(options.embedInCodeView === true
-        ? { disableFileHeader: true as const }
-        : {}),
+      disableFileHeader: true,
       enableLineSelection: true,
       overflow:
         options.presentation?.wrapLines === true
@@ -60,64 +51,16 @@ export function FileConflictBody(options: {
     [
       options.appearance.codeThemes,
       options.appearance.colorMode,
-      options.embedInCodeView,
       options.presentation?.wrapLines,
     ]
   );
-
-  const renderHeaderMetadata = useCallback((): ReactElement | null => {
-    if (
-      options.onOpenFile === undefined &&
-      options.onStageFile === undefined &&
-      !options.busy
-    ) {
-      return null;
-    }
-    return (
-      <span className="inline-flex items-center gap-2">
-        {options.busy ? (
-          <span className="text-muted-foreground text-xs">
-            {options.labels.resolving}
-          </span>
-        ) : null}
-        {options.onOpenFile ? (
-          <Button
-            disabled={options.busy}
-            onClick={options.onOpenFile}
-            size="xs"
-            type="button"
-            variant="ghost"
-          >
-            {options.labels.openFile}
-          </Button>
-        ) : null}
-        {options.onStageFile && options.labels.stageFile ? (
-          <Button
-            aria-label={options.labels.stageFile}
-            disabled={options.busy}
-            onClick={options.onStageFile}
-            size="icon-xs"
-            type="button"
-            variant="ghost"
-          >
-            <Plus data-icon />
-          </Button>
-        ) : null}
-      </span>
-    );
-  }, [
-    options.busy,
-    options.labels.openFile,
-    options.labels.resolving,
-    options.labels.stageFile,
-    options.onOpenFile,
-    options.onStageFile,
-  ]);
 
   const style = useMemo(
     (): CSSProperties => ({
       ["--diffs-font-family" as string]: options.appearance.codeFontFamily,
       ["--diffs-font-size" as string]: options.appearance.codeFontSize,
+      ["--diffs-line-height" as string]: `${metrics.lineHeight}px`,
+      ["--pier-diff-content-padding-bottom" as string]: "0px",
       colorScheme: options.appearance.colorMode,
       height: "auto",
       width: "100%",
@@ -125,6 +68,7 @@ export function FileConflictBody(options: {
     [
       options.appearance.codeFontFamily,
       options.appearance.codeFontSize,
+      metrics.lineHeight,
       options.appearance.colorMode,
     ]
   );
@@ -140,7 +84,6 @@ export function FileConflictBody(options: {
         disableWorkerPool={false}
         file={file}
         options={pierreOptions}
-        {...(options.embedInCodeView === true ? {} : { renderHeaderMetadata })}
         style={style}
       />
     </div>

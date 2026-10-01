@@ -182,8 +182,11 @@ export class GitReviewPorcelainV2Parser {
       {
         conflict: {
           conflict: {
+            baseMode: fields[3]?.toString("ascii") ?? "000000",
             baseOid,
+            oursMode: fields[4]?.toString("ascii") ?? "000000",
             oursOid,
+            theirsMode: fields[5]?.toString("ascii") ?? "000000",
             theirsOid,
             xy,
           },

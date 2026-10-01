@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { createContext, type ReactElement, useContext } from "react";
 import type {
   PierDiffViewAppearance,
   PierDiffViewPresentation,
@@ -11,20 +11,30 @@ import { FileConflictBody } from "./file-body.tsx";
 import type { PierUnresolvedConflictHost } from "./host-types.ts";
 import { MarkersConflictBody } from "./markers-body.tsx";
 
+/** Pierre caches annotation elements; live view state must cross that cache. */
+export const UnresolvedConflictViewContext = createContext<{
+  readonly appearance: PierDiffViewAppearance;
+  readonly host: PierUnresolvedConflictHost | undefined;
+  readonly presentation: PierDiffViewPresentation | undefined;
+} | null>(null);
+
 export function UnresolvedConflictAnnotationHost({
-  appearance,
-  host,
+  appearance: initialAppearance,
+  host: initialHost,
   itemId,
   metadata,
-  presentation,
+  presentation: initialPresentation,
 }: {
   readonly appearance: PierDiffViewAppearance;
   readonly host: PierUnresolvedConflictHost | undefined;
   readonly itemId: string;
   readonly metadata: PierUnresolvedConflictAnnotationMetadata;
-  readonly onOpenFile?: (itemId: string) => void;
   readonly presentation?: PierDiffViewPresentation;
 }): ReactElement | null {
+  const live = useContext(UnresolvedConflictViewContext);
+  const appearance = live === null ? initialAppearance : live.appearance;
+  const host = live === null ? initialHost : live.host;
+  const presentation = live === null ? initialPresentation : live.presentation;
   if (host === undefined) {
     return null;
   }
@@ -41,7 +51,6 @@ export function UnresolvedConflictAnnotationHost({
         busy={busy}
         contents={metadata.conflict.contents}
         contentsDigest={metadata.conflict.contentsDigest}
-        embedInCodeView
         labels={host.labels}
         path={metadata.path}
         {...errorProp}
@@ -50,49 +59,21 @@ export function UnresolvedConflictAnnotationHost({
       />
     );
   }
-  const fileLevel =
-    host.renderFileLevel === undefined
-      ? undefined
-      : host.renderFileLevel({
-          busy,
-          conflict: metadata.conflict,
-          itemId,
-          path: metadata.path,
-          ...(metadata.stateNotice === undefined
-            ? {}
-            : { stateNotice: metadata.stateNotice }),
-        });
   if (
     metadata.conflict.contents !== null &&
     metadata.conflict.presentation === "file-level"
   ) {
     return (
-      <>
-        {fileLevel}
-        <FileConflictBody
-          appearance={appearance}
-          busy={busy}
-          contents={metadata.conflict.contents}
-          contentsDigest={metadata.conflict.contentsDigest}
-          embedInCodeView
-          labels={host.labels}
-          path={metadata.path}
-          {...presentationProp}
-        />
-      </>
+      <FileConflictBody
+        appearance={appearance}
+        contents={metadata.conflict.contents}
+        contentsDigest={metadata.conflict.contentsDigest}
+        path={metadata.path}
+        {...presentationProp}
+      />
     );
   }
-  if (fileLevel !== undefined) {
-    return <>{fileLevel}</>;
-  }
-  if (metadata.stateNotice === undefined) {
-    return null;
-  }
-  return (
-    <p className="px-5 py-3 text-muted-foreground text-sm">
-      {metadata.stateNotice}
-    </p>
-  );
+  return null;
 }
 
 export function renderUnresolvedConflictAnnotation(
@@ -101,7 +82,6 @@ export function renderUnresolvedConflictAnnotation(
     readonly appearance: PierDiffViewAppearance;
     readonly host: PierUnresolvedConflictHost | undefined;
     readonly itemId: string;
-    readonly onOpenFile?: (itemId: string) => void;
     readonly presentation?: PierDiffViewPresentation;
   }
 ): ReactElement | null | undefined {
@@ -114,9 +94,6 @@ export function renderUnresolvedConflictAnnotation(
       host={options.host}
       itemId={options.itemId}
       metadata={metadata}
-      {...(options.onOpenFile === undefined
-        ? {}
-        : { onOpenFile: options.onOpenFile })}
       {...(options.presentation === undefined
         ? {}
         : { presentation: options.presentation })}

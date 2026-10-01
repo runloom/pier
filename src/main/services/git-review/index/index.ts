@@ -16,10 +16,7 @@ import {
   GitReviewIdentityResolver,
   type GitReviewRepositoryIdentity,
 } from "../identity.ts";
-import {
-  createGitReviewExactPathspecs,
-  hasGitReviewExactPathspecConflict,
-} from "../path/spec.ts";
+import { createGitReviewExactPathspecs } from "../path/spec.ts";
 import {
   type AssembledGitReviewIndex,
   assembleGitReviewIndex,
@@ -38,6 +35,7 @@ import {
   toGitReviewIndexFailure,
 } from "./execution.ts";
 import { GitReviewNumstatParser } from "./numstat-parser.ts";
+import { readGitReviewOrdinaryNumstat } from "./ordinary-numstat.ts";
 import { GitReviewPorcelainV2Parser } from "./primary-parser.ts";
 import {
   filterCommittedPrimaryEntries,
@@ -49,11 +47,6 @@ import {
   createGitReviewIndexRevision,
   createGitReviewWorkingTreeRevision,
 } from "./revision.ts";
-import {
-  applyScopedMovements,
-  GitReviewScopedMovementParser,
-  mergeScopedPrimaryReads,
-} from "./scoped.ts";
 import { GitReviewIndexSnapshotCache } from "./snapshot-cache.ts";
 import {
   buildGitReviewGroupSummaries,
@@ -344,79 +337,52 @@ export class GitReviewIndexReader {
       );
       return primaryParser.finish();
     };
-    const pathspecConflict =
-      paths !== undefined && hasGitReviewExactPathspecConflict(paths);
-    let primary: GitReviewIndexPrimaryParseResult;
-    if (paths === undefined || !pathspecConflict) {
-      primary = await readPrimary(paths);
-    } else {
-      const reads: GitReviewIndexPrimaryParseResult[] = [];
-      for (const path of paths) {
-        reads.push(await readPrimary([path]));
-      }
-      primary = mergeScopedPrimaryReads(reads);
-      for (const group of ["unstaged", "staged"] as const) {
-        const parser = new GitReviewScopedMovementParser(group);
+    const primary = await readPrimary(paths);
+    const rangePaths =
+      paths === undefined ? [] : scopedRangePaths(primary, paths);
+    const rangePathspecs =
+      paths === undefined ? [] : createGitReviewExactPathspecs(rangePaths);
+    // Bounded ordinary queries never read unmerged files through numstat.
+    const hasConflicts = primary.entries.some(
+      (entry) => entry.groupFacts.conflict !== undefined
+    );
+    const statsByGroup: Partial<
+      Record<GitReviewGroup, GitReviewIndexStatParseResult>
+    > = {};
+    // Both groups have independent parsers and can run concurrently.
+    const statReads = await Promise.all(
+      (["unstaged", "staged"] as const).map(async (group) => {
+        if (hasConflicts) {
+          const parsed = await readGitReviewOrdinaryNumstat({
+            execGitRaw: this.#execGitRaw,
+            primary,
+            group,
+            machineArgs: DIFF_MACHINE_ARGS,
+            canonicalRoot: identity.canonicalRoot,
+            budget,
+            signal,
+          });
+          return [group, parsed] as const;
+        }
+        const parser = new GitReviewNumstatParser(group);
         await runGitReviewIndexParser(
           this.#execGitRaw,
           [
-            "--literal-pathspecs",
             "diff",
             ...DIFF_MACHINE_ARGS,
             ...(group === "staged" ? ["--cached"] : []),
-            "--raw",
-            "--no-abbrev",
-            "--diff-filter=RC",
+            "--numstat",
             "-z",
             "--",
-            ...paths,
+            ...rangePathspecs,
           ],
           identity.canonicalRoot,
           budget,
           signal,
           (record) => parser.push(record)
         );
-        const parsed = parser.finish();
-        primary = applyScopedMovements(primary, group, parsed, paths);
-      }
-    }
-    const rangePaths =
-      paths === undefined ? [] : scopedRangePaths(primary, paths);
-    const rangePathspecConflict =
-      paths !== undefined && hasGitReviewExactPathspecConflict(rangePaths);
-    const rangePathspecs =
-      paths === undefined || rangePathspecConflict
-        ? []
-        : createGitReviewExactPathspecs(rangePaths);
-    const statsByGroup: Partial<
-      Record<GitReviewGroup, GitReviewIndexStatParseResult>
-    > = {};
-    // unstaged / staged numstat 互不依赖，各自独占 parser。串行等于白等一次
-    // git 索引刷新——大仓下这一步就是 document 读取的主要耗时来源。
-    const statReads = await Promise.all(
-      (rangePathspecConflict ? [] : (["unstaged", "staged"] as const)).map(
-        async (group) => {
-          const parser = new GitReviewNumstatParser(group);
-          await runGitReviewIndexParser(
-            this.#execGitRaw,
-            [
-              ...(paths === undefined ? ["--literal-pathspecs"] : []),
-              "diff",
-              ...DIFF_MACHINE_ARGS,
-              ...(group === "staged" ? ["--cached"] : []),
-              "--numstat",
-              "-z",
-              "--",
-              ...rangePathspecs,
-            ],
-            identity.canonicalRoot,
-            budget,
-            signal,
-            (record) => parser.push(record)
-          );
-          return [group, parser.finish()] as const;
-        }
-      )
+        return [group, parser.finish()] as const;
+      })
     );
     for (const [group, parsed] of statReads) {
       statsByGroup[group] = parsed;

@@ -60,15 +60,11 @@ export type {
   PierDiffViewProps,
 } from "./types.ts";
 export type { PierUnresolvedConflictHost } from "./unresolved-conflict/host-types.ts";
-export {
-  conflictStageTexts,
-  type PierConflictFileBody,
-  type PierConflictPresentation,
-  PierConflictStageDiff,
-  type PierConflictXy,
-  type PierUnresolvedConflictLabels,
-  type PierUnresolvedConflictProps,
-  PierUnresolvedConflictView,
-} from "./unresolved-conflict/index.tsx";
+export type {
+  PierConflictFileBody,
+  PierConflictPresentation,
+  PierConflictXy,
+  PierUnresolvedConflictLabels,
+} from "./unresolved-conflict/types.ts";
 export { PierDiffView } from "./view/pier-diff-view.tsx";
 export { PierDiffWorkerProvider } from "./worker.tsx";

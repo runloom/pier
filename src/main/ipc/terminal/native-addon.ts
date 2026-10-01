@@ -1,4 +1,3 @@
-import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal/launch.ts";
 import type {
@@ -8,6 +7,7 @@ import type {
   TerminalNativeWindowState,
   TerminalRuntimeConfig,
 } from "@shared/contracts/terminal.ts";
+import { loadNativeBinding } from "../../native-module.ts";
 import { stripHostColorPolicyFromProcessEnv } from "../../services/process-environment/clean-env.ts";
 
 export interface NativeAddon {
@@ -308,10 +308,7 @@ export function loadNativeAddon(): {
     return { addon: null, error: "ghostty requires macOS" };
   }
   try {
-    const require = createRequire(import.meta.url);
-    const addonPath = require.resolve(
-      "../../native/build/Release/ghostty_native.node"
-    );
+    const { addon, addonPath } = loadNativeBinding<NativeAddon>();
     // Ghostty 找 shell-integration 脚本靠 GHOSTTY_RESOURCES_DIR，pier 把脚本
     // 打在 native/GhosttyResources/ghostty/ 下（zsh/bash/fish/nushell/elvish）。
     // 必须在 ghostty native 首次 init 前设，否则会 fallback 到禁用集成。
@@ -319,7 +316,6 @@ export function loadNativeAddon(): {
       ghosttyResourcesDirFromAddonPath(addonPath);
     // Ghostty snapshots process env at init; drop host NO_COLOR before that.
     stripHostColorPolicyFromProcessEnv();
-    const addon: NativeAddon = require(addonPath);
     return { addon, error: null };
   } catch (e) {
     return {

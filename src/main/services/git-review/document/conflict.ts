@@ -1,5 +1,7 @@
 import { isUtf8 } from "node:buffer";
 import { createHash } from "node:crypto";
+import { lstat } from "node:fs/promises";
+import { resolve } from "node:path";
 import type {
   GitReviewConflictPresentation,
   GitReviewConflictXy,
@@ -7,6 +9,7 @@ import type {
 } from "../../../../shared/contracts/git/review.ts";
 import type { ExecGitRaw } from "../../git/exec.ts";
 import type {
+  GitReviewIndexConflictStages,
   GitReviewIndexExecutionBudget,
   GitReviewIndexGroupFact,
 } from "../index/contract.ts";
@@ -16,6 +19,7 @@ import {
   GitReviewPathError,
   readGitReviewFileSnapshot,
 } from "../path/guard.ts";
+import { statToken } from "../path/path-helpers.ts";
 import {
   GitReviewDocumentProtocolError,
   GitReviewDocumentStaleError,
@@ -73,10 +77,15 @@ export async function readGitReviewConflictMaterial(
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
   } catch (error) {
-    return materialFromPathError(error, xy, stages, options);
+    return materialFromPathError(error, conflict, stages, options);
   }
 
-  const { bytes, digest } = snapshot;
+  const { bytes } = snapshot;
+  const digest = conflictContentsDigest(
+    `${snapshot.digest}:${snapshot.identityToken}`,
+    xy,
+    conflict
+  );
   if (bytes.includes(0)) {
     return {
       contents: null,
@@ -168,6 +177,8 @@ export function hasCompleteMergeConflictMarkers(text: string): boolean {
     if (top === undefined) {
       if (marker === "start") {
         stack.push({ stage: "current" });
+      } else if (marker !== null) {
+        return false;
       }
       continue;
     }
@@ -202,11 +213,12 @@ export function hasCompleteMergeConflictMarkers(text: string): boolean {
 
 async function materialFromPathError(
   error: unknown,
-  xy: GitReviewConflictXy,
+  conflict: GitReviewIndexConflictStages,
   stages: GitReviewConflictMaterial["stages"],
   options: ReadGitReviewConflictOptions
 ): Promise<GitReviewConflictMaterial> {
   const { budget } = options;
+  const { xy } = conflict;
   if (!(error instanceof GitReviewPathError)) {
     throw error;
   }
@@ -239,9 +251,17 @@ async function materialFromPathError(
     presentation = "file-level";
   }
 
-  const digest = `sha256:${createHash("sha256")
-    .update(`conflict:${xy}:${error.reason}:${error.message}`)
-    .digest("hex")}`;
+  let worktreeIdentity: string = error.reason;
+  try {
+    const info = await lstat(
+      resolve(options.gitRootPath, options.fact.targetPath),
+      { bigint: true }
+    );
+    worktreeIdentity = `${error.reason}:${statToken(info)}`;
+  } catch {
+    // The path-error state (including absence) remains part of the fingerprint.
+  }
+  const digest = conflictContentsDigest(worktreeIdentity, xy, conflict);
   const base = {
     contents: null,
     contentsDigest: digest,
@@ -253,7 +273,7 @@ async function materialFromPathError(
   if (presentation !== "file-level") {
     return base;
   }
-  const sides = await readConflictStageTexts(options, stages);
+  const sides = await readConflictStageTexts(options, conflict);
   if (sides === null) {
     return base;
   }
@@ -272,15 +292,15 @@ type ConflictStageBlob =
 
 async function readConflictStageTexts(
   options: ReadGitReviewConflictOptions,
-  stages: GitReviewConflictMaterial["stages"]
+  stages: GitReviewIndexConflictStages
 ): Promise<{
   readonly digest: string;
   readonly oursContents: string | null;
   readonly theirsContents: string | null;
 } | null> {
   const [ours, theirs] = await Promise.all([
-    readConflictBlob(options, stages.oursOid),
-    readConflictBlob(options, stages.theirsOid),
+    readConflictBlob(options, stages.oursOid, stages.oursMode),
+    readConflictBlob(options, stages.theirsOid, stages.theirsMode),
   ]);
   if (ours.kind === "unavailable" || theirs.kind === "unavailable") {
     return null;
@@ -297,10 +317,14 @@ async function readConflictStageTexts(
 
 async function readConflictBlob(
   options: ReadGitReviewConflictOptions,
-  oid: string | null
+  oid: string | null,
+  mode: string
 ): Promise<ConflictStageBlob> {
   if (oid === null || /^0+$/u.test(oid)) {
     return { kind: "absent" };
+  }
+  if (mode === "160000") {
+    return { kind: "unavailable" };
   }
   if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(oid)) {
     return { kind: "unavailable" };
@@ -335,6 +359,16 @@ async function readConflictBlob(
     }
     return { kind: "unavailable" };
   }
+}
+
+function conflictContentsDigest(
+  worktreeIdentity: string,
+  xy: GitReviewConflictXy,
+  stages: GitReviewIndexConflictStages
+): string {
+  return `sha256:${createHash("sha256")
+    .update(JSON.stringify([xy, stages, worktreeIdentity]))
+    .digest("hex")}`;
 }
 
 function splitPreserveEmpty(text: string): string[] {

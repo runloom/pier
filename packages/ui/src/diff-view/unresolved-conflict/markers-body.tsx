@@ -10,8 +10,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { Button } from "../../button.tsx";
 import { ensurePierDiffLightDomStyles } from "../appearance.ts";
+import { diffMetrics } from "../geometry.ts";
 import type {
   PierDiffViewAppearance,
   PierDiffViewPresentation,
@@ -44,10 +44,8 @@ export function MarkersConflictBody(options: {
   readonly busy: boolean;
   readonly contents: string;
   readonly contentsDigest: string;
-  readonly embedInCodeView?: boolean;
   readonly labels: PierUnresolvedConflictLabels;
   readonly onError?: (error: Error) => void;
-  readonly onOpenFile?: () => void;
   readonly onWriteResolved?: (payload: {
     readonly contents: string;
     readonly contentsDigest: string;
@@ -55,6 +53,7 @@ export function MarkersConflictBody(options: {
   readonly path: string;
   readonly presentation?: PierDiffViewPresentation;
 }): ReactElement {
+  const metrics = diffMetrics(options.appearance.codeFontSize);
   const writingRef = useRef(false);
   const acceptLockedRef = useRef(false);
   const liveContentsRef = useRef(options.contents);
@@ -193,9 +192,7 @@ export function MarkersConflictBody(options: {
 
   const pierreOptions = useMemo(
     () => ({
-      ...(options.embedInCodeView === true
-        ? { disableFileHeader: true as const }
-        : {}),
+      disableFileHeader: true,
       enableLineSelection: true,
       ...(options.labels.expandAllUnmodified === undefined
         ? {}
@@ -215,42 +212,10 @@ export function MarkersConflictBody(options: {
       formatUnmodifiedLines,
       options.appearance.codeThemes,
       options.appearance.colorMode,
-      options.embedInCodeView,
       options.labels.expandAllUnmodified,
       options.presentation?.wrapLines,
     ]
   );
-
-  const renderHeaderMetadata = useCallback(() => {
-    if (options.onOpenFile === undefined && !controlsDisabled) {
-      return null;
-    }
-    return (
-      <span className="inline-flex items-center gap-2">
-        {controlsDisabled ? (
-          <span className="text-muted-foreground text-xs">
-            {options.labels.resolving}
-          </span>
-        ) : null}
-        {options.onOpenFile ? (
-          <Button
-            disabled={controlsDisabled}
-            onClick={options.onOpenFile}
-            size="xs"
-            type="button"
-            variant="ghost"
-          >
-            {options.labels.openFile}
-          </Button>
-        ) : null}
-      </span>
-    );
-  }, [
-    controlsDisabled,
-    options.labels.openFile,
-    options.labels.resolving,
-    options.onOpenFile,
-  ]);
 
   // CSS content tokens need quotes; JSON.stringify is a valid CSS string.
   const style = useMemo(
@@ -263,6 +228,8 @@ export function MarkersConflictBody(options: {
       ),
       ["--diffs-font-family" as string]: options.appearance.codeFontFamily,
       ["--diffs-font-size" as string]: options.appearance.codeFontSize,
+      ["--diffs-line-height" as string]: `${metrics.lineHeight}px`,
+      ["--pier-diff-content-padding-bottom" as string]: "0px",
       colorScheme: options.appearance.colorMode,
       height: "auto",
       width: "100%",
@@ -270,6 +237,7 @@ export function MarkersConflictBody(options: {
     [
       options.appearance.codeFontFamily,
       options.appearance.codeFontSize,
+      metrics.lineHeight,
       options.appearance.colorMode,
       options.labels.currentChange,
       options.labels.incomingChange,
@@ -288,7 +256,6 @@ export function MarkersConflictBody(options: {
         file={file}
         key={file.cacheKey}
         options={pierreOptions}
-        {...(options.embedInCodeView === true ? {} : { renderHeaderMetadata })}
         renderMergeConflictUtility={renderMergeConflictUtility}
         style={style}
       />

@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <vector>
 
+void RegisterAtomicFile(Napi::Env env, Napi::Object exports);
+
 extern "C" {
     bool ghostty_bridge_setup_window(void* nsWindow, long browserWindowId);
     bool ghostty_bridge_create_terminal(void* nsWindow, const char* panelId,
@@ -1360,6 +1362,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("orderedWindowNumbers", Napi::Function::New(env, JsOrderedWindowNumbers));
     exports.Set("windowNumberFor", Napi::Function::New(env, JsWindowNumberFor));
     exports.Set("getUnixPeerUid", Napi::Function::New(env, JsGetUnixPeerUid));
+    RegisterAtomicFile(env, exports);
     return exports;
 }
 

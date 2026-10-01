@@ -104,10 +104,10 @@ export const gitReviewConflictResolveRequestSchema = z
   .strictObject({
     action: z.enum(["ours", "stage", "theirs", "write"]),
     /**
-     * Worktree content digest (sha256:…) observed by the client.
-     * Required for write; optional for ours/theirs/stage (still re-validates unmerged).
+     * Conflict digest (worktree state + XY + stage identity) observed by the client.
+     * Required for every action: no resolution may overwrite unseen changes.
      */
-    expectedContentsDigest: gitReviewRevisionSchema.optional(),
+    expectedContentsDigest: gitReviewRevisionSchema,
     operationId: gitReviewOperationIdSchema,
     /** UTF-8 body after resolution; required when action is write. */
     resolvedContents: z
@@ -117,21 +117,12 @@ export const gitReviewConflictResolveRequestSchema = z
     source: gitReviewFileDocumentRequestSchema.shape.source,
   })
   .superRefine((request, context) => {
-    if (request.action === "write") {
-      if (request.resolvedContents === undefined) {
-        context.addIssue({
-          code: "custom",
-          message: "write requires resolvedContents",
-          path: ["resolvedContents"],
-        });
-      }
-      if (request.expectedContentsDigest === undefined) {
-        context.addIssue({
-          code: "custom",
-          message: "write requires expectedContentsDigest",
-          path: ["expectedContentsDigest"],
-        });
-      }
+    if (request.action === "write" && request.resolvedContents === undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "write requires resolvedContents",
+        path: ["resolvedContents"],
+      });
     }
   });
 export type GitReviewConflictResolveRequest = z.infer<

@@ -1,4 +1,5 @@
 import { type FileDiffMetadata, processFile } from "@pierre/diffs";
+import type { PierConflictFileBody } from "./types.ts";
 
 export const UNRESOLVED_CONFLICT_CACHE_KEY_PREFIX = "unresolved-conflict:";
 
@@ -16,6 +17,32 @@ export function isUnresolvedConflictCacheKey(
 
 export function unresolvedConflictCacheKey(itemCacheKey: string): string {
   return `${UNRESOLVED_CONFLICT_CACHE_KEY_PREFIX}${itemCacheKey}`;
+}
+
+/**
+ * Only readable stages can replace a missing worktree body.
+ * Null means no blob; undefined means the stage could not be read.
+ */
+export function conflictStageTexts(
+  conflict: Pick<
+    PierConflictFileBody,
+    "contents" | "oursContents" | "presentation" | "theirsContents"
+  >
+): { readonly ours: string; readonly theirs: string } | null {
+  if (conflict.contents !== null || conflict.presentation !== "file-level") {
+    return null;
+  }
+  if (
+    conflict.oursContents === undefined ||
+    conflict.theirsContents === undefined ||
+    (conflict.oursContents === null && conflict.theirsContents === null)
+  ) {
+    return null;
+  }
+  return {
+    ours: conflict.oursContents ?? "",
+    theirs: conflict.theirsContents ?? "",
+  };
 }
 
 /**

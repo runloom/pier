@@ -4,16 +4,19 @@ import type {
   GitReviewMutationResult,
 } from "../../../../shared/contracts/git/review.ts";
 import { gitReviewFailureSchema } from "../../../../shared/contracts/git/review.ts";
-import type { ExecGitRaw } from "../../git/exec.ts";
+import { type ExecGitRaw, GitExecRawError } from "../../git/exec.ts";
 import { isGitPathspecError } from "../../git/stage-operations.ts";
 import type { GitReviewIndexExecutionBudget } from "../index/contract.ts";
 import type { GitReviewIndexReader } from "../index/index.ts";
 import type { GitReviewMutationWriter } from "../mutation.ts";
 import {
+  GIT_REVIEW_SNAPSHOT_MAX_BYTES,
   GitReviewPathError,
   readGitReviewFileSnapshot,
 } from "../path/guard.ts";
 import { writeGitReviewFileContents } from "../path/write.ts";
+import { readGitReviewConflictMaterial } from "./conflict.ts";
+import { GitReviewDocumentStaleError } from "./patch-contract.ts";
 
 type ConflictIndexReader = Pick<GitReviewIndexReader, "resolve">;
 
@@ -64,47 +67,176 @@ export async function resolveGitReviewConflict(options: {
 
   const cwd = request.source.gitRootPath;
   const path = request.source.path;
+  const revalidate = async (): Promise<GitReviewFailure | null> => {
+    const currentIndex = await indexReader.resolve(
+      { paths: [path], scope },
+      { budget, signal }
+    );
+    if (currentIndex.kind === "error") {
+      return currentIndex;
+    }
+    const currentFact = currentIndex.resolvedEntries.find(
+      (candidate) => candidate.path === path
+    )?.groupFacts.conflict;
+    if (currentFact === undefined || currentFact.origin !== "conflict") {
+      return failure(
+        "staleRevision",
+        true,
+        "The conflict index changed before resolution"
+      );
+    }
+    const current = await readGitReviewConflictMaterial({
+      budget,
+      execGitRaw,
+      fact: currentFact,
+      gitRootPath: cwd,
+      signal,
+    });
+    return current.contentsDigest === request.expectedContentsDigest
+      ? null
+      : failure(
+          "staleRevision",
+          true,
+          "The conflict changed before resolution"
+        );
+  };
 
   try {
+    const material = await readGitReviewConflictMaterial({
+      budget,
+      execGitRaw,
+      fact: conflictFact,
+      gitRootPath: cwd,
+      signal,
+    });
+    if (material.contentsDigest !== request.expectedContentsDigest) {
+      return failure(
+        "staleRevision",
+        true,
+        "The conflict changed before it could be resolved"
+      );
+    }
     if (request.action === "write") {
-      const writeResult = await writeResolvedContents({
+      const contents = request.resolvedContents;
+      if (
+        contents === undefined ||
+        /^(?:<{7}|={7}|\|{7}|>{7})/mu.test(contents)
+      ) {
+        return failure(
+          "invalidSource",
+          false,
+          "Conflict markers remain in the resolved contents"
+        );
+      }
+      if (Buffer.byteLength(contents, "utf8") > GIT_REVIEW_SNAPSHOT_MAX_BYTES) {
+        return failure(
+          "invalidSource",
+          false,
+          "Resolved contents exceed the file snapshot byte limit"
+        );
+      }
+      const before = await readGitReviewFileSnapshot({
         budget,
-        expectedDigest: request.expectedContentsDigest,
+        gitRootPath: cwd,
         path,
-        resolvedContents: request.resolvedContents ?? "",
-        root: cwd,
         signal,
       });
-      if (writeResult !== null) {
-        return writeResult;
+      const stale = await revalidate();
+      if (stale !== null) {
+        return stale;
       }
-    } else if (request.action !== "stage") {
+      await writeGitReviewFileContents({
+        budget,
+        contents,
+        expectedSnapshot: before,
+        gitRootPath: cwd,
+        path,
+        signal,
+      });
+    } else if (request.action === "stage") {
+      if (
+        material.contents !== null &&
+        /^(?:<{7}|={7}|\|{7}|>{7})/mu.test(material.contents)
+      ) {
+        return failure(
+          "invalidSource",
+          false,
+          "Conflict markers remain in the worktree"
+        );
+      }
+      if (
+        material.presentation === "tooLarge" ||
+        material.presentation === "readError"
+      ) {
+        return failure(
+          "commandFailed",
+          false,
+          "The conflict worktree could not be checked before staging"
+        );
+      }
+      const stale = await revalidate();
+      if (stale !== null) {
+        return stale;
+      }
+    } else {
       const stages = conflictFact.conflict;
       const chosenOid =
         request.action === "ours" ? stages?.oursOid : stages?.theirsOid;
-      if (chosenOid === null || chosenOid === undefined) {
+      const chosenMode =
+        request.action === "ours" ? stages?.oursMode : stages?.theirsMode;
+      if (chosenOid !== null && chosenOid !== undefined) {
+        if (
+          (chosenMode === "100644" || chosenMode === "100755") &&
+          (await stageBlobHasMarkers(
+            execGitRaw,
+            chosenOid,
+            cwd,
+            budget,
+            signal
+          ))
+        ) {
+          return failure(
+            "invalidSource",
+            false,
+            "Conflict markers remain in the selected version"
+          );
+        }
+        const stale = await revalidate();
+        if (stale !== null) {
+          return stale;
+        }
+        const side = request.action === "ours" ? "--ours" : "--theirs";
+        await execGitRaw(
+          [
+            "--literal-pathspecs",
+            "checkout",
+            ...(chosenMode === "160000" ? ["--recurse-submodules"] : []),
+            side,
+            "--",
+            path,
+          ],
+          { budget, cwd, mode: "collect", signal }
+        );
+      } else {
+        const stale = await revalidate();
+        if (stale !== null) {
+          return stale;
+        }
         await execGitRaw(["--literal-pathspecs", "rm", "-f", "--", path], {
           budget,
           cwd,
           mode: "collect",
-          ...(signal ? { signal } : {}),
+          signal,
         });
-      } else {
-        const side = request.action === "ours" ? "--ours" : "--theirs";
-        await execGitRaw(
-          ["--literal-pathspecs", "checkout", side, "--", path],
-          {
-            budget,
-            cwd,
-            mode: "collect",
-            ...(signal ? { signal } : {}),
-          }
-        );
+        return { kind: "ok", operationId: request.operationId };
       }
     }
     await writer.stage(cwd, { paths: [path] });
   } catch (error) {
-    if (error instanceof GitReviewPathError && error.reason === "changed") {
+    if (
+      error instanceof GitReviewDocumentStaleError ||
+      (error instanceof GitReviewPathError && error.reason === "changed")
+    ) {
       return failure("staleRevision", true, error.message);
     }
     if (isGitPathspecError(error)) {
@@ -124,51 +256,39 @@ export async function resolveGitReviewConflict(options: {
   return { kind: "ok", operationId: request.operationId };
 }
 
-async function writeResolvedContents(options: {
-  readonly budget: GitReviewIndexExecutionBudget;
-  readonly expectedDigest: string | undefined;
-  readonly path: string;
-  readonly resolvedContents: string;
-  readonly root: string;
-  readonly signal?: AbortSignal;
-}): Promise<GitReviewFailure | null> {
-  if (options.expectedDigest === undefined) {
-    return failure(
-      "staleRevision",
-      true,
-      "Resolved write requires the observed file digest"
-    );
-  }
-  let before: Awaited<ReturnType<typeof readGitReviewFileSnapshot>>;
+async function stageBlobHasMarkers(
+  execGitRaw: ExecGitRaw,
+  oid: string,
+  cwd: string,
+  budget: GitReviewIndexExecutionBudget,
+  signal: AbortSignal
+): Promise<boolean> {
   try {
-    before = await readGitReviewFileSnapshot({
-      budget: options.budget,
-      gitRootPath: options.root,
-      path: options.path,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
+    await execGitRaw(
+      [
+        "grep",
+        "--no-textconv",
+        "-I",
+        "-q",
+        "-E",
+        "^(<{7}|={7}|\\|{7}|>{7})",
+        oid,
+        "--",
+      ],
+      { budget, cwd, mode: "collect", signal }
+    );
+    return true;
   } catch (error) {
-    if (error instanceof GitReviewPathError && error.reason === "missing") {
-      return failure("changeNotFound", true, "Conflict file is missing");
+    if (
+      error instanceof GitExecRawError &&
+      error.causeKind === "exit" &&
+      error.exitCode === 1 &&
+      error.signal === null
+    ) {
+      return false;
     }
     throw error;
   }
-  if (before.digest !== options.expectedDigest) {
-    return failure(
-      "staleRevision",
-      true,
-      "The conflict file changed before it could be written"
-    );
-  }
-
-  await writeGitReviewFileContents({
-    budget: options.budget,
-    contents: options.resolvedContents,
-    gitRootPath: options.root,
-    path: options.path,
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-  });
-  return null;
 }
 
 function failure(

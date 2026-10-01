@@ -1,7 +1,7 @@
 import {
-  __applyConflictResolutionForTest,
-  __countUnresolvedMarkersForTest,
-} from "@pier/ui/diff-view/unresolved-conflict/index.tsx";
+  applyConflictResolution,
+  countUnresolvedMarkers,
+} from "@pier/ui/diff-view/unresolved-conflict/rebuild.ts";
 import { describe, expect, it } from "vitest";
 
 const multiRegion = [
@@ -22,8 +22,8 @@ const multiRegion = [
 
 describe("conflict Accept rebuild", () => {
   it("counts unresolved start markers", () => {
-    expect(__countUnresolvedMarkersForTest(multiRegion)).toBe(2);
-    expect(__countUnresolvedMarkersForTest("clean\n")).toBe(0);
+    expect(countUnresolvedMarkers(multiRegion)).toBe(2);
+    expect(countUnresolvedMarkers("clean\n")).toBe(0);
   });
 
   it("applies sequential Accepts across two regions", () => {
@@ -34,11 +34,7 @@ describe("conflict Accept rebuild", () => {
       separatorLineIndex: 3,
       startLineIndex: 1,
     };
-    const afterFirst = __applyConflictResolutionForTest(
-      multiRegion,
-      region0,
-      "current"
-    );
+    const afterFirst = applyConflictResolution(multiRegion, region0, "current");
     expect(afterFirst).toBe(
       [
         "pre\n",
@@ -52,7 +48,7 @@ describe("conflict Accept rebuild", () => {
         "post\n",
       ].join("")
     );
-    expect(__countUnresolvedMarkersForTest(afterFirst)).toBe(1);
+    expect(countUnresolvedMarkers(afterFirst)).toBe(1);
 
     // Second region shifts up after first Accept (start was 7, removed 4 lines → 3).
     const region1 = {
@@ -61,7 +57,7 @@ describe("conflict Accept rebuild", () => {
       separatorLineIndex: 5,
       startLineIndex: 3,
     };
-    const afterSecond = __applyConflictResolutionForTest(
+    const afterSecond = applyConflictResolution(
       afterFirst,
       region1,
       "incoming"
@@ -69,7 +65,7 @@ describe("conflict Accept rebuild", () => {
     expect(afterSecond).toBe(
       ["pre\n", "ours-a\n", "mid\n", "theirs-b\n", "post\n"].join("")
     );
-    expect(__countUnresolvedMarkersForTest(afterSecond)).toBe(0);
+    expect(countUnresolvedMarkers(afterSecond)).toBe(0);
   });
 
   it("accept both concatenates current then incoming", () => {
@@ -80,7 +76,7 @@ describe("conflict Accept rebuild", () => {
       "b\n",
       ">>>>>>> other\n",
     ].join("");
-    const resolved = __applyConflictResolutionForTest(
+    const resolved = applyConflictResolution(
       body,
       {
         conflictIndex: 0,
