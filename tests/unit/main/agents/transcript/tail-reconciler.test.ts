@@ -1,7 +1,8 @@
 import { appendFileSync, writeFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as waitForWatchPoll } from "node:timers/promises";
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTranscriptTailReconciler } from "../../../../../src/main/services/agents/integrations/transcript/tail-reconciler.ts";
@@ -10,9 +11,11 @@ import { shouldDropStaleEmptyTurnTerminal } from "../../../../../src/main/servic
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
   const mockedStat = vi.fn(actual.stat);
+  const mockedRealpath = vi.fn(actual.realpath);
   return {
     ...actual,
-    default: { ...actual, stat: mockedStat },
+    default: { ...actual, realpath: mockedRealpath, stat: mockedStat },
+    realpath: mockedRealpath,
     stat: mockedStat,
   };
 });
@@ -231,34 +234,58 @@ describe("createTranscriptTailReconciler", () => {
     }
   });
 
-  it("PromptSubmit 水位丢弃空 turnId 旧终态，水位之后的新行仍派发", async () => {
+  it("holds stale anonymous terminals while resolving a PromptSubmit path", async () => {
     const received: AgentHookEventPayload[] = [];
+    const readLines: string[] = [];
     const reconciler = createTranscriptTailReconciler({
       agent: "kimi",
       classifyLine: (line) => {
-        if (!line.includes("turn_ended")) {
-          return null;
-        }
-        return {
-          nativeEvent: "kimi.wire.TurnEnd",
-          pierEvent: "TurnCompleted",
-          turnId: "",
-        };
+        readLines.push(line);
+        return line.includes("turn_ended")
+          ? {
+              nativeEvent: "kimi.wire.TurnEnd",
+              pierEvent: "TurnCompleted",
+              turnId: "",
+            }
+          : null;
       },
       onTerminalEvent: (event) => received.push(event),
       transcriptRoot,
     });
-    await reconciler.observe(sessionStart(path));
-    appendFileSync(path, emptyTurnLine());
-    await reconciler.observe(promptEvent(path));
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    expect(received).toHaveLength(0);
-    appendFileSync(path, emptyTurnLine());
-    await vi.waitFor(() => {
-      expect(received).toHaveLength(1);
-    });
-    expect(received[0]?.event).toBe("TurnCompleted");
-    reconciler.dispose();
+    const entered = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    try {
+      await reconciler.observe(sessionStart(path));
+      await vi.waitFor(() => expect(readLines).toHaveLength(1));
+      const canonicalRoot = await realpath(transcriptRoot);
+      vi.mocked(realpath).mockImplementationOnce(async () => {
+        entered.resolve();
+        await resume.promise;
+        return canonicalRoot;
+      });
+      appendFileSync(path, emptyTurnLine());
+      const pending = reconciler.observe({
+        ...promptEvent(path),
+        sessionId: "session-new",
+      });
+      await entered.promise;
+      // Native StatWatcher polling is not driven by Vitest's fake JS timers.
+      await waitForWatchPoll(400);
+      expect(received).toHaveLength(0);
+      resume.resolve();
+      await pending;
+      await vi.waitFor(() => expect(readLines).toHaveLength(2));
+      expect(received).toHaveLength(0);
+      appendFileSync(path, emptyTurnLine());
+      await vi.waitFor(() => expect(received).toHaveLength(1));
+      expect(received[0]).toMatchObject({
+        event: "TurnCompleted",
+        sessionId: "session-new",
+      });
+    } finally {
+      resume.resolve();
+      reconciler.dispose();
+    }
   });
 
   it.each([
