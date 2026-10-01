@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1789529308808,
+  "generatedAt": 1790881899193,
   "plugins": {
     "pier.agent-splits": {
       "description": "Connect splits opened by assistants to workbench panels.",
@@ -43,7 +43,7 @@
       "description": "Manage Claude accounts and switch the active login for Pier.",
       "displayName": "Claude Account Management",
       "id": "pier.claude",
-      "latest": "1.3.11",
+      "latest": "1.3.12",
       "locales": {
         "en": {
           "name": "Claude Account Management",
@@ -122,6 +122,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "b58382f78474bb57d8fa82ab711adc2f7d058980a50961cd05234c957554d43d",
           "size": 575039
+        },
+        "1.3.12": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.12/pier.claude-1.3.12.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "3ca94c830d4190b21e5d89d897088fe4113e6d5fb682bda0de18d0ceb0f30beb",
+          "size": 576063
         }
       }
     },
@@ -129,7 +135,7 @@
       "description": "Codex account management and usage monitoring for Pier.",
       "displayName": "Codex Account Management",
       "id": "pier.codex",
-      "latest": "1.4.15",
+      "latest": "1.4.16",
       "locales": {
         "en": {
           "name": "Codex Account Management",
@@ -232,6 +238,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "de6466e139bd6b6de2a50cdcf5f49df4378b42d9073ea42df7c0fe20ce9d0d16",
           "size": 571967
+        },
+        "1.4.16": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.16/pier.codex-1.4.16.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "a85b39c40c074c56f797f589badd91f4a5d745a9167070b9285e7940f6bdb908",
+          "size": 572991
         }
       }
     },
@@ -367,7 +379,7 @@
       "description": "Manage SSH hosts and open SSH terminals from Pier.",
       "displayName": "SSH Hosts",
       "id": "pier.ssh",
-      "latest": "1.0.9",
+      "latest": "1.0.10",
       "locales": {
         "en": {
           "name": "SSH Hosts",
@@ -434,6 +446,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "eebadb84c23222f9adedaad508f09c94c0676d1cc518fe4251da07b53d5ab332",
           "size": 382512
+        },
+        "1.0.10": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.10/pier.ssh-1.0.10.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "c732c6165a7ebeb5ea752899532f74007fc2539653da5330cf612be6287b9054",
+          "size": 382512
         }
       }
     },
@@ -476,11 +494,11 @@
       }
     }
   },
-  "sequence": 44,
+  "sequence": 45,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "rDJtqpeNKBhJeZc0zKV0Zqx1T8FlC7lEfgxIqEmltKax55cY52h6Gf0ZDrijHcCx9PuxMi80w+1p9JFGrzizCA=="
+    "value": "hj4OxcuMeIa3MQk6zeAxxKQm5iZe3843tSq2XIcm4lgOQHd4Cs6HVSPOP18YZVJRsUmTx2/ZsdXtiEdROtogAg=="
   }
 }
