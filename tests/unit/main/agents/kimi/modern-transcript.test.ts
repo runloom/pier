@@ -220,7 +220,8 @@ describe("Kimi Code 0.41 main turn completion", () => {
     step(0);
     const ts = Date.now();
     if (flushed) wire({ reason: "completed", turnId: 0, type: "turn.ended" });
-    await hook("Stop", { ts: ts * 1_000_000 });
+    // Keep a native sub-ms phase; Number rounding at an exact ms can backdate Stop.
+    await hook("Stop", { ts: ts * 1_000_000 + 1000 });
     if (!flushed) wire({ reason: "completed", turnId: 0, type: "turn.ended" });
     await waitForTranscript(() => expect(received).toHaveLength(1));
     expect(status()).toBe("ready");
