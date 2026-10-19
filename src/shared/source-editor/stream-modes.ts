@@ -28,6 +28,29 @@ export const graphqlMode = simpleMode({
 });
 
 /**
+ * Compact Mermaid stream parser (no maintained L0 CodeMirror grammar).
+ * Highlights the diagram header, structural keywords, comments, quoted
+ * labels, edge arrows and shape brackets; the rendered preview owns real
+ * syntax validation.
+ */
+export const mermaidMode = simpleMode({
+  start: [
+    { regex: /%%.*/, token: "comment" },
+    { regex: /"(?:[^\\"]|\\.)*"/, token: "string" },
+    {
+      regex:
+        /\b(?:graph|flowchart|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|gantt|pie|journey|gitGraph|mindmap|timeline|quadrantChart|requirementDiagram|C4Context|subgraph|end|participant|actor|class|state|direction|section|title|accTitle|accDescr|click|style|classDef|linkStyle|note|loop|alt|else|opt|par|and|rect|critical|break|activate|deactivate)\b/,
+      token: "keyword",
+    },
+    { regex: /(?:-{2,}|-\.-|={2,}|~{2,})[>ox]?/, token: "operator" },
+    { regex: /\|[^|\n]*\|/, token: "string" },
+    { regex: /#[0-9a-fA-F]{3,8}\b/, token: "number" },
+    { regex: /\b\d+(?:\.\d+)?\b/, token: "number" },
+    { regex: /[{}()[\]]/, token: "bracket" },
+  ],
+});
+
+/**
  * Compact HCL / Terraform stream parser (no L0 `@codemirror/lang-hcl`).
  * Covers blocks, strings, comments, and `${}` interpolations.
  */

@@ -33,7 +33,11 @@ import { svelte } from "@replit/codemirror-lang-svelte";
 import { detectLiveModuleFrameworkFromFileName } from "@shared/live-module-framework.ts";
 import { pierAstroLanguage } from "@shared/source-editor/astro-language.ts";
 import { pierMarkdownLanguage } from "@shared/source-editor/markdown-language.ts";
-import { graphqlMode, hclMode } from "@shared/source-editor/stream-modes.ts";
+import {
+  graphqlMode,
+  hclMode,
+  mermaidMode,
+} from "@shared/source-editor/stream-modes.ts";
 import type {
   BuiltinFilesDocumentLanguage,
   FilesDocumentLanguage,
@@ -131,6 +135,8 @@ export function cmLanguageExtension(
       return StreamLanguage.define(lua);
     case "markdown":
       return pierMarkdownLanguage();
+    case "mermaid":
+      return StreamLanguage.define(mermaidMode);
     case "php":
       return StreamLanguage.define(clikeC);
     case "python":
