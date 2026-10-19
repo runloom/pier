@@ -41,7 +41,7 @@ import { swift } from "@codemirror/legacy-modes/mode/swift";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
 import { svelte } from "@replit/codemirror-lang-svelte";
 import { pierAstroLanguage } from "./astro-language.ts";
-import { graphqlMode, hclMode } from "./stream-modes.ts";
+import { graphqlMode, hclMode, mermaidMode } from "./stream-modes.ts";
 
 function stream(
   mode: Parameters<typeof StreamLanguage.define>[0]
@@ -109,6 +109,7 @@ const ROWS: readonly HighlightLanguageRow[] = [
     ["md", "mdx", "markdown"],
     markdown()
   ),
+  row("Mermaid", ["mermaid", "mmd"], ["mermaid", "mmd"], stream(mermaidMode)),
   row("PHP", ["php"], ["php"], stream(clikeC)),
   row("Python", ["py", "python", "pyi"], ["py", "pyi"], python()),
   row("R", ["r", "rmd"], ["r", "rmd"], stream(rMode)),
