@@ -109,6 +109,8 @@
     "filePanel.markdown.zoom.level": "Text size",
     "filePanel.markdown.zoom.out": "Decrease text size",
     "filePanel.markdown.zoom.reset": "Reset text size",
+    "filePanel.mermaid.empty": "This Mermaid file is empty. Write diagram syntax in the source view, then switch back to preview.",
+    "filePanel.mermaid.renderFailed": "Unable to render this diagram. Check the Mermaid syntax and try again.",
     "filePanel.editor.sourceLabel": "Source editor",
     "filePanel.editor.gitGutter.openChangesFailed": "Couldn't open Changes. Open a project folder with git first.",
     "filePanel.editor.contextMenuFailed": "Unable to open editor menu",

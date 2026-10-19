@@ -194,6 +194,7 @@ export function FilesGroupView({
     }
     if (
       selectedDocument?.language === "markdown" ||
+      selectedDocument?.language === "mermaid" ||
       selectedDocument?.language === "html" ||
       selectedDocument?.language === "svg"
     ) {

@@ -109,6 +109,8 @@
     "filePanel.markdown.zoom.level": "文字サイズ",
     "filePanel.markdown.zoom.out": "文字を小さくする",
     "filePanel.markdown.zoom.reset": "文字サイズをリセット",
+    "filePanel.mermaid.empty": "この Mermaid ファイルは空です。ソース表示で図の構文を書き、プレビューに戻ってください。",
+    "filePanel.mermaid.renderFailed": "この図を描画できませんでした。Mermaid の構文を確認して、もう一度お試しください。",
     "filePanel.editor.sourceLabel": "ソースエディタ",
     "filePanel.editor.gitGutter.openChangesFailed": "変更を開けませんでした。先に git のあるプロジェクトフォルダを開いてください。",
     "filePanel.editor.contextMenuFailed": "エディタメニューを開けません",

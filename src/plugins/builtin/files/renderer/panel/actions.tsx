@@ -89,6 +89,7 @@ export function ResolvedFilePanelActions({
     : undefined;
   const supportsPreview =
     document.language === "markdown" ||
+    document.language === "mermaid" ||
     document.language === "canvas" ||
     (document.language === "html" && document.source.kind === "disk") ||
     (document.language === "svg" && document.source.kind === "disk") ||
@@ -127,6 +128,7 @@ export function ResolvedFilePanelActions({
           if (
             mode === "preview" &&
             language !== "markdown" &&
+            language !== "mermaid" &&
             language !== "canvas" &&
             language !== "html" &&
             language !== "svg"

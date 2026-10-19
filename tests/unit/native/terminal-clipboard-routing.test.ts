@@ -18,6 +18,10 @@ const APP_TERMINAL_INPUT_PATH = join(
   process.cwd(),
   "native/Vendor/libghostty-spm/Sources/GhosttyTerminal/Platform/AppKit/AppTerminalView+Input.swift"
 );
+const GHOSTTY_BRIDGE_PATH = join(
+  process.cwd(),
+  "native/Sources/GhosttyBridge/GhosttyBridge.swift"
+);
 
 function readSource(path: string): string {
   return readFileSync(path, "utf8");
@@ -199,5 +203,82 @@ describe("native terminal responder action gating", () => {
       const body = extractFunctionBody(source, signature);
       expect(body).toContain("hostKeyboardActive");
     }
+  });
+});
+
+/**
+ * Cmd+C/V/A 与 App menu 的 role 双占：menu role 走 `window.firstResponder`，
+ * 原生终端 FR 是异步移交的（且 focusesOnMouseDown=false）。FR 还停在 web 时，
+ * menu 先消费 Cmd+C 并复制空的 web 选区，Ghostty 永远收不到复制动作。
+ * 键盘归属已在终端时必须由事件路由先处理三连键，再让 menu 处理其它 Cmd 组合。
+ */
+describe("terminal keyboard clipboard chords", () => {
+  function routeKeyDownBody(): string {
+    return extractFunctionBody(
+      readSource(GHOSTTY_BRIDGE_PATH),
+      "private func routeKeyDown("
+    );
+  }
+
+  it("handles clipboard chords before the app menu claims the key equivalent", () => {
+    const body = routeKeyDownBody();
+    const clipboardAt = body.indexOf("terminalClipboardAction");
+    const performAt = body.indexOf("performClipboardAction");
+    const menuAt = body.indexOf("NSApp.mainMenu?.performKeyEquivalent");
+
+    expect(clipboardAt).toBeGreaterThan(-1);
+    expect(performAt).toBeGreaterThan(clipboardAt);
+    expect(menuAt).toBeGreaterThan(performAt);
+  });
+
+  it("routes clipboard chords by terminal keyboard ownership, not first responder", () => {
+    const source = readSource(GHOSTTY_BRIDGE_PATH);
+    const body = extractFunctionBody(source, "func performClipboardAction(");
+
+    expect(body).toContain("activeTerminalPanelId(for: window)");
+    expect(body).not.toContain("firstResponder");
+    expect(body).not.toContain("hostKeyboardActive");
+  });
+
+  it("keeps web-owned keyboards and undelivered chords on the original path", () => {
+    const body = routeKeyDownBody();
+    const webGuardAt = body.indexOf("guard activeTerminalPanelId != nil else");
+    const clipboardAt = body.indexOf("terminalClipboardAction");
+
+    // 浮层/设置等 web 焦点把键盘归属拉走后，⌘C 必须仍归 web。
+    expect(webGuardAt).toBeGreaterThan(-1);
+    expect(clipboardAt).toBeGreaterThan(webGuardAt);
+
+    // 只有终端真正派发了 binding action 才消费事件；失败要能回落。
+    expect(body).not.toContain(
+      "_ = GhosttyBridgeImpl.shared.performClipboardAction"
+    );
+    expect(body).toContain(
+      "GhosttyBridgeImpl.shared.performClipboardAction(action, for: window) {"
+    );
+  });
+
+  it("maps only bare Cmd+C/V/A onto terminal clipboard actions", () => {
+    const source = readSource(GHOSTTY_BRIDGE_PATH);
+    const body = extractFunctionBody(
+      source,
+      "static func terminalClipboardAction("
+    );
+
+    expect(body).toContain("relevant == .command");
+    expect(body).toContain('case "c":');
+    expect(body).toContain('case "v":');
+    expect(body).toContain('case "a":');
+  });
+
+  it("uses Ghostty clipboard binding names", () => {
+    const body = extractFunctionBody(
+      readSource(GHOSTTY_BRIDGE_PATH),
+      "var bindingAction: String"
+    );
+
+    expect(body).toContain('"copy_to_clipboard"');
+    expect(body).toContain('"paste_from_clipboard"');
+    expect(body).toContain('"select_all"');
   });
 });

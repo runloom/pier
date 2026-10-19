@@ -109,6 +109,8 @@
     "filePanel.markdown.zoom.level": "正文字号",
     "filePanel.markdown.zoom.out": "缩小正文字号",
     "filePanel.markdown.zoom.reset": "重置正文字号",
+    "filePanel.mermaid.empty": "这个 Mermaid 文件是空的。在源码视图写下图表语法，再切回预览。",
+    "filePanel.mermaid.renderFailed": "无法渲染这个图表。检查 Mermaid 语法后再试。",
     "filePanel.editor.sourceLabel": "源码编辑器",
     "filePanel.editor.gitGutter.openChangesFailed": "无法打开变更。请先打开带 git 的项目文件夹。",
     "filePanel.editor.contextMenuFailed": "无法打开编辑器菜单",

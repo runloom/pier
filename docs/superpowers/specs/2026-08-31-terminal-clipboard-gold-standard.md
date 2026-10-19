@@ -2,7 +2,7 @@
 
 日期：2026-08-31
 状态：现行权威
-范围：ghostty 剪贴板回调（write / read / confirm）的宿主路由、空串防御、composer 发送期的剪贴板图片抑制恢复、⌘C/⌘V responder 动作门禁。
+范围：ghostty 剪贴板回调（write / read / confirm）的宿主路由、空串防御、composer 发送期的剪贴板图片抑制恢复、⌘C/⌘V responder 动作门禁、⌘C/⌘V/⌘A 键盘和弦归属。
 不包含：粘贴确认 NSAlert 生命周期（见 `ghostty-host-copy.ts` 头注释与 `ClipboardConfirmRequest.swift`）、renderer 上下文菜单复制（`read-selection-text` + 菜单 `clipboardText`，不经本文回调）。
 
 背景缺陷：Pier 曾把 ghostty 的 selection 剪贴板与 standard 剪贴板都写进
@@ -84,10 +84,26 @@ responder，被终端处理即意味着 web 侧没有处理 —— **禁止用 `
 `keyUp` / `flagsChanged` / `performKeyEquivalent` / `doCommand`）与 web 浮层键盘
 归属存在真实竞态，门禁必须保留。
 
+## 键盘和弦归属（⌘C / ⌘V / ⌘A）
+
+App menu 的 `role: copy/paste/selectAll` 同样占用 ⌘C/⌘V/⌘A，AppKit 会把 selector 派发给
+**当前 first responder**。原生终端的 first responder 由 renderer 状态异步移交
+（`focusesOnMouseDown = false`）；交接完成前、或 Chromium 拒绝 resign 时，menu 会把复制
+落到 web 选区上并消费按键，Ghostty 永远收不到 `copy_to_clipboard` —— 表现为「终端里
+⌘C 没反应」，而普通键入仍正常（事件监视器可直接转发，不依赖 FR）。
+
+因此事件路由在 menu 之前按**键盘归属**（`activeTerminalPanelId`，不是 FR，也不是
+`hostKeyboardActive`）处理裸 ⌘C/⌘V/⌘A，直接调用终端 binding action
+（`copy_to_clipboard` / `paste_from_clipboard` / `select_all`）并消费事件。
+Shift/Option 变体与其它 Cmd 组合保持原路径（menu / Ghostty）。web 拥有键盘时
+（浮层打开、`activeTerminalPanelId == nil`）不拦截，menu 行为不变。
+
 ## 检查点
 
 - `tests/unit/native/terminal-clipboard-routing.test.ts`（路由 / 未知种类
-  fail-closed / 空串策略作用域 / confirm / responder 门禁）
+  fail-closed / 空串策略作用域 / confirm / responder 门禁 / ⌘C⌘V⌘A 先于 menu 归属）
+- `native/Tests/GhosttyBridgeTests/TerminalClipboardChordTests.swift`（裸 Cmd 三连键映射；
+  Shift/Option 变体不接管）
 - `native/Tests/GhosttyBridgeTests/TerminalClipboardRoutingTests.swift`（种类映射
   与 failable init；**行为测试**直接驱动真 `TerminalCallbacks.writeClipboard`：
   selection 写不动 general changeCount、空 selection 写清陈旧选区、未知种类 /

@@ -28,6 +28,7 @@ export type BuiltinFilesDocumentLanguage =
   | "kotlin"
   | "lua"
   | "markdown"
+  | "mermaid"
   | "php"
   | "python"
   | "r"

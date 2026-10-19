@@ -755,7 +755,7 @@ describe("pier.codex accounts service", () => {
     const stateFile = join(dir, "accounts.json");
     const managedBaseDir = join(dir, "managed");
     const staleExpiry = Date.parse("2026-08-10T14:03:28+00:00");
-    const renewsAt = Date.parse("2026-10-04T21:38:26+00:00");
+    const renewsAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
     await mkdir(dir, { recursive: true });
     await writeFile(
       stateFile,
@@ -817,7 +817,7 @@ describe("pier.codex accounts service", () => {
     const stateFile = join(dir, "accounts.json");
     const managedBaseDir = join(dir, "managed");
     const staleExpiry = Date.parse("2026-08-10T14:03:28+00:00");
-    const renewsAt = Date.parse("2026-10-04T21:38:26+00:00");
+    const renewsAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
     await mkdir(dir, { recursive: true });
     await writeFile(
       stateFile,

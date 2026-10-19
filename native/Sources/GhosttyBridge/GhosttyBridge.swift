@@ -434,6 +434,26 @@ final class EventRouterView: NSView {
         return parts.joined(separator: "+")
     }
 
+    /// Bare Cmd+C / Cmd+V / Cmd+A only — shifted/optioned variants keep their
+    /// own meaning (and fall through to the menu / Ghostty).
+    static func terminalClipboardAction(
+        modifierFlags mods: NSEvent.ModifierFlags,
+        chars: String
+    ) -> TerminalClipboardAction? {
+        let relevant = mods.intersection([.command, .control, .option, .shift])
+        guard relevant == .command else { return nil }
+        switch chars.lowercased() {
+        case "c":
+            return .copy
+        case "v":
+            return .paste
+        case "a":
+            return .selectAll
+        default:
+            return nil
+        }
+    }
+
     private func passThroughToTerminal(window: NSWindow, event: NSEvent) -> NSEvent? {
         if GhosttyBridgeImpl.shared.prepareTerminalForOrdinaryKeyDown(
             window: window, event: event
@@ -486,6 +506,24 @@ final class EventRouterView: NSView {
         // Terminal mode: 只把运行时 allowlist 内的 Pier app 快捷键 forward 给 web
         // (路径 2 IPC), 其他组合全部 pass through 给 Ghostty.
         let isCmd = mods.contains(.command)
+
+        // Clipboard chords belong to the terminal that owns the keyboard. The
+        // app menu also claims Cmd+C/V/A (`role: copy/paste/selectAll`) and
+        // routes them to `window.firstResponder`, which can still be the web
+        // view during focus handoff — the menu then copies an empty web
+        // selection and consumes the event, so Ghostty never sees Cmd+C.
+        // Handle the triad here first; web surfaces take the menu path below.
+        // Swallow only when the terminal actually dispatched the action —
+        // otherwise fall through so the menu / web path still gets a chance.
+        if isCmd,
+           let action = Self.terminalClipboardAction(
+               modifierFlags: mods,
+               chars: chars
+           ),
+           GhosttyBridgeImpl.shared.performClipboardAction(action, for: window) {
+            record("terminal-clipboard-\(action.rawValue)")
+            return nil
+        }
 
         // macOS menu reserved keys (Cmd+Q/Cmd+H/Cmd+M/Cmd+Comma 等 role-bound items)
         // 必须先让 NSApp.mainMenu 处理. performKeyEquivalent 命中 menu item 后会调
@@ -857,6 +895,29 @@ enum NativeApplyResult: Int32 {
     case applied = 0
     case unchanged = 1
     case stale = 2
+}
+
+/// Clipboard chords the terminal must own while it has keyboard focus.
+/// The app menu also binds these chords (`role: copy/paste/selectAll`), and
+/// AppKit dispatches those roles to the *current first responder* — which is
+/// not necessarily the native terminal (focus handoff is asynchronous and
+/// `focusesOnMouseDown` is false). Routing here by keyboard ownership keeps
+/// Cmd+C/V/A deterministic instead of depending on first-responder timing.
+enum TerminalClipboardAction: String, Equatable {
+    case copy
+    case paste
+    case selectAll
+
+    var bindingAction: String {
+        switch self {
+        case .copy:
+            return "copy_to_clipboard"
+        case .paste:
+            return "paste_from_clipboard"
+        case .selectAll:
+            return "select_all"
+        }
+    }
 }
 
 private struct TerminalWindowApplyState {
@@ -1360,6 +1421,22 @@ final class GhosttyBridgeImpl {
         let state = appliedWindowStates[ObjectIdentifier(window)]
         guard state?.windowFocused == true else { return nil }
         return state?.keyboardTarget.terminalPanelId
+    }
+
+    /// Explicit clipboard chord from the event router. Targets the terminal
+    /// that owns the keyboard, not `window.firstResponder`: the Edit menu's
+    /// `copy:`/`paste:`/`selectAll:` roles may land on the Chromium view while
+    /// native focus transfer is still settling (or was refused), which copied
+    /// the empty web selection and swallowed Cmd+C.
+    func performClipboardAction(
+        _ action: TerminalClipboardAction,
+        for window: NSWindow
+    ) -> Bool {
+        guard let panelId = activeTerminalPanelId(for: window),
+              let term = terminals[panelId] else {
+            return false
+        }
+        return term.terminalView.performBindingAction(action.bindingAction)
     }
 
     func applyFirstResponder(

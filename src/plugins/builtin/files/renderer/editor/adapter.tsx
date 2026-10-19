@@ -13,6 +13,7 @@ import {
 import { FileCanvasPreview } from "../preview/canvas.tsx";
 import { FileHtmlPreview } from "../preview/html.tsx";
 import { FileImagePreview } from "../preview/image.tsx";
+import { FileMermaidPreview } from "../preview/mermaid.tsx";
 import { FilesFindUnavailableNotice } from "../search/use-find-unavailable.ts";
 import type { FileEditorAdapterProps } from "./adapter-types.ts";
 import { CodeMirrorEditor } from "./cm.tsx";
@@ -167,6 +168,32 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
               context={props.context}
               document={svgPreviewDocument}
               t={props.t}
+            />
+          </FilesFindUnavailableNotice>
+        );
+      }
+      return <CodeMirrorEditor {...props} />;
+    }
+    if (props.language === "mermaid") {
+      if (props.context && props.t) {
+        const mermaidContext = props.context;
+        const mermaidT = props.t;
+        return (
+          <FilesFindUnavailableNotice
+            context={mermaidContext}
+            panelId={props.panelId}
+            searchRequest={props.searchRequest}
+            t={mermaidT}
+          >
+            <FileMermaidPreview
+              context={mermaidContext}
+              loading={document?.loadState !== "loaded"}
+              name={
+                document?.name ??
+                mermaidT("filePanel.markdown.diagramLabel", "Mermaid diagram")
+              }
+              source={props.value}
+              t={mermaidT}
             />
           </FilesFindUnavailableNotice>
         );

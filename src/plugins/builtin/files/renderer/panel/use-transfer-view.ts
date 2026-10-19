@@ -22,6 +22,10 @@ import {
   readHtmlOpenMode,
   writeHtmlOpenMode,
 } from "../preview/html-open-mode.ts";
+import {
+  readMermaidOpenMode,
+  writeMermaidOpenMode,
+} from "../preview/mermaid-open-mode.ts";
 import { readSvgOpenMode, writeSvgOpenMode } from "../preview/svg-open-mode.ts";
 import {
   peekFilesPanelViewSeed,
@@ -83,6 +87,10 @@ export function defaultModeForSource(
   if (source && language === "markdown") {
     return readMarkdownOpenMode();
   }
+  // Mermaid is a diagram document: preview first, then remember the toggle.
+  if (source && language === "mermaid") {
+    return readMermaidOpenMode();
+  }
   if (source?.kind === "disk" && language === "html") {
     return readHtmlOpenMode();
   }
@@ -105,6 +113,9 @@ export function persistPreviewOpenMode(
   }
   if (language === "markdown") {
     writeMarkdownOpenMode(mode);
+  }
+  if (language === "mermaid") {
+    writeMermaidOpenMode(mode);
   }
   if (language === "html") {
     writeHtmlOpenMode(mode);
