@@ -1,7 +1,7 @@
 # Mermaid 纸面着色金标准
 
 日期：2026-09-10  
-状态：现行权威（Markdown 围栏 mermaid、全屏预览、Canvas `Mermaid` 卡片）  
+状态：现行权威（Markdown 围栏 mermaid、全屏预览、Canvas `Mermaid` 卡片、`.mermaid` 文件预览）  
 范围：official mermaid 11 闭集图种的默认铬如何映射到纸面语义令牌。  
 不包含：Canvas `WorkflowDiagram` / `ScreenFlow`（见流程图金标准）、作者 `classDef` 语义色、闭集外图种的完整映射。`look: handDrawn` 由作者显式声明时保留，宿主不保证其填色。
 
@@ -39,7 +39,7 @@
 4. **文字规则与形状规则分开。** 禁止把 `.actor` 盒子和 `nodeLabel` 写在同一条 `fill` 里。
 5. **镖分空心 / 实心。** 实心镖走 `marker path` / `.arrowheadPath` / `.arrowMarkerPath` / `.composition` / `.dependency`。空心镖按类型：`.extension` / `.aggregation` / `.onlyOne` / `.zeroOrOne` / `.oneOrMore` / `.zeroOrMore`，显式 `fill: none`，且必须盖过泛化的 `marker path`。禁止 `.marker { fill: none }`（mermaid 11.16 给每个镖都打 `class="marker"`，会掏空 neo point）。镖与线同色；不改 mermaid 镖宽高。
 6. **themeCSS 只许语义令牌 + `!important`。** 禁止 hex / `rgb()` / `hsl()` 进 `MERMAID_THEME_CSS`。引擎里的 KaTeX `#000` 用 `currentColor` 盖掉。
-7. **单例覆盖层。** Markdown 围栏、全屏、Canvas 卡片走同一 `renderMermaid`。禁止按纸面或图种重新 `initialize`。`htmlLabels` 恒 true。
+7. **单例覆盖层。** Markdown 围栏、全屏、Canvas 卡片、`.mermaid` 文件预览走同一 `renderMermaid`。禁止按纸面或图种重新 `initialize`。`htmlLabels` 恒 true。
 8. **默认边不是状态色。** 无角色拓扑走 `--muted-foreground`。禁止 `--status-info-fg` / 其它 `status-*` 当 mermaid 默认边或镖。
 9. **流程图才 neo。** `look: neo` 与 `curve: rounded` 只合并进 flowchart / graph 的 `%%{init}%%`。图种看 YAML / 指令剥掉之后的图头，不把 YAML 键 `flowchart:` 当成图种。作者已声明 `look`（`%%{init}%%` 或 YAML `config.look`）则不动。新指令插在 YAML 之后，避免 mermaid 的 `^---` 解析失败。禁止全局 `initialize({ look: "neo" })`。
 10. **neo 镖停车。** 渲染后若 neo 实线仍用 4 段 `stroke-dasharray` 让镖，宿主只修实际带 `point*Margin` 的那一端的 `refX` 与 dash 间隙。缺 `marker-start` / `marker-end` 不加间隙。不改 path `d`。幂等。

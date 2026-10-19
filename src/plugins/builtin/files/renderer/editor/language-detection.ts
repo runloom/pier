@@ -11,7 +11,8 @@ import { editorLanguageModeRegistry } from "./language/mode-registry.ts";
 
 /**
  * L0 extension → language map from the shared language matrix, plus box
- * languages that are not PATH rows (JS/TS/Vue live in special factories).
+ * languages that are not PATH rows (JS/TS/Vue live in special factories) and
+ * preview-first document types (Mermaid).
  */
 const MATRIX_EXTENSION_TO_LANGUAGE = editorExtensionMapFromMatrix();
 
@@ -22,7 +23,9 @@ const BOX_EXTENSION_TO_LANGUAGE: Readonly<
   cts: "typescript",
   js: "javascript",
   jsx: "javascript",
+  mermaid: "mermaid",
   mjs: "javascript",
+  mmd: "mermaid",
   mts: "typescript",
   ts: "typescript",
   tsx: "typescript",

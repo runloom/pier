@@ -19,6 +19,7 @@ import {
 import { forwardWheelToMarkdownPreview } from "./scroll-handoff.ts";
 
 export function MarkdownDiagram({
+  capHeight = true,
   charts,
   colorMode,
   contentPreview,
@@ -28,6 +29,11 @@ export function MarkdownDiagram({
   previewTitle,
   source,
 }: {
+  /**
+   * Markdown blocks honor the Files `blockHeightLimit` setting. Dedicated file
+   * previews own the whole panel and always expand with the page.
+   */
+  capHeight?: boolean | undefined;
   charts: RendererPluginContext["charts"];
   /**
    * Resolved preview color mode (fixed reading paper wins over app chrome).
@@ -57,7 +63,7 @@ export function MarkdownDiagram({
   const blockHeightLimit = useMarkdownPreviewPrefsStore(
     (state) => state.blockHeightLimit
   );
-  const heightCapped = blockHeightLimit === "capped";
+  const heightCapped = capHeight && blockHeightLimit === "capped";
 
   const shellRef = useCallback((node: HTMLDivElement | null) => {
     resizeObserverRef.current?.disconnect();

@@ -204,6 +204,7 @@ export const LANGUAGE_LABELS: Readonly<
   kotlin: "Kotlin",
   lua: "Lua",
   markdown: "Markdown",
+  mermaid: "Mermaid",
   php: "PHP",
   python: "Python",
   r: "R",

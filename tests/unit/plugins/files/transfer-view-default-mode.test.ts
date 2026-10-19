@@ -11,6 +11,11 @@ import {
   writeHtmlOpenMode,
 } from "@plugins/builtin/files/renderer/preview/html-open-mode.ts";
 import {
+  MERMAID_OPEN_MODE_KEY,
+  readMermaidOpenMode,
+  writeMermaidOpenMode,
+} from "@plugins/builtin/files/renderer/preview/mermaid-open-mode.ts";
+import {
   readSvgOpenMode,
   SVG_OPEN_MODE_KEY,
   writeSvgOpenMode,
@@ -27,11 +32,17 @@ const svgDiskSource = {
   path: "icon.svg",
   root: "/workspace/pier",
 };
+const mermaidDiskSource = {
+  kind: "disk" as const,
+  path: "docs/figures/class-diagram.mermaid",
+  root: "/workspace/pier",
+};
 
 describe("defaultModeForSource", () => {
   beforeEach(() => {
     window.localStorage.removeItem(HTML_OPEN_MODE_KEY);
     window.localStorage.removeItem(SVG_OPEN_MODE_KEY);
+    window.localStorage.removeItem(MERMAID_OPEN_MODE_KEY);
     window.localStorage.removeItem("pier.files.markdown.openMode");
   });
 
@@ -83,6 +94,26 @@ describe("defaultModeForSource", () => {
     expect(defaultModeForSource(svgDiskSource, "svg")).toBe("preview");
   });
 
+  it("opens mermaid files in preview and remembers a source choice", () => {
+    expect(defaultModeForSource(mermaidDiskSource, "mermaid")).toBe("preview");
+    writeMermaidOpenMode("source");
+    expect(defaultModeForSource(mermaidDiskSource, "mermaid")).toBe("source");
+    // 其它语言的偏好不受影响。
+    expect(defaultModeForSource(diskSource, "html")).toBe("source");
+    expect(defaultModeForSource(svgDiskSource, "svg")).toBe("source");
+  });
+
+  it("does not apply mermaid preview preference to missing sources", () => {
+    writeMermaidOpenMode("preview");
+    expect(
+      defaultModeForSource(
+        { id: "untitled-1", kind: "untitled", name: "Untitled" },
+        "mermaid"
+      )
+    ).toBe("preview");
+    expect(defaultModeForSource(null, "mermaid")).toBe("source");
+  });
+
   it("keeps group-view html and svg open-mode on the disk-gated helper", async () => {
     const source = await readFile(
       join(
@@ -105,6 +136,7 @@ describe("persistPreviewOpenMode", () => {
   beforeEach(() => {
     window.localStorage.removeItem(HTML_OPEN_MODE_KEY);
     window.localStorage.removeItem(SVG_OPEN_MODE_KEY);
+    window.localStorage.removeItem(MERMAID_OPEN_MODE_KEY);
     window.localStorage.removeItem("pier.files.markdown.openMode");
   });
 
@@ -130,6 +162,13 @@ describe("persistPreviewOpenMode", () => {
   it("writes svg preview preference without leaking into html", () => {
     persistPreviewOpenMode("svg", "preview");
     expect(readSvgOpenMode()).toBe("preview");
+    expect(readHtmlOpenMode()).toBe("source");
+  });
+
+  it("writes mermaid source preference without leaking into markdown or html", () => {
+    persistPreviewOpenMode("mermaid", "source");
+    expect(readMermaidOpenMode()).toBe("source");
+    expect(readMarkdownOpenMode()).toBe("source");
     expect(readHtmlOpenMode()).toBe("source");
   });
 });
