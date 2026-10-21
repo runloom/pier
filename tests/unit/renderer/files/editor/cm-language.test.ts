@@ -16,7 +16,7 @@ function isLanguageExtension(value: unknown): boolean {
 
 const ALL_LANGUAGE_IDS = (
   Object.keys(LANGUAGE_LABELS) as BuiltinFilesDocumentLanguage[]
-).filter((id) => id !== "text");
+).filter((id) => id !== "text" && id !== "csv");
 
 describe("cmLanguageExtension", () => {
   it("returns a CodeMirror language extension for every supported language id", () => {
@@ -29,8 +29,9 @@ describe("cmLanguageExtension", () => {
     }
   });
 
-  it("returns null for the text fallback so basicSetup keeps a plain editor", () => {
+  it("returns null for text/csv so basicSetup keeps a plain editor", () => {
     expect(cmLanguageExtension("text")).toBeNull();
+    expect(cmLanguageExtension("csv")).toBeNull();
   });
 
   it("routes astro through the HTML self-closing highlighter", () => {

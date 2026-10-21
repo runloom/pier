@@ -79,6 +79,9 @@ export default defineConfig({
       // and pollute the source tree / git status. Keep artifacts under /out.
       outDir: resolve(import.meta.dirname, "out/renderer"),
       emptyOutDir: true,
+      // react-data-grid ships light-dark(); Lightning CSS (Vite 8 default
+      // css minifier) mis-minifies it. Keep modern CSS as-is.
+      cssTarget: "esnext",
       rollupOptions: {
         input: resolve(import.meta.dirname, "src/renderer/index.html"),
       },

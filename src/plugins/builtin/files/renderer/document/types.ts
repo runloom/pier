@@ -15,6 +15,7 @@ export type BuiltinFilesDocumentLanguage =
   | "canvas"
   | "cpp"
   | "csharp"
+  | "csv"
   | "css"
   | "dart"
   | "dockerfile"

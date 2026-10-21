@@ -206,6 +206,9 @@ importers:
       react:
         specifier: 19.2.7
         version: 19.2.7
+      react-data-grid:
+        specifier: 7.0.0-beta.62
+        version: 7.0.0-beta.62(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
@@ -5718,6 +5721,12 @@ packages:
   raw-body@3.0.2:
     resolution: {integrity: sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA==}
     engines: {node: '>= 0.10'}
+
+  react-data-grid@7.0.0-beta.62:
+    resolution: {integrity: sha512-PL9JTsO58t4eIDSdYiYuQxdtU1VasstRXgxDqf76Q5dVGk1Ji+eowMCrZGjZF7wtdn7KmM3eU0W8A09G/yX0Vg==}
+    peerDependencies:
+      react: ^19.2
+      react-dom: ^19.2
 
   react-day-picker@10.0.1:
     resolution: {integrity: sha512-eNh6BlwcYInWaJtRv18mXQ06Ys/H6rdTZAnTaSdOYJuTpwP1JMCHNd1FDRadA+gbeinq+psdULN5Xnowy9mV8w==}
@@ -12409,6 +12418,11 @@ snapshots:
       http-errors: 2.0.1
       iconv-lite: 0.7.2
       unpipe: 1.0.0
+
+  react-data-grid@7.0.0-beta.62(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
 
   react-day-picker@10.0.1(@types/react@19.2.17)(react@19.2.7):
     dependencies:

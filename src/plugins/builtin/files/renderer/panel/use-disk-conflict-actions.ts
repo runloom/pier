@@ -57,7 +57,9 @@ export function useDiskConflictActions(input: {
         });
         if (mode === "diff" && onModeChange) {
           onModeChange(
-            language === "markdown" || language === "canvas"
+            language === "markdown" ||
+              language === "canvas" ||
+              language === "csv"
               ? "preview"
               : "source"
           );

@@ -20,14 +20,17 @@ const BOX_EXTENSION_TO_LANGUAGE: Readonly<
   Record<string, FilesDocumentLanguage>
 > = {
   cjs: "javascript",
+  csv: "csv",
   cts: "typescript",
   js: "javascript",
   jsx: "javascript",
   mermaid: "mermaid",
   mjs: "javascript",
+  tab: "csv",
   mmd: "mermaid",
   mts: "typescript",
   ts: "typescript",
+  tsv: "csv",
   tsx: "typescript",
   vue: "vue",
 };

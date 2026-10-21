@@ -11,6 +11,8 @@ import {
   type TaskToggleInput,
 } from "../markdown/task-patch.ts";
 import { FileCanvasPreview } from "../preview/canvas.tsx";
+import { csvHeaderPanelKey } from "../preview/csv/header-state.ts";
+import { CsvPreview } from "../preview/csv/preview.tsx";
 import { FileHtmlPreview } from "../preview/html.tsx";
 import { FileImagePreview } from "../preview/image.tsx";
 import { FileMermaidPreview } from "../preview/mermaid.tsx";
@@ -173,6 +175,33 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         );
       }
       return <CodeMirrorEditor {...props} />;
+    }
+    if (props.language === "csv") {
+      return (
+        <FilesFindUnavailableNotice
+          context={props.context}
+          panelId={props.panelId}
+          searchRequest={props.searchRequest}
+          t={props.t}
+        >
+          <CsvPreview
+            documentId={props.documentId}
+            loading={document?.loadState !== "loaded"}
+            onOpenSource={
+              props.onJumpToSource
+                ? () => {
+                    props.onJumpToSource?.(0);
+                  }
+                : undefined
+            }
+            panelKey={csvHeaderPanelKey(props.panelId, props.documentId)}
+            path={props.markdownSource?.path}
+            readOnly={props.readOnly === true}
+            t={props.t}
+            value={props.value}
+          />
+        </FilesFindUnavailableNotice>
+      );
     }
     if (props.language === "mermaid") {
       if (props.context && props.t) {

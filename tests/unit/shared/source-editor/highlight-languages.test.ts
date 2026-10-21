@@ -7,7 +7,12 @@ import { filesLspHighlightLanguage } from "@plugins/builtin/files/renderer/lsp/h
 import { pierHighlightLanguage } from "@shared/source-editor/fenced-languages.ts";
 import { describe, expect, it } from "vitest";
 
-const FENCE_SKIP = new Set<BuiltinFilesDocumentLanguage>(["canvas", "text"]);
+// csv is a data language: source mode stays plain text; the table is primary.
+const FENCE_SKIP = new Set<BuiltinFilesDocumentLanguage>([
+  "canvas",
+  "csv",
+  "text",
+]);
 
 describe("highlight pipeline lockstep", () => {
   it("resolves hover/fence languages for every builtin editor id except canvas/text", () => {
@@ -35,11 +40,11 @@ describe("highlight pipeline lockstep", () => {
 });
 
 describe("cmLanguageExtension coverage", () => {
-  it("returns a highlighter for every builtin language except text", () => {
+  it("returns a highlighter for every builtin language except text/csv", () => {
     for (const id of Object.keys(
       LANGUAGE_LABELS
     ) as BuiltinFilesDocumentLanguage[]) {
-      if (id === "text") {
+      if (id === "text" || id === "csv") {
         expect(cmLanguageExtension(id)).toBeNull();
         continue;
       }

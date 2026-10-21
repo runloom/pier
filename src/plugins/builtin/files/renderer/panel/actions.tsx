@@ -18,6 +18,8 @@ import type { FilesTranslate } from "../i18n.ts";
 import { FilesMutationSuspendedError } from "../mutation/gate.ts";
 import { CanvasCommentsButton } from "../preview/canvas-comments-button.tsx";
 import { CanvasReloadButton } from "../preview/canvas-toolbar.tsx";
+import { CsvHeaderActions } from "../preview/csv/header-actions.tsx";
+import { csvHeaderPanelKey } from "../preview/csv/header-state.ts";
 import {
   DocumentFormatBadge,
   DocumentStatusDot,
@@ -91,6 +93,7 @@ export function ResolvedFilePanelActions({
     document.language === "markdown" ||
     document.language === "mermaid" ||
     document.language === "canvas" ||
+    document.language === "csv" ||
     (document.language === "html" && document.source.kind === "disk") ||
     (document.language === "svg" && document.source.kind === "disk") ||
     (document.source.kind === "disk" &&
@@ -131,7 +134,8 @@ export function ResolvedFilePanelActions({
             language !== "mermaid" &&
             language !== "canvas" &&
             language !== "html" &&
-            language !== "svg"
+            language !== "svg" &&
+            language !== "csv"
           ) {
             if (panelId) {
               controller.setPanelMode(panelId, "source");
@@ -153,6 +157,12 @@ export function ResolvedFilePanelActions({
         document={document}
         t={t}
       />
+      {document.language === "csv" && mode === "preview" ? (
+        <CsvHeaderActions
+          panelKey={csvHeaderPanelKey(panelId, document.id)}
+          t={t}
+        />
+      ) : null}
       {/* Canvas preview: annotate → reload → source toggle. */}
       {showCanvasComments && canvasCommentPath ? (
         <CanvasCommentsButton path={canvasCommentPath} t={t} />

@@ -198,6 +198,7 @@ export const LANGUAGE_LABELS: Readonly<
   cpp: "C++",
   csharp: "C#",
   css: "CSS",
+  csv: "CSV",
   dart: "Dart",
   dockerfile: "Dockerfile",
   elixir: "Elixir",

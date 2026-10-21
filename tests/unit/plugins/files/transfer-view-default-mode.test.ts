@@ -6,6 +6,11 @@ import {
   persistPreviewOpenMode,
 } from "@plugins/builtin/files/renderer/panel/use-transfer-view.ts";
 import {
+  CSV_OPEN_MODE_KEY,
+  readCsvOpenMode,
+  writeCsvOpenMode,
+} from "@plugins/builtin/files/renderer/preview/csv/open-mode.ts";
+import {
   HTML_OPEN_MODE_KEY,
   readHtmlOpenMode,
   writeHtmlOpenMode,
@@ -32,6 +37,11 @@ const svgDiskSource = {
   path: "icon.svg",
   root: "/workspace/pier",
 };
+const csvDiskSource = {
+  kind: "disk" as const,
+  path: "data/orders.csv",
+  root: "/workspace/pier",
+};
 const mermaidDiskSource = {
   kind: "disk" as const,
   path: "docs/figures/class-diagram.mermaid",
@@ -43,6 +53,7 @@ describe("defaultModeForSource", () => {
     window.localStorage.removeItem(HTML_OPEN_MODE_KEY);
     window.localStorage.removeItem(SVG_OPEN_MODE_KEY);
     window.localStorage.removeItem(MERMAID_OPEN_MODE_KEY);
+    window.localStorage.removeItem(CSV_OPEN_MODE_KEY);
     window.localStorage.removeItem("pier.files.markdown.openMode");
   });
 
@@ -103,6 +114,13 @@ describe("defaultModeForSource", () => {
     expect(defaultModeForSource(svgDiskSource, "svg")).toBe("source");
   });
 
+  it("opens CSV files in preview and remembers a source choice", () => {
+    expect(defaultModeForSource(csvDiskSource, "csv")).toBe("preview");
+    writeCsvOpenMode("source");
+    expect(defaultModeForSource(csvDiskSource, "csv")).toBe("source");
+    expect(defaultModeForSource(diskSource, "html")).toBe("source");
+  });
+
   it("does not apply mermaid preview preference to missing sources", () => {
     writeMermaidOpenMode("preview");
     expect(
@@ -137,12 +155,19 @@ describe("persistPreviewOpenMode", () => {
     window.localStorage.removeItem(HTML_OPEN_MODE_KEY);
     window.localStorage.removeItem(SVG_OPEN_MODE_KEY);
     window.localStorage.removeItem(MERMAID_OPEN_MODE_KEY);
+    window.localStorage.removeItem(CSV_OPEN_MODE_KEY);
     window.localStorage.removeItem("pier.files.markdown.openMode");
   });
 
   it("writes html preview preference without leaking into markdown", () => {
     persistPreviewOpenMode("html", "preview");
     expect(readHtmlOpenMode()).toBe("preview");
+    expect(readMarkdownOpenMode()).toBe("source");
+  });
+
+  it("writes CSV preview preference without leaking into markdown", () => {
+    persistPreviewOpenMode("csv", "preview");
+    expect(readCsvOpenMode()).toBe("preview");
     expect(readMarkdownOpenMode()).toBe("source");
   });
 
