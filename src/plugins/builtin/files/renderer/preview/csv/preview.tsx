@@ -275,7 +275,7 @@ export function CsvPreview({
         aria-label={
           t?.("filePanel.csv.loading", "Loading table") ?? "Loading table"
         }
-        className="h-full space-y-2 p-4"
+        className="flex h-full flex-col gap-2 p-4"
         data-slot="file-csv-preview-loading"
         role="status"
       >
