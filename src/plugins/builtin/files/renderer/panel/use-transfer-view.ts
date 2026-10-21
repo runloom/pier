@@ -18,6 +18,7 @@ import {
   readMarkdownOpenMode,
   writeMarkdownOpenMode,
 } from "../markdown/preview-preferences.ts";
+import { readCsvOpenMode, writeCsvOpenMode } from "../preview/csv/open-mode.ts";
 import {
   readHtmlOpenMode,
   writeHtmlOpenMode,
@@ -97,6 +98,9 @@ export function defaultModeForSource(
   if (source?.kind === "disk" && language === "svg") {
     return readSvgOpenMode();
   }
+  if (source && language === "csv") {
+    return readCsvOpenMode();
+  }
   // Canvas: default preview. Use path when language has not hydrated yet.
   if (isCanvasSource(source, language)) {
     return "preview";
@@ -122,6 +126,9 @@ export function persistPreviewOpenMode(
   }
   if (language === "svg") {
     writeSvgOpenMode(mode);
+  }
+  if (language === "csv") {
+    writeCsvOpenMode(mode);
   }
 }
 

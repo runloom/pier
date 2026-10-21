@@ -196,7 +196,8 @@ export function FilesGroupView({
       selectedDocument?.language === "markdown" ||
       selectedDocument?.language === "mermaid" ||
       selectedDocument?.language === "html" ||
-      selectedDocument?.language === "svg"
+      selectedDocument?.language === "svg" ||
+      selectedDocument?.language === "csv"
     ) {
       return defaultModeForSource(selectedSource, selectedDocument.language);
     }

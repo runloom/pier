@@ -1,0 +1,46 @@
+/*
+ * react-data-grid theme bridge. Colors come from the host semantic tokens;
+ * geometry stays at the product's 28px density.
+ */
+.pier-csv-grid.rdg {
+  --rdg-background-color: var(--background);
+  --rdg-border-color: var(--border);
+  --rdg-color: var(--foreground);
+  --rdg-font-size: 12px;
+  --rdg-header-background-color: var(--muted);
+  --rdg-row-hover-background-color: var(--muted);
+  --rdg-row-selected-background-color: var(--accent);
+  --rdg-selection-color: var(--ring);
+  --rdg-checkbox-focus-color: var(--ring);
+  block-size: 100%;
+  color-scheme: inherit;
+}
+
+.pier-csv-grid .rdg-cell {
+  padding-inline: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-color: var(--border);
+}
+
+.pier-csv-grid .rdg-header-row .rdg-cell {
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.pier-csv-grid .pier-csv-rownum {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  text-align: right;
+}
+
+.pier-csv-grid .rdg-cell[aria-selected="true"] {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+
+.pier-csv-grid .rdg-cell:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
