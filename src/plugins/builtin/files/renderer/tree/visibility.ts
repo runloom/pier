@@ -12,7 +12,8 @@ import {
   FilesTreeGitIgnoredIndex,
   type GitIgnoredIndex,
   isGitIgnoredPath,
-} from "./git-ignored-index.ts";
+  type RepoScopeSnapshot,
+} from "./git/ignored-index.ts";
 
 export interface FilesTreeList {
   isPathVisible?: (root: string, path: string) => boolean;
@@ -159,12 +160,24 @@ export class FilesTreeVisibilityController {
         const showGitIgnoredFiles = this.showsGitIgnoredFiles();
         // listing 与忽略索引并行；索引命中缓存（成功或短 TTL 负缓存）时不等待，
         // 未知时必须等一次：否则首帧 / 设置切换 / invalidate 后会把忽略文件当可见。
-        const [entries, gitIgnored] = await Promise.all([
+        const [entries, parallelIndex] = await Promise.all([
           this.#context.files.list(root, options),
           showGitIgnoredFiles
             ? Promise.resolve(EMPTY_GIT_IGNORED_INDEX)
             : this.#gitIgnored.load(root),
         ]);
+        // 多仓库父目录：这一步之前任何路径都不属于仓库。listing 里的 `.git` 才是
+        // 仓库边界，且必须在本拍内生效 —— 否则这个仓库自己的直接子项（含
+        // node_modules）会绕过忽略规则进树。
+        const discoveredRepo = this.#gitIgnored.observeListing(
+          root,
+          options?.path ?? "",
+          entries
+        );
+        const gitIgnored =
+          discoveredRepo && !showGitIgnoredFiles
+            ? await this.#gitIgnored.load(root)
+            : parallelIndex;
         return filterFilesTreeEntries(entries, {
           excludePatterns: this.excludePatterns(),
           gitIgnored,
@@ -190,6 +203,30 @@ export class FilesTreeVisibilityController {
 
   invalidateGitIgnored(root: string): void {
     this.#gitIgnored.invalidate(root);
+  }
+
+  /** 已知仓库边界（`""` 代表树根本身）；多仓库父目录按这些边界聚合状态。 */
+  repoPrefixes(root: string): readonly string[] {
+    return this.#gitIgnored.repoPrefixes(root);
+  }
+
+  /** 引用稳定的仓库边界快照；边界或「根是不是仓库」变化时才换引用。 */
+  repoScope(root: string): RepoScopeSnapshot {
+    return this.#gitIgnored.repoScope(root);
+  }
+
+  /** 树根本身是不是 Git 仓库；未探测到 `.git` 时为 false。 */
+  isRootRepo(root: string): boolean {
+    return this.#gitIgnored.isRootRepo(root);
+  }
+
+  subscribeRepoPrefixes(root: string, listener: () => void): () => void {
+    return this.#gitIgnored.subscribeRepoPrefixes(root, listener);
+  }
+
+  /** 插件卸载 / 测试复位：丢掉仓库边界与索引缓存。 */
+  resetRepoScopes(root?: string): void {
+    this.#gitIgnored.reset(root);
   }
 
   /** Pin a path visible (with its ancestor chain) even when Git-ignored.

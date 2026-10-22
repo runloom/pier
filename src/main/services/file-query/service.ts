@@ -238,6 +238,14 @@ async function runPathQuery(args: RunPathQueryArgs): Promise<void> {
       ignoredPaths,
       maxScanned,
       signal,
+      // 项目根可以只是装着多个仓库的父目录：根上取不到忽略规则，但每个子仓库
+      // 都有自己的。遍历进入仓库边界时补取一次，和 Files 树的可见性一致。
+      ...(applyGitIgnore && listIgnored
+        ? {
+            resolveRepoIgnores: (directory: string) =>
+              listIgnored(directory, signal),
+          }
+        : {}),
     });
 
     if (session.emit === null || signal.aborted) return;

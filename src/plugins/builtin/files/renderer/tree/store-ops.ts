@@ -65,6 +65,52 @@ function hasDescendantEntry(
   return false;
 }
 
+/**
+ * 单次遍历判断多个目录是否已有后代条目。
+ *
+ * `loadFilesTreeDirectoryBranch` / `ensureAncestorDirectoryEntries` 原先对每个
+ * 待判目录各扫一遍全表，展开深目录时是 O(目录数 × 条目数)。这里把待判目录放进
+ * 集合，一次遍历就够：命中的祖先路径逐级前缀剥离后标记。
+ */
+export function directoriesWithDescendantEntries(
+  entries: ReadonlyMap<string, FileEntry>,
+  directoryPaths: Iterable<string>
+): Set<string> {
+  const pending = new Set(directoryPaths);
+  const found = new Set<string>();
+  if (pending.size === 0) {
+    return found;
+  }
+  // 根目录 "" 的语义是「有任意条目」；空树时不算有后代。
+  if (pending.has("")) {
+    pending.delete("");
+    if (entries.size > 0) {
+      found.add("");
+    }
+  }
+  if (pending.size === 0) {
+    return found;
+  }
+  for (const entryPath of entries.keys()) {
+    let candidate = entryPath;
+    for (;;) {
+      const slash = candidate.lastIndexOf("/");
+      if (slash < 0) {
+        break;
+      }
+      candidate = candidate.slice(0, slash);
+      if (pending.has(candidate)) {
+        found.add(candidate);
+        pending.delete(candidate);
+        if (pending.size === 0) {
+          return found;
+        }
+      }
+    }
+  }
+  return found;
+}
+
 function directChildPathWithinDirectory(
   directoryPath: string,
   entryPath: string

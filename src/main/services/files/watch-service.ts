@@ -6,10 +6,19 @@ import type {
   FileWatchChangeKind,
   FileWatchEvent,
 } from "@shared/contracts/file/watch.ts";
+import { createLogger } from "@shared/logger.ts";
+
+const log = createLogger("files.watch");
 
 const DEFAULT_DEBOUNCE_MS = 250;
 const DEFAULT_MAX_WAIT_MS = 1000;
 const DEFAULT_POLL_MS = 5000;
+/**
+ * 兜底轮询退避上限。fs.watch 常驻失败时（递归 watch 建不起来、或运行中 error），
+ * 每个轮询周期都会发一次 `.` 哨兵，renderer 收到就整树重载 —— 条目多的根上这是
+ * 每周期一次的 O(全部条目) 同步工作。退避把无上限的持续开销压成低位心跳。
+ */
+export const FILE_WATCH_POLL_BACKOFF_MAX_MS = 60_000;
 /** 一批 flush 里并行探测路径存在性的上限；批量 checkout / 安装不得挤满 libuv 线程池。 */
 export const FILE_WATCH_PROBE_CONCURRENCY = 16;
 
@@ -22,6 +31,12 @@ const NOISE_SEGMENTS = new Set([
   ".next",
   "coverage",
 ]);
+
+/**
+ * fs.watch 失败后重新尝试建立 watcher 的间隔。失败时轮询在退避中继续兜底；
+ * 恢复成功后停轮询，避免 `.` 哨兵长期主导 renderer 的重载节奏。
+ */
+export const FILE_WATCH_RETRY_MS = 30_000;
 
 export type FsWatchFn = (
   target: string,
@@ -37,7 +52,10 @@ export interface CreateFileWatchServiceOptions {
   maxWaitMs?: number;
   /** 测试 seam；生产用异步 access，禁止在 fs.watch 回调里 sync stat。 */
   pathExists?: FileWatchPathExists;
+  /** 首次轮询间隔；失败后按 2 倍退避，封顶 {@link FILE_WATCH_POLL_BACKOFF_MAX_MS}。 */
   pollMs?: number;
+  /** 轮询期间重试建立 fs.watch 的间隔。 */
+  retryMs?: number;
 }
 
 export interface FileWatchService {
@@ -63,8 +81,12 @@ interface RootEntry {
   listeners: Set<RootListener>;
   /** path → 最近一次 fs.watch eventType（rename / change）。分类推迟到 flush。 */
   pending: Map<string, string>;
-  pollTimer: ReturnType<typeof setInterval> | null;
+  /** 当前退避下的轮询间隔；首次用 pollMs，之后逐次翻倍。 */
+  pollIntervalMs: number;
+  pollTimer: ReturnType<typeof setTimeout> | null;
   resolvedRoot: string;
+  /** 轮询期间重试建立 fs.watch 的定时器。 */
+  retryTimer: ReturnType<typeof setTimeout> | null;
   timer: ReturnType<typeof setTimeout> | null;
   watcher: FSWatcher | null;
 }
@@ -162,6 +184,7 @@ export function createFileWatchService(
   const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
   const maxWaitMs = options.maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
   const pollMs = options.pollMs ?? DEFAULT_POLL_MS;
+  const retryMs = options.retryMs ?? FILE_WATCH_RETRY_MS;
   const watchFn = options.fsWatch ?? fsWatch;
   const pathExists = options.pathExists ?? defaultPathExists;
   const roots = new Map<string, RootEntry>();
@@ -227,20 +250,73 @@ export function createFileWatchService(
     scheduleFlush(entry);
   }
 
-  function startPollFallback(entry: RootEntry): void {
-    if (entry.pollTimer) {
+  /** 在退避中重启一次轮询；间隔逐次翻倍到上限。 */
+  function scheduleNextPoll(entry: RootEntry): void {
+    if (entry.listeners.size === 0) {
       return;
     }
-    entry.pollTimer = setInterval(() => {
+    entry.pollTimer = setTimeout(() => {
+      entry.pollTimer = null;
+      if (entry.listeners.size === 0) {
+        return;
+      }
       // Polling fallback cannot invent precise path ops; emit a sentinel
       // changed event on "." so renderer can reload expanded roots.
       enqueue(entry, ".", "change");
-    }, pollMs);
+      entry.pollIntervalMs = Math.min(
+        entry.pollIntervalMs * 2,
+        FILE_WATCH_POLL_BACKOFF_MAX_MS
+      );
+      scheduleNextPoll(entry);
+    }, entry.pollIntervalMs);
   }
 
-  function ensureWatcher(root: string, entry: RootEntry): void {
-    if (entry.watcher) {
+  function startPollFallback(root: string, entry: RootEntry): void {
+    if (entry.listeners.size === 0) {
       return;
+    }
+    if (entry.pollTimer !== null || entry.retryTimer !== null) {
+      return;
+    }
+    log.warn("fs-watch-unavailable; falling back to polling", {
+      pollMs: entry.pollIntervalMs,
+      retryMs,
+      root,
+    });
+    scheduleNextPoll(entry);
+    // fs.watch 可能只是暂时失败（句柄耗尽、FSEvents 资源紧张）。持续重试，
+    // 成功即停轮询 —— 否则 `.` 哨兵会长期以最高频率主导 renderer 重载。
+    entry.retryTimer = setTimeout(function retryWatcher(): void {
+      entry.retryTimer = null;
+      if (entry.listeners.size === 0) {
+        return;
+      }
+      if (ensureWatcher(root, entry)) {
+        stopPollFallback(entry);
+        // 下次失败重新从首档开始，不继承上一轮已经涨到的退避档位。
+        entry.pollIntervalMs = pollMs;
+        log.info("fs-watch-recovered; polling stopped", { root });
+        return;
+      }
+      entry.retryTimer = setTimeout(retryWatcher, retryMs);
+    }, retryMs);
+  }
+
+  function stopPollFallback(entry: RootEntry): void {
+    if (entry.pollTimer !== null) {
+      clearTimeout(entry.pollTimer);
+      entry.pollTimer = null;
+    }
+    if (entry.retryTimer !== null) {
+      clearTimeout(entry.retryTimer);
+      entry.retryTimer = null;
+    }
+  }
+
+  /** 建立（或重建）递归 watcher；返回是否成功。 */
+  function ensureWatcher(root: string, entry: RootEntry): boolean {
+    if (entry.watcher) {
+      return true;
     }
     try {
       entry.watcher = watchFn(
@@ -259,22 +335,27 @@ export function createFileWatchService(
           enqueue(entry, path, eventType);
         }
       );
-      entry.watcher.on("error", () => {
+      entry.watcher.on("error", (error: unknown) => {
+        log.warn("fs-watch-error; falling back to polling", {
+          message: error instanceof Error ? error.message : String(error),
+          root,
+        });
         try {
           entry.watcher?.close();
         } catch {
           // ignore close errors during recovery
         }
         entry.watcher = null;
-        startPollFallback(entry);
+        startPollFallback(root, entry);
       });
-    } catch {
+      return true;
+    } catch (error) {
+      log.warn("fs-watch-start-failed; falling back to polling", {
+        message: error instanceof Error ? error.message : String(error),
+        root,
+      });
       entry.watcher = null;
-    }
-    // 轮询只做兜底:fs.watch 正常时绝不发 "." 哨兵,否则 renderer 会每个
-    // 周期无差别 reload root + 重读所有打开文档。
-    if (!entry.watcher) {
-      startPollFallback(entry);
+      return false;
     }
   }
 
@@ -284,9 +365,7 @@ export function createFileWatchService(
         if (entry.timer) {
           clearTimeout(entry.timer);
         }
-        if (entry.pollTimer) {
-          clearInterval(entry.pollTimer);
-        }
+        stopPollFallback(entry);
         try {
           entry.watcher?.close();
         } catch {
@@ -305,8 +384,10 @@ export function createFileWatchService(
           flushing: false,
           listeners: new Set(),
           pending: new Map(),
+          pollIntervalMs: pollMs,
           pollTimer: null,
           resolvedRoot,
+          retryTimer: null,
           timer: null,
           watcher: null,
         };
@@ -320,6 +401,14 @@ export function createFileWatchService(
       }
       const rootListener: RootListener = { clientRoot: root, listener };
       entry.listeners.add(rootListener);
+      // 订阅建立后才启动兜底轮询：enqueue 需要至少一个 listener 才有意义。
+      if (
+        !entry.watcher &&
+        entry.pollTimer === null &&
+        entry.retryTimer === null
+      ) {
+        startPollFallback(resolvedRoot, entry);
+      }
       return () => {
         const current = roots.get(resolvedRoot);
         if (!current) {
@@ -332,9 +421,7 @@ export function createFileWatchService(
         if (current.timer) {
           clearTimeout(current.timer);
         }
-        if (current.pollTimer) {
-          clearInterval(current.pollTimer);
-        }
+        stopPollFallback(current);
         try {
           current.watcher?.close();
         } catch {

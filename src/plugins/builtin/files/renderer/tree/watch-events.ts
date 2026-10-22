@@ -9,6 +9,76 @@ import {
 
 const TRAILING_SLASHES_PATTERN = /\/+$/;
 
+/**
+ * `.` 哨兵的根重载最小间隔。
+ *
+ * 哨兵来自 main 侧的轮询兜底：fs.watch 建不起来时每个轮询周期发一次。它没有
+ * 精确路径，只能整树重载 —— 在条目多的根上是每周期一次的 O(全部条目) 同步
+ * 工作。main 已经退避到 60s 封顶，这里再兜一层：同一根的哨兵重载不早于该间隔，
+ * 期间到达的哨兵合并成下一次重载。
+ */
+export const FILES_TREE_SENTINEL_RELOAD_MIN_INTERVAL_MS = 15_000;
+
+const lastSentinelReloadAtByRoot = new Map<string, number>();
+const pendingSentinelReloadByRoot = new Map<
+  string,
+  {
+    list: FilesTreeList;
+    fallbackError: string;
+    timer: ReturnType<typeof setTimeout>;
+  }
+>();
+
+function clearSentinelState(root: string): void {
+  lastSentinelReloadAtByRoot.delete(root);
+  const pending = pendingSentinelReloadByRoot.get(root);
+  if (pending) {
+    clearTimeout(pending.timer);
+    pendingSentinelReloadByRoot.delete(root);
+  }
+}
+
+function scheduleSentinelRootReload(
+  root: string,
+  list: FilesTreeList,
+  fallbackError: string
+): void {
+  const pending = pendingSentinelReloadByRoot.get(root);
+  if (pending) {
+    return;
+  }
+  const last = lastSentinelReloadAtByRoot.get(root);
+  const elapsed =
+    last === undefined ? Number.POSITIVE_INFINITY : Date.now() - last;
+  if (elapsed >= FILES_TREE_SENTINEL_RELOAD_MIN_INTERVAL_MS) {
+    lastSentinelReloadAtByRoot.set(root, Date.now());
+    refreshFilesTreeRootAfterPendingLoad(root, list, fallbackError).catch(
+      () => undefined
+    );
+    return;
+  }
+  const delay = FILES_TREE_SENTINEL_RELOAD_MIN_INTERVAL_MS - elapsed;
+  const timer = setTimeout(() => {
+    pendingSentinelReloadByRoot.delete(root);
+    lastSentinelReloadAtByRoot.set(root, Date.now());
+    refreshFilesTreeRootAfterPendingLoad(root, list, fallbackError).catch(
+      () => undefined
+    );
+  }, delay);
+  pendingSentinelReloadByRoot.set(root, { fallbackError, list, timer });
+}
+
+/** 树面板关闭 / 根切换时丢弃节流状态，避免把旧根的时间戳带给下一次打开。 */
+export function resetFilesTreeSentinelThrottle(root?: string): void {
+  if (root === undefined) {
+    for (const key of lastSentinelReloadAtByRoot.keys()) {
+      clearSentinelState(key);
+    }
+    return;
+  }
+  clearSentinelState(root);
+}
+
 function normalizeRoot(root: string): string {
   return root.replace(TRAILING_SLASHES_PATTERN, "");
 }
@@ -49,13 +119,14 @@ export function applyFilesTreeWatchEvent(
 
   const snapshot = getFilesTreeSnapshot(root);
   let needsRootReload = false;
+  let needsSentinelReload = false;
   const parentsToRefresh = new Set<string>();
   const directoriesToRefresh = new Set<string>();
   const createdKnownDirectories = new Set<string>();
 
   for (const change of event.changes) {
     if (change.path === ".") {
-      needsRootReload = true;
+      needsSentinelReload = true;
       continue;
     }
 
@@ -107,6 +178,13 @@ export function applyFilesTreeWatchEvent(
   }
 
   (async () => {
+    // 真实路径事件比哨兵精确；同批里已有真实路径时，不再叠加一次整树重载。
+    const hasRealPathChange = event.changes.some(
+      (change) => change.path !== "."
+    );
+    if (needsSentinelReload && !hasRealPathChange) {
+      scheduleSentinelRootReload(root, list, fallbackError);
+    }
     const parentRefreshes = [...parentsToRefresh].map((parentPath) =>
       refreshFilesTreeDirectoryAfterPendingLoad(root, parentPath, list)
     );

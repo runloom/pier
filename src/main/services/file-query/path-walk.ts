@@ -25,6 +25,16 @@ export interface WalkOptions {
   readonly ignoredPaths?: ReadonlySet<string> | undefined;
   /** Hard cap; defaults to `FILE_WALK_MAX_SCANNED`. */
   readonly maxScanned?: number | undefined;
+  /**
+   * 走进一个子树里的仓库根时，取这个仓库自己的忽略清单（仓库内相对路径）。
+   *
+   * 项目根可以只是装着多个仓库的父目录：此时根上没有任何忽略规则，但每个
+   * 子仓库都有自己的。`ignoredPaths` 只覆盖根，这一层补上嵌套仓库。
+   * 根目录不调用——调用方已经对根取过一次。
+   */
+  readonly resolveRepoIgnores?:
+    | ((absoluteDirectory: string) => Promise<readonly string[]>)
+    | undefined;
   /** Absolute project root (canonical, no trailing slash needed). */
   readonly root: string;
   /** Cooperative cancel. */
@@ -97,15 +107,55 @@ function isGitIgnored(
   return false;
 }
 
+/** 目录里直接有 `.git`（工作树目录或 worktree / submodule 的 gitfile）即为仓库根。 */
+function hasGitMetadata(entries: readonly Dirent[]): boolean {
+  return entries.some((entry) => entry.name === ".git");
+}
+
+/**
+ * 把嵌套仓库的忽略清单并进遍历用的集合。
+ *
+ * 只在进入该目录、开始检查它自己的条目之前追加，因此兄弟仓库之间不会互相影响；
+ * 任何失败（仓库不可读、git 不可用）都只是这一层不过滤，不中断整个遍历。
+ */
+async function addNestedRepoIgnores(options: {
+  directory: { absolute: string; relative: string };
+  entries: readonly Dirent[];
+  ignored: Set<string>;
+  resolveRepoIgnores: (absoluteDirectory: string) => Promise<readonly string[]>;
+}): Promise<void> {
+  const { directory, entries, ignored, resolveRepoIgnores } = options;
+  // 根由调用方处理过，这里只管更深的仓库边界。
+  if (directory.relative === "" || !hasGitMetadata(entries)) {
+    return;
+  }
+  let repoIgnored: readonly string[];
+  try {
+    repoIgnored = await resolveRepoIgnores(directory.absolute);
+  } catch {
+    return;
+  }
+  for (const entry of repoIgnored) {
+    ignored.add(`${directory.relative}/${entry}`);
+  }
+}
+
 /**
  * BFS walk. Resolves with the collected paths (unsorted) and metrics. Throws
  * `AbortedWalkError` when the signal aborts; other errors propagate.
  */
 export async function walkFiles(options: WalkOptions): Promise<WalkResult> {
-  const { root, excludePatternSource, ignoredPaths, signal } = options;
+  const {
+    root,
+    excludePatternSource,
+    ignoredPaths,
+    resolveRepoIgnores,
+    signal,
+  } = options;
   const maxScanned = options.maxScanned ?? FILE_WALK_MAX_SCANNED;
   const matchers = parseExcludePatternSource(excludePatternSource);
-  const ignored = ignoredPaths ?? new Set<string>();
+  // 复制一份：嵌套仓库的忽略清单要在遍历过程中增量并入。
+  const ignored = new Set<string>(ignoredPaths ?? []);
 
   let rootReal: string;
   try {
@@ -136,6 +186,15 @@ export async function walkFiles(options: WalkOptions): Promise<WalkResult> {
         throw new Error(`file walk root inaccessible: ${root}: ${message}`);
       }
       continue;
+    }
+    if (resolveRepoIgnores) {
+      await addNestedRepoIgnores({
+        directory: dir,
+        entries,
+        ignored,
+        resolveRepoIgnores,
+      });
+      if (signal?.aborted) throw new AbortedWalkError();
     }
     for (const entry of entries) {
       if (signal?.aborted) throw new AbortedWalkError();

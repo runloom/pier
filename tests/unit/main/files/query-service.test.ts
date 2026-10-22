@@ -587,4 +587,66 @@ describe("createFileQueryService", () => {
     expect(pathBatch.mode).toBe("path");
     expect(contentBatch.mode).toBe("content");
   });
+
+  it("applies each nested repo's ignore rules when the root is a multi-repo parent", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-file-query-multi-"));
+    roots.push(root);
+    for (const repo of ["repo-a", "repo-b"]) {
+      await mkdir(join(root, repo, ".git"), { recursive: true });
+      await writeFile(join(root, repo, ".git", "HEAD"), "");
+      await mkdir(join(root, repo, "src"), { recursive: true });
+    }
+    await writeFile(join(root, "repo-a", "src", "feature.ts"), "");
+    await writeFile(join(root, "repo-b", "src", "other.ts"), "");
+    await mkdir(join(root, "repo-a", "node_modules", "pkg"), {
+      recursive: true,
+    });
+    await writeFile(join(root, "repo-a", "node_modules", "pkg", "x.ts"), "");
+    await mkdir(join(root, "repo-b", "dist"), { recursive: true });
+    await writeFile(join(root, "repo-b", "dist", "bundle.js"), "");
+
+    const listIgnored = vi.fn(async (cwd: string) => {
+      if (cwd === join(root, "repo-a")) {
+        return ["node_modules/"];
+      }
+      if (cwd === join(root, "repo-b")) {
+        return ["dist/"];
+      }
+      // 父目录自己不是仓库
+      throw new Error("not a git repository");
+    });
+    const service = createFileQueryService({ listIgnored });
+    const rec = recorder();
+
+    service.start(
+      1,
+      {
+        queryId: "multi",
+        owner: "quick-open:multi",
+        root,
+        query: "ts",
+        limit: 200,
+        mruPaths: [],
+      },
+      rec.emit
+    );
+
+    await rec.done;
+
+    const batch = rec.events.find((event) => event.kind === "batch");
+    if (batch?.kind !== "batch") throw new Error("expected batch");
+    const paths = batch.items.map((item) => item.path);
+    expect(paths).toContain("repo-a/src/feature.ts");
+    expect(paths).toContain("repo-b/src/other.ts");
+    expect(paths).not.toContain("repo-a/node_modules/pkg/x.ts");
+    expect(paths).not.toContain("repo-b/dist/bundle.js");
+    expect(listIgnored).toHaveBeenCalledWith(
+      join(root, "repo-a"),
+      expect.anything()
+    );
+    expect(listIgnored).toHaveBeenCalledWith(
+      join(root, "repo-b"),
+      expect.anything()
+    );
+  });
 });

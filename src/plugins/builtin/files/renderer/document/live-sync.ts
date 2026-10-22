@@ -85,13 +85,56 @@ export function clearAllDocumentAutoSaveTimers(
   saveTimers.clear();
 }
 
+/**
+ * 哨兵触发的整树重新读取的最小间隔。
+ *
+ * `.` 哨兵来自 main 的轮询兜底，没有精确路径，只能把每个打开中的磁盘文档
+ * 都重读一遍。文档大、打开多时这是每周期一次的整档读取；即便 main 已退避，
+ * 这里也必须再兜一层，否则一次哨兵就能把主线程压满。
+ */
+export const FILES_DOCUMENT_SENTINEL_RELOAD_MIN_INTERVAL_MS = 15_000;
+
+const lastSentinelReloadAtByRoot = new Map<string, number>();
+
+/** 测试与根切换复用：丢弃某根的节流时间戳。 */
+export function resetDocumentSentinelThrottle(root?: string): void {
+  if (root === undefined) {
+    lastSentinelReloadAtByRoot.clear();
+    return;
+  }
+  lastSentinelReloadAtByRoot.delete(root);
+}
+
 /** Reload open disk documents affected by a file-watch event. */
 export function reloadDocumentsForFileWatchEvent(input: {
   acquiredDocumentIds: ReadonlySet<string>;
   event: FileWatchEvent;
   loader: Pick<FileDocumentLoader, "start">;
+  now?: number;
 }): void {
-  const paths = input.event.changes.map((change) => change.path);
+  const sentinelOnly = input.event.changes.every(
+    (change) => change.path === "."
+  );
+  const hasSentinel = input.event.changes.some((change) => change.path === ".");
+  if (hasSentinel) {
+    const now = input.now ?? Date.now();
+    const last = lastSentinelReloadAtByRoot.get(input.event.root);
+    if (
+      last !== undefined &&
+      now - last < FILES_DOCUMENT_SENTINEL_RELOAD_MIN_INTERVAL_MS
+    ) {
+      return;
+    }
+    lastSentinelReloadAtByRoot.set(input.event.root, now);
+  }
+  // 哨兵批次只表示「根下可能有变化」；同批里的真实路径已经覆盖了受影响文档，
+  // 再按哨兵全量重读等于把每个打开文档都重来一遍。
+  const paths = sentinelOnly
+    ? []
+    : input.event.changes
+        .map((change) => change.path)
+        .filter((path) => path !== ".");
+  const reloadAll = sentinelOnly;
   for (const document of listOpenDiskDocuments()) {
     if (
       document.source.kind !== "disk" ||
@@ -99,10 +142,13 @@ export function reloadDocumentsForFileWatchEvent(input: {
     ) {
       continue;
     }
+    if (reloadAll) {
+      input.loader.start(document.id, true);
+      continue;
+    }
     const locatorPath = document.source.path;
     const affected = paths.some(
       (path) =>
-        path === "." ||
         isSamePathOrDescendant(locatorPath, path) ||
         (document.canonicalPath !== null &&
           isSamePathOrDescendant(document.canonicalPath, path))
