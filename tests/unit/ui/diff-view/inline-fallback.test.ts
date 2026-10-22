@@ -1,9 +1,9 @@
+import type { PierDiffViewItem } from "@pier/ui/diff-view/items.ts";
 import {
   allowInlineDiffFallback,
   INLINE_FALLBACK_MAX_ITEMS,
   INLINE_FALLBACK_MAX_PATCH_BYTES,
-} from "@pier/ui/diff-view/inline-fallback.ts";
-import type { PierDiffViewItem } from "@pier/ui/diff-view/items.ts";
+} from "@pier/ui/diff-view/view/inline-fallback.ts";
 import { describe, expect, it } from "vitest";
 
 const item = (

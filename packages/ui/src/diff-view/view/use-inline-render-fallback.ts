@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { allowInlineDiffFallback } from "../inline-fallback.ts";
 import type { PierDiffViewItem } from "../items.ts";
+import { allowInlineDiffFallback } from "./inline-fallback.ts";
 
 const INLINE_RENDER_TIMEOUT_MS = 10_000;
 /** Large reviews keep the worker longer; they must not fall back inline. */

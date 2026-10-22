@@ -1,4 +1,4 @@
-import type { PierDiffViewItem } from "./items.ts";
+import type { PierDiffViewItem } from "../items.ts";
 
 /**
  * The worker-timeout fallback renders diffs inline on the renderer main
