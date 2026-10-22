@@ -18,7 +18,10 @@ import {
   subscribeFilesTreeSession,
 } from "@plugins/builtin/files/renderer/tree/store.ts";
 import { reloadFilesTreeVisibility } from "@plugins/builtin/files/renderer/tree/visibility-reload.ts";
-import { applyFilesTreeWatchEvent } from "@plugins/builtin/files/renderer/tree/watch-events.ts";
+import {
+  applyFilesTreeWatchEvent,
+  resetFilesTreeSentinelThrottle,
+} from "@plugins/builtin/files/renderer/tree/watch-events.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
 import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
 
@@ -84,6 +87,7 @@ describe("files-tree-store", () => {
     vi.useRealTimers();
     clearFilesTreeStore();
     clearFileTreeSidebarCache();
+    resetFilesTreeSentinelThrottle();
     localStorage.removeItem("pier.files.tree.expansion.v1:/repo");
     vi.restoreAllMocks();
   });
@@ -994,6 +998,80 @@ describe("files-tree-store", () => {
     expect(snapshot.entriesByPath.get("src/new.ts")).toEqual(
       file("src/new.ts")
     );
+  });
+
+  it("throttles repeated root sentinels instead of reloading the root every cycle", async () => {
+    vi.useFakeTimers();
+    await loadRoot([file("a.ts")]);
+    const list = listFromResponses({ "": [file("b.ts")] });
+
+    for (let tick = 0; tick < 5; tick += 1) {
+      applyFilesTreeWatchEvent(
+        ROOT,
+        { changes: [{ kind: "changed", path: "." }], root: ROOT },
+        list,
+        "Failed to load files"
+      );
+      await vi.advanceTimersByTimeAsync(100);
+    }
+
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  it("merges sentinels that land inside the throttle window into one reload", async () => {
+    vi.useFakeTimers();
+    await loadRoot([file("a.ts")]);
+    const list = listFromResponses({ "": [file("b.ts")] });
+    const sentinel = {
+      changes: [{ kind: "changed" as const, path: "." }],
+      root: ROOT,
+    };
+
+    applyFilesTreeWatchEvent(ROOT, sentinel, list, "Failed to load files");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(list).toHaveBeenCalledTimes(1);
+
+    applyFilesTreeWatchEvent(ROOT, sentinel, list, "Failed to load files");
+    applyFilesTreeWatchEvent(ROOT, sentinel, list, "Failed to load files");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(list).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(getFilesTreeSnapshot(ROOT).entriesByPath.has("b.ts")).toBe(true);
+  });
+
+  it("does not reload the whole root when a sentinel arrives with real paths", async () => {
+    vi.useFakeTimers();
+    await loadRoot([directory("src"), file("keep.ts")]);
+    await loadFilesTreeDirectory(
+      ROOT,
+      "src",
+      listFromResponses({ src: [file("src/old.ts")] })
+    );
+    // 根 listing 换成完全不同的内容：一旦哨兵触发整树重载就会看到 removed.ts。
+    const list = listFromResponses({
+      "": [directory("src"), file("keep.ts"), file("removed.ts")],
+      src: [file("src/new.ts")],
+    });
+
+    applyFilesTreeWatchEvent(
+      ROOT,
+      {
+        changes: [
+          { kind: "changed", path: "." },
+          { kind: "created", path: "src/new.ts" },
+        ],
+        root: ROOT,
+      },
+      list,
+      "Failed to load files"
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.entriesByPath.has("removed.ts")).toBe(false);
+    expect(snapshot.entriesByPath.has("src/new.ts")).toBe(true);
   });
 
   it("queues a root refresh when a watch event arrives during its load", async () => {

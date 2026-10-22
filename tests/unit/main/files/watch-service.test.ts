@@ -111,6 +111,95 @@ describe("createFileWatchService", () => {
     service.dispose();
   });
 
+  it("backs off poll sentinels while the fs watcher stays unavailable", async () => {
+    vi.useFakeTimers();
+    const fsWatch: FsWatchFn = () => {
+      throw new Error("watch unavailable");
+    };
+    const root = await mkdtemp(join(tmpdir(), "pier-file-watch-backoff-"));
+    const service = createFileWatchService({
+      pathExists,
+      debounceMs: 10,
+      fsWatch,
+      maxWaitMs: 50,
+      pollMs: 100,
+      retryMs: 600_000,
+    });
+    const listener = vi.fn();
+    const stop = service.watch(root, listener);
+
+    // 首档 100ms，之后每档翻倍：100 → 300 → 700 → 1500。
+    await vi.advanceTimersByTimeAsync(110);
+    expect(listener).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(190);
+    expect(listener).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(listener).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(399);
+    expect(listener).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(listener).toHaveBeenCalledTimes(3);
+    // 700 → 1500 之间不应有第四次。
+    await vi.advanceTimersByTimeAsync(790);
+    expect(listener).toHaveBeenCalledTimes(3);
+
+    stop();
+    service.dispose();
+  });
+
+  it("stops poll sentinels once the fs watcher recovers", async () => {
+    vi.useFakeTimers();
+    const watchers: FakeWatcher[] = [];
+    let unavailable = true;
+    const fsWatch: FsWatchFn = (_target, _options, listener) => {
+      if (unavailable) {
+        throw new Error("watch unavailable");
+      }
+      const watcher = new FakeWatcher();
+      watchers.push(watcher);
+      watcher.on("change", (eventType: string, filename: string) => {
+        listener(eventType, filename);
+      });
+      return watcher as unknown as ReturnType<FsWatchFn>;
+    };
+    const root = await mkdtemp(join(tmpdir(), "pier-file-watch-recover-"));
+    const service = createFileWatchService({
+      pathExists,
+      debounceMs: 10,
+      fsWatch,
+      maxWaitMs: 50,
+      pollMs: 100,
+      retryMs: 1000,
+    });
+    const listener = vi.fn();
+    const stop = service.watch(root, listener);
+
+    await vi.advanceTimersByTimeAsync(110);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    // 1000ms 时重试建立 watcher 成功；此前 300 / 700 两次哨兵照常发出。
+    unavailable = false;
+    await vi.advanceTimersByTimeAsync(900);
+    expect(listener).toHaveBeenCalledTimes(3);
+    expect(watchers).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(listener).toHaveBeenCalledTimes(3);
+
+    // 真实 watcher 恢复后事件仍走原路径。
+    await writeFile(join(root, "real.ts"), "export {};\n");
+    watchers[0]?.emit("change", "change", "real.ts");
+    await vi.advanceTimersByTimeAsync(20);
+    expect(listener).toHaveBeenCalledTimes(4);
+    const lastEvent = listener.mock.calls.at(-1)?.at(0) as {
+      changes: Array<{ kind: string; path: string }>;
+    };
+    expect(lastEvent.changes).toEqual([{ kind: "changed", path: "real.ts" }]);
+
+    stop();
+    service.dispose();
+  });
+
   it("emits events with the client-subscribed root string, not only resolve()", async () => {
     vi.useFakeTimers();
     const watchers: FakeWatcher[] = [];

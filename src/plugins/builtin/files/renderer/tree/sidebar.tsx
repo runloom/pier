@@ -30,7 +30,8 @@ import { useFilesTreeContextMenus } from "./context-menu.ts";
 import { cancelInlineCreate, commitInlineCreate } from "./create.ts";
 import { type DoubleClickTrack, detectDoubleClick } from "./double-click.ts";
 import { ExternalActiveFileEntry } from "./external-file-entry.tsx";
-import { ignoredStatusFor } from "./git-decorations.ts";
+import { ignoredStatusFor } from "./git/decorations.ts";
+import { useFilesTreeGitDecorations } from "./git/use-decorations.ts";
 import { handleFilesTreeSidebarKeyDown } from "./hotkeys.ts";
 import {
   hasPendingCreatePath,
@@ -49,7 +50,6 @@ import {
   moveFilesTreeEntry,
   reloadFilesTreeRoot,
 } from "./store.ts";
-import { useFilesTreeGitDecorations } from "./use-git-decorations.ts";
 import { useFilesTreeSearch } from "./use-search.ts";
 import { useFilesTreeSidebarPrefs } from "./use-sidebar-prefs.ts";
 import { useFilesTreeVisibility } from "./use-visibility.ts";

@@ -14,6 +14,7 @@ import {
 import { beginFilesTreeRootLoad } from "./root-loader.ts";
 import {
   addEntry,
+  directoriesWithDescendantEntries,
   markParentEmptyAfterChildRemove,
   markParentLoadedAfterChildAdd,
   moveDirectoryStatesSubtree,
@@ -218,10 +219,11 @@ async function loadFilesTreeDirectoryBranch(
 ): Promise<FilesTreeDirectoryLoadDetails> {
   const loadGeneration = session.directoryLoadGenerations.get(path) ?? 0;
   const priorState = session.snapshot.directoryStatesByPath.get(path);
-  const hasDescendantEntry = [...session.snapshot.entriesByPath.keys()].some(
-    (entryPath) =>
-      path === "" ? entryPath.length > 0 : entryPath.startsWith(`${path}/`)
-  );
+  // 只看一次前缀命中，不做全表 some：展开深目录时全表扫描是平方级开销。
+  const hasDescendantEntry = directoriesWithDescendantEntries(
+    session.snapshot.entriesByPath,
+    [path]
+  ).has(path);
   // Allow refetch of stale "loaded"/"empty" stubs that never received children
   // (legacy ensureAncestorDirectoryEntries marked ancestors loaded without list).
   const staleEmptyStub =
@@ -262,9 +264,10 @@ async function loadFilesTreeDirectoryBranch(
       : { error: branch.error, ok: false };
   if ((session.directoryLoadGenerations.get(path) ?? 0) !== loadGeneration) {
     if (session.snapshot.directoryStatesByPath.get(path) === "loading") {
-      const hasDescendant = [...session.snapshot.entriesByPath.keys()].some(
-        (entryPath) => entryPath.startsWith(`${path}/`)
-      );
+      const hasDescendant = directoriesWithDescendantEntries(
+        session.snapshot.entriesByPath,
+        [path]
+      ).has(path);
       session.snapshot = {
         ...session.snapshot,
         directoryStatesByPath: setDirectoryState(
@@ -348,8 +351,15 @@ export function ensureAncestorDirectoryEntries(
   let entriesByPath = session.snapshot.entriesByPath;
   let directoryStatesByPath = session.snapshot.directoryStatesByPath;
   let changed = false;
-  for (let index = 1; index < segments.length; index += 1) {
-    const ancestorPath = segments.slice(0, index).join("/");
+  // 先一次性算出哪些祖先已有后代，避免循环里每个祖先各扫一遍全表。
+  const ancestors = segments
+    .slice(1)
+    .map((_, offset) => segments.slice(0, offset + 1).join("/"));
+  const ancestorsWithChildren = directoriesWithDescendantEntries(
+    entriesByPath,
+    ancestors
+  );
+  for (const ancestorPath of ancestors) {
     if (session.visibilityPredicate?.(ancestorPath) === false) {
       continue;
     }
@@ -373,23 +383,14 @@ export function ensureAncestorDirectoryEntries(
         "unloaded"
       );
       changed = true;
-    } else if (state === "loaded") {
+    } else if (state === "loaded" && !ancestorsWithChildren.has(ancestorPath)) {
       // Repair stale optimistic "loaded" stubs that have no listed children.
-      const hasChild = [...entriesByPath.keys()].some(
-        (entryPath) =>
-          entryPath !== ancestorPath &&
-          (ancestorPath === ""
-            ? !entryPath.includes("/")
-            : entryPath.startsWith(`${ancestorPath}/`))
+      directoryStatesByPath = setDirectoryState(
+        directoryStatesByPath,
+        ancestorPath,
+        "unloaded"
       );
-      if (!hasChild) {
-        directoryStatesByPath = setDirectoryState(
-          directoryStatesByPath,
-          ancestorPath,
-          "unloaded"
-        );
-        changed = true;
-      }
+      changed = true;
     }
   }
   if (!changed) {

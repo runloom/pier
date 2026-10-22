@@ -1,5 +1,6 @@
 import type { PierFileTreeGitStatus } from "@pier/ui/file/tree.tsx";
 import type { GitStatus } from "@shared/contracts/git.ts";
+import { prefixRepoPath } from "./repo-scope.ts";
 
 export interface FilesGitDecorations {
   changedByPath: ReadonlyMap<string, PierFileTreeGitStatus>;
@@ -93,4 +94,35 @@ export function buildGitStatusByPath(
     }
   }
   return byPath;
+}
+
+/**
+ * 把仓库内的状态映射到树根相对路径再建索引。
+ *
+ * 多仓库父目录下，每个仓库各自是一份 `git status`；路径必须先拼上仓库前缀，
+ * 否则不同仓库里同名的 `src/index.ts` 会互相覆盖。
+ */
+export function buildPrefixedGitStatusByPath(
+  prefix: string,
+  files: GitStatus["files"]
+): ReadonlyMap<string, PierFileTreeGitStatus> {
+  if (prefix.length === 0) {
+    return buildGitStatusByPath(files);
+  }
+  return buildGitStatusByPath(
+    files.map((file) => ({ ...file, path: prefixRepoPath(prefix, file.path) }))
+  );
+}
+
+/** 合并多份状态索引；同名路径保留信息更具体的那个，不把 added / untracked 降级。 */
+export function mergeGitStatusByPath(
+  target: Map<string, PierFileTreeGitStatus>,
+  source: ReadonlyMap<string, PierFileTreeGitStatus>
+): void {
+  for (const [path, status] of source) {
+    const existing = target.get(path);
+    if (!existing || (existing === "modified" && status !== "modified")) {
+      target.set(path, status);
+    }
+  }
 }

@@ -22,6 +22,7 @@ import {
   releaseFilesDraftSuspendAfterDispose,
   removeFilesDraftRecord,
 } from "./document/drafts.ts";
+import { resetDocumentSentinelThrottle } from "./document/live-sync.ts";
 import {
   ensureDiskDocument,
   getDocument,
@@ -76,6 +77,7 @@ import {
   createTreeToggleAction,
 } from "./tree/view-actions.ts";
 import { clearFilesTreeWatchers } from "./tree/watch.ts";
+import { resetFilesTreeSentinelThrottle } from "./tree/watch-events.ts";
 import { FilesWatchHub } from "./watch-hub.ts";
 
 function withFilesMutationGate(
@@ -372,6 +374,8 @@ export const filesRendererPlugin: RendererPluginModule = {
         dispose();
       }
       clearFilesTreeWatchers();
+      resetFilesTreeSentinelThrottle();
+      resetDocumentSentinelThrottle();
       editorController.dispose({ clearDocuments: true });
       releaseFilesDraftSuspendAfterDispose();
       watchHub.dispose();

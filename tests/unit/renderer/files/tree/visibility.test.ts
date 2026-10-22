@@ -1,5 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import { GIT_IGNORED_PROBE_FAILURE_TTL_MS } from "@plugins/builtin/files/renderer/tree/git-ignored-index.ts";
+import { GIT_IGNORED_PROBE_FAILURE_TTL_MS } from "@plugins/builtin/files/renderer/tree/git/ignored-index.ts";
 import {
   FilesTreeVisibilityController,
   isDefaultExcludedFileTreePath,

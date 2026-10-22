@@ -1,5 +1,8 @@
 import {
+  FILES_DOCUMENT_SENTINEL_RELOAD_MIN_INTERVAL_MS,
   handleDocumentStoreChangeForLiveSync,
+  reloadDocumentsForFileWatchEvent,
+  resetDocumentSentinelThrottle,
   scheduleDocumentAutoSave,
 } from "@plugins/builtin/files/renderer/document/live-sync.ts";
 import {
@@ -74,6 +77,81 @@ function loadDiskNote(path = "note.md"): FilesDocument {
   }
   return loaded;
 }
+
+describe("reloadDocumentsForFileWatchEvent", () => {
+  afterEach(() => {
+    clearFilesDocumentStore();
+    resetDocumentSentinelThrottle();
+  });
+
+  const acquiredFor = (ids: readonly string[]) => new Set(ids);
+
+  it("reloads every open disk document on a root sentinel", () => {
+    const note = loadDiskNote();
+    const other = loadDiskNote("other.md");
+    const start = vi.fn();
+    reloadDocumentsForFileWatchEvent({
+      acquiredDocumentIds: acquiredFor([note.id, other.id]),
+      event: { changes: [{ kind: "changed", path: "." }], root: "/repo" },
+      loader: { start },
+      now: 1_000_000,
+    });
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(start).toHaveBeenCalledWith(note.id, true);
+    expect(start).toHaveBeenCalledWith(other.id, true);
+  });
+
+  it("throttles repeated root sentinels within the minimum interval", () => {
+    const note = loadDiskNote();
+    const start = vi.fn();
+    const event = {
+      changes: [{ kind: "changed" as const, path: "." }],
+      root: "/repo",
+    };
+    const acquiredDocumentIds = acquiredFor([note.id]);
+    reloadDocumentsForFileWatchEvent({
+      acquiredDocumentIds,
+      event,
+      loader: { start },
+      now: 1_000_000,
+    });
+    reloadDocumentsForFileWatchEvent({
+      acquiredDocumentIds,
+      event,
+      loader: { start },
+      now: 1_000_000 + FILES_DOCUMENT_SENTINEL_RELOAD_MIN_INTERVAL_MS - 1,
+    });
+    expect(start).toHaveBeenCalledTimes(1);
+
+    reloadDocumentsForFileWatchEvent({
+      acquiredDocumentIds,
+      event,
+      loader: { start },
+      now: 1_000_000 + FILES_DOCUMENT_SENTINEL_RELOAD_MIN_INTERVAL_MS,
+    });
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not reload unrelated documents for a sentinel mixed with real paths", () => {
+    const edited = loadDiskNote("src/a.ts");
+    const untouched = loadDiskNote("src/b.ts");
+    const start = vi.fn();
+    reloadDocumentsForFileWatchEvent({
+      acquiredDocumentIds: acquiredFor([edited.id, untouched.id]),
+      event: {
+        changes: [
+          { kind: "changed", path: "." },
+          { kind: "changed", path: "src/a.ts" },
+        ],
+        root: "/repo",
+      },
+      loader: { start },
+      now: 2_000_000,
+    });
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledWith(edited.id, true);
+  });
+});
 
 describe("scheduleDocumentAutoSave", () => {
   afterEach(() => {
