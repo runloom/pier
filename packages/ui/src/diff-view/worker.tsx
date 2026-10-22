@@ -69,13 +69,15 @@ function getWorkerResourceLimits(): {
 
 const WORKER_RESOURCE_LIMITS = getWorkerResourceLimits();
 let workerPoolFailed = false;
+let workerPoolFailureReason: string | null = null;
 const workerPoolFailureListeners = new Set<() => void>();
 
-function reportWorkerPoolFailure(): void {
+function reportWorkerPoolFailure(reason: string): void {
   if (workerPoolFailed) {
     return;
   }
   workerPoolFailed = true;
+  workerPoolFailureReason = reason;
   for (const listener of workerPoolFailureListeners) {
     listener();
   }
@@ -87,6 +89,7 @@ function subscribeWorkerPoolFailure(listener: () => void): () => void {
     workerPoolFailureListeners.delete(listener);
     if (workerPoolFailureListeners.size === 0) {
       workerPoolFailed = false;
+      workerPoolFailureReason = null;
     }
   };
 }
@@ -106,7 +109,9 @@ const WORKER_POOL_OPTIONS = {
       new URL("@pierre/diffs/worker/worker.js", import.meta.url),
       { type: "module" }
     );
-    worker.addEventListener("error", reportWorkerPoolFailure);
+    worker.addEventListener("error", (event) => {
+      reportWorkerPoolFailure(event.message || "worker-error");
+    });
     return worker;
   },
 } as const;
@@ -117,7 +122,7 @@ function WorkerThemeSync({
   theme,
 }: {
   readonly onError: (error: Error) => void;
-  readonly onUnavailable: () => void;
+  readonly onUnavailable: (reason: string) => void;
   readonly theme: PierDiffWorkerTheme;
 }): null {
   const pool = useWorkerPool();
@@ -133,7 +138,7 @@ function WorkerThemeSync({
     let active = true;
     const timeout = setTimeout(() => {
       if (active) {
-        onUnavailable();
+        onUnavailable("initialization-timeout");
       }
     }, WORKER_INITIALIZATION_TIMEOUT_MS);
     pool
@@ -151,7 +156,7 @@ function WorkerThemeSync({
             return;
           }
           if (!pool.isWorkingPool()) {
-            onUnavailable();
+            onUnavailable("pool-unavailable");
             return;
           }
           onError(error instanceof Error ? error : new Error(String(error)));
@@ -168,7 +173,7 @@ function WorkerThemeSync({
 function WorkerFailureSync({
   onUnavailable,
 }: {
-  readonly onUnavailable: () => void;
+  readonly onUnavailable: (reason: string) => void;
 }): null {
   const failed = useSyncExternalStore(
     subscribeWorkerPoolFailure,
@@ -177,7 +182,7 @@ function WorkerFailureSync({
   );
   useEffect(() => {
     if (failed) {
-      onUnavailable();
+      onUnavailable(workerPoolFailureReason ?? "worker-error");
     }
   }, [failed, onUnavailable]);
   return null;
@@ -200,7 +205,7 @@ export function PierDiffWorkerHost({
 }: {
   readonly children?: ReactNode;
   readonly onError?: (error: Error) => void;
-  readonly onUnavailable?: () => void;
+  readonly onUnavailable?: (reason: string) => void;
   readonly theme: PierDiffWorkerTheme;
 }): React.JSX.Element {
   const themeKey = pierDiffThemeDependency(theme);
@@ -246,7 +251,7 @@ export function PierDiffWorkerProvider({
 }: {
   readonly children: ReactNode;
   readonly onError: (error: Error) => void;
-  readonly onUnavailable: () => void;
+  readonly onUnavailable: (reason: string) => void;
   readonly theme: PierDiffWorkerTheme;
 }): React.JSX.Element {
   const existingPool = useWorkerPool();

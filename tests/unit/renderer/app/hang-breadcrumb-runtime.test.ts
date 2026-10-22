@@ -86,4 +86,21 @@ describe("hang breadcrumb runtime (renderer)", () => {
     });
     expect(hangBreadcrumb).toHaveBeenCalledTimes(1);
   });
+
+  it("flushes worker failure marks immediately so a following hang cannot strand them", () => {
+    vi.useFakeTimers();
+    noteHangBreadcrumb({
+      kind: "mark",
+      phase: "state",
+      detail: "diff-worker-unavailable: worker-error",
+    });
+    expect(hangBreadcrumb).toHaveBeenCalledTimes(1);
+    const payload = hangBreadcrumb.mock.calls[0]?.[0];
+    expect(payload).toEqual(
+      expect.objectContaining({
+        detail: "diff-worker-unavailable: worker-error",
+        kind: "mark",
+      })
+    );
+  });
 });

@@ -1,5 +1,6 @@
 import { PierDiffWorkerHost } from "@pier/ui/diff-view/worker.tsx";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useCallback, useMemo } from "react";
+import { noteHangBreadcrumb } from "@/lib/diagnostics/hang-breadcrumb.ts";
 import { getShikiThemePair } from "@/lib/theme/preset-registry.ts";
 import { ensureCustomShikiThemesRegistered } from "@/lib/theme/register-custom-themes.ts";
 import { useThemeStore } from "@/stores/theme.store.ts";
@@ -16,5 +17,28 @@ export function DiffWorkerHost({ children }: { children: ReactNode }) {
     () => getShikiThemePair(stylePresetId),
     [stylePresetId]
   );
-  return <PierDiffWorkerHost theme={theme}>{children}</PierDiffWorkerHost>;
+  const handleWorkerError = useCallback((error: Error) => {
+    noteHangBreadcrumb({
+      kind: "mark",
+      phase: "state",
+      detail: `diff-worker-error: ${error.message.slice(0, 100)}`,
+    });
+    console.error("[diff-worker]", error);
+  }, []);
+  const handleWorkerUnavailable = useCallback((reason: string) => {
+    noteHangBreadcrumb({
+      kind: "mark",
+      phase: "state",
+      detail: `diff-worker-unavailable: ${reason.slice(0, 100)}`,
+    });
+  }, []);
+  return (
+    <PierDiffWorkerHost
+      onError={handleWorkerError}
+      onUnavailable={handleWorkerUnavailable}
+      theme={theme}
+    >
+      {children}
+    </PierDiffWorkerHost>
+  );
 }

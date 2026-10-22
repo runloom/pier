@@ -129,4 +129,4 @@ export type StoredRendererHangBreadcrumb = RendererHangBreadcrumb & {
  */
 export const RENDERER_HANG_BREADCRUMB_IMMEDIATE_KINDS: ReadonlySet<
   RendererHangBreadcrumb["kind"]
-> = new Set(["panel-close", "files-conflict", "command"]);
+> = new Set(["panel-close", "files-conflict", "command", "mark"]);

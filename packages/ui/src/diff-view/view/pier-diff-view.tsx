@@ -52,8 +52,11 @@ import {
 import { useDiffViewHeaders } from "../use-headers.tsx";
 import { useDiffViewItemApply } from "../use-item-apply.ts";
 import { PierDiffViewShell } from "../view-shell.tsx";
+import {
+  useInlineRenderFallbackState,
+  useInlineRenderFallbackTimeout,
+} from "./use-inline-render-fallback.ts";
 
-const INLINE_RENDER_TIMEOUT_MS = 10_000;
 export function PierDiffView({
   activeReviewEpoch,
   activeReviewSlotsByItem,
@@ -118,8 +121,6 @@ export function PierDiffView({
   /** 仅布局不变量（lineHeight/diffStyle）remount 时恢复视口；成员/stage 变更不走此路径。 */
   const layoutScrollRestoreRef = useRef<TopologyScrollRestore | null>(null);
   const previousCodeViewKeyRef = useRef<string | null>(null);
-  const [inlineRenderFailed, setInlineRenderFailed] = useState(false);
-  const [workerUnavailable, setWorkerUnavailable] = useState(false);
   /**
    * 命令式 updateItem / 折叠会改 parsedItemListRef，但不改 inputs。
    * epoch 迫使 codeViewItems 重新读取权威列表，供 layout remount 的 initialItems 使用。
@@ -133,9 +134,6 @@ export function PierDiffView({
   const fileHoverHostsRef = useRef(new Map<string, HTMLElement>());
   // 菜单打开瞬间的选区文本快照（浏览器字符选区优先；行选模型回退）。
   const selectedTextRef = useRef("");
-  const disableWorkerPool = useCallback(() => {
-    setWorkerUnavailable(true);
-  }, []);
   const parsed = useMemo(
     () => toCodeViewItems(inputs, parsedItemsRef.current),
     [inputs]
@@ -172,7 +170,13 @@ export function PierDiffView({
     () => diffMetrics(appearance.codeFontSize),
     [appearance.codeFontSize]
   );
-  const renderMode = workerUnavailable ? "inline" : "worker";
+  const {
+    disableWorkerPool,
+    inlineFallbackSafe,
+    inlineRenderFailed,
+    renderMode,
+    setInlineRenderFailed,
+  } = useInlineRenderFallbackState({ inputs, onError });
   // Remount on layout + theme only (not item membership). Theme is required:
   // Pierre onThemeChange only invalidates the pool without re-rendering.
   const themeKey = pierDiffThemeKey(appearance);
@@ -218,6 +222,15 @@ export function PierDiffView({
     markRendered,
     pendingRenderKey,
   } = useDiffRenderWatchdog(renderEnvironment, codeViewItems, getRenderedItems);
+  useInlineRenderFallbackTimeout({
+    disableWorkerPool,
+    inlineFallbackSafe,
+    onError,
+    pendingRenderKey,
+    renderItemCount: codeViewItems.length,
+    renderMode,
+    setInlineRenderFailed,
+  });
   const isUserCollapsed = useUserCollapsedPredicate(
     collapsedItemsRef,
     collapseAllIntentRef
@@ -370,29 +383,6 @@ export function PierDiffView({
     });
   }, [codeViewItems, codeViewKey, inputs, scheduleRenderWindowReport]);
 
-  useEffect(() => {
-    if (codeViewItems.length === 0 || pendingRenderKey === null) {
-      return;
-    }
-    const timeout = setTimeout(() => {
-      if (renderMode === "worker") {
-        disableWorkerPool();
-        return;
-      }
-      setInlineRenderFailed(true);
-      onError(
-        new Error("Pierre did not render the diff after the worker fallback.")
-      );
-    }, INLINE_RENDER_TIMEOUT_MS);
-    return () => clearTimeout(timeout);
-  }, [
-    codeViewItems.length,
-    disableWorkerPool,
-    onError,
-    pendingRenderKey,
-    renderMode,
-  ]);
-
   useDiffViewHandle({
     appliedItemsRef,
     auditVisibleItems,
@@ -487,7 +477,7 @@ export function PierDiffView({
         renderHeaderMetadata={renderHeaderMetadata}
         renderHeaderPrefix={renderHeaderPrefix}
         style={style}
-        workerUnavailable={workerUnavailable}
+        workerUnavailable={renderMode === "inline"}
       />
     </UnresolvedConflictViewContext>
   );
