@@ -305,7 +305,10 @@ describe("Git diff renderer governance", () => {
       ": { poolSize: 3, totalASTLRUCacheSize: 100 }"
     );
     expect(workerSource).toContain(
-      'worker.addEventListener("error", reportWorkerPoolFailure);'
+      'worker.addEventListener("error", (event) => {'
+    );
+    expect(workerSource).toContain(
+      'reportWorkerPoolFailure(event.message || "worker-error");'
     );
     expect(shellSource).toContain(
       "disableWorkerPool={props.workerUnavailable}"

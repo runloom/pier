@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PierDiffViewItem } from "../items.ts";
 import { allowInlineDiffFallback } from "./inline-fallback.ts";
 
@@ -55,6 +55,16 @@ export function useInlineRenderFallbackState(input: {
       setWorkerUnavailable(false);
     }
   }, [inlineFallbackSafe, workerUnavailable]);
+  // A large review that errored into the failed empty state must render again
+  // when the view changes to a different item set. Tracked via a ref compare
+  // so a watchdog failure does not reset itself within the same view.
+  const lastInputsRef = useRef(inputs);
+  useEffect(() => {
+    if (lastInputsRef.current !== inputs) {
+      lastInputsRef.current = inputs;
+      setInlineRenderFailed(false);
+    }
+  }, [inputs]);
   return {
     disableWorkerPool,
     inlineFallbackSafe,
