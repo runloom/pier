@@ -43,7 +43,7 @@ export function PierDiffViewShell(props: {
   readonly handleUserScrollIntent: () => void;
   readonly handleUserScrollKey: (event: KeyboardEvent<HTMLDivElement>) => void;
   readonly onError: (error: Error) => void;
-  readonly onUnavailable: () => void;
+  readonly onUnavailable: (reason: string) => void;
   readonly options: CodeViewOptions<PierDiffAnnotationMetadata>;
   readonly renderAnnotation?: (
     annotation: { readonly metadata?: PierDiffAnnotationMetadata },

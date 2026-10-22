@@ -18,6 +18,18 @@ const webContents = {
     webListeners.set(event, listener);
     return webContents;
   }),
+  once: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+    webListeners.set(event, listener);
+    return webContents;
+  }),
+  removeListener: vi.fn(
+    (event: string, listener: (...args: unknown[]) => void) => {
+      if (webListeners.get(event) === listener) {
+        webListeners.delete(event);
+      }
+      return webContents;
+    }
+  ),
 };
 
 const window = {
@@ -75,6 +87,11 @@ describe("installRendererFailureRecovery logging", () => {
     installRendererFailureRecovery({
       beforeLoadFailure: vi.fn(),
       beforeRendererGone: vi.fn(),
+      captureHangSample: vi.fn(async () => ({
+        file: null,
+        ok: false,
+        reason: "platform" as const,
+      })),
       isContentVisible: () => true,
       isQuitting: () => false,
       reloadAppEntry: vi.fn(),
@@ -132,6 +149,11 @@ describe("installRendererFailureRecovery logging", () => {
     installRendererFailureRecovery({
       beforeLoadFailure: vi.fn(),
       beforeRendererGone: vi.fn(),
+      captureHangSample: vi.fn(async () => ({
+        file: null,
+        ok: false,
+        reason: "platform" as const,
+      })),
       isContentVisible: () => true,
       isQuitting: () => false,
       reloadAppEntry: vi.fn(),
@@ -139,7 +161,15 @@ describe("installRendererFailureRecovery logging", () => {
     });
 
     webListeners.get("unresponsive")?.();
-    expect(webContents.forcefullyCrashRenderer).toHaveBeenCalledOnce();
+    await vi.waitFor(() =>
+      expect(webContents.forcefullyCrashRenderer).toHaveBeenCalledOnce()
+    );
+    expect(
+      records.some(
+        (r) =>
+          r.scope === "renderer.failure" && r.msg === "renderer-hang-sample"
+      )
+    ).toBe(true);
 
     const unresponsive = records.find(
       (r) => r.scope === "renderer.failure" && r.msg === "renderer-unresponsive"
@@ -188,6 +218,11 @@ describe("installRendererFailureRecovery logging", () => {
     installRendererFailureRecovery({
       beforeLoadFailure: vi.fn(),
       beforeRendererGone: vi.fn(),
+      captureHangSample: vi.fn(async () => ({
+        file: null,
+        ok: false,
+        reason: "platform" as const,
+      })),
       isContentVisible: () => true,
       isQuitting: () => false,
       reloadAppEntry: vi.fn(),
@@ -202,6 +237,16 @@ describe("installRendererFailureRecovery logging", () => {
     const incidentId = String(unresponsive?.ctx?.incidentId ?? "");
     expect(incidentId).toMatch(/^[0-9a-f]{12}$/i);
 
+    await vi.waitFor(() =>
+      expect(
+        records.some(
+          (r) =>
+            r.scope === "renderer.failure" &&
+            r.msg === "renderer-failure" &&
+            r.ctx?.kind === "unresponsive"
+        )
+      ).toBe(true)
+    );
     const failRecovery = records.find(
       (r) =>
         r.scope === "renderer.failure" &&

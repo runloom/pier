@@ -1359,10 +1359,11 @@ describe("PierDiffView", () => {
     );
   });
 
-  it("2,001 项拓扑中的单项正文只通过一次增量 updateItem 提交", async () => {
+  it("2,001 项拓扑中的单项正文只通过一次增量 updateItem 提交，且不回退到主线程 inline", async () => {
     const ref = createRef<PierDiffViewHandle>();
     const setItems = vi.spyOn(PierreCodeView.prototype, "setItems");
     const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
+    const onError = vi.fn();
     const placeholders: PierDiffViewItem[] = Array.from(
       { length: 2001 },
       (_, index) => ({
@@ -1377,7 +1378,7 @@ describe("PierDiffView", () => {
         appearance={appearance}
         items={placeholders}
         labels={labels}
-        onError={vi.fn()}
+        onError={onError}
         ref={ref}
       />
     );
@@ -1402,12 +1403,17 @@ describe("PierDiffView", () => {
     expect(updateItem.mock.calls[0]?.[0].id).toBe("file-2000.ts");
     expect(setItems).toHaveBeenCalledTimes(initialSetCalls);
 
-    const acceptedItem = updateItem.mock.calls[0]?.[0];
+    // 大审查（2,001 项 > 16）不得回退到主线程 inline：报可重试错误，
+    // 不重建拓扑，否则会重现主线程被大 diff 渲染拖死的卡死。
     act(() => workers[0]?.dispatchEvent(new Event("error")));
     await waitFor(() =>
-      expect(setItems.mock.calls.length).toBeGreaterThan(initialSetCalls)
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining("inline fallback was skipped"),
+        })
+      )
     );
-    expect(setItems.mock.calls.at(-1)?.[0][2000]).toBe(acceptedItem);
+    expect(setItems).toHaveBeenCalledTimes(initialSetCalls);
 
     view.rerender(
       <PierDiffView

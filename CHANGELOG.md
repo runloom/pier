@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **大改动审查不再把 diff 高亮回退到 renderer 主线程。** worker 超时或不可用时，超过 16 个文件或 256KB patch 的审查面保留 worker（最长等 30 秒）；仍失败则显示可重试错误，不再 inline 重做并拖死界面。无响应诊断新增 renderer CPU / 内存、崩溃前 `sample` 栈和 diff worker 失败面包屑。
+
 ## [0.1.48] - 2026-10-20
 
 ### Added
