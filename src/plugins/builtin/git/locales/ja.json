@@ -501,6 +501,7 @@
     "ui.reviewTreeCollapseAll": "フォルダを折りたたむ",
     "ui.reviewTreeCollapseFolders": "フォルダを折りたたむ",
     "ui.reviewTreeExpandAll": "フォルダを展開",
+    "ui.reviewTreeFoldersUnavailable": "変更ファイルのツリーが表示されていません。先にツリーを表示してください。",
     "ui.reviewTreeExpand": "変更ファイルを表示",
     "ui.reviewToggleTree": "変更ファイルツリーを切り替え",
     "ui.reviewToggleTreeUnavailable": "先に git リポジトリを開いてください。",

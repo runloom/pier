@@ -573,6 +573,7 @@
     "ui.reviewTreeCollapseAll": "折叠目录",
     "ui.reviewTreeCollapseFolders": "折叠目录",
     "ui.reviewTreeExpandAll": "展开目录",
+    "ui.reviewTreeFoldersUnavailable": "目录树未显示。请先显示变更文件目录树。",
     "ui.reviewTreeExpand": "显示目录树",
     "ui.reviewToggleTree": "显示/隐藏目录树",
     "ui.reviewToggleTreeUnavailable": "请先打开 git 仓库。",

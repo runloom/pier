@@ -102,8 +102,6 @@ export function GitReviewPanelLayout({
   const hasTree = Boolean(treeHasContent && onOpenPath);
 
   const treeApiRef = treeSearch.treeApiRef;
-  const collapseAllFolders = treeSearch.collapseAllFolders;
-  const expandAllFolders = treeSearch.expandAllFolders;
   useEffect(() => {
     if (!(hasTree && !sidebarCollapsed && treeLoading !== true)) {
       return;
@@ -117,33 +115,33 @@ export function GitReviewPanelLayout({
             rootPath,
           }
         : { maxExpandLevels: GIT_REVIEW_TREE_EXPAND_ALL_MAX_LEVELS };
+    // `false` = API not attached yet; the registry retries briefly so a menu
+    // selection right after mount / focus restore never silently no-ops.
     return registerGitReviewTreeFolderHandlers({
       collapseAll: (rootPath) => {
-        const options = rootPath ? { rootPath } : undefined;
         const api = treeApiRef.current;
-        if (api) {
-          api.collapseAll(options);
-          return;
+        if (!api) {
+          return false;
         }
-        // 与主路径同 scope，禁止无参整树 collapse
-        collapseAllFolders(options);
+        api.collapseAll(rootPath ? { rootPath } : undefined);
+        return true;
       },
+      ...(contextId ? { contextId } : {}),
       expandAll: (rootPath) => {
-        const options = reviewExpandOptions(rootPath);
         const api = treeApiRef.current;
-        if (api) {
-          api.expandAll(options);
-          return;
+        if (!api) {
+          return false;
         }
-        // 与主路径同 options，禁止无参整树 / 默认 3 层
-        expandAllFolders(options);
+        api.expandAll(reviewExpandOptions(rootPath));
+        return true;
       },
+      ...(sourcePanelId ? { panelId: sourcePanelId } : {}),
     });
   }, [
-    collapseAllFolders,
-    expandAllFolders,
+    contextId,
     hasTree,
     sidebarCollapsed,
+    sourcePanelId,
     treeApiRef,
     treeLoading,
   ]);
