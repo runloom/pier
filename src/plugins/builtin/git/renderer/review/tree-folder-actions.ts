@@ -9,6 +9,7 @@ import { toggleGitReviewTreeSidebar } from "./tree/sidebar-preference.ts";
 import {
   collapseGitReviewTreeFolders,
   expandGitReviewTreeFolders,
+  type GitReviewTreeFolderOwner,
 } from "./tree-collapse-registry.ts";
 
 export const GIT_REVIEW_COLLAPSE_FOLDERS_COMMAND_ID =
@@ -52,6 +53,31 @@ function reviewTreeExpandRootPath(
   return slash < 0 ? undefined : item.path.slice(0, slash);
 }
 
+/**
+ * Panel identity for handler dispatch: the right-clicked tree must win over
+ * any other mounted review tree (split panels, other worktrees).
+ */
+function treeFolderOwner(
+  invocation: RendererPluginActionInvocation | undefined
+): GitReviewTreeFolderOwner {
+  const metadata = invocation?.metadata;
+  const raw = metadata?.contextId;
+  return {
+    contextId: typeof raw === "string" && raw.length > 0 ? raw : null,
+    panelId: invocation?.sourcePanelId ?? null,
+  };
+}
+
+function reportTreeUnavailable(context: RendererPluginContext): void {
+  context.notifications.error(
+    pluginText(
+      context,
+      "reviewTreeFoldersUnavailable",
+      "The changed files tree isn't shown. Show it first."
+    )
+  );
+}
+
 /** Expand/Collapse Folders (context menu) + toggle tree sidebar (keybinding). */
 export function registerGitReviewTreeFolderActions(options: {
   context: RendererPluginContext;
@@ -93,10 +119,13 @@ export function registerGitReviewTreeFolderActions(options: {
       category: "git",
       enabled: () => true,
       handler: async (invocation) => {
-        expandGitReviewTreeFolders(
-          reviewTreeExpandRootPath(parseItem(invocation))
+        const applied = await expandGitReviewTreeFolders(
+          reviewTreeExpandRootPath(parseItem(invocation)),
+          treeFolderOwner(invocation)
         );
-        return await Promise.resolve();
+        if (!applied) {
+          reportTreeUnavailable(context);
+        }
       },
       id: GIT_REVIEW_EXPAND_ALL_COMMAND_ID,
       metadata: {
@@ -112,10 +141,13 @@ export function registerGitReviewTreeFolderActions(options: {
       category: "git",
       enabled: () => true,
       handler: async (invocation) => {
-        collapseGitReviewTreeFolders(
-          reviewTreeExpandRootPath(parseItem(invocation))
+        const applied = await collapseGitReviewTreeFolders(
+          reviewTreeExpandRootPath(parseItem(invocation)),
+          treeFolderOwner(invocation)
         );
-        return await Promise.resolve();
+        if (!applied) {
+          reportTreeUnavailable(context);
+        }
       },
       id: GIT_REVIEW_COLLAPSE_FOLDERS_COMMAND_ID,
       metadata: {
