@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { attachWorkspaceTabStripBehavior } from "@/components/workspace/tab-strip-behavior.ts";
+import { focusedTabPanelId } from "@/lib/workspace/focused-tab.ts";
 import {
   resetTabRevealSuppressionForTests,
   withSuppressedTabReveal,
@@ -38,33 +39,48 @@ function mountGroupTab(panelId: string, scrollLeft: number) {
   content.dataset.panelTabId = panelId;
   tab.append(content);
   tabs.append(tab);
-  groupEl.append(tabs);
+  const header = document.createElement("div");
+  header.className = "dv-tabs-and-actions-container";
+  header.append(tabs);
+  groupEl.append(header);
   document.body.append(groupEl);
   tabs.scrollLeft = scrollLeft;
   setRect(tabs, { bottom: 34, left: 0, right: 120, top: 0 });
   setRect(tab, { bottom: 34, left: 120, right: 200, top: 0 });
-  return { groupEl, tabs, tab, panelId };
+  return { groupEl, header, tabs, tab, panelId };
 }
 
 type Listener = (payload: unknown) => void;
 
-function createApiMock(group: {
-  activePanel: { id: string };
-  element: HTMLElement;
-  id: string;
-}) {
+function createApiMock(
+  group: {
+    activePanel: { id: string };
+    element: HTMLElement;
+    id: string;
+  },
+  { active = true }: { active?: boolean } = {}
+) {
   const maximizedListeners = new Set<Listener>();
   const activeGroupListeners = new Set<Listener>();
+  const activePanelListeners = new Set<Listener>();
   const layoutListeners = new Set<Listener>();
 
   return {
     api: {
-      groups: [group],
+      groups: [{ ...group, api: { isActive: active } }],
       onDidActiveGroupChange: (listener: Listener) => {
         activeGroupListeners.add(listener);
         return {
           dispose: () => {
             activeGroupListeners.delete(listener);
+          },
+        };
+      },
+      onDidActivePanelChange: (listener: Listener) => {
+        activePanelListeners.add(listener);
+        return {
+          dispose: () => {
+            activePanelListeners.delete(listener);
           },
         };
       },
@@ -88,6 +104,11 @@ function createApiMock(group: {
     fireActiveGroup: (next: typeof group | undefined) => {
       for (const listener of activeGroupListeners) {
         listener(next);
+      }
+    },
+    fireActivePanel: (panel: { group: { element: HTMLElement } } | null) => {
+      for (const listener of activePanelListeners) {
+        listener({ origin: "api", panel });
       }
     },
     fireMaximized: (isMaximized: boolean) => {
@@ -213,6 +234,73 @@ describe("attachWorkspaceTabStripBehavior", () => {
     fireActiveGroup(group);
 
     expect(mounted.tabs.scrollLeft).toBe(0);
+    dispose();
+  });
+
+  it("activates an inactive group when pointerdown lands in panel content", () => {
+    const mounted = mountGroupTab("terminal-1", 0);
+    const content = document.createElement("div");
+    content.className = "dv-content-container";
+    mounted.groupEl.append(content);
+    const setActive = vi.fn();
+    const group = {
+      activePanel: { api: { setActive }, id: "terminal-1" },
+      element: mounted.groupEl,
+      id: "group-1",
+    };
+    const { api } = createApiMock(group, { active: false });
+    const dispose = attachWorkspaceTabStripBehavior(
+      api as never,
+      document.body
+    );
+
+    content.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, button: 0 })
+    );
+
+    expect(setActive).toHaveBeenCalledOnce();
+
+    setActive.mockClear();
+    content.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, button: 2 })
+    );
+    expect(setActive).not.toHaveBeenCalled();
+
+    mounted.header.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, button: 0 })
+    );
+    expect(setActive).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it("drops stale tab focus when the active group moves elsewhere", () => {
+    const stale = mountGroupTab("stale-tab", 0);
+    const target = mountGroupTab("target-tab", 0);
+    const targetGroup = {
+      activePanel: { id: "target-tab" },
+      element: target.groupEl,
+      id: "group-2",
+    };
+    const { api, fireActivePanel } = createApiMock(targetGroup);
+    const dispose = attachWorkspaceTabStripBehavior(
+      api as never,
+      document.body
+    );
+    const tab = stale.tab.querySelector<HTMLElement>("[data-panel-tab-id]");
+    if (!tab) {
+      throw new Error("tab fixture missing data-panel-tab-id");
+    }
+    tab.tabIndex = 0;
+    tab.focus();
+    expect(document.activeElement).toBe(tab);
+
+    fireActivePanel({ group: { element: target.groupEl } });
+    expect(document.activeElement).not.toBe(tab);
+    expect(focusedTabPanelId()).toBeNull();
+
+    tab.focus();
+    fireActivePanel({ group: { element: stale.groupEl } });
+    expect(document.activeElement).toBe(tab);
     dispose();
   });
 

@@ -1,4 +1,6 @@
 import type { DockviewApi } from "dockview-react";
+import { releaseTabFocusOutsideGroup } from "@/lib/workspace/focused-tab.ts";
+import { activatePanelFromContentPointerDown } from "@/lib/workspace/pointer-activation.ts";
 import {
   isTabRevealSuppressed,
   suppressTabRevealForCurrentInteraction,
@@ -42,6 +44,10 @@ export function attachWorkspaceTabStripBehavior(
   // Content-area pointerdown focuses the container (tabIndex=-1) → dockview
   // activates the group in the same turn. That user gesture must not scroll
   // the strip; only tab clicks / keyboard nav / explicit reveals may.
+  //
+  // The same capture also activates the group explicitly: controls that
+  // preventDefault() on pointerdown suppress the focus move, and without this
+  // the previous group stays "active" (Cmd+W would close its tab).
   const onContentPointerDown = (event: PointerEvent): void => {
     const target = event.target;
     if (
@@ -49,6 +55,9 @@ export function attachWorkspaceTabStripBehavior(
       target.closest(".dv-content-container") !== null
     ) {
       suppressTabRevealForCurrentInteraction();
+    }
+    if (event.button === 0) {
+      activatePanelFromContentPointerDown(api, target);
     }
   };
   const listenerDocument =
@@ -101,6 +110,17 @@ export function attachWorkspaceTabStripBehavior(
       : undefined
   );
 
+  // Programmatic group switches (focus-right, setActive, native terminal
+  // focus intent) do not move DOM focus. Drop tab-strip focus left in the old
+  // group so Cmd+W resolves the newly active panel, not the stale tab.
+  const activePanelSubscription = asDisposable(
+    typeof api.onDidActivePanelChange === "function"
+      ? api.onDidActivePanelChange((change) => {
+          releaseTabFocusOutsideGroup(change.panel?.group?.element);
+        })
+      : undefined
+  );
+
   // New groups / splits: bind scroll listeners; prune memory for removed groups.
   const layoutSubscription = asDisposable(
     typeof api.onDidLayoutChange === "function"
@@ -116,6 +136,7 @@ export function attachWorkspaceTabStripBehavior(
     });
     maximizedSubscription.dispose();
     activeGroupSubscription.dispose();
+    activePanelSubscription.dispose();
     layoutSubscription.dispose();
     setTabStripRevealAbortHook(null);
     setActiveTabStripScrollMemory(null);
