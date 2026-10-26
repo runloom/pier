@@ -70,6 +70,7 @@ export const rendererHangBreadcrumbSchema = z
       "files-doc",
       "files-conflict",
       "heartbeat",
+      "longtask",
       "mark",
     ]),
     mode: z.enum(["diff", "preview", "source"]).optional(),
@@ -77,6 +78,14 @@ export const rendererHangBreadcrumbSchema = z
     /** Project-relative or basename path only — never dump full user home. */
     path: pathHint.optional(),
     phase: z.enum(["end", "start", "state", "tick"]).optional(),
+    /**
+     * Main-side enrich 的 renderer CPU / 工作集（MB）。renderer 自己填不了：
+     * `performance.memory.usedJSHeapSize` 在未开启
+     * `--enable-precise-memory-info` 时是恒定占位值（实测 75s 内分配 1.3GB
+     * 仍纹丝不动），不能用来判断「卡死前内存是不是在爬」。
+     */
+    rendererCpuPercent: z.number().nonnegative().max(10_000).optional(),
+    rendererWorkingSetMb: z.number().nonnegative().max(1_048_576).optional(),
   })
   .strict();
 
@@ -126,7 +135,9 @@ export type StoredRendererHangBreadcrumb = RendererHangBreadcrumb & {
 /**
  * Kinds that flush IPC immediately so a hang cannot strand them in the
  * 1s pending buffer. Heartbeats stay batched; they only need sparse liveness.
+ * `longtask` joins them: it is only noted after the blocking task finished, and
+ * the next blocking task may be the one that never returns.
  */
 export const RENDERER_HANG_BREADCRUMB_IMMEDIATE_KINDS: ReadonlySet<
   RendererHangBreadcrumb["kind"]
-> = new Set(["panel-close", "files-conflict", "command", "mark"]);
+> = new Set(["panel-close", "files-conflict", "command", "longtask", "mark"]);

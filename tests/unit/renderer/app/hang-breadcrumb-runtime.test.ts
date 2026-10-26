@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   __resetHangBreadcrumbRuntimeForTests,
+  installHangBreadcrumbRuntime,
   noteHangBreadcrumb,
   readLocalHangBreadcrumbs,
 } from "@/lib/diagnostics/hang-breadcrumb.ts";
@@ -20,6 +21,42 @@ describe("hang breadcrumb runtime (renderer)", () => {
   afterEach(() => {
     __resetHangBreadcrumbRuntimeForTests();
     vi.useRealTimers();
+  });
+
+  it("keeps heartbeats free of renderer-side memory claims", () => {
+    // `performance.memory.usedJSHeapSize` 在未开启 --enable-precise-memory-info
+    // 时是恒定占位值，据此报「内存没涨」会误导复盘。真实内存由 main 侧补。
+    vi.useFakeTimers();
+    installHangBreadcrumbRuntime();
+    vi.advanceTimersByTime(30_000);
+    vi.advanceTimersByTime(30_000);
+
+    const heartbeats = readLocalHangBreadcrumbs().filter(
+      (crumb) => crumb.kind === "heartbeat"
+    );
+    expect(heartbeats.map((crumb) => crumb.detail)).toEqual([
+      "alive-1",
+      "alive-2",
+    ]);
+  });
+
+  it("disposes the long-task observer with the runtime", () => {
+    const disconnect = vi.fn();
+    const observe = vi.fn();
+    class FakePerformanceObserver {
+      disconnect = disconnect;
+      observe = observe;
+      takeRecords = vi.fn(() => []);
+    }
+    vi.stubGlobal("PerformanceObserver", FakePerformanceObserver);
+    try {
+      const dispose = installHangBreadcrumbRuntime();
+      expect(observe).toHaveBeenCalledWith({ entryTypes: ["longtask"] });
+      dispose();
+      expect(disconnect).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("dedupes consecutive identical crumbs and batches flush", () => {
@@ -85,6 +122,23 @@ describe("hang breadcrumb runtime (renderer)", () => {
       detail: "web-keydown",
     });
     expect(hangBreadcrumb).toHaveBeenCalledTimes(1);
+  });
+
+  it("flushes long-task crumbs immediately so the next blocking task cannot strand them", () => {
+    vi.useFakeTimers();
+    noteHangBreadcrumb({
+      kind: "longtask",
+      phase: "state",
+      detail: "longtask 4100ms start 88231",
+    });
+    expect(hangBreadcrumb).toHaveBeenCalledTimes(1);
+    const payload = hangBreadcrumb.mock.calls[0]?.[0];
+    expect(payload).toEqual(
+      expect.objectContaining({
+        detail: "longtask 4100ms start 88231",
+        kind: "longtask",
+      })
+    );
   });
 
   it("flushes worker failure marks immediately so a following hang cannot strand them", () => {
