@@ -25,6 +25,7 @@ import {
   PANEL_EDIT_SURFACE,
   PANEL_LAYOUT_SURFACE,
 } from "@/lib/context-menu/surface-profiles.ts";
+import { focusedTabPanelId } from "@/lib/workspace/focused-tab.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelsInSameGroup } from "@/stores/workspace-panel-helpers.ts";
@@ -227,6 +228,14 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       categoryKey: "panel",
       group: "9_close",
       handler: async () => {
+        // 键盘 / 辅助技术可以把焦点停在 inactive tab 上而不激活它
+        // (dockview 采用 manual activation)。先认焦点所在的 tab，再退回
+        // dockview active panel，避免 Cmd+W 关掉“选中但不是当前聚焦”的 tab。
+        const focusedPanelId = focusedTabPanelId();
+        if (focusedPanelId) {
+          await useWorkspaceStore.getState().closePanel(focusedPanelId);
+          return;
+        }
         await useWorkspaceStore.getState().closeActivePanel();
       },
       id: "pier.panel.closeActive",

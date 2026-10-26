@@ -154,10 +154,39 @@ export function invocationFromKeybindingScope(): ActionInvocation | undefined {
   };
 }
 
+function menuActionBlockedByOverlay(commandId: string): boolean {
+  const scope = useKeybindingScope.getState();
+  if (scope.overlayStack.length === 0) {
+    return false;
+  }
+  const bindings = keybindingRegistry.getBindingsFor(commandId);
+  if (bindings.length === 0) {
+    // Menu-only commands (no chord / no accelerator) must stay clickable;
+    // there is no global shortcut to fall through the overlay.
+    return false;
+  }
+  // Mirror resolve(): the top overlay is a whitelist. A menu action with a
+  // chord only passes when that chord resolves back to the same command.
+  return !bindings.some(
+    (binding) =>
+      keybindingRegistry.resolve(binding.chord, {
+        activePanelComponent: scope.activePanelComponent,
+        overlayStack: scope.overlayStack,
+      }) === commandId
+  );
+}
+
 export function dispatchKeybindingAction(
   action: Action,
   route: KeybindingDispatchRoute
 ): void {
+  // The native application menu calls this directly (MENU_COMMAND_REQUEST),
+  // bypassing resolveKeybindingAction. Apply the same overlay blocking here so
+  // ⌘W & co. cannot mutate the workspace behind a modal dialog / palette.
+  if (route === "menu" && menuActionBlockedByOverlay(action.id)) {
+    recordKeybindingDecision("overlay-blocked", action.id, route);
+    return;
+  }
   const invocation = invocationFromKeybindingScope();
   // 路径依赖等动作在菜单里禁用；快捷键仍命中并 toast 原因，避免静默无响应。
   if (action.enabled?.(invocation) === false) {

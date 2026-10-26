@@ -142,6 +142,125 @@ describe("installRendererFailureRecovery logging", () => {
     expect(pageLoaded?.ctx?.incidentId).toBe(gone?.ctx?.incidentId);
   });
 
+  /** 可手动放行的采样桩，用来精确控制 6s 采样窗口的时序。 */
+  function deferredSample(): {
+    captureHangSample: (
+      input: unknown
+    ) => Promise<{ file: null; ok: false; reason: "platform" }>;
+    release: () => void;
+  } {
+    let release: (() => void) | null = null;
+    const captureHangSample = (
+      _input: unknown
+    ): Promise<{ file: null; ok: false; reason: "platform" }> =>
+      new Promise((resolve) => {
+        release = () => resolve({ file: null, ok: false, reason: "platform" });
+      });
+    return {
+      captureHangSample,
+      release: () => release?.(),
+    };
+  }
+
+  it("keeps force-crashing when the renderer recovers and hangs again inside the sample window", async () => {
+    const { installRendererFailureRecovery } = await import(
+      "@main/windows/renderer-failure-recovery.ts"
+    );
+    const sample = deferredSample();
+    installRendererFailureRecovery({
+      beforeLoadFailure: vi.fn(),
+      beforeRendererGone: vi.fn(),
+      captureHangSample: sample.captureHangSample,
+      isContentVisible: () => false,
+      isQuitting: () => false,
+      reloadAppEntry: vi.fn(),
+      window: window as never,
+    });
+
+    webListeners.get("unresponsive")?.();
+    // 采样窗口内：先答上，再卡死。一次性 recovered 闩会在这里误判成已恢复。
+    webListeners.get("responsive")?.();
+    webListeners.get("unresponsive")?.();
+    sample.release();
+
+    await vi.waitFor(() =>
+      expect(webContents.forcefullyCrashRenderer).toHaveBeenCalled()
+    );
+    expect(
+      records.some(
+        (r) =>
+          r.scope === "renderer.failure" &&
+          r.msg === "renderer-recovered-before-force-crash"
+      )
+    ).toBe(false);
+  });
+
+  it("leaves a renderer alone when it is responsive after the sample", async () => {
+    const { installRendererFailureRecovery } = await import(
+      "@main/windows/renderer-failure-recovery.ts"
+    );
+    const sample = deferredSample();
+    installRendererFailureRecovery({
+      beforeLoadFailure: vi.fn(),
+      beforeRendererGone: vi.fn(),
+      captureHangSample: sample.captureHangSample,
+      isContentVisible: () => false,
+      isQuitting: () => false,
+      reloadAppEntry: vi.fn(),
+      window: window as never,
+    });
+
+    webListeners.get("unresponsive")?.();
+    webListeners.get("responsive")?.();
+    sample.release();
+
+    await vi.waitFor(() =>
+      expect(
+        records.some(
+          (r) =>
+            r.scope === "renderer.failure" &&
+            r.msg === "renderer-recovered-before-force-crash"
+        )
+      ).toBe(true)
+    );
+    expect(webContents.forcefullyCrashRenderer).not.toHaveBeenCalled();
+  });
+
+  it("deferred unresponsive runs after the in-flight chain finishes", async () => {
+    const { installRendererFailureRecovery } = await import(
+      "@main/windows/renderer-failure-recovery.ts"
+    );
+    const pending: Array<() => void> = [];
+    const captureHangSample = vi.fn(
+      () =>
+        new Promise<{ file: null; ok: false; reason: "platform" }>(
+          (resolve) => {
+            pending.push(() =>
+              resolve({ file: null, ok: false, reason: "platform" })
+            );
+          }
+        )
+    );
+    installRendererFailureRecovery({
+      beforeLoadFailure: vi.fn(),
+      beforeRendererGone: vi.fn(),
+      captureHangSample,
+      isContentVisible: () => false,
+      isQuitting: () => false,
+      reloadAppEntry: vi.fn(),
+      window: window as never,
+    });
+
+    webListeners.get("unresponsive")?.();
+    // 第一条链还在采样，第二次 unresponsive 只能排队，不能丢掉。
+    webListeners.get("unresponsive")?.();
+    expect(captureHangSample).toHaveBeenCalledTimes(1);
+
+    pending[0]?.();
+    await vi.waitFor(() => expect(captureHangSample).toHaveBeenCalledTimes(2));
+    pending[1]?.();
+  });
+
   it("correlates unresponsive force-crash with the following process-gone", async () => {
     const { installRendererFailureRecovery } = await import(
       "@main/windows/renderer-failure-recovery.ts"

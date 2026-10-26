@@ -1,22 +1,17 @@
 import { createLogger } from "@shared/logger.ts";
 import { app, dialog, type WebContents } from "electron";
-import { getHangBreadcrumbsForDiagnostics } from "../ipc/renderer-hang-breadcrumb-store.ts";
 import type { AppWindow } from "./app-window.ts";
 import {
   collectRendererFailureDiagnostics,
   createRendererFailureIncidentTracker,
   formatRendererCrashDetail,
   logRendererProcessGone,
-  type RendererFailureIncident,
   type RendererProcessGoneDetails,
-  rendererFailureLogCtx,
 } from "./renderer-failure-diagnostics.ts";
 import {
   type CaptureRendererHangSampleInput,
   captureRendererHangSample,
-  findRendererProcessMetric,
   type RendererHangSampleResult,
-  type RendererProcessMetricSnapshot,
 } from "./renderer-hang-capture.ts";
 import {
   buildRendererRecoveryCopy,
@@ -31,6 +26,7 @@ import {
   type RendererFailureRecovery,
   RendererResourceFailureCoordinator,
 } from "./renderer-resource-failure.ts";
+import { createUnresponsiveHandler } from "./renderer-unresponsive-recovery.ts";
 
 export type {
   RendererFailureKind,
@@ -350,125 +346,20 @@ export function installRendererFailureRecovery({
       kind: incident.forceCrashed ? "unresponsive" : "crash",
     });
   });
-  const handleUnresponsive = async (): Promise<void> => {
-    if (isQuitting() || window.isDestroyed()) {
-      return;
-    }
-    const incident = incidents.beginUnresponsive();
-    const snapshot = snapshotFor();
-    // Breadcrumbs flushed earlier via IPC; ring is oldest→newest. Dump the
-    // newest N only so diagnostics array sanitization cannot drop the tail.
-    const hangBreadcrumbs = getHangBreadcrumbsForDiagnostics(window.id);
-    let rendererMetrics: RendererProcessMetricSnapshot | null = null;
-    try {
-      rendererMetrics = findRendererProcessMetric(
-        app.getAppMetrics(),
-        snapshot.rendererOsPid
-      );
-    } catch {
-      // Metrics are best-effort; the incident still gets logged.
-    }
-    log.error(
-      "renderer-unresponsive",
-      rendererFailureLogCtx(incident, snapshot, undefined, {
-        hangBreadcrumbCount: hangBreadcrumbs.length,
-        hangBreadcrumbs,
-        ...(rendererMetrics === null ? {} : { rendererMetrics }),
-      })
-    );
-
-    // Capture a native stack before force-crash destroys the process. The
-    // sampler is bounded; a renderer that recovers meanwhile is left alone.
-    let recovered = false;
-    const onResponsive = (): void => {
-      recovered = true;
-    };
-    window.webContents.once("responsive", onResponsive);
-    const sample = await captureHangSample({
-      diagnosticsDir: snapshot.diagnosticsDir,
-      incidentId: incident.incidentId,
-      pid: snapshot.rendererOsPid,
-    });
-    window.webContents.removeListener("responsive", onResponsive);
-    log.error("renderer-hang-sample", {
-      incidentId: incident.incidentId,
-      ok: sample.ok,
-      ...(sample.file === null ? {} : { file: sample.file }),
-      ...(sample.reason === undefined ? {} : { reason: sample.reason }),
-      ...(sample.error === undefined ? {} : { error: sample.error }),
-      windowId: window.id,
-    });
-    if (recovered) {
-      log.info("renderer-recovered-before-force-crash", {
-        incidentId: incident.incidentId,
-        windowId: window.id,
-      });
-      return;
-    }
-    if (isQuitting() || window.isDestroyed()) {
-      return;
-    }
-    try {
-      if (
-        window.webContents.isDestroyed() ||
-        window.webContents.getOSProcessId() === 0
-      ) {
-        return;
-      }
-    } catch {
-      return;
-    }
-    try {
-      // Kill the hung process so we can load a recovery document that the
-      // user can interact with (reload / close) without waiting forever.
-      // Mark the link only after a successful call so a throw cannot leave a
-      // stale pending force-crash that mis-attributes a later process-gone.
-      window.webContents.forcefullyCrashRenderer();
-      incidents.markForceCrashAttempt(incident.incidentId);
-      log.error("renderer-force-crash", {
-        incidentId: incident.incidentId,
-        windowId: window.id,
-      });
-    } catch (error) {
-      incidents.clearPendingForceCrash();
-      log.error("force-crash-failed", {
-        incidentId: incident.incidentId,
-        message: error instanceof Error ? error.message : String(error),
-        windowId: window.id,
-      });
-      const failed: RendererFailureIncident = {
-        ...incident,
-        forceCrashed: false,
-      };
-      recovery.report({
-        detail: formatRendererCrashDetail({
-          diagnosticsDir: snapshot.diagnosticsDir,
-          exitCode: -1,
-          forceCrashed: false,
-          incidentId: failed.incidentId,
-          reason: "unresponsive-force-crash-failed",
-        }),
-        incidentId: failed.incidentId,
-        kind: "unresponsive",
-      });
-    }
-  };
+  const unresponsive = createUnresponsiveHandler({
+    ...(captureHangSample === undefined ? {} : { captureHangSample }),
+    incidents,
+    isQuitting,
+    log,
+    recovery,
+    snapshotFor,
+    window,
+  });
   window.webContents.on("unresponsive", () => {
-    handleUnresponsive().catch((error: unknown) => {
-      log.error("unresponsive-handler-failed", {
-        message: error instanceof Error ? error.message : String(error),
-        windowId: window.id,
-      });
-      try {
-        if (!(isQuitting() || window.isDestroyed())) {
-          window.webContents.forcefullyCrashRenderer();
-        }
-      } catch {
-        // Recovery already failed; nothing else can be done here.
-      }
-    });
+    unresponsive.handle();
   });
   window.webContents.on("responsive", () => {
+    unresponsive.noteResponsive();
     log.info("renderer-responsive", { windowId: window.id });
   });
   window.webContents.on("preload-error", (_event, preloadPath, error) => {

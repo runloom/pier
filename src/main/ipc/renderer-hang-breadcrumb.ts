@@ -6,8 +6,13 @@ import {
 } from "@shared/contracts/diagnostics/hang-breadcrumb.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
-import type { IpcMain } from "electron";
+import { app, type IpcMain, type WebContents } from "electron";
 import { findAppWindowByWebContents } from "../windows/identity.ts";
+import {
+  type AppMetricLike,
+  findRendererProcessMetric,
+  type RendererProcessMetricSnapshot,
+} from "../windows/renderer-hang-capture.ts";
 import { rememberHangBreadcrumb } from "./renderer-hang-breadcrumb-store.ts";
 
 export {
@@ -48,11 +53,73 @@ export function normalizeHangBreadcrumbBatch(
   return out;
 }
 
+/** 落盘前给每条记录补上的 renderer 侧真实指标。 */
+export interface RendererMetricEnrichment {
+  cpuPercent: number | null;
+  workingSetMb: number | null;
+}
+
+export function readRendererMetricForSender(
+  sender: Pick<WebContents, "getOSProcessId">,
+  metrics: readonly AppMetricLike[] = app.getAppMetrics()
+): RendererMetricEnrichment | null {
+  let pid: number;
+  try {
+    pid = sender.getOSProcessId();
+  } catch {
+    return null;
+  }
+  if (pid <= 0) {
+    return null;
+  }
+  const metric: RendererProcessMetricSnapshot | null =
+    findRendererProcessMetric(metrics, pid);
+  if (metric === null) {
+    return null;
+  }
+  return {
+    cpuPercent: metric.cpuPercent,
+    workingSetMb: metric.workingSetMb,
+  };
+}
+
+function enrich(
+  crumb: RendererHangBreadcrumb,
+  metric: RendererMetricEnrichment | null
+): RendererHangBreadcrumb {
+  if (metric === null) {
+    return crumb;
+  }
+  return {
+    ...crumb,
+    ...(metric.cpuPercent === null
+      ? {}
+      : { rendererCpuPercent: metric.cpuPercent }),
+    ...(metric.workingSetMb === null
+      ? {}
+      : { rendererWorkingSetMb: metric.workingSetMb }),
+  };
+}
+
 /**
  * Renderer hang trail: validate batch, ring-buffer, one JSONL line per flush.
  * Window identity is always taken from event.sender (never from payload).
+ *
+ * 每条记录附带 main 侧读到的 renderer CPU 与工作集：`performance.memory`
+ * 在未开启 `--enable-precise-memory-info` 时是恒定占位值，renderer 自己
+ * 报的内存不可信。
  */
-export function registerRendererHangBreadcrumbIpc(ipcMain: IpcMain): void {
+export function registerRendererHangBreadcrumbIpc(
+  ipcMain: IpcMain,
+  deps: {
+    readMetric?: (
+      sender: Pick<WebContents, "getOSProcessId">
+    ) => RendererMetricEnrichment | null;
+  } = {}
+): void {
+  const readMetric =
+    deps.readMetric ?? ((sender) => readRendererMetricForSender(sender));
+
   ipcMain.on(PIER.RENDERER_HANG_BREADCRUMB, (event, raw) => {
     const win = findAppWindowByWebContents(event.sender);
     if (!win) {
@@ -66,9 +133,15 @@ export function registerRendererHangBreadcrumbIpc(ipcMain: IpcMain): void {
       });
       return;
     }
+    let metric: RendererMetricEnrichment | null = null;
+    try {
+      metric = readMetric(event.sender);
+    } catch {
+      // Metrics are best-effort; the trail still gets written.
+    }
     const receivedAt = Date.now();
     const stored: StoredRendererHangBreadcrumb[] = crumbs.map((crumb) => ({
-      ...crumb,
+      ...enrich(crumb, metric),
       receivedAt,
     }));
     for (const crumb of stored) {
