@@ -161,3 +161,71 @@ describe("useFilesTreeGitDecorations", () => {
     );
   });
 });
+
+describe("useFilesTreeGitDecorations with Git-ignored files shown", () => {
+  const SINGLE_ROOT = "/workspace/single";
+  const SINGLE_ENTRIES: Record<string, FileEntry[]> = {
+    "": [
+      { kind: "file", path: ".git", root: SINGLE_ROOT },
+      { kind: "directory", path: "dist", root: SINGLE_ROOT },
+      { kind: "directory", path: "src", root: SINGLE_ROOT },
+    ],
+    src: [{ kind: "file", path: "src/main.ts", root: SINGLE_ROOT }],
+  };
+
+  function createSingleRepoHarness() {
+    const list = vi.fn(
+      async (_root: string, options?: { path?: string }) =>
+        SINGLE_ENTRIES[options?.path ?? ""] ?? []
+    );
+    const listIgnored = vi.fn(async () => ["dist/"]);
+    const getStatus = vi.fn(async () =>
+      status([
+        { index: ".", origPath: null, path: "src/main.ts", worktree: "M" },
+      ])
+    );
+    const watch = vi.fn(() => () => undefined);
+    const context = {
+      configuration: {
+        get: vi.fn((key: string) => {
+          if (key === FILES_TREE_SHOW_EXCLUDED_SETTING_KEY) {
+            return false;
+          }
+          if (key === FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY) {
+            return FILES_TREE_DEFAULT_EXCLUDE_PATTERNS;
+          }
+          if (key === FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY) {
+            return true;
+          }
+          return;
+        }),
+      },
+      files: { list },
+      git: { getStatus, listIgnored, watch },
+    } as unknown as RendererPluginContext;
+    return { context, getStatus, listIgnored };
+  }
+
+  it("still loads the ignore index and status for a repo root", async () => {
+    const { context, getStatus, listIgnored } = createSingleRepoHarness();
+    const controller = new FilesTreeVisibilityController(context);
+    await controller.list(SINGLE_ROOT);
+
+    const { result } = renderHook(() =>
+      useFilesTreeGitDecorations({
+        context,
+        reloadTreeVisibility: async () => undefined,
+        root: SINGLE_ROOT,
+        treeVisibility: controller,
+      })
+    );
+
+    // 显示忽略项时 list() 不加载索引；淡化装饰与状态标记仍必须各自到位。
+    await waitFor(() => {
+      expect(result.current.ignoredDirs).toEqual(["dist"]);
+      expect(result.current.changedByPath.get("src/main.ts")).toBe("modified");
+    });
+    expect(listIgnored).toHaveBeenCalledWith(SINGLE_ROOT);
+    expect(getStatus).toHaveBeenCalledWith(SINGLE_ROOT);
+  });
+});
