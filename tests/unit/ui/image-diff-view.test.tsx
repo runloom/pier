@@ -36,6 +36,40 @@ function side(kind: "before" | "after"): PierImageDiffSide {
   };
 }
 
+/** 普通照片尺寸（不触发像素素材放大）。 */
+function photoSide(
+  kind: "before" | "after",
+  width = 1200,
+  height = 700
+): PierImageDiffSide {
+  return {
+    byteSize: 120_000,
+    height,
+    locator: {
+      absolutePath: `/tmp/${kind}.png`,
+      kind: "absolute",
+      mime: "image/png",
+      revision: kind,
+    },
+    width,
+  };
+}
+
+/** SVG 等格式可能拿不到固有像素尺寸。 */
+function unknownSizeSide(kind: "before" | "after"): PierImageDiffSide {
+  return {
+    byteSize: 4096,
+    height: null,
+    locator: {
+      absolutePath: `/tmp/${kind}.svg`,
+      kind: "absolute",
+      mime: "image/svg+xml",
+      revision: kind,
+    },
+    width: null,
+  };
+}
+
 describe("ImageDiffView", () => {
   it("renders 2-up as two bordered images without a swipe handle", () => {
     function Harness() {
@@ -204,6 +238,60 @@ describe("ImageDiffView", () => {
       '[data-slot="pier-image-diff-checker"]'
     );
     expect(PIER_DIFF_LIGHT_DOM_CSS).toContain("user-select: none");
+  });
+
+  it("leaves dimensions unset instead of collapsing unknown-size images to 1px", () => {
+    // SVG 可能解析不出固有尺寸；此时写死 width=1 / height=1 会让图片塌成一点，
+    // 三种对比模式都必须改成「不输出尺寸属性」。
+    for (const mode of ["two-up", "swipe", "onion"] as const) {
+      const { container, unmount } = render(
+        <ImageDiffView
+          after={unknownSizeSide("after")}
+          afterUrl="pier-file-preview://file/after"
+          before={unknownSizeSide("before")}
+          beforeUrl="pier-file-preview://file/before"
+          labels={labels}
+          locale="en"
+          mode={mode}
+          onModeChange={() => undefined}
+        />
+      );
+      const images = [...container.querySelectorAll("img")];
+      expect(images).toHaveLength(2);
+      for (const image of images) {
+        expect(image.hasAttribute("width")).toBe(false);
+        expect(image.hasAttribute("height")).toBe(false);
+      }
+      if (mode !== "two-up") {
+        // 舞台退化为最小占位，而不是被 1×1 撑出的空盒。
+        expect(
+          container.querySelector(
+            "[data-slot='pier-image-diff'] [style*='8rem']"
+          )
+        ).not.toBeNull();
+      }
+      unmount();
+    }
+  });
+
+  it("keeps known dimensions as attributes for aspect ratio", () => {
+    const { container } = render(
+      <ImageDiffView
+        after={photoSide("after")}
+        afterUrl="pier-file-preview://file/after"
+        before={photoSide("before")}
+        beforeUrl="pier-file-preview://file/before"
+        labels={labels}
+        locale="en"
+        mode="two-up"
+        onModeChange={() => undefined}
+      />
+    );
+    // 舞台 384×224（1200×700 scaled），图片按 stage 缩放后写入属性。
+    for (const image of container.querySelectorAll("img")) {
+      expect(image.getAttribute("width")).toBe("384");
+      expect(image.getAttribute("height")).toBe("224");
+    }
   });
 });
 

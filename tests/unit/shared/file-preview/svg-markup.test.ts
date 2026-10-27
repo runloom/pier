@@ -24,6 +24,15 @@ describe("classifyPreviewSvgMarkupText", () => {
     ).toBeNull();
     expect(classifyPreviewSvgMarkupText("<root><svg></svg></root>")).toBeNull();
   });
+
+  it("skips a doctype preamble the way SVG renderers do", () => {
+    // Illustrator 等工具会输出 doctype；浏览器仍按 SVG 渲染。
+    expect(
+      classifyPreviewSvgMarkupText(
+        "<?xml version='1.0'?><!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'><svg width='64' height='64'></svg>"
+      )
+    ).toBe("image/svg+xml");
+  });
 });
 
 describe("classifyPreviewSvgMarkup", () => {

@@ -154,14 +154,14 @@ export function StagedImage({
           : "relative mx-auto block max-h-96 max-w-full object-contain"
       }
       decoding="async"
-      height={box?.height ?? 1}
+      height={box?.height ?? undefined}
       onError={load.onError}
       src={load.url}
       style={{
         ...(pixelated ? { imageRendering: "pixelated" } : {}),
         ...(box !== null && stage !== null ? placedImageStyle(box, stage) : {}),
       }}
-      width={box?.width ?? 1}
+      width={box?.width ?? undefined}
     />
   );
 }
@@ -226,11 +226,11 @@ function PreviewImage({
       alt=""
       className="block h-auto max-h-96 w-full max-w-full"
       decoding="async"
-      height={height ?? 1}
+      height={height ?? undefined}
       onError={load.onError}
       src={load.url}
       style={pixelated ? { imageRendering: "pixelated" } : undefined}
-      width={width ?? 1}
+      width={width ?? undefined}
     />
   );
 }
