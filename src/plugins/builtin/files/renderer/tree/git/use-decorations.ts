@@ -51,9 +51,6 @@ export function useFilesTreeGitDecorations(options: {
     const statusPrefixes = repoScope.prefixes.filter(
       (prefix) => prefix.length > 0 || repoScope.rootIsRepo
     );
-    if (statusPrefixes.length === 0) {
-      return;
-    }
 
     let disposed = false;
     // 按仓库保存，最后合并成一张树根相对的表。单个仓库的 watcher 事件只替换
@@ -132,7 +129,11 @@ export function useFilesTreeGitDecorations(options: {
         .catch(() => undefined);
     };
     const refresh = () => {
-      readStatuses();
+      // 忽略项与仓库边界不依赖 status 订阅：单仓库根在「显示忽略项」模式下
+      // 也必须先加载忽略索引，否则 rootIsRepo 永远为 false、状态与淡化一起缺席。
+      if (statusPrefixes.length > 0) {
+        readStatuses();
+      }
       refreshIgnored();
     };
 

@@ -236,10 +236,15 @@ function readLiveIntrinsicSize(
 }
 
 function parseSafeSvg(source: string): SVGElement | null {
-  const document = new DOMParser().parseFromString(source, "image/svg+xml");
-  const svg = document.documentElement;
-  if (svg.localName !== "svg" || document.querySelector("parsererror"))
-    return null;
+  // Mermaid serializes rendered diagrams as HTML, not XML: HTML labels inside
+  // `<foreignObject>` keep void elements unclosed (`<br>`, `<img>`). Parsing
+  // the string as `image/svg+xml` turns every such label into a fatal tag
+  // mismatch, so a valid diagram becomes the "Unable to render" state. The
+  // HTML parser builds the same SVG / XHTML namespaces and tolerates the
+  // serialization; sanitizing below still rejects active markup.
+  const document = new DOMParser().parseFromString(source, "text/html");
+  const svg = document.querySelector("svg");
+  if (!svg) return null;
   // Official Mermaid uses sanitized XHTML labels in foreignObject. The host
   // renderer already rejects active attributes and non-local URLs.
   for (const forbidden of svg.querySelectorAll(

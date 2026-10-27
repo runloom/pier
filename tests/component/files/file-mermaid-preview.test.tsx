@@ -93,6 +93,74 @@ describe("FileMermaidPreview", () => {
     expect(renderMermaid).not.toHaveBeenCalled();
   });
 
+  it("renders HTML labels whose void elements are serialized unclosed", async () => {
+    // Mermaid emits `<br>` (HTML void, not XML `<br/>`) inside htmlLabels.
+    // Re-parsing that string as XML used to reject every such diagram.
+    const renderMermaid = vi.fn(async () => ({
+      ok: true as const,
+      svg: [
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">',
+        '<g class="node"><rect></rect>',
+        '<foreignObject width="320" height="200">',
+        '<div xmlns="http://www.w3.org/1999/xhtml"><span class="nodeLabel">',
+        "<p>会话领域事件流<br>stream = session_id</p>",
+        "</span></div></foreignObject></g></svg>",
+      ].join(""),
+    }));
+
+    const { container } = render(
+      <FileMermaidPreview
+        context={createContext(renderMermaid)}
+        name="event-flow.mermaid"
+        source={"flowchart TD\n  A[会话领域事件流<br/>stream = session_id]"}
+        t={t}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-slot="markdown-diagram"] svg br')
+      ).not.toBeNull();
+    });
+    expect(
+      screen.queryByText(
+        "Unable to render this diagram. Check the Mermaid syntax and try again."
+      )
+    ).toBeNull();
+  });
+
+  it("still strips active markup after the HTML parse", async () => {
+    const renderMermaid = vi.fn(async () => ({
+      ok: true as const,
+      svg: [
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" onload="alert(1)">',
+        "<script>alert(1)</script>",
+        '<a href="https://example.com"><text>link</text></a>',
+        '<g class="node" onclick="alert(2)"><text>Flow</text></g>',
+        "</svg>",
+      ].join(""),
+    }));
+
+    const { container } = render(
+      <FileMermaidPreview
+        context={createContext(renderMermaid)}
+        name="sanitized.mermaid"
+        source={"flowchart TD\n  A-->B"}
+        t={t}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-slot="markdown-diagram"] svg text')
+      ).not.toBeNull();
+    });
+    expect(container.querySelector("svg script")).toBeNull();
+    expect(container.querySelector("svg [onload]")).toBeNull();
+    expect(container.querySelector("svg [onclick]")).toBeNull();
+    expect(container.querySelector('svg a[href^="https"]')).toBeNull();
+  });
+
   it("shows a skeleton while the document is still loading", () => {
     const renderMermaid = vi.fn(async () => ({
       ok: true as const,
