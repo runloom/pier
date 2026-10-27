@@ -1,3 +1,9 @@
+import {
+  PREVIEW_SVG_SNIFF_LIMIT_BYTES,
+  previewSvgRootTagText,
+} from "../../shared/file-preview/svg-markup.ts";
+import { parseSvgSizeFromRootTag } from "../../shared/file-preview/svg-size.ts";
+
 export interface PreviewImageDimensions {
   readonly height: number;
   readonly width: number;
@@ -8,7 +14,7 @@ const GIF_SIZE_OFFSET = 6;
 const WEBP_14BIT = 16_384;
 
 /**
- * Best-effort width/height from a signature-validated raster buffer.
+ * Best-effort width/height from a signature-validated image buffer.
  * Returns null when the header is truncated or the format variant is unknown.
  */
 export function readPreviewImageDimensions(
@@ -30,7 +36,29 @@ export function readPreviewImageDimensions(
   if (isJpeg(bytes)) {
     return readJpegDimensions(bytes);
   }
+  const svg = readSvgDimensions(bytes);
+  if (svg !== null) {
+    return svg;
+  }
   return null;
+}
+
+/**
+ * SVG 没有像素头，尺寸来自根标签的 `width` / `height` / `viewBox`。
+ * 具体规则（含缺失一侧按 viewBox 比例补全）见 `svg-size.ts`；
+ * 无任何可用来源时返回 null，调用方必须按「尺寸未知」处理，
+ * 不能拿 1×1 占位，否则图片会被压成一点。
+ */
+function readSvgDimensions(bytes: Uint8Array): PreviewImageDimensions | null {
+  const slice =
+    bytes.byteLength > PREVIEW_SVG_SNIFF_LIMIT_BYTES
+      ? bytes.subarray(0, PREVIEW_SVG_SNIFF_LIMIT_BYTES)
+      : bytes;
+  const tag = previewSvgRootTagText(new TextDecoder("utf-8").decode(slice));
+  if (tag === null) {
+    return null;
+  }
+  return parseSvgSizeFromRootTag(tag);
 }
 
 function isPng(bytes: Uint8Array): boolean {

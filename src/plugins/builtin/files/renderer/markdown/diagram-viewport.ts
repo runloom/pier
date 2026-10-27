@@ -6,6 +6,7 @@
  * - Never scale up to fill the column (that produces huge nodes on tall graphs).
  * - Only scale down when the diagram is wider than the container.
  */
+import { parseSvgSizeFromRootTag } from "@shared/file-preview/svg-size.ts";
 
 export interface DiagramSize {
   height: number;
@@ -14,10 +15,13 @@ export interface DiagramSize {
 
 /**
  * Read intrinsic CSS-pixel size from SVG markup (no DOM required).
- * Prefers viewBox; falls back to width/height attributes.
+ * Prefers viewBox; falls back to width/height attributes (viewBox-first is
+ * the Mermaid display contract — the layout engine's canvas is the design
+ * size). Attribute scanning, units and case rules come from the shared
+ * `parseSvgSizeFromRootTag` so this cannot drift from the review surface.
  */
 export function parseSvgIntrinsicSize(svgMarkup: string): DiagramSize | null {
-  const viewBox = /viewBox\s*=\s*["']([^"']+)["']/iu.exec(svgMarkup)?.[1];
+  const viewBox = /viewBox\s*=\s*["']([^"']+)["']/u.exec(svgMarkup)?.[1];
   if (viewBox) {
     const parts = viewBox
       .trim()
@@ -33,16 +37,8 @@ export function parseSvgIntrinsicSize(svgMarkup: string): DiagramSize | null {
     }
   }
 
-  const width = parseSvgLength(
-    /<svg\b[^>]*\bwidth\s*=\s*["']([^"']+)["']/iu.exec(svgMarkup)?.[1]
-  );
-  const height = parseSvgLength(
-    /<svg\b[^>]*\bheight\s*=\s*["']([^"']+)["']/iu.exec(svgMarkup)?.[1]
-  );
-  if (width && height && width > 0 && height > 0) {
-    return { height, width };
-  }
-  return null;
+  const tag = /<svg\b[^>]*>/u.exec(svgMarkup)?.[0];
+  return tag === undefined ? null : parseSvgSizeFromRootTag(tag);
 }
 
 /**
@@ -95,14 +91,4 @@ export function contentBoxWidthPx(element: HTMLElement): number {
     (Number.parseFloat(styles.paddingLeft) || 0) +
     (Number.parseFloat(styles.paddingRight) || 0);
   return Math.max(0, element.clientWidth - padX);
-}
-
-function parseSvgLength(raw: string | undefined): number | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (!trimmed || trimmed.endsWith("%")) return null;
-  const match = /^([\d.]+)(?:px)?$/iu.exec(trimmed);
-  if (!match) return null;
-  const value = Number(match[1]);
-  return Number.isFinite(value) && value > 0 ? value : null;
 }
