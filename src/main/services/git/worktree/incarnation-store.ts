@@ -1,9 +1,10 @@
 /**
- * Worktree incarnation 持久化（repo 主根下 .pier/worktree-incarnations.json）。
+ * Worktree incarnation 持久化（userData/worktree-incarnations/<sha256>.json，
+ * 按主仓库分片）。不再写进用户工作区目录，避免污染非 Pier 项目的 git 状态。
  * create 必须 mint 新 id；list 对已有路径 ensure；remove 后 forget。
- * 磁盘不可写时降级为进程内 Map，避免 list/create 因路径假造失败。
+ * 磁盘不可写或未提供 storeRootDir 时降级为进程内 Map，避免 list/create 因路径假造失败。
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
@@ -22,17 +23,24 @@ interface StoreFile {
 /** 进程内兜底：同 mainPath 共享，磁盘失败时仍满足 mint/ensure 语义 */
 const memoryByMain = new Map<string, Record<string, string>>();
 
-function storePath(mainPath: string): string {
-  return join(resolve(mainPath), ".pier", "worktree-incarnations.json");
+function storePath(storeRootDir: string, mainPath: string): string {
+  const digest = createHash("sha256").update(resolve(mainPath)).digest("hex");
+  return join(storeRootDir, "worktree-incarnations", `${digest}.json`);
 }
 
 function keyOf(path: string): string {
   return resolve(path);
 }
 
-async function loadDisk(mainPath: string): Promise<StoreFile | null> {
+async function loadDisk(
+  storeRootDir: string | undefined,
+  mainPath: string
+): Promise<StoreFile | null> {
+  if (!storeRootDir) {
+    return null;
+  }
   try {
-    const raw = await readFile(storePath(mainPath), "utf8");
+    const raw = await readFile(storePath(storeRootDir, mainPath), "utf8");
     const parsed = JSON.parse(raw) as StoreFile;
     if (
       parsed &&
@@ -48,9 +56,16 @@ async function loadDisk(mainPath: string): Promise<StoreFile | null> {
   return null;
 }
 
-async function saveDisk(mainPath: string, data: StoreFile): Promise<boolean> {
+async function saveDisk(
+  storeRootDir: string | undefined,
+  mainPath: string,
+  data: StoreFile
+): Promise<boolean> {
+  if (!storeRootDir) {
+    return false;
+  }
   try {
-    const file = storePath(mainPath);
+    const file = storePath(storeRootDir, mainPath);
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, `${JSON.stringify(data, null, 2)}\n`, "utf8");
     return true;
@@ -72,10 +87,13 @@ function memoryMap(mainPath: string): Record<string, string> {
 export function createWorktreeIncarnationStore(options?: {
   load?: (mainPath: string) => Promise<StoreFile>;
   save?: (mainPath: string, data: StoreFile) => Promise<void>;
+  /** 磁盘持久化根目录（userData）。缺省时仅进程内，不落盘。 */
+  storeRootDir?: string;
   uuid?: () => string;
 }): (mainPath: string) => WorktreeIncarnationStore {
   const customLoad = options?.load;
   const customSave = options?.save;
+  const storeRootDir = options?.storeRootDir;
   const uuid = options?.uuid ?? (() => randomUUID());
 
   return (mainPath: string): WorktreeIncarnationStore => {
@@ -96,7 +114,7 @@ export function createWorktreeIncarnationStore(options?: {
         const data = await customLoad(root);
         return { ...data.byPath };
       }
-      const disk = await loadDisk(root);
+      const disk = await loadDisk(storeRootDir, root);
       if (disk) {
         // 磁盘优先合并进进程缓存；始终返回拷贝，避免 mint/write 与 live map 别名互相清空。
         const mem = memoryMap(root);
@@ -118,7 +136,7 @@ export function createWorktreeIncarnationStore(options?: {
         await customSave(root, data);
         return;
       }
-      await saveDisk(root, data);
+      await saveDisk(storeRootDir, root, data);
     }
 
     return {

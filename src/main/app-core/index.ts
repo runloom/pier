@@ -37,7 +37,7 @@ import { createFileService } from "../services/files/service.ts";
 import { createFileWatchService } from "../services/files/watch-service.ts";
 import { createGitService } from "../services/git/service.ts";
 import { createGitWatchService } from "../services/git/watch/service.ts";
-import { createWorktreeService } from "../services/git/worktree/service.ts";
+import { wireWorktreeService } from "../services/git/worktree/service.ts";
 import { GitReviewService } from "../services/git-review/service.ts";
 import { createNodeHttpAssetFetcher } from "../services/managed-plugins/http-asset-fetcher.ts";
 import { createHttpOfficialIndexProvider } from "../services/managed-plugins/http-index-provider.ts";
@@ -459,9 +459,7 @@ function createPierAppCore(): PierAppCore {
     // pairing + remoteControl：remoteAccess.* 命令面（Task 9）经此消费。
     ...remoteControlBoot.services,
     workspace: workspaceService,
-    worktrees: createWorktreeService({
-      readPreferences: () => preferences.read(),
-    }),
+    worktrees: wireWorktreeService(userDataDir, () => preferences.read()),
     // git+gitWatch 一体绑 getStatus（watch 广播需 status；多订阅共享）
     ...(() => {
       const git = createGitService({
