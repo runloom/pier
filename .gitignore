@@ -120,8 +120,9 @@ playwright-report/
 .pier/skills/library/pier-*/
 .pier/skills/library/.pier-system-skill-*/
 
-# Worktree incarnation registry (runtime local state; path → UUID).
-# Written by worktree identity services; never commit.
+# Legacy worktree incarnation registry written by pre-userData builds.
+# New builds persist to userData, but keep the ignore so stale in-repo
+# files in contributor checkouts don't surface as untracked changes.
 .pier/worktree-incarnations.json
 
 # Generated canvas applet module declarations (scripts/generate-canvas-applet-types.mjs)

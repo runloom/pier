@@ -67,6 +67,8 @@ export interface CreateWorktreeServiceOptions {
   ) => Promise<string>;
   /** 测试可注入内存 incarnation store 工厂 */
   incarnationStoreForMain?: (mainPath: string) => WorktreeIncarnationStore;
+  /** incarnation 磁盘持久化根目录（userData）；缺省时仅进程内，不落盘 */
+  incarnationStoreRootDir?: string;
   mkdir?: (path: string) => Promise<void>;
   readPreferences?: () => Promise<WorktreeRootPreferences>;
   realpath?: (path: string) => Promise<string>;
@@ -125,8 +127,15 @@ export function createWorktreeService({
   },
   readPreferences = async () => ({ worktreeRootPath: "" }),
   realpath = fsRealpath,
-  incarnationStoreForMain = createWorktreeIncarnationStore(),
+  incarnationStoreForMain,
+  incarnationStoreRootDir,
 }: CreateWorktreeServiceOptions = {}): WorktreeService {
+  const storeFactory =
+    incarnationStoreForMain ??
+    createWorktreeIncarnationStore(
+      incarnationStoreRootDir ? { storeRootDir: incarnationStoreRootDir } : {}
+    );
+
   async function attachRefs(
     mainPath: string,
     items: readonly WorktreeItem[],
@@ -137,7 +146,7 @@ export function createWorktreeService({
     return attachWorktreeRefs({
       mainPath: mainKey,
       items,
-      store: incarnationStoreForMain(mainKey),
+      store: storeFactory(mainKey),
       mode,
       mintPath,
       realpath: (p) => safeRealpath(p, realpath),
@@ -431,7 +440,7 @@ export function createWorktreeService({
     }
 
     const mainKey = await safeRealpath(before.mainPath, realpath);
-    const store = incarnationStoreForMain(mainKey);
+    const store = storeFactory(mainKey);
     await store.forget(target.path);
 
     const after = await list({ path: before.mainPath });
@@ -459,4 +468,18 @@ export function createWorktreeService({
   }
 
   return { check, create, get, list, prune, remove, resolveRootPath };
+}
+
+/**
+ * 宿主装配入口：incarnation 持久化到 userData（而非工作区目录）。
+ * 独立成 helper 以控制 app-core/index.ts 的组装行数（500 行硬上限）。
+ */
+export function wireWorktreeService(
+  userDataDir: string,
+  readPreferences: () => Promise<{ worktreeRootPath: string }>
+): WorktreeService {
+  return createWorktreeService({
+    readPreferences,
+    incarnationStoreRootDir: userDataDir,
+  });
 }
