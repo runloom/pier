@@ -32,6 +32,7 @@ import {
   TerminalNativeFrameGate,
 } from "../native-frame-gate.ts";
 import { waitForRealSize } from "../native-frame-wait.ts";
+import { SYNTHETIC_BACKGROUND_FRAME } from "../panel-params.ts";
 import { requestTerminalPresentation } from "../presentation-reconciler.ts";
 import { readTerminalAnchorFrame } from "../viewport.ts";
 import { notifyAgentRestoreOutcome } from "./try-resume-last.ts";
@@ -309,7 +310,7 @@ export function runTerminalNativeLifecycleEffect({
       const useSyntheticFrame = backgroundCreate === true && !api.isVisible;
       // 合成 frame：surface 原生层本就 hidden，真实 frame 由可见性快照贴上。
       const frame = useSyntheticFrame
-        ? { height: 800, width: 1200, x: 0, y: 0 }
+        ? SYNTHETIC_BACKGROUND_FRAME
         : await waitForRealSize(anchor, isDisposed);
       if (!frame || isDisposed() || didCreateNativeTerminal) {
         return;
@@ -351,7 +352,12 @@ export function runTerminalNativeLifecycleEffect({
       renderableAnchorObserver = null;
       layoutRegistration.flushTrailing("visibility");
       requestTerminalPresentation("visibility");
-      if (frameGate.markCreated()) {
+      if (frameGate.markCreated() || useSyntheticFrame) {
+        // useSyntheticFrame：后台隐藏面板 surface 原生层 offscreen+hidden，
+        // 从不提交可见帧，frameCommitted 事件永不触发。合成 frame 已 spawn
+        // 原生终端，创建即 ready，避免后台 tab 永远卡在 waiting_for_frame
+        // 半启动空壳。可见的 backgroundCreate 面板（placement 分屏 / 还原
+        // active tab / 跨窗转移）useSyntheticFrame 为 false，仍走真实帧等待。
         markNativeTerminalReady();
       } else {
         frameCommitWaiting = true;

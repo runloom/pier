@@ -8,6 +8,7 @@ import {
   type TaskPanelMetadata,
   taskOutputPanelParamsSchema,
 } from "@shared/contracts/tasks.ts";
+import type { TerminalFrame } from "@shared/contracts/terminal.ts";
 
 export interface ActiveTerminalLaunch {
   context?: PanelContext | undefined;
@@ -58,3 +59,15 @@ export function backgroundCreateFromParams(params: unknown): boolean {
     params.backgroundCreate === true
   );
 }
+
+/**
+ * 后台隐藏面板（backgroundCreate 且不可见）surface 原生层 offscreen+hidden，
+ * 无法等到真实可见帧，用合成 frame 先行 spawn 原生终端；真实 frame 由首次
+ * applyTerminalWindowState 可见性快照贴上。
+ */
+export const SYNTHETIC_BACKGROUND_FRAME: TerminalFrame = {
+  height: 800,
+  width: 1200,
+  x: 0,
+  y: 0,
+};
