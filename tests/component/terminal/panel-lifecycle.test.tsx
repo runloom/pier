@@ -35,7 +35,12 @@ import {
 } from "@/lib/workspace/terminal-launch-confirmation.ts";
 import { TERMINAL_COMPOSER_GAP_PX } from "@/panel-kits/terminal/composer-helpers.ts";
 import { hasRegisteredTerminalAnchor } from "@/panel-kits/terminal/layout-coordinator.ts";
+import {
+  readTerminalPanelLifecycleDebug,
+  resetTerminalPanelLifecycleDebugForTests,
+} from "@/panel-kits/terminal/lifecycle-debug.ts";
 import { TerminalPanel } from "@/panel-kits/terminal/panel.tsx";
+import { SYNTHETIC_BACKGROUND_FRAME } from "@/panel-kits/terminal/panel-params.ts";
 import { registerTerminalActions } from "@/panel-kits/terminal/register-actions.ts";
 import {
   TERMINAL_STATUS_BAR_HEIGHT_PX,
@@ -217,6 +222,8 @@ function createPanelProps(
     isActive?: boolean;
     isVisible?: boolean;
     params?: {
+      /** 后台创建（agents.start 委派）：挂载即建面，跳过可见性门控。 */
+      backgroundCreate?: boolean;
       context?: PanelContext;
       /** 旧版持久化 layout 字段；TerminalPanel 必须忽略它。 */
       initialInput?: string;
@@ -390,6 +397,7 @@ describe("TerminalPanel lifecycle", () => {
     frameCommittedListeners = [];
     terminalRelaunchStoreMock.reset();
     resetTerminalLaunchConfirmationsForTest();
+    resetTerminalPanelLifecycleDebugForTests();
     resetFreshTerminalPanelsForTests();
 
     resetTerminalInputRoutingForTests();
@@ -2150,6 +2158,87 @@ describe("TerminalPanel lifecycle", () => {
       expect(
         container.querySelector('[data-testid="terminal-placeholder"]')
       ).toBeNull();
+    });
+  });
+
+  it("marks a hidden backgroundCreate panel ready without waiting for a committed frame", async () => {
+    // 后台隐藏面板（agents.start 委派）surface 原生层 offscreen+hidden，从不
+    // 提交可见帧；合成 frame 已 spawn 原生终端，创建即 ready。这里用不发射
+    // frameCommitted 的 create 实现来锁定「不等待可见帧」的路径。
+    vi.mocked(window.pier.terminal.create).mockImplementationOnce(async () => ({
+      ok: true,
+    }));
+    const props = createPanelProps({
+      isActive: false,
+      isVisible: false,
+      params: { backgroundCreate: true },
+    });
+
+    const { container } = render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "terminal-1",
+          frame: SYNTHETIC_BACKGROUND_FRAME,
+        })
+      );
+    });
+    await waitFor(() => {
+      expect(readTerminalPanelLifecycleDebug("terminal-1")?.phase).toBe(
+        "ready"
+      );
+      expect(
+        readTerminalPanelLifecycleDebug("terminal-1")?.nativeTerminalReady
+      ).toBe(true);
+    });
+    expect(
+      container.querySelector('[data-testid="terminal-placeholder"]')
+    ).toBeNull();
+  });
+
+  it("keeps a visible backgroundCreate panel waiting for a real committed frame", async () => {
+    // 可见的 backgroundCreate（placement 分屏 / 还原 active tab / 跨窗转移）
+    // useSyntheticFrame 为 false，仍走真实帧等待，不得因 backgroundCreate 跳过
+    // frameCommitted。
+    vi.mocked(window.pier.terminal.create).mockImplementationOnce(async () => ({
+      ok: true,
+    }));
+    const props = createPanelProps({
+      isActive: true,
+      isVisible: true,
+      params: { backgroundCreate: true },
+    });
+
+    render(<TerminalPanel {...props} />);
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+    await waitFor(() => {
+      expect(readTerminalPanelLifecycleDebug("terminal-1")?.phase).toBe(
+        "waiting_for_frame"
+      );
+    });
+    expect(
+      readTerminalPanelLifecycleDebug("terminal-1")?.nativeTerminalReady
+    ).toBe(false);
+
+    const createArgs = vi.mocked(window.pier.terminal.create).mock
+      .calls[0]?.[0];
+    if (!createArgs) {
+      throw new Error("terminal create args were not captured");
+    }
+    act(() => {
+      emitCommittedFrame(createArgs);
+    });
+
+    await waitFor(() => {
+      expect(readTerminalPanelLifecycleDebug("terminal-1")?.phase).toBe(
+        "ready"
+      );
     });
   });
 
