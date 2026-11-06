@@ -1,4 +1,9 @@
-import { pickUniquePanel } from "@main/app-core/commands/terminal-locate.ts";
+import {
+  incompletePanelListFailure,
+  panelListLookupError,
+  panelLookupError,
+  pickUniquePanel,
+} from "@main/app-core/commands/terminal-locate.ts";
 import { describe, expect, it } from "vitest";
 
 describe("pickUniquePanel", () => {
@@ -34,5 +39,50 @@ describe("pickUniquePanel", () => {
       ok: false,
       reason: "missing",
     });
+  });
+});
+
+describe("panel lookup error classification", () => {
+  it("treats ambiguity as invalid_command, not not_found", () => {
+    expect(panelLookupError("ambiguous", "term-1")).toMatchObject({
+      code: "invalid_command",
+    });
+    expect(panelListLookupError([], "ambiguous", "term-1")).toMatchObject({
+      code: "invalid_command",
+    });
+  });
+
+  it("reports a renderer failure as platform_unavailable", () => {
+    expect(
+      panelListLookupError(
+        [{ code: "platform_unavailable", message: "renderer hung" }],
+        "missing",
+        "term-2"
+      )
+    ).toMatchObject({ code: "platform_unavailable" });
+  });
+
+  it("keeps genuine absence as not_found", () => {
+    expect(panelListLookupError([], "missing", "term-2")).toMatchObject({
+      code: "not_found",
+    });
+  });
+
+  it("fails closed when an unscoped listing is incomplete", () => {
+    expect(
+      incompletePanelListFailure("req", undefined, [
+        { code: "platform_unavailable", message: "renderer hung" },
+      ])
+    ).toMatchObject({
+      error: { code: "platform_unavailable" },
+      ok: false,
+      requestId: "req",
+    });
+    expect(incompletePanelListFailure("req", undefined, [])).toBeNull();
+    expect(
+      incompletePanelListFailure("req", "main", [
+        { code: "platform_unavailable", message: "renderer hung" },
+      ])
+    ).toBeNull();
   });
 });

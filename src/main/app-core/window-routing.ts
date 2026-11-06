@@ -28,6 +28,25 @@ export function windowInfoMatches(
   );
 }
 
+/**
+ * 把命令侧窗口 id 归一化为内部 id（`main` / `w-1`）。
+ * 入参同时接受内部 id、`PIER_WINDOW_ID`（Electron id）与 record UUID。
+ * 宿主面板快照的 `windowId` 是内部 id；FA / hook 快照沿用 Electron id。
+ * 需要与任一种快照严格比较时，两侧都要先过这一层。
+ */
+export function canonicalWindowId(
+  commandWindowId: string | undefined,
+  windows: readonly WindowInfo[]
+): string | undefined {
+  if (!commandWindowId) {
+    return;
+  }
+  const match = windows.find((windowInfo) =>
+    windowInfoMatches(windowInfo, commandWindowId)
+  );
+  return match?.id ?? commandWindowId;
+}
+
 export function matchingWindows(
   windows: readonly WindowInfo[],
   commandWindowId: string | undefined

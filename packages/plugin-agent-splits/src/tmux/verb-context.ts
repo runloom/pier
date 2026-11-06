@@ -1,7 +1,17 @@
 import { delimiter, join } from "node:path";
-import type { SessionMap, SessionPaneBinding } from "../main/session-map.ts";
+import {
+  loadSessionMap,
+  type SessionMap,
+  type SessionPaneBinding,
+  saveSessionMap,
+} from "../main/session-map.ts";
 import { flagString } from "./parse.ts";
-import type { ControlResult, JsonCommand, TmuxFlags } from "./types.ts";
+import {
+  type ControlResult,
+  type JsonCommand,
+  type TmuxFlags,
+  windowIdFromResult,
+} from "./types.ts";
 
 export interface VerbContext {
   commands: JsonCommand[];
@@ -131,12 +141,109 @@ export function paneLaunchFields(ctx: VerbContext, paneId: string) {
   };
 }
 
+/**
+ * 把某个面板的所有绑定改写到宿主当前窗口。返回新 map 而不是原地改，
+ * 方便调用方决定是否落盘（跨窗移动的位置刷新是缓存维护，不应阻断命令）。
+ */
+export function rebindPanelWindow(
+  map: SessionMap,
+  panelId: string,
+  windowId: string
+): { changed: boolean; map: SessionMap } {
+  let changed = false;
+  const panes = { ...map.panes };
+  for (const [paneId, binding] of Object.entries(panes)) {
+    if (binding.panelId === panelId && binding.windowId !== windowId) {
+      panes[paneId] = { ...binding, windowId };
+      changed = true;
+    }
+  }
+  return { changed, map: { ...map, panes } };
+}
+
+function refreshBindingWindow(
+  ctx: VerbContext,
+  panelId: string,
+  windowId: string
+): void {
+  // 以磁盘最新版本为底，避免覆盖其他 shim 进程刚写入的 pane。
+  const latest = loadSessionMap(ctx.workDir, ctx.map.sessionId) ?? ctx.map;
+  const rebound = rebindPanelWindow(latest, panelId, windowId);
+  // 即使绑定无需改写也采纳磁盘版本：后续失败回滚用它写盘，
+  // 不能把其它 shim 已写入的 pane 丢掉。
+  ctx.map = rebound.map;
+  if (!rebound.changed) {
+    return;
+  }
+  try {
+    saveSessionMap(ctx.workDir, ctx.map);
+  } catch {
+    // 位置刷新是缓存维护：写盘失败仍让本次命令继续，下一条命令会再次核对。
+  }
+}
+
+/**
+ * 取命令绑定的面板：split / new-window 的参照 pane 在 `referencePanelId`。
+ */
+function commandPanelId(command: JsonCommand): string | undefined {
+  if (typeof command.panelId === "string") {
+    return command.panelId;
+  }
+  return typeof command.referencePanelId === "string"
+    ? command.referencePanelId
+    : undefined;
+}
+
+/**
+ * 带 windowId 的命令失败且宿主回报 not_found 时，面板可能已被拖到其他窗口：
+ * 不带窗口再查一次当前位置，命中不同窗口就回填 map 并重试一次。
+ * 面板确实消失或结果未知时保持原失败，不掩盖真实错误。
+ */
+async function retryInCurrentWindow(
+  ctx: VerbContext,
+  command: JsonCommand
+): Promise<ControlResult | null> {
+  const panelId = commandPanelId(command);
+  const windowId =
+    typeof command.windowId === "string" ? command.windowId : undefined;
+  if (!(panelId && windowId)) {
+    return null;
+  }
+  const probe: JsonCommand = { type: "terminal.get", panelId };
+  ctx.commands.push(probe);
+  let probeResult: ControlResult;
+  try {
+    probeResult = await ctx.invoke(probe);
+  } catch {
+    // 位置核验是尽力而为：通道失败时保留原始失败结果。
+    return null;
+  }
+  const current = windowIdFromResult(probeResult);
+  if (!(probeResult.ok && current) || current === windowId) {
+    return null;
+  }
+  refreshBindingWindow(ctx, panelId, current);
+  const retry: JsonCommand = { ...command, windowId: current };
+  ctx.commands.push(retry);
+  try {
+    return await ctx.invoke(retry);
+  } catch {
+    // 重试本身也可能超时 / 断链：交回原始 not_found，让调用方走失败清理，
+    // 而不是把异常抛过 openAllocated 的 removePane 回收。
+    return null;
+  }
+}
+
 export async function invokeTracked(
   ctx: VerbContext,
   command: JsonCommand
 ): Promise<ControlResult> {
   ctx.commands.push(command);
-  return await ctx.invoke(command);
+  const result = await ctx.invoke(command);
+  if (result.ok || result.error.code !== "not_found") {
+    return result;
+  }
+  return (await retryInCurrentWindow(ctx, command)) ?? result;
 }
 
 export function requireBinding(

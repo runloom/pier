@@ -19,6 +19,7 @@ import {
   type Page,
   test,
 } from "@playwright/test";
+import { isolatedTestEnv } from "../agents/subagent-harness.ts";
 
 const OUT_MAIN = join(
   import.meta.dirname,
@@ -34,6 +35,28 @@ const PIER_CLI = join(PROJECT_ROOT, "bin", "pier.mjs");
 const SETTINGS_ACCELERATOR =
   process.platform === "darwin" ? "Meta+Comma" : "Control+Comma";
 
+/**
+ * agent-splits e2e 基线：复用仓库的 Pier 身份隔离 helper（清空继承的
+ * PIER_*），再补清宿主会话自带的智能体预设变量（Claude Code 常开 TEAMS），
+ * 让预设开关的正负例都有干净基线。
+ */
+function agentSplitsEnv(
+  userDataDir: string,
+  overrides: Record<string, string> = {}
+): Record<string, string> {
+  const env = isolatedTestEnv(userDataDir, overrides);
+  for (const key of [
+    "TMUX",
+    "TMUX_PANE",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
+    "OPENCODE_CONFIG_DIR",
+    "OPENCODE_PORT",
+  ]) {
+    delete env[key];
+  }
+  return env;
+}
+
 async function launchPierApp(
   userDataDir: string,
   extraEnv: Record<string, string> = {}
@@ -41,7 +64,7 @@ async function launchPierApp(
   return await electron.launch({
     args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
     cwd: PROJECT_ROOT,
-    env: { ...process.env, ...extraEnv } as Record<string, string>,
+    env: agentSplitsEnv(userDataDir, extraEnv),
   });
 }
 
@@ -127,20 +150,16 @@ async function agentsList(userDataDir: string): Promise<{
   return raw.json?.data as { entries: AgentIndexEntry[] };
 }
 
-/** v1 socket 直发 terminal.open(+launch.agentId)：产品真实智能体建面管线。 */
-function v1OpenAgentPanel(
-  userDataDir: string
+/** v1 socket 直发 terminal.open：产品真实建面管线。 */
+function v1OpenPanel(
+  userDataDir: string,
+  command: Record<string, unknown>
 ): Promise<{ panelId: string; windowId: string }> {
   const envelope = {
     protocolVersion: 1,
     requestId: randomUUID(),
     clientId: "cli-local",
-    command: {
-      type: "terminal.open",
-      backgroundCreate: true,
-      focus: false,
-      launch: { agentId: "claude" },
-    },
+    command,
   };
   return new Promise((resolve, reject) => {
     const socket: Socket = netConnect(
@@ -183,6 +202,17 @@ function v1OpenAgentPanel(
       }
     });
     socket.on("error", reject);
+  });
+}
+
+function v1OpenAgentPanel(
+  userDataDir: string
+): Promise<{ panelId: string; windowId: string }> {
+  return v1OpenPanel(userDataDir, {
+    type: "terminal.open",
+    backgroundCreate: true,
+    focus: false,
+    launch: { agentId: "claude" },
   });
 }
 
@@ -232,10 +262,7 @@ function runPierCli(
   origin?: { panelId: string; windowId: string },
   stdin = ""
 ): RawCli {
-  const env: Record<string, string> = {
-    ...process.env,
-    PIER_USER_DATA_DIR: userDataDir,
-  } as Record<string, string>;
+  const env: Record<string, string> = agentSplitsEnv(userDataDir);
   if (origin) {
     env.PIER_PANEL_ID = origin.panelId;
     env.PIER_WINDOW_ID = origin.windowId;
@@ -257,6 +284,32 @@ function runPierCli(
     code: spawned.status ?? -1,
     json,
     stderr: spawned.stderr ?? "",
+  };
+}
+
+/** 直接跑插件 bin/tmux shim，模拟 agent 进程里的 tmux 调用。 */
+function runTmuxShim(
+  userDataDir: string,
+  env: Record<string, string>,
+  args: string[]
+): { code: number; stderr: string; stdout: string } {
+  const shim = join(
+    userDataDir,
+    "plugins",
+    "work",
+    "pier.agent-splits",
+    "bin",
+    "tmux"
+  );
+  const spawned = spawnSync(shim, args, {
+    encoding: "utf8",
+    env,
+    timeout: 30_000,
+  });
+  return {
+    code: spawned.status ?? -1,
+    stderr: spawned.stderr ?? "",
+    stdout: spawned.stdout ?? "",
   };
 }
 
@@ -327,20 +380,149 @@ test.describe("Agent splits plugin e2e", () => {
     }
   });
 
+  test("split panes survive leader rebind across window id aliases", async () => {
+    test.setTimeout(180_000);
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-pane-identity-e2e-"));
+    const restoreWorkspace = bootstrapWorkspacePlugin();
+    const workDir = join(userDataDir, "plugins", "work", "pier.agent-splits");
+    let app: ElectronApplication | undefined;
+    try {
+      app = await launchPierApp(userDataDir, { PIER_PLUGIN_MODE: "workspace" });
+      const win = await app.firstWindow();
+      await waitForWorkspaceReady(win);
+      await expect
+        .poll(() => runPierCli(userDataDir, ["status"]).code === 0, {
+          timeout: 20_000,
+        })
+        .toBe(true);
+      await expect
+        .poll(() => existsSync(join(workDir, "bin", "tmux")), {
+          timeout: 60_000,
+        })
+        .toBe(true);
+
+      const leader = await v1OpenPanel(userDataDir, {
+        backgroundCreate: true,
+        focus: false,
+        type: "terminal.open",
+      });
+      const windows =
+        (runPierCli(userDataDir, ["windows", "list"]).json?.data as
+          | Array<{ electronWindowId?: string; id: string }>
+          | undefined) ?? [];
+      const electronWindowId =
+        windows.find((item) => item.id === leader.windowId)?.electronWindowId ??
+        windows[0]?.electronWindowId;
+      expect(
+        electronWindowId,
+        "window must expose a PIER_WINDOW_ID alias"
+      ).toBeTruthy();
+      const commandWindowId = electronWindowId as string;
+
+      // 修复前 pickUniquePanel 只认内部 id：这里直接 not_found，shim 随后
+      // 每个进程都重建 map 并丢掉刚 split 出来的 %1。
+      await expect
+        .poll(
+          () =>
+            runPierCli(userDataDir, [
+              "terminal",
+              "get",
+              leader.panelId,
+              "--window",
+              commandWindowId,
+            ]).code,
+          { timeout: 20_000 }
+        )
+        .toBe(0);
+
+      const sessionId = `${commandWindowId}__${leader.panelId}`;
+      const env: Record<string, string> = {
+        ...agentSplitsEnv(userDataDir),
+        PATH: `${join(workDir, "bin")}:${process.env.PATH ?? ""}`,
+        PIER_CONTROL_SOCKET: join(userDataDir, "pier-control.sock"),
+        PIER_PANEL_ID: leader.panelId,
+        PIER_WINDOW_ID: commandWindowId,
+        TMUX: `${join(workDir, "sessions", `${sessionId}.sock`)},12345,0`,
+        TMUX_PANE: "%0",
+      };
+
+      const terminalCount = async () =>
+        (await panelList(userDataDir)).panels.filter((panel) =>
+          panel.id.startsWith("terminal-")
+        ).length;
+      const before = await terminalCount();
+
+      const display = runTmuxShim(userDataDir, env, [
+        "display-message",
+        "-p",
+        "#{pane_id}",
+      ]);
+      expect(display.code, display.stderr).toBe(0);
+      expect(display.stdout.trim()).toBe("%0");
+
+      const split = runTmuxShim(userDataDir, env, [
+        "split-window",
+        "-d",
+        "-h",
+        "-l",
+        "70%",
+        "-P",
+        "-F",
+        "#{pane_id}",
+        "--",
+        "cat",
+      ]);
+      expect(split.code, split.stderr).toBe(0);
+      expect(split.stdout.trim()).toBe("%1");
+      await expect.poll(terminalCount, { timeout: 15_000 }).toBe(before + 1);
+
+      const listed = runTmuxShim(userDataDir, env, [
+        "list-panes",
+        "-F",
+        "#{pane_id}",
+      ]);
+      expect(listed.stdout.trim().split("\n")).toEqual(["%0", "%1"]);
+
+      const respawn = runTmuxShim(userDataDir, env, [
+        "respawn-pane",
+        "-k",
+        "-t",
+        "%1",
+        "--",
+        "sleep",
+        "60",
+      ]);
+      expect(respawn.code, respawn.stderr).toBe(0);
+
+      const killed = runTmuxShim(userDataDir, env, ["kill-pane", "-t", "%1"]);
+      expect(killed.code, killed.stderr).toBe(0);
+      await expect.poll(terminalCount, { timeout: 15_000 }).toBe(before);
+
+      const after = runTmuxShim(userDataDir, env, [
+        "list-panes",
+        "-F",
+        "#{pane_id}",
+      ]);
+      expect(after.stdout.trim()).toBe("%0");
+    } finally {
+      await app?.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+      restoreWorkspace();
+    }
+  });
+
   test("presets inject env and args into spawned agent terminals", async () => {
     test.setTimeout(240_000);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-preset-e2e-"));
     const fakeBin = installFakeAgent();
     const restoreWorkspace = bootstrapWorkspacePlugin();
-    const app = await electron.launch({
-      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
-      cwd: PROJECT_ROOT,
-      env: {
-        ...process.env,
-        PIER_USER_DATA_DIR: userDataDir,
-        PIER_PLUGIN_MODE: "workspace",
-        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
-      } as Record<string, string>,
+    const app = await launchPierApp(userDataDir, {
+      PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+      // 登录 shell 会覆盖 PATH，使替身 claude/opencode 被真实二进制顶掉；
+      // 本用例只验证预设注入，用测试环境确定性换 shell env 探测。
+      PIER_FORCE_DISABLE_SHELL_ENV: "1",
+      PIER_PLUGIN_MODE: "workspace",
+      PIER_USER_DATA_DIR: userDataDir,
     });
 
     const done = (async () => {

@@ -75,6 +75,22 @@ function services(opts: {
       : null);
   return {
     ...(opts.registry ? { pendingInteractions: opts.registry } : {}),
+    window: {
+      list: () => [
+        {
+          electronWindowId: "7",
+          focused: true,
+          id: WINDOW_ID,
+          recordId: "record-w1",
+        },
+        {
+          electronWindowId: "8",
+          focused: false,
+          id: "w2",
+          recordId: "record-w2",
+        },
+      ],
+    },
     ...(activities
       ? {
           foregroundActivity: {
@@ -259,6 +275,54 @@ describe("agent.attention.respond 面板寻址（移动端：裸 panelId）", ()
       data: { accepted: true },
       ok: true,
       requestId: "p2b",
+    });
+    expect(sendText).toHaveBeenCalledTimes(1);
+  });
+
+  it("裸 panelId + record UUID，FA 使用 Electron 词表 → success", async () => {
+    // 生产真源：hook / FA 活动带 PIER_WINDOW_ID（Electron id "7"），
+    // 命令侧可能带 record UUID；两侧都必须归一化后才能比较。
+    const electronRef = makeAgentRef("7", PANEL_ID);
+    const registry = createPendingInteractionRegistry();
+    registry.onHookEvent(
+      { ...requested(INTERACTION_ID), windowId: "7" },
+      electronRef
+    );
+    const result = await executeAgentAttentionRespondCommand(
+      "p2e",
+      { ...cmd("enter"), agentRef: PANEL_ID, windowId: "record-w1" },
+      services({
+        activities: [{ panelId: PANEL_ID, status: "waiting", windowId: "7" }],
+        registry,
+      })
+    );
+    expect(result).toEqual({
+      data: { accepted: true },
+      ok: true,
+      requestId: "p2e",
+    });
+    expect(sendText).toHaveBeenCalledTimes(1);
+  });
+
+  it("裸 panelId + 内部 windowId，FA 使用 Electron 词表 → success", async () => {
+    const electronRef = makeAgentRef("7", PANEL_ID);
+    const registry = createPendingInteractionRegistry();
+    registry.onHookEvent(
+      { ...requested(INTERACTION_ID), windowId: "7" },
+      electronRef
+    );
+    const result = await executeAgentAttentionRespondCommand(
+      "p2i",
+      { ...cmd("enter"), agentRef: PANEL_ID, windowId: WINDOW_ID },
+      services({
+        activities: [{ panelId: PANEL_ID, status: "waiting", windowId: "7" }],
+        registry,
+      })
+    );
+    expect(result).toEqual({
+      data: { accepted: true },
+      ok: true,
+      requestId: "p2i",
     });
     expect(sendText).toHaveBeenCalledTimes(1);
   });

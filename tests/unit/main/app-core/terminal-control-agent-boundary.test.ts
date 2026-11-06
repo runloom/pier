@@ -99,6 +99,16 @@ function services(entries: Record<string, unknown>[]): PierCoreServices {
     rendererCommand: {
       execute: rendererExecute,
     },
+    window: {
+      list: () => [
+        {
+          electronWindowId: "7",
+          focused: true,
+          id: "w1",
+          recordId: "record-w1",
+        },
+      ],
+    },
   } as never;
 }
 
@@ -115,6 +125,26 @@ describe("terminal send/key agent boundary (W3)", () => {
         type: "terminal.send",
         panelId: "agent-panel",
         text: "hello",
+      },
+      services([])
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toMatchObject({
+        accepted: true,
+        panelId: "agent-panel",
+      });
+    }
+  });
+
+  it("sends text when windowId is PIER_WINDOW_ID", async () => {
+    const result = await executeTerminalSendCommand(
+      "r1-electron",
+      {
+        type: "terminal.send",
+        panelId: "agent-panel",
+        text: "hello",
+        windowId: "7",
       },
       services([])
     );

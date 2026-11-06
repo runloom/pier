@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   controlTimeoutMsForCommand,
@@ -9,16 +9,25 @@ import { runTmux } from "./verbs.ts";
 
 export { runTmux, TMUX_VERSION_LINE } from "./verbs.ts";
 
-function isMainModule(): boolean {
-  const entry = process.argv[1];
+export function isMainEntry(
+  entry: string | undefined,
+  moduleFile: string
+): boolean {
   if (!entry) {
     return false;
   }
   try {
-    return fileURLToPath(import.meta.url) === resolve(entry);
+    // 安装后的 shim 没有 .js 扩展名，且 macOS 临时目录常带 /var → /private/var
+    // 符号链接：Node 以 realpath 加载入口，argv 保留调用路径，直接比较会永远
+    // 不相等并让 shim 静默退出 0。两侧都先规范化。
+    return realpathSync(moduleFile) === realpathSync(entry);
   } catch {
     return false;
   }
+}
+
+function isMainModule(): boolean {
+  return isMainEntry(process.argv[1], fileURLToPath(import.meta.url));
 }
 
 async function main(): Promise<void> {
