@@ -1,8 +1,5 @@
 import { join } from "node:path";
-import {
-  NATIVE_CHROME_FALLBACK,
-  TRANSPARENT_NATIVE_BACKGROUND,
-} from "@shared/theme-colors.ts";
+import { NATIVE_CHROME_FALLBACK } from "@shared/theme-colors.ts";
 import { BaseWindow, BrowserWindow, WebContentsView } from "electron";
 import { isDevRuntime } from "../runtime-mode.ts";
 import { type AppWindow, createAppWindow } from "./app-window.ts";
@@ -23,7 +20,14 @@ export function createManagedMacWindow(
 ): AppWindow {
   const host = new BaseWindow(baseOpts);
   const appView = new WebContentsView({ webPreferences });
-  appView.setBackgroundColor(TRANSPARENT_NATIVE_BACKGROUND);
+  // WebContentsView 必须是**不透明** backing，且与窗口兜底色一致。
+  // 透明 backing 会让 Chromium 的部分重绘在未覆盖区域保留旧帧像素（buffer
+  // age / partial swap）：页面缩放后终端状态栏这类「透明底 + 局部重绘」的
+  // 区域会残留缩放前的旧文字（2026-11-09 复现）。终端可见性由
+  // TerminalHoleMask 硬裁保证，web 表面不再承担「透明透出 native」职责。
+  appView.setBackgroundColor(
+    baseOpts.backgroundColor || NATIVE_CHROME_FALLBACK.dark
+  );
   host.contentView.addChildView(appView);
   installMacAppViewGeometry(host, appView);
   return createAppWindow(host, appView.webContents, appView);

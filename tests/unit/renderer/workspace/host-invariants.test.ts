@@ -32,6 +32,10 @@ const TRANSFER_HOST_SOURCE = readFileSync(
   join(process.cwd(), "src/renderer/components/workspace/transfer/host.ts"),
   "utf8"
 );
+const ACTIVE_PANEL_SCOPE_SOURCE = readFileSync(
+  join(process.cwd(), "src/renderer/lib/workspace/active-panel-scope.ts"),
+  "utf8"
+);
 
 const USER_TOUCHED_FLAG_RE = /let userTouched = false/;
 const USER_TOUCHED_SET_TRUE_RE = /userTouched = true/;
@@ -42,13 +46,13 @@ const IS_APPLYING_PERSISTED_DECL_RE = /let isApplyingPersistedLayout = false/;
 const IS_APPLYING_GUARDS_SAVE_RE = /if \(isApplyingPersistedLayout\) \{/;
 
 const ACTIVE_PANEL_CHANGE_HANDLES_NULL_RE =
-  /function syncActivePanelScope\(panel: WorkspacePanel \| null \| undefined\): void \{[\s\S]{0,200}?if \(!panel\) \{/;
+  /function syncActivePanelScope\([\s\S]{0,260}?if \(!panel\) \{/;
 const ACTIVE_PANEL_CHANGE_USES_SCOPE_HELPER_RE =
-  /const handleActivePanelChange:[\s\S]{0,200}?= \(change\) => \{[\s\S]{0,1200}?const panel = change\.panel;[\s\S]{0,1200}?syncActivePanelScope\(panel\)/;
+  /const handleActivePanelChange:[\s\S]{0,200}?= \(change\) => \{[\s\S]{0,1200}?const panel = change\.panel;[\s\S]{0,1200}?syncActivePanelScope\(panel, panelKindOf\)/;
 const ACTIVE_PANEL_CHANGE_REQUESTS_PRESENTATION_RE =
   /const handleActivePanelChange:[\s\S]{0,200}?= \(change\) => \{[\s\S]{0,1400}?terminalLayout\.present\(event\.api, "dockview-active-panel"\)/;
 const ACTIVE_PANEL_CHANGE_SETS_INPUT_ROUTING_RE =
-  /function syncActivePanelScope\(panel: WorkspacePanel \| null \| undefined\): void \{[\s\S]{0,900}?setTerminalBasePanel/;
+  /function syncActivePanelScope\([\s\S]{0,900}?setTerminalBasePanel/;
 const OLD_ACTIVE_PANEL_PRIMITIVE_RE = new RegExp(
   [String.raw`window\.pier\?\.terminal\?\.set`, "ActivePanelKind"].join("")
 );
@@ -125,14 +129,18 @@ describe("workspace-host invariants (#17 #19)", () => {
   it("onDidActivePanelChange handles null panel via scope + presentation sync", () => {
     // active panel 可能为 null. renderer 只同步 keybinding scope + desired
     // presentation, 不再直接写 native primitive.
-    expect(SOURCE).toMatch(ACTIVE_PANEL_CHANGE_HANDLES_NULL_RE);
+    expect(ACTIVE_PANEL_SCOPE_SOURCE).toMatch(
+      ACTIVE_PANEL_CHANGE_HANDLES_NULL_RE
+    );
     expect(SOURCE).toMatch(ACTIVE_PANEL_CHANGE_USES_SCOPE_HELPER_RE);
     expect(SOURCE).toMatch(ACTIVE_PANEL_CHANGE_REQUESTS_PRESENTATION_RE);
   });
 
   it("routes active panel keyboard ownership through the input routing coordinator", () => {
     // renderer 只更新输入路由目标; native first responder 由 main 校验后统一落地.
-    expect(SOURCE).toMatch(ACTIVE_PANEL_CHANGE_SETS_INPUT_ROUTING_RE);
+    expect(ACTIVE_PANEL_SCOPE_SOURCE).toMatch(
+      ACTIVE_PANEL_CHANGE_SETS_INPUT_ROUTING_RE
+    );
     expect(SOURCE).not.toMatch(OLD_ACTIVE_PANEL_PRIMITIVE_RE);
   });
 

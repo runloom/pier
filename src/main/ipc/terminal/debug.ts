@@ -18,6 +18,7 @@ import { buildTerminalDebugIssues } from "@shared/terminal-debug-diagnostics.ts"
 import type { IpcMain, WebContents } from "electron";
 import type { AppWindow } from "../../windows/app-window.ts";
 import { findAppWindowByElectronId } from "../../windows/identity.ts";
+import { normalizeHoleMaskSnapshot } from "./debug-hole-mask.ts";
 import { terminalFocusCoordinator } from "./focus-coordinator.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import { fromNativePanelKey, toNativePanelKey } from "./panel-id.ts";
@@ -287,6 +288,7 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
       keyboardFocusTarget: keyboardFocusTargetValue(
         rawWindow?.keyboardFocusTarget
       ),
+      holeMask: normalizeHoleMaskSnapshot(rawWindow?.holeMask),
       lastAppliedNativeApplySequence:
         typeof rawWindow?.lastAppliedNativeApplySequence === "number"
           ? rawWindow.lastAppliedNativeApplySequence

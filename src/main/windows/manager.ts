@@ -38,6 +38,7 @@ import {
   forgetAppWindow,
   rememberAppWindow,
 } from "./identity.ts";
+import { setNativeWindowChromeColor } from "./native-chrome.ts";
 import {
   bindWindowOsTitleHost,
   forgetWindowOsTitle,
@@ -104,7 +105,7 @@ class WindowManager {
 
   setNativeChromeColor(window: AppWindow, color: string): void {
     if (isMac) {
-      window.setBackgroundColor(color);
+      setNativeWindowChromeColor(window, color);
     }
   }
 

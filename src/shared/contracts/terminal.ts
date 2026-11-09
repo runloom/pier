@@ -60,6 +60,14 @@ export type TerminalPresentationReason =
 export interface TerminalWebOverlayRect {
   frame: TerminalFrame;
   id: string;
+  /**
+   * 是否允许 web 在这块几何上绘制（native 洞遮罩回填）。缺省 true。
+   *
+   * 仅用于输入捕获的全屏浮层（菜单 / popover 打开、sash 拖拽、tab 拖拽）
+   * 必须显式 false：它本身不画像素，若参与回填会把终端洞全部抹掉；
+   * 配合不透明 web backing 会整块盖住终端（2026-11-09 分栏拖拽复现）。
+   */
+  paints?: boolean;
 }
 
 export type TerminalKeyboardFocusTarget =

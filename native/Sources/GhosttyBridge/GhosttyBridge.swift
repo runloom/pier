@@ -856,6 +856,8 @@ private struct TerminalWindowEntry: Codable {
 private struct TerminalWebOverlayRectEntry: Codable {
     let frame: TerminalWindowFrame
     let id: String
+    /// false = 仅输入捕获，不参与洞遮罩回填；缺省 true（见 TS 契约）。
+    let paints: Bool?
 }
 
 private struct TerminalKeyboardTargetEnvelope: Codable {
@@ -1131,8 +1133,9 @@ final class GhosttyBridgeImpl {
         // macOS Sequoia+ 升级若改动 WKWebView 内部可能让 setValue 抛 NSException, swift
         // setValue 不能被 try 捕获 (它不 throws), 用 @objc try-catch wrapper 是 over-engineering.
         // 当前接受风险: 若未来 OS 移除这俩 KVC, app 启动 crash, 需通过 macOS support 矩阵
-        // 控制和发版前烟测. 降级方案: BrowserWindow.transparent=true + setBackgroundColor
-        // ("#00000000") 已设, 即使 WKWebView 仍 opaque, 至少透明渲染默认值是 clear.
+        // 控制和发版前烟测. 降级方案: WebContentsView backing 已改为不透明兜底色
+        // (见 src/main/windows/factory.ts), 页面透明区显示主题色而不是白底;
+        // 终端可见性始终由 TerminalHoleMask 负责, 不再依赖 web alpha.
         if let container = wkWebView {
             func findWKWebView(in view: NSView) -> NSView? {
                 let typeName = String(describing: type(of: view))
@@ -1205,6 +1208,7 @@ final class GhosttyBridgeImpl {
         }
 
         var nextTargets: [String: EventRouterView.Target] = [:]
+        var holeViewports: [NSRect] = []
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for entry in state.terminals {
@@ -1243,6 +1247,7 @@ final class GhosttyBridgeImpl {
                 }
                 term.containerView.alphaValue = 1
                 term.containerView.isHidden = false
+                holeViewports.append(viewport)
                 nextTargets[entry.panelId] = EventRouterView.Target(
                     rect: Self.terminalTargetRect(viewport: viewport),
                     view: term.containerView
@@ -1273,6 +1278,15 @@ final class GhosttyBridgeImpl {
                 installMouseOverlayFilter(on: term, router: router)
             }
         }
+        // 硬保证：web 合成层只能在非终端矩形与已登记浮层矩形内出像素。
+        // 仅输入捕获的全屏浮层（paints=false）不回填，否则整窗矩形会把洞抹空。
+        TerminalHoleMask.apply(
+            contentView: contentView,
+            terminals: holeViewports,
+            overlays: state.webOverlayRects
+                .filter { $0.paints != false }
+                .map { $0.frame.nsRect }
+        )
         CATransaction.commit()
 
         // 转场顺序按方向选择，避免向 TUI 发出瞬时 focus-out（ESC[O）：
@@ -2140,6 +2154,10 @@ final class GhosttyBridgeImpl {
             terminalLayouts.removeValue(forKey: panelId)
         }
         eventRouters[windowId]?.targets.removeAll()
+        // 没有终端了，web 合成层不该再被挖洞。
+        if let contentView = parent.contentView {
+            TerminalHoleMask.clear(contentView: contentView)
+        }
     }
 
     /// Window 被关闭时的完全清理: closeAll + EventRouter 移除 + monitor 卸载 + 字典
@@ -2412,6 +2430,9 @@ final class GhosttyBridgeImpl {
             "terminalTargetCount": router?.targets.count ?? 0,
             "webOverlayRectCount": router?.webOverlayRects.count ?? 0,
         ]
+        if let contentView {
+            windowPayload["holeMask"] = TerminalHoleMask.debugPayload(contentView: contentView)
+        }
         if let controllerDiagnostics = controllers[windowId]?.pierDiagnostics {
             windowPayload["appTickCount"] = Double(controllerDiagnostics.appTickCount)
             if let lastAppTickUptime = controllerDiagnostics.lastAppTickUptime {

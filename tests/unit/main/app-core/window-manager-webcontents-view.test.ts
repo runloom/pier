@@ -208,8 +208,10 @@ describeMockedMacOSWindowManager(
       expect(
         electronMock.baseWindow.contentView.addChildView
       ).toHaveBeenCalledWith(electronMock.appView);
+      // 不透明 backing：透明 WebContentsView 会让部分重绘保留旧帧像素
+      // （缩放后状态栏残影）；终端可见性由洞遮罩硬裁保证。
       expect(electronMock.appView.setBackgroundColor).toHaveBeenCalledWith(
-        "#00000000"
+        "#1e1e1e"
       );
       expect(electronMock.appView.setBounds).toHaveBeenCalledWith({
         height: 800,

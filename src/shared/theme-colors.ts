@@ -6,5 +6,3 @@ export const NATIVE_CHROME_FALLBACK = {
   dark: "#1e1e1e",
   light: "#ffffff",
 } as const;
-
-export const TRANSPARENT_NATIVE_BACKGROUND = "#00000000";
