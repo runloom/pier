@@ -51,7 +51,13 @@ export function beginTerminalPanelWebDragCapture(
   };
 }
 
-const webOverlayRects = new Map<string, TerminalFrame>();
+interface WebOverlayEntry {
+  frame: TerminalFrame;
+  /** false = 仅输入捕获，不参与 native 洞遮罩回填（见契约注释）。 */
+  paints: boolean;
+}
+
+const webOverlayRects = new Map<string, WebOverlayEntry>();
 const webRequestIds = new Set<string>();
 /** composer 等 web 输入组件接管的面板：native 不得成 FR；pin focus + 藏绘制光标。 */
 const focusDisabledPanelIds = new Set<string>();
@@ -151,9 +157,10 @@ function applyTerminalInputRouting(): void {
     {
       basePanel,
       focusDisabledPanelIds: Array.from(focusDisabledPanelIds),
-      webOverlayRects: Array.from(webOverlayRects, ([id, frame]) => ({
-        frame,
+      webOverlayRects: Array.from(webOverlayRects, ([id, entry]) => ({
+        frame: entry.frame,
         id,
+        paints: entry.paints,
       })),
       webRequestCount: webRequestIds.size,
     },
@@ -195,7 +202,11 @@ export function setTerminalNativeFocusDisabled(
   applyTerminalInputRouting();
 }
 
-function setWebOverlayRect(id: string, frame: TerminalFrame | null): void {
+function setWebOverlayRect(
+  id: string,
+  frame: TerminalFrame | null,
+  paints = true
+): void {
   const previous = webOverlayRects.get(id);
   if (!frame) {
     if (!previous) {
@@ -205,10 +216,14 @@ function setWebOverlayRect(id: string, frame: TerminalFrame | null): void {
     applyTerminalInputRouting();
     return;
   }
-  if (previous && frameKey(previous) === frameKey(frame)) {
+  if (
+    previous &&
+    previous.paints === paints &&
+    frameKey(previous.frame) === frameKey(frame)
+  ) {
     return;
   }
-  webOverlayRects.set(id, frame);
+  webOverlayRects.set(id, { frame, paints });
   applyTerminalInputRouting();
 }
 
@@ -346,8 +361,12 @@ export function registerTerminalFullscreenWebOverlay(
 ): WebOverlayRegistration {
   let frameRequest: number | null = null;
 
+  // 全屏输入捕获层本身不画像素：只进事件路由，不参与 native 洞遮罩回填。
+  // 若把整窗矩形当 web 可绘制区，洞会被全部抹掉；不透明 backing 下终端
+  // 会整块消失（2026-11-09 sash 拖拽复现）。真正绘制的浮层内容
+  // （菜单 / popover / toast）各自用 registerTerminalElementWebOverlay 登记。
   const flush = () => {
-    setWebOverlayRect(id, readTerminalViewportFrame());
+    setWebOverlayRect(id, readTerminalViewportFrame(), false);
   };
 
   const flushTrailing = () => {

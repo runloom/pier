@@ -295,6 +295,46 @@ describe("terminal native debug IPC", () => {
     });
   });
 
+  it("normalizes the native hole-mask snapshot for diagnostics", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+    fakeAddon.debugSnapshot.mockReturnValue(
+      JSON.stringify({
+        surfaces: [],
+        window: {
+          activeTerminalPanelId: null,
+          holeMask: {
+            active: true,
+            compositor: true,
+            cutRectCount: 2,
+            cutRects: [
+              { height: 200, width: 300, x: 10, y: 20 },
+              { height: "bad", width: 80, x: 400, y: 500 },
+            ],
+          },
+          keyboardFocusTarget: { kind: "web" },
+          terminalTargetCount: 1,
+          webOverlayRectCount: 1,
+        },
+      })
+    );
+
+    const snapshot = (await invokeHandlers.get(
+      "pier:terminal:debug-snapshot"
+    )?.({ sender: win.webContents })) as {
+      native: { window: Record<string, unknown> };
+    };
+
+    expect(snapshot.native.window.holeMask).toEqual({
+      active: true,
+      compositor: true,
+      cutRectCount: 2,
+      cutRects: [
+        { height: 200, width: 300, x: 10, y: 20 },
+        { height: 0, width: 80, x: 400, y: 500 },
+      ],
+    });
+  });
+
   it("normalizes native recentRouterDecisions: demangles panel-id fields, preserves seq, tallies drops for unknown-kind / non-object entries", async () => {
     const { fakeAddon, invokeHandlers, win } = await setupHarness();
 

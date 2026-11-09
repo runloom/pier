@@ -37,8 +37,8 @@ function fallbackChromeColor(themeSource: ThemePreference): string {
 
 function applyNativeChromeColor(color: string): void {
   if (isMac) {
-    // macOS: opaque BaseWindow 只作为兜底 backing; renderer 透明区域仍通过
-    // transparent WebContentsView 透出 native terminal NSView.
+    // macOS: 窗口与 WebContentsView backing 同为不透明兜底色。透明 backing
+    // 会让部分重绘保留旧帧像素；终端可见性由 TerminalHoleMask 硬裁保证。
     for (const win of windowManager.getAll()) {
       windowManager.setNativeChromeColor(win, color);
     }

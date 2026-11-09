@@ -76,9 +76,20 @@ export interface TerminalDebugRouterDecision {
   seq: number;
 }
 
+export interface TerminalDebugHoleMaskSnapshot {
+  /** 合成层当前是否挂着洞遮罩。 */
+  active: boolean;
+  /** 是否找到了 Chromium 合成层（ViewsCompositorSuperview）。 */
+  compositor: boolean;
+  cutRectCount: number;
+  /** 被挖掉的洞，contentView top-left CSS px。 */
+  cutRects: TerminalFrame[];
+}
+
 export interface TerminalDebugNativeWindowSnapshot {
   activeTerminalPanelId: string | null;
   appTickCount?: number | undefined;
+  holeMask?: TerminalDebugHoleMaskSnapshot | undefined;
   keyboardFocusTarget: TerminalKeyboardFocusTarget;
   lastAppliedNativeApplySequence?: number | undefined;
   lastAppliedRendererSequence?: number | undefined;

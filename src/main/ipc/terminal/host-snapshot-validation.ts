@@ -8,7 +8,10 @@ import type {
 
 const MAX_COORDINATE = 100_000;
 const MAX_ID_LENGTH = 256;
-const MAX_OVERLAY_RECTS = 64;
+// 每个分栏一条 sash（随 dockview 布局线性增长），再叠加菜单 / toast 等浮层。
+// 按 MAX_TERMINALS 的最坏情况（N 个面板最多 N-1 条 sash）留足余量；
+// 上限只防畸形 payload，不应让合法大布局整份快照被拒（输入路由与洞遮罩会停更）。
+const MAX_OVERLAY_RECTS = 1024;
 const MAX_TERMINALS = 256;
 
 const HOST_REASONS: Record<TerminalHostReason, true> = {
@@ -82,7 +85,11 @@ function isOverlayRect(value: unknown): value is TerminalWebOverlayRect {
     return false;
   }
   const rect = value as Record<string, unknown>;
-  return isPanelId(rect.id) && isFiniteFrame(rect.frame);
+  return (
+    isPanelId(rect.id) &&
+    isFiniteFrame(rect.frame) &&
+    (rect.paints === undefined || typeof rect.paints === "boolean")
+  );
 }
 
 export function isTerminalHostSnapshot(

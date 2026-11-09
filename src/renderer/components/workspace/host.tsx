@@ -17,24 +17,22 @@ import {
   subscribePluginPanelRegistry,
 } from "@/lib/plugins/panel-registry.ts";
 import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
+import { syncActivePanelScope } from "@/lib/workspace/active-panel-scope.ts";
 import {
   markWorkspaceLayoutPersistenceStarting,
   markWorkspaceLayoutPersistenceUnavailable,
   registerWorkspaceLayoutFlusher,
 } from "@/lib/workspace/layout-persistence.ts";
+import { attachWorkspaceSashWebOverlays } from "@/lib/workspace/sash-web-overlays.ts";
 import { setDockviewTabRevealRoot } from "@/lib/workspace/tab-visibility.ts";
 import { activateTerminalPanelFromFocusRequest } from "@/lib/workspace/terminal-focus-request.ts";
 import { setTerminalLayoutPresentationScheduler } from "@/panel-kits/terminal/layout-coordinator.ts";
 import { requestTerminalPresentation } from "@/panel-kits/terminal/presentation-reconciler.ts";
 import { ensureTuiInputFocus } from "@/panel-kits/terminal/tui-input-focus.ts";
-import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
 import { terminalComposerTakeoverFocus } from "@/stores/terminal-composer-takeover.ts";
-import {
-  requestTerminalFocusIntent,
-  setTerminalBasePanel,
-} from "@/stores/terminal-input-routing-slice.ts";
+import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { setWorkspaceBootstrapGate } from "./bootstrap-gate.ts";
 import { applyDefaultLayout } from "./default-layout.ts";
@@ -82,35 +80,6 @@ import {
  * panel actions 注册由 main.tsx bootstrap 统一调用。
  */
 const SAVE_DEBOUNCE_MS = 500;
-
-type WorkspacePanel = DockviewReadyEvent["api"]["panels"][number];
-
-function syncActivePanelScope(panel: WorkspacePanel | null | undefined): void {
-  if (!panel) {
-    useKeybindingScope.getState().setActivePanel(null, null, null);
-    setTerminalBasePanel({ kind: "web" });
-    return;
-  }
-  const component = panel.view.contentComponent;
-  const kind = panelKindOf(component);
-  useKeybindingScope.getState().setActivePanel(kind, component, panel.id);
-  if (kind === "terminal") {
-    // basePanel 永远反映「前台是哪个终端」，无论键盘归 composer / 搜索还是 native。
-    // 缺失这一步时 basePanel 停在初始 web，宿主无法定位需要藏 hardware cursor 的
-    // 那个终端（webRequestCount>0 但没有 anchor panel）。
-    setTerminalBasePanel({ kind: "terminal", panelId: panel.id });
-    // Rich Input 打开时：激活终端面板应 refocus 输入框（reason=activate）；
-    // 未接管则走原生焦点归还路径。
-    if (!terminalComposerTakeoverFocus(panel.id, "activate")) {
-      requestTerminalFocusIntent(panel.id);
-      // crush 等 TUI 内部输入框可能失焦（paste/Enter 会被静默丢弃）：
-      // 探针确认后按 catalog 白名单恢复。fire-and-forget，内部 per-panel 互斥。
-      ensureTuiInputFocus(panel.id).catch(() => undefined);
-    }
-  } else {
-    setTerminalBasePanel({ kind: "web" });
-  }
-}
 
 export function WorkspaceHost() {
   const setApi = useWorkspaceStore((s) => s.setApi);
@@ -174,7 +143,7 @@ export function WorkspaceHost() {
       workspaceLayoutFlushDisposeRef.current = () => undefined;
       setApi(null);
       setWorkspaceHasMaximizedGroup(false);
-      syncActivePanelScope(null);
+      syncActivePanelScope(null, panelKindOf);
       markWorkspaceLayoutPersistenceUnavailable();
     };
   }, [setApi, setWorkspaceHasMaximizedGroup]);
@@ -260,6 +229,11 @@ export function WorkspaceHost() {
         event.api,
         rootRef.current
       );
+      // 分栏 sash 压在终端 viewport 上：登记进 webOverlayRects，native 洞遮罩
+      // 才会回填分栏线；未登记 web chrome 会被硬裁（2026-11-09 分栏线消失）。
+      const sashWebOverlayDispose = rootRef.current
+        ? attachWorkspaceSashWebOverlays(rootRef.current, event.api)
+        : () => undefined;
 
       const syncDockviewMaximizedState = (): void => {
         const nextHasMaximizedGroup = event.api.hasMaximizedGroup();
@@ -319,7 +293,7 @@ export function WorkspaceHost() {
 
       const maximizedSubscription = event.api.onDidMaximizedGroupChange(() => {
         syncDockviewMaximizedState();
-        syncActivePanelScope(event.api.activePanel);
+        syncActivePanelScope(event.api.activePanel, panelKindOf);
         terminalLayout.present(event.api, "dockview-maximize");
       });
 
@@ -351,7 +325,7 @@ export function WorkspaceHost() {
         // 程序化切 tab / 关闭面板等路径指针未必移动, 主动收掉残留 tooltip.
         dismissAllTooltips();
 
-        syncActivePanelScope(panel);
+        syncActivePanelScope(panel, panelKindOf);
         terminalLayout.present(event.api, "dockview-active-panel");
       };
       const activePanelSubscription = event.api.onDidActivePanelChange(
@@ -429,7 +403,7 @@ export function WorkspaceHost() {
             applyDefaultLayout(event.api);
           }
           syncDockviewMaximizedState();
-          syncActivePanelScope(event.api.activePanel);
+          syncActivePanelScope(event.api.activePanel, panelKindOf);
           terminalLayout.hydrate(event.api);
         } catch (err) {
           console.error("[workspace] fromJSON failed, fallback default:", err);
@@ -437,7 +411,7 @@ export function WorkspaceHost() {
             applyDefaultLayout(event.api);
           }
           syncDockviewMaximizedState();
-          syncActivePanelScope(event.api.activePanel);
+          syncActivePanelScope(event.api.activePanel, panelKindOf);
           terminalLayout.hydrate(event.api);
         }
 
@@ -468,6 +442,7 @@ export function WorkspaceHost() {
         newTerminalDispose();
         tabDragInputDispose();
         tabStripBehaviorDispose();
+        sashWebOverlayDispose();
         panelTransferDispose();
         window.removeEventListener("beforeunload", handleBeforeUnload);
       };

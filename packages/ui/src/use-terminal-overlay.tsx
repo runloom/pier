@@ -12,6 +12,9 @@ import {
  *
  * - `registerElement(id, el)` — 注册浮层几何，用于终端鼠标命中检测。
  *   返回清理与同步刷新句柄；元素卸载时必须清理，transform 位移后应刷新。
+ * - 同一份几何也是 native 洞遮罩（`TerminalHoleMask`）的回填来源：
+ *   `webOverlayRects` 与终端 viewport 的交集是 web 唯一允许盖住终端的
+ *   区域；未注册的 web 内容在终端矩形内会被硬裁掉。
  *
  * 键盘焦点意图不在此契约内：点击打开的浮层由事件路由层的 capture 阶段
  * pointerdown 统一触发（terminal-input-routing store），键盘打开的浮层
