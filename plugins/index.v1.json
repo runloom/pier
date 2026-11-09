@@ -1,11 +1,11 @@
 {
-  "generatedAt": 1790881899193,
+  "generatedAt": 1794238953026,
   "plugins": {
     "pier.agent-splits": {
       "description": "Connect splits opened by assistants to workbench panels.",
       "displayName": "Agent splits",
       "id": "pier.agent-splits",
-      "latest": "1.5.2",
+      "latest": "1.5.3",
       "locales": {
         "en": {
           "name": "Agent splits",
@@ -36,6 +36,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "ce589917eb3ff1f45571e4eba236dfb6fb2c63de37775447ba35e140558639e5",
           "size": 57367
+        },
+        "1.5.3": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-agent-splits-v1.5.3/pier.agent-splits-1.5.3.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "d6631486eaf20b9f16fa2c856e0c22040fb693dd5edcdf3422a41db9524b50aa",
+          "size": 65564
         }
       }
     },
@@ -494,11 +500,11 @@
       }
     }
   },
-  "sequence": 45,
+  "sequence": 46,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "hj4OxcuMeIa3MQk6zeAxxKQm5iZe3843tSq2XIcm4lgOQHd4Cs6HVSPOP18YZVJRsUmTx2/ZsdXtiEdROtogAg=="
+    "value": "4+8O0Uc2FPayXWDjjNc1SSd9b4kSPRuWLpivED1dVO9e+XVh0KQerXV7FhU5Su/dQUMJBvl7Az08R11uzkqUDw=="
   }
 }
