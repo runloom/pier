@@ -104,6 +104,15 @@ describe("SettingsDialog input routing", () => {
         webRequestCount: 1,
       })
     );
+    // 遮罩只做输入捕获（paints:false），否则整窗回填会把终端洞抹空、
+    // 设置打开时终端整块消失；卡片本身必须回填（paints:true），
+    // 否则 native 终端会盖住 Dialog 内容。
+    expect(getLastTerminalHostSnapshot()?.webOverlayRects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ paints: false }),
+        expect.objectContaining({ paints: true }),
+      ])
+    );
     expect(applyHostSnapshot).toHaveBeenCalled();
   });
 

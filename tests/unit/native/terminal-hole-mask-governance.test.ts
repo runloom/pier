@@ -20,6 +20,8 @@ const NATIVE_CHROME = "src/main/windows/native-chrome.ts";
 const THEME_COLORS = "src/shared/theme-colors.ts";
 const WINDOW_MANAGER_TEST =
   "tests/unit/main/app-core/window-manager-webcontents-view.test.ts";
+const DIALOG = "packages/ui/src/dialog.tsx";
+const ALERT_DIALOG = "packages/ui/src/alert-dialog.tsx";
 
 function read(rel: string): string {
   return readFileSync(join(ROOT, rel), "utf8");
@@ -156,6 +158,24 @@ describe("terminal hole mask governance (transparent web over Ghostty)", () => {
 
     expect(read("AGENTS.md")).toContain("paints: false");
     expect(read(SPEC)).toContain("paints: false");
+  });
+
+  it("keeps modal scrims as input capture while registering dialog cards", () => {
+    // 设置 / 确认弹窗的整窗 scrim 是输入捕获层：paints:false 只进事件路由，
+    // 否则整窗回填会把所有终端洞抹空，不透明 backing 下设置打开时终端整块
+    // 消失。卡片本身是不透明 web 面，必须单独登记回填，native 终端才不会
+    // 盖住 Dialog 内容。
+    const dialog = read(DIALOG);
+    expect(dialog).toContain("useTerminalOverlay({ paints: false })");
+    expect(dialog).toContain(
+      "const contentOverlay = useTerminalOverlayRegistration()"
+    );
+    expect(dialog).toContain("ref={contentRef}");
+
+    const alertDialog = read(ALERT_DIALOG);
+    expect(alertDialog).toContain("paints: false");
+    expect(alertDialog).toContain(":content");
+    expect(alertDialog).toContain("ref={contentRef}");
   });
 
   it("registers the composer autocomplete portal as a paint overlay", () => {

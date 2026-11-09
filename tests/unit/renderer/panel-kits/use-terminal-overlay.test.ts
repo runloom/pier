@@ -140,6 +140,27 @@ describe("useTerminalOverlay", () => {
     );
   });
 
+  it("passes paints:false through for input-capture-only surfaces", () => {
+    // Dialog / AlertDialog 的整窗 scrim 只做事件路由与点击捕获，本身不画
+    // 可覆盖终端的内容；若参与洞遮罩回填会把所有终端洞抹空。
+    const { result } = renderHook(() => useTerminalOverlay({ paints: false }), {
+      wrapper,
+    });
+
+    result.current(makeSizedElement());
+
+    expect(snapshot()?.webOverlayRects).toHaveLength(1);
+    expect(snapshot()?.webOverlayRects[0]?.paints).toBe(false);
+  });
+
+  it("defaults drawn overlays to paints:true", () => {
+    const { result } = renderHook(() => useTerminalOverlay(), { wrapper });
+
+    result.current(makeSizedElement());
+
+    expect(snapshot()?.webOverlayRects[0]?.paints).toBe(true);
+  });
+
   it("degrades to noop without a Provider — no throw, store state unchanged", () => {
     // 不包 Provider，使用默认 noopRegistry。
     const { result } = renderHook(() => useTerminalOverlay());

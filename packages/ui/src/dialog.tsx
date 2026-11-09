@@ -5,7 +5,10 @@ import type * as React from "react";
 import { Button } from "./button.tsx";
 import { isTopmostModalContent } from "./modal-layer.ts";
 import { useDeferredDialogOpen } from "./use-deferred-dialog-open.ts";
-import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
+import {
+  useTerminalOverlay,
+  useTerminalOverlayRegistration,
+} from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
 function Dialog({
@@ -90,7 +93,10 @@ function DialogOverlay({
 }: React.ComponentProps<typeof DialogPrimitive.Overlay> & {
   allowTitlebarDismiss?: boolean;
 }) {
-  const overlayRef = useTerminalOverlay();
+  // 遮罩是半透明 scrim：只负责输入捕获，不参与 native 洞遮罩回填。
+  // 整窗回填会把所有终端洞抹空（不透明 backing 下终端整块消失）；
+  // 真正绘制的 Dialog 卡片由 DialogContent 单独登记。
+  const overlayRef = useTerminalOverlay({ paints: false });
   const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <DialogPrimitive.Overlay
@@ -189,6 +195,10 @@ function DialogContent({
       className={overlayClassName}
     />
   );
+  // 卡片是不透明 web 面，必须登记回填：遮罩已改为 paints:false，
+  // 卡片区域若仍留洞，native 终端会盖住 Dialog 内容。
+  const contentOverlay = useTerminalOverlayRegistration();
+  const contentRef = useComposedRefs(props.ref, contentOverlay.ref);
 
   return (
     <DialogPortal>
@@ -255,6 +265,7 @@ function DialogContent({
         }}
         tabIndex={tabIndex}
         {...props}
+        ref={contentRef}
       >
         {children}
         {showCloseButton && (
