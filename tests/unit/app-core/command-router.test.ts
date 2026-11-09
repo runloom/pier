@@ -1129,6 +1129,156 @@ describe("createCommandRouter", () => {
     ]);
   });
 
+  it("terminal.get / terminal.close 接受 PIER_WINDOW_ID 与 record UUID", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services(rendererCommands, {
+      main: [
+        {
+          active: true,
+          component: "terminal",
+          context: panelContext("/Users/dev/ABC/pier"),
+          display: { short: "terminal-1" },
+          id: "terminal-1",
+          kind: "terminal",
+        },
+      ],
+    });
+    fakeServices.window.list = () => [
+      {
+        electronWindowId: "1",
+        focused: true,
+        id: "main",
+        recordId: "record-main",
+      },
+    ];
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    for (const windowId of ["1", "record-main"]) {
+      await expect(
+        router.execute({
+          clientId: "desktop-1",
+          command: {
+            panelId: "terminal-1",
+            type: "terminal.get",
+            windowId,
+          },
+          protocolVersion: 1,
+          requestId: `req-terminal-get-${windowId}`,
+        })
+      ).resolves.toMatchObject({
+        data: { terminal: { panelId: "terminal-1", windowId: "main" } },
+        ok: true,
+        requestId: `req-terminal-get-${windowId}`,
+      });
+    }
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          panelId: "terminal-1",
+          type: "terminal.close",
+          windowId: "1",
+        },
+        protocolVersion: 1,
+        requestId: "req-terminal-close-electron-window",
+      })
+    ).resolves.toMatchObject({
+      data: { closed: true, panelId: "terminal-1", windowId: "main" },
+      ok: true,
+      requestId: "req-terminal-close-electron-window",
+    });
+    expect(rendererCommands).toContainEqual({
+      panelId: "terminal-1",
+      type: "panel.close",
+      windowId: "main",
+    });
+  });
+
+  it("unscoped terminal get/send 在 panel.list 不完整时 fail closed", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services(rendererCommands, {
+      main: [
+        {
+          active: true,
+          component: "terminal",
+          context: panelContext("/Users/dev/ABC/pier"),
+          display: { short: "terminal-1" },
+          id: "terminal-1",
+          kind: "terminal",
+        },
+      ],
+    });
+    fakeServices.window.list = () => [
+      {
+        electronWindowId: "1",
+        focused: true,
+        id: "main",
+        recordId: "record-main",
+      },
+      {
+        electronWindowId: "2",
+        focused: false,
+        id: "w-2",
+        recordId: "record-w-2",
+      },
+    ];
+    const originalExecute = fakeServices.rendererCommand.execute;
+    fakeServices.rendererCommand.execute = (command) => {
+      if (command.type === "panel.list" && command.windowId === "w-2") {
+        return Promise.resolve({
+          error: { code: "platform_unavailable", message: "renderer hung" },
+          ok: false,
+          requestId: "renderer-req",
+        });
+      }
+      return originalExecute(command);
+    };
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    // 健康窗口里的唯一命中不能掩盖失败窗口里可能的同名面板。
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: { panelId: "terminal-1", type: "terminal.get" },
+        protocolVersion: 1,
+        requestId: "req-partial-get",
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: "platform_unavailable",
+        message: "panel list incomplete; pass windowId",
+      },
+      ok: false,
+      requestId: "req-partial-get",
+    });
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          panelId: "terminal-1",
+          text: "hello",
+          type: "terminal.send",
+        },
+        protocolVersion: 1,
+        requestId: "req-partial-send",
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: "platform_unavailable",
+        message: "panel list incomplete; pass windowId",
+      },
+      ok: false,
+      requestId: "req-partial-send",
+    });
+  });
+
   it("terminal.open 在注册 launch 前合并 shell、CLI、profile 和显式环境", async () => {
     const rendererCommands: unknown[] = [];
     const terminalLaunches: unknown[] = [];

@@ -310,14 +310,17 @@ export function requestTerminalWebFocus(id: string): () => void {
 
 export function registerTerminalElementWebOverlay(
   id: string,
-  element: HTMLElement
+  element: HTMLElement,
+  options?: { paints?: boolean }
 ): WebOverlayRegistration {
+  const paints = options?.paints ?? true;
   let frameRequest: number | null = null;
 
   const flush = () => {
     setWebOverlayRect(
       id,
-      cssDomRectToTerminalFrame(element.getBoundingClientRect())
+      cssDomRectToTerminalFrame(element.getBoundingClientRect()),
+      paints
     );
   };
 

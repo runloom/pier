@@ -1,4 +1,5 @@
 import {
+  canonicalWindowId,
   matchingWindows,
   resolveCommandWindow,
   windowInfoMatches,
@@ -28,6 +29,34 @@ describe("windowInfoMatches", () => {
     expect(windowInfoMatches(main, "1")).toBe(true);
     expect(windowInfoMatches(main, "record-main")).toBe(true);
     expect(windowInfoMatches(main, "9")).toBe(false);
+  });
+});
+
+describe("canonicalWindowId", () => {
+  const windows = [
+    window({
+      electronWindowId: "1",
+      focused: true,
+      id: "main",
+      recordId: "record-main",
+    }),
+    window({
+      electronWindowId: "4",
+      id: "w-1",
+      recordId: "record-w-1",
+    }),
+  ];
+
+  it("normalizes PIER_WINDOW_ID and record UUID to the internal id", () => {
+    expect(canonicalWindowId("1", windows)).toBe("main");
+    expect(canonicalWindowId("4", windows)).toBe("w-1");
+    expect(canonicalWindowId("record-w-1", windows)).toBe("w-1");
+    expect(canonicalWindowId("main", windows)).toBe("main");
+  });
+
+  it("keeps unknown ids verbatim and passes through undefined", () => {
+    expect(canonicalWindowId("9", windows)).toBe("9");
+    expect(canonicalWindowId(undefined, windows)).toBeUndefined();
   });
 });
 

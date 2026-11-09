@@ -58,7 +58,10 @@ function AlertDialogOverlay({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Overlay> & {
   terminalOverlayId?: string;
 }) {
-  const overlay = useTerminalOverlayRegistration(terminalOverlayId);
+  // 同 DialogOverlay：scrim 只做输入捕获，不回填终端洞；卡片单独登记。
+  const overlay = useTerminalOverlayRegistration(terminalOverlayId, {
+    paints: false,
+  });
   const composedRef = useComposedRefs(props.ref, overlay.ref);
   return (
     <AlertDialogPrimitive.Overlay
@@ -86,6 +89,11 @@ function AlertDialogContent({
   size?: "default" | "sm";
   terminalOverlayId?: string;
 }) {
+  // scrim 不再整窗回填，卡片必须自己登记，否则终端会盖住弹窗内容。
+  const contentOverlay = useTerminalOverlayRegistration(
+    terminalOverlayId ? `${terminalOverlayId}:content` : undefined
+  );
+  const contentRef = useComposedRefs(props.ref, contentOverlay.ref);
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay
@@ -106,6 +114,7 @@ function AlertDialogContent({
           onEscapeKeyDown?.(event);
         }}
         {...props}
+        ref={contentRef}
       />
     </AlertDialogPortal>
   );

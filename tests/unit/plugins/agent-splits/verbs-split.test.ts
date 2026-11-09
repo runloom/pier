@@ -1,6 +1,10 @@
 import { delimiter, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  loadSessionMap,
+  saveSessionMap,
+} from "../../../../packages/plugin-agent-splits/src/main/session-map.ts";
+import {
   isRecord,
   type JsonCommand,
 } from "../../../../packages/plugin-agent-splits/src/tmux/types.ts";
@@ -37,6 +41,7 @@ describe("tmux split-window mapping", () => {
     expect(result.stdout).toBe("%2\n");
     const open = findCommand(result.commands, "terminal.open");
     expect(open).toMatchObject({
+      backgroundCreate: true,
       focus: false,
       placement: "split-below",
       referencePanelId: PANE_ONE_PANEL,
@@ -64,6 +69,7 @@ describe("tmux split-window mapping", () => {
     const open = findCommand(result.commands, "terminal.open");
     expect(open?.focus).not.toBe(false);
     expect(open?.focus).toBe(true);
+    expect(open?.backgroundCreate).toBe(true);
     expect(open?.referencePanelId).toBe(LEADER_PANEL);
     expect(open?.placement).toBe("split-below");
   });
@@ -87,6 +93,7 @@ describe("tmux split-window mapping", () => {
     });
     const tabOpen = findCommand(created.commands, "terminal.open");
     expect(tabOpen?.placement).toBe("active-tab");
+    expect(tabOpen?.backgroundCreate).toBe(true);
     expect(tabOpen?.referencePanelId).toBe(LEADER_PANEL);
     expect(created.exitCode).toBe(0);
 
@@ -185,6 +192,400 @@ describe("tmux split-window mapping", () => {
     });
     expect(killed.exitCode).toBe(0);
     expect(findCommand(killed.commands, "panel.equalize")).toBeUndefined();
+  });
+
+  it("binds the pane to terminal.open's returned internal window id", async () => {
+    const workDir = await makeWorkDir();
+    dirs.push(workDir);
+    const { env, sessionId } = seedSession(workDir, 1);
+    const base = okInvoke();
+    const invoke = async (command: JsonCommand) => {
+      if (command.type === "terminal.open") {
+        // 真实宿主返回内部 id（如 "main"），与 PIER_WINDOW_ID（"1"）不同词表。
+        return {
+          data: { panelId: OPENED_PANEL, windowId: "main" },
+          ok: true as const,
+          requestId: "r",
+        };
+      }
+      return await base(command);
+    };
+    const result = await runTmux(
+      ["split-window", "-t", "%0", "-h", "-l", "70%", "-d"],
+      { env, invoke }
+    );
+    expect(result.exitCode).toBe(0);
+
+    const saved = loadSessionMap(workDir, sessionId);
+    expect(saved?.panes["%1"]).toEqual({
+      panelId: OPENED_PANEL,
+      splitAxis: "horizontal",
+      windowId: "main",
+    });
+    expect(findCommand(result.commands, "panel.setSize")).toMatchObject({
+      panelId: OPENED_PANEL,
+      type: "panel.setSize",
+      widthRatio: 0.7,
+      windowId: "main",
+    });
+  });
+
+  it("retries split in the reference pane's current window after a move", async () => {
+    const workDir = await makeWorkDir();
+    dirs.push(workDir);
+    const { env, sessionId } = seedSession(workDir, 2);
+    const base = okInvoke();
+    const openWindows: unknown[] = [];
+    const invoke = async (command: JsonCommand) => {
+      if (command.type === "terminal.get") {
+        if (command.panelId === LEADER_PANEL) {
+          return await base(command);
+        }
+        // 子 pane 已跨窗移动到 main；旧绑定窗口查不到。
+        if (command.windowId === WINDOW_ID) {
+          return {
+            error: { code: "not_found", message: "terminal panel not found" },
+            ok: false as const,
+            requestId: "r",
+          };
+        }
+        return {
+          data: { terminal: { canonicalPath: "/repo", windowId: "main" } },
+          ok: true as const,
+          requestId: "r",
+        };
+      }
+      if (command.type === "terminal.open") {
+        openWindows.push(command.windowId);
+        if (command.windowId === WINDOW_ID) {
+          return {
+            error: { code: "not_found", message: "terminal panel not found" },
+            ok: false as const,
+            requestId: "r",
+          };
+        }
+        return {
+          data: { panelId: OPENED_PANEL, windowId: "main" },
+          ok: true as const,
+          requestId: "r",
+        };
+      }
+      return await base(command);
+    };
+    const result = await runTmux(["split-window", "-t", "%1", "-h", "-d"], {
+      env,
+      invoke,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(openWindows).toEqual([WINDOW_ID, "main"]);
+
+    const saved = loadSessionMap(workDir, sessionId);
+    expect(saved?.panes["%1"]).toMatchObject({ windowId: "main" });
+    expect(saved?.panes["%2"]).toEqual({
+      panelId: OPENED_PANEL,
+      splitAxis: "horizontal",
+      windowId: "main",
+    });
+  });
+
+  it("keeps the refreshed reference binding when the retried open fails", async () => {
+    const workDir = await makeWorkDir();
+    dirs.push(workDir);
+    const { env, sessionId } = seedSession(workDir, 2);
+    const base = okInvoke();
+    const invoke = async (command: JsonCommand) => {
+      if (command.type === "terminal.get") {
+        if (command.panelId === LEADER_PANEL) {
+          return await base(command);
+        }
+        if (command.windowId === WINDOW_ID) {
+          return {
+            error: { code: "not_found", message: "terminal panel not found" },
+            ok: false as const,
+            requestId: "r",
+          };
+        }
+        return {
+          data: { terminal: { canonicalPath: "/repo", windowId: "main" } },
+          ok: true as const,
+          requestId: "r",
+        };
+      }
+      if (command.type === "terminal.open") {
+        return command.windowId === WINDOW_ID
+          ? {
+              error: { code: "not_found", message: "terminal panel not found" },
+              ok: false as const,
+              requestId: "r",
+            }
+          : {
+              error: { code: "platform_unavailable", message: "renderer hung" },
+              ok: false as const,
+              requestId: "r",
+            };
+      }
+      return await base(command);
+    };
+    const result = await runTmux(["split-window", "-t", "%1", "-h", "-d"], {
+      env,
+      invoke,
+    });
+    expect(result.exitCode).toBe(1);
+    // 失败回滚不能把重试时刷新的 %1 窗口 id 改回旧值。
+    const saved = loadSessionMap(workDir, sessionId);
+    expect(saved?.panes["%1"]?.windowId).toBe("main");
+    expect(saved?.panes["%2"]).toBeUndefined();
+  });
+
+  it("rolls back the allocated pane when the cross-window retry rejects", async () => {
+    const workDir = await makeWorkDir();
+    dirs.push(workDir);
+    const { env, sessionId } = seedSession(workDir, 2);
+    const base = okInvoke();
+    const invoke = async (command: JsonCommand) => {
+      if (command.type === "terminal.get") {
+        if (command.panelId === LEADER_PANEL) {
+          return await base(command);
+        }
+        if (command.windowId === WINDOW_ID) {
+          return {
+            error: { code: "not_found", message: "terminal panel not found" },
+            ok: false as const,
+            requestId: "r",
+          };
+        }
+        return {
+          data: { terminal: { canonicalPath: "/repo", windowId: "main" } },
+          ok: true as const,
+          requestId: "r",
+        };
+      }
+      if (command.type === "terminal.open") {
+        if (command.windowId === WINDOW_ID) {
+          return {
+            error: { code: "not_found", message: "terminal panel not found" },
+            ok: false as const,
+            requestId: "r",
+          };
+        }
+        throw new Error("control socket timed out");
+      }
+      return await base(command);
+    };
+    const result = await runTmux(["split-window", "-t", "%1", "-h", "-d"], {
+      env,
+      invoke,
+    });
+    expect(result.exitCode).toBe(1);
+    // 重试异常不能越过 openAllocated 的回收，留下绑定到参照 pane 的占位记录。
+    expect(loadSessionMap(workDir, sessionId)?.panes["%2"]).toBeUndefined();
+  });
+
+  it("rolls back the allocated pane when the first open rejects", async () => {
+    const workDir = await makeWorkDir();
+    dirs.push(workDir);
+    const { env, sessionId } = seedSession(workDir, 2);
+    const base = okInvoke();
+    const invoke = async (command: JsonCommand) => {
+      if (command.type === "terminal.open") {
+        throw new Error("control socket timed out");
+      }
+      return await base(command);
+    };
+    const result = await runTmux(["split-window", "-t", "%1", "-h", "-d"], {
+      env,
+      invoke,
+    });
+    expect(result.exitCode).toBe(1);
+    // 首次 open 超时同样不能留下绑定到参照 pane 的占位记录。
+    expect(loadSessionMap(workDir, sessionId)?.panes["%2"]).toBeUndefined();
+    expect(loadSessionMap(workDir, sessionId)?.panes["%1"]).toEqual({
+      panelId: PANE_ONE_PANEL,
+      windowId: WINDOW_ID,
+    });
+  });
+
+  it("keeps a concurrent shim's pane when rolling back a failed open", async () => {
+    const workDir = await makeWorkDir();
+    dirs.push(workDir);
+    const { env, sessionId } = seedSession(workDir, 2);
+    const base = okInvoke();
+    const invoke = async (command: JsonCommand) => {
+      if (command.type === "terminal.open") {
+        // 打开期间另一个 shim 已分配并成功绑定 %3；回滚只能删自己的占位。
+        const latest = loadSessionMap(workDir, sessionId);
+        if (latest) {
+          saveSessionMap(workDir, {
+            ...latest,
+            nextIndex: 4,
+            panes: {
+              ...latest.panes,
+              "%3": { panelId: "panel-other", windowId: WINDOW_ID },
+            },
+          });
+        }
+        return {
+          error: { code: "invalid_command", message: "bad placement" },
+          ok: false as const,
+          requestId: "r",
+        };
+      }
+      return await base(command);
+    };
+    const result = await runTmux(["split-window", "-t", "%1", "-h", "-d"], {
+      env,
+      invoke,
+    });
+    expect(result.exitCode).toBe(1);
+    const saved = loadSessionMap(workDir, sessionId);
+    expect(saved?.panes["%2"]).toBeUndefined();
+    expect(saved?.panes["%3"]).toEqual({
+      panelId: "panel-other",
+      windowId: WINDOW_ID,
+    });
+  });
+
+  it("does not delete a peer's binding that reused the allocated pane id", async () => {
+    const workDir = await makeWorkDir();
+    dirs.push(workDir);
+    const { env, sessionId } = seedSession(workDir, 2);
+    const base = okInvoke();
+    const invoke = async (command: JsonCommand) => {
+      if (command.type === "terminal.open") {
+        // 并发 shim 在同一个 pane id 上完成了真实绑定；回滚不能删它。
+        const latest = loadSessionMap(workDir, sessionId);
+        if (latest) {
+          saveSessionMap(workDir, {
+            ...latest,
+            panes: {
+              ...latest.panes,
+              "%2": { panelId: "panel-peer", windowId: WINDOW_ID },
+            },
+          });
+        }
+        return {
+          error: { code: "platform_unavailable", message: "renderer hung" },
+          ok: false as const,
+          requestId: "r",
+        };
+      }
+      return await base(command);
+    };
+    const result = await runTmux(["split-window", "-t", "%1", "-h", "-d"], {
+      env,
+      invoke,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(loadSessionMap(workDir, sessionId)?.panes["%2"]).toEqual({
+      panelId: "panel-peer",
+      windowId: WINDOW_ID,
+    });
+  });
+
+  it("adopts the disk map when another shim already refreshed the window", async () => {
+    const workDir = await makeWorkDir();
+    dirs.push(workDir);
+    const { env, sessionId } = seedSession(workDir, 2);
+    const base = okInvoke();
+    const invoke = async (command: JsonCommand) => {
+      if (command.type === "terminal.get") {
+        if (command.panelId === LEADER_PANEL) {
+          return await base(command);
+        }
+        if (command.windowId === WINDOW_ID) {
+          return {
+            error: { code: "not_found", message: "terminal panel not found" },
+            ok: false as const,
+            requestId: "r",
+          };
+        }
+        return {
+          data: { terminal: { canonicalPath: "/repo", windowId: "main" } },
+          ok: true as const,
+          requestId: "r",
+        };
+      }
+      if (command.type === "terminal.open") {
+        // 另一个 shim 在重试前已把 %1 刷到 main 并新增 %3。
+        const latest = loadSessionMap(workDir, sessionId);
+        const paneOne = latest?.panes["%1"];
+        if (latest && paneOne) {
+          saveSessionMap(workDir, {
+            ...latest,
+            nextIndex: 4,
+            panes: {
+              ...latest.panes,
+              "%1": { ...paneOne, windowId: "main" },
+              "%3": { panelId: "panel-other", windowId: WINDOW_ID },
+            },
+          });
+        }
+        return command.windowId === WINDOW_ID
+          ? {
+              error: { code: "not_found", message: "terminal panel not found" },
+              ok: false as const,
+              requestId: "r",
+            }
+          : {
+              error: { code: "platform_unavailable", message: "renderer hung" },
+              ok: false as const,
+              requestId: "r",
+            };
+      }
+      return await base(command);
+    };
+    const result = await runTmux(["split-window", "-t", "%1", "-h", "-d"], {
+      env,
+      invoke,
+    });
+    expect(result.exitCode).toBe(1);
+    // 回滚必须采纳磁盘版本：%1 的新窗口和并发新增的 %3 都不能被旧快照覆盖。
+    const saved = loadSessionMap(workDir, sessionId);
+    expect(saved?.panes["%1"]?.windowId).toBe("main");
+    expect(saved?.panes["%3"]).toEqual({
+      panelId: "panel-other",
+      windowId: WINDOW_ID,
+    });
+    expect(saved?.panes["%2"]).toBeUndefined();
+  });
+
+  it("merges the successful binding into the disk map written during open", async () => {
+    const workDir = await makeWorkDir();
+    dirs.push(workDir);
+    const { env, sessionId } = seedSession(workDir, 1);
+    const base = okInvoke();
+    const invoke = async (command: JsonCommand) => {
+      if (command.type === "terminal.open") {
+        // 打开期间另一个 shim 新增了 %2；绑定落盘不能整段覆盖。
+        const latest = loadSessionMap(workDir, sessionId);
+        if (latest) {
+          saveSessionMap(workDir, {
+            ...latest,
+            nextIndex: 3,
+            panes: {
+              ...latest.panes,
+              "%2": { panelId: "panel-other", windowId: WINDOW_ID },
+            },
+          });
+        }
+      }
+      return await base(command);
+    };
+    const result = await runTmux(["split-window", "-t", "%0", "-h", "-d"], {
+      env,
+      invoke,
+    });
+    expect(result.exitCode).toBe(0);
+    const saved = loadSessionMap(workDir, sessionId);
+    expect(saved?.panes["%1"]).toEqual({
+      panelId: OPENED_PANEL,
+      splitAxis: "horizontal",
+      windowId: WINDOW_ID,
+    });
+    expect(saved?.panes["%2"]).toEqual({
+      panelId: "panel-other",
+      windowId: WINDOW_ID,
+    });
   });
 
   it("maps send-keys literals to terminal.send and Enter to terminal.key", async () => {

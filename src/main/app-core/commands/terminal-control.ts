@@ -17,6 +17,8 @@ import {
   isTerminalComponent,
   pickUniquePanel,
   resolveNativeKey,
+  resolvePanelPick,
+  resolveTerminalWindowId,
 } from "./terminal-locate.ts";
 
 type TerminalListCommand = Extract<PierCommand, { type: "terminal.list" }>;
@@ -132,15 +134,23 @@ export function toLocator(
 async function collectTerminals(
   services: PierCoreServices,
   windowId?: string
-): Promise<ReturnType<typeof toLocator>[]> {
+): Promise<{
+  errors: ReadonlyArray<{ code?: string | undefined; message: string }>;
+  terminals: ReturnType<typeof toLocator>[];
+  windowId: string | undefined;
+}> {
+  const scopedWindowId = resolveTerminalWindowId(windowId, services);
   const listed = await listPanels(
-    windowId ? { type: "panel.list", windowId } : { type: "panel.list" },
+    scopedWindowId
+      ? { type: "panel.list", windowId: scopedWindowId }
+      : { type: "panel.list" },
     services as never
   );
   const indexAgentByPanel = agentIdsByPanel(services);
-  return listed.panels
+  const terminals = listed.panels
     .filter((p) => isTerminalComponent(p.component))
     .map((p) => toLocator(p, indexAgentByPanel));
+  return { errors: listed.errors, terminals, windowId: scopedWindowId };
 }
 
 export async function executeTerminalListCommand(
@@ -148,7 +158,7 @@ export async function executeTerminalListCommand(
   command: TerminalListCommand,
   services: PierCoreServices
 ): Promise<PierCommandResult> {
-  const terminals = await collectTerminals(services, command.windowId);
+  const { terminals } = await collectTerminals(services, command.windowId);
   return success(requestId, { terminals });
 }
 
@@ -157,23 +167,23 @@ export async function executeTerminalGetCommand(
   command: TerminalGetCommand,
   services: PierCoreServices
 ): Promise<PierCommandResult> {
-  const terminals = await collectTerminals(services, command.windowId);
-  const picked = pickUniquePanel(
-    terminals,
-    command.panelId,
-    command.windowId,
-    (terminal) => terminal.panelId
-  );
-  if (!picked.ok) {
-    return failure(
-      requestId,
-      "not_found",
-      picked.reason === "ambiguous"
-        ? `terminal panel is ambiguous across windows: ${command.panelId}`
-        : `terminal panel not found: ${command.panelId}`
-    );
+  const collected = await collectTerminals(services, command.windowId);
+  const resolved = resolvePanelPick({
+    errors: collected.errors,
+    panelId: command.panelId,
+    picked: pickUniquePanel(
+      collected.terminals,
+      command.panelId,
+      collected.windowId,
+      (terminal) => terminal.panelId
+    ),
+    requestId,
+    windowId: command.windowId,
+  });
+  if (!resolved.ok) {
+    return resolved.result;
   }
-  return success(requestId, { terminal: picked.item });
+  return success(requestId, { terminal: resolved.item });
 }
 
 function keySequence(key: string): string | null {
@@ -205,26 +215,23 @@ async function resolvePanelForWrite(
   | { ok: true; windowId: string; params?: Record<string, unknown> }
   | { ok: false; result: PierCommandResult }
 > {
-  const terminals = await collectTerminals(services, windowId);
-  const picked = pickUniquePanel(
-    terminals,
+  const collected = await collectTerminals(services, windowId);
+  const resolved = resolvePanelPick({
+    errors: collected.errors,
     panelId,
+    picked: pickUniquePanel(
+      collected.terminals,
+      panelId,
+      collected.windowId,
+      (terminal) => terminal.panelId
+    ),
+    requestId,
     windowId,
-    (terminal) => terminal.panelId
-  );
-  if (!picked.ok) {
-    return {
-      ok: false,
-      result: failure(
-        requestId,
-        "not_found",
-        picked.reason === "ambiguous"
-          ? `terminal panel is ambiguous across windows: ${panelId}`
-          : `terminal panel not found: ${panelId}`
-      ),
-    };
+  });
+  if (!resolved.ok) {
+    return { ok: false, result: resolved.result };
   }
-  return { ok: true, windowId: picked.item.windowId };
+  return { ok: true, windowId: resolved.item.windowId };
 }
 
 export async function executeTerminalSendCommand(

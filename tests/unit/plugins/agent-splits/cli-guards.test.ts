@@ -1,4 +1,14 @@
+import {
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { isMainEntry } from "../../../../packages/plugin-agent-splits/src/tmux/cli.ts";
 import {
   runTmux,
   TMUX_VERSION_LINE,
@@ -18,6 +28,24 @@ afterEach(async () => {
 });
 
 describe("tmux cli guards", () => {
+  it("recognizes the entry through a symlinked install path", async () => {
+    const realDir = mkdtempSync(join(realpathSync(tmpdir()), "pier-cli-"));
+    const link = `${realDir}-link`;
+    dirs.push(realDir);
+    try {
+      symlinkSync(realDir, link);
+      const realEntry = join(realDir, "tmux");
+      const linkedEntry = join(link, "tmux");
+      writeFileSync(realEntry, "#!/usr/bin/env node\n");
+      expect(isMainEntry(realEntry, realEntry)).toBe(true);
+      expect(isMainEntry(linkedEntry, realEntry)).toBe(true);
+      expect(isMainEntry(join(realDir, "other"), realEntry)).toBe(false);
+      expect(isMainEntry(undefined, realEntry)).toBe(false);
+    } finally {
+      rmSync(link, { force: true });
+    }
+  });
+
   it("prints version locally without hitting the control socket", async () => {
     const invoke = async () => {
       throw new Error("version must not use the control socket");

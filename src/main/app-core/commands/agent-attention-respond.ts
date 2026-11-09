@@ -30,6 +30,7 @@ import {
   commandSuccess as success,
 } from "../command-results.ts";
 import type { PierCoreServices } from "../command-router-services.ts";
+import { canonicalWindowId } from "../window-routing.ts";
 import { resolveNativeKey } from "./terminal-locate.ts";
 
 type RespondCommand = Extract<PierCommand, { type: "agent.attention.respond" }>;
@@ -81,12 +82,17 @@ function resolveRespondRef(
   }
   try {
     const snapshot = services.foregroundActivity?.snapshot();
+    // FA 活动沿用终端 env 的 PIER_WINDOW_ID（Electron id）；命令侧可能带
+    // 内部 id / Electron id / record UUID。两侧都归一化后再比较。
+    // 未带 windowId 时不做归一化，也就不必枚举窗口。
+    const windows = windowId ? services.window.list() : [];
+    const scopedWindowId = canonicalWindowId(windowId, windows);
     const matches = (snapshot?.activities ?? []).filter((activity) => {
       if (activity.kind !== "agent" || activity.panelId !== raw) {
         return false;
       }
-      if (windowId !== undefined && windowId.length > 0) {
-        return activity.windowId === windowId;
+      if (scopedWindowId !== undefined && scopedWindowId.length > 0) {
+        return canonicalWindowId(activity.windowId, windows) === scopedWindowId;
       }
       return true;
     });

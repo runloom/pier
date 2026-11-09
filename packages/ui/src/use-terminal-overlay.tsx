@@ -24,8 +24,21 @@ import {
  * 由宿主应用通过 `TerminalOverlayContext.Provider` 注入具体实现；
  * 独立使用（如插件 storybook 环境）时默认降级为 noop。
  */
+export interface TerminalOverlayOptions {
+  /**
+   * 是否允许该浮层回填 native 洞遮罩。全屏输入捕获层（Dialog 遮罩等）
+   * 只参与事件路由、不画自身内容覆盖终端时必须传 `false`；否则整窗矩形
+   * 会把所有终端洞抹空，不透明 backing 下终端整块消失。
+   */
+  paints?: boolean;
+}
+
 export interface TerminalOverlayRegistry {
-  registerElement(id: string, el: HTMLElement): TerminalOverlayRegistration;
+  registerElement(
+    id: string,
+    el: HTMLElement,
+    options?: TerminalOverlayOptions
+  ): TerminalOverlayRegistration;
 }
 
 export interface TerminalOverlayRegistration {
@@ -52,13 +65,17 @@ export const TerminalOverlayContext =
  *
  * 依赖 `TerminalOverlayContext` 提供的 registry；未提供时降级为 noop。
  */
-export function useTerminalOverlayRegistration(explicitId?: string): {
+export function useTerminalOverlayRegistration(
+  explicitId?: string,
+  options?: TerminalOverlayOptions
+): {
   flush(): void;
   ref(el: HTMLElement | null): void;
 } {
   const registry = useContext(TerminalOverlayContext);
   const id = useId();
   const registrationRef = useRef<TerminalOverlayRegistration | null>(null);
+  const paints = options?.paints;
   const ref = useCallback(
     (el: HTMLElement | null) => {
       registrationRef.current?.dispose();
@@ -67,14 +84,19 @@ export function useTerminalOverlayRegistration(explicitId?: string): {
         return;
       }
       const overlayId = explicitId ?? `terminal-overlay:${id}`;
-      registrationRef.current = registry.registerElement(overlayId, el);
+      registrationRef.current =
+        paints === undefined
+          ? registry.registerElement(overlayId, el)
+          : registry.registerElement(overlayId, el, { paints });
     },
-    [explicitId, id, registry]
+    [explicitId, id, paints, registry]
   );
   const flush = useCallback(() => registrationRef.current?.flush(), []);
   return useMemo(() => ({ flush, ref }), [flush, ref]);
 }
 
-export function useTerminalOverlay(): (el: HTMLElement | null) => void {
-  return useTerminalOverlayRegistration().ref;
+export function useTerminalOverlay(
+  options?: TerminalOverlayOptions
+): (el: HTMLElement | null) => void {
+  return useTerminalOverlayRegistration(undefined, options).ref;
 }

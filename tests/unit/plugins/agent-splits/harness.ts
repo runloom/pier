@@ -4,7 +4,7 @@ import { join } from "node:path";
 import {
   type SessionMap,
   saveSessionMap,
-  sessionIdFromWindowId,
+  sessionIdForLeader,
   tmuxValueForSession,
 } from "../../../../packages/plugin-agent-splits/src/main/session-map.ts";
 import type {
@@ -29,7 +29,8 @@ export function seedSession(
   workDir: string,
   paneCount = 2
 ): { env: NodeJS.Dict<string>; map: SessionMap; sessionId: string } {
-  const sessionId = sessionIdFromWindowId(WINDOW_ID);
+  // 与 bindLeaderSession 一致：session id 由 leader 的 windowId + panelId 组成。
+  const sessionId = sessionIdForLeader(WINDOW_ID, LEADER_PANEL);
   const panes: SessionMap["panes"] = {
     "%0": { panelId: LEADER_PANEL, windowId: WINDOW_ID },
   };

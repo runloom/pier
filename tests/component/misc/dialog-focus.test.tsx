@@ -49,11 +49,19 @@ describe("Dialog initial focus", () => {
     );
 
     const overlay = document.querySelector('[data-slot="dialog-overlay"]');
+    const content = document.querySelector('[data-slot="dialog-content"]');
 
     expect(overlay).toBeInstanceOf(HTMLElement);
+    expect(content).toBeInstanceOf(HTMLElement);
+    // scrim 只做输入捕获，不回填终端洞；卡片是绘制面，必须单独登记回填。
     expect(registerElement).toHaveBeenCalledWith(
       expect.stringMatching(/^terminal-overlay:/),
-      overlay
+      overlay,
+      { paints: false }
+    );
+    expect(registerElement).toHaveBeenCalledWith(
+      expect.stringMatching(/^terminal-overlay:/),
+      content
     );
 
     unmount();

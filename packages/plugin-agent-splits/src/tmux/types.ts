@@ -46,3 +46,14 @@ export function resultDataRecord(
   }
   return result.data;
 }
+
+/** 宿主 terminal 命令回报的当前内部窗口 id；面板跨窗移动后用它刷新绑定。 */
+export function windowIdFromResult(result: ControlResult): string | undefined {
+  const data = resultDataRecord(result);
+  if (!data) {
+    return;
+  }
+  const terminal = isRecord(data.terminal) ? data.terminal : undefined;
+  const windowId = terminal?.windowId ?? data.windowId;
+  return typeof windowId === "string" ? windowId : undefined;
+}
