@@ -52,7 +52,9 @@ function CommandDialog({
       </DialogHeader>
       <DialogContent
         className={cn(
-          "top-1/3 translate-y-0 overflow-hidden rounded-3xl! p-0",
+          // 壳几何静止（见 DialogContent 注释）。top 钉在 1/3；bottom-auto
+          // 退出垂直 m-auto，否则面板会在 1/3 和窗口底之间被重新居中。
+          "top-1/3 bottom-auto overflow-hidden rounded-3xl! p-0",
           className
         )}
         closeOnOverlayClick

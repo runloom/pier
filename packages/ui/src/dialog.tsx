@@ -93,15 +93,14 @@ function DialogOverlay({
 }: React.ComponentProps<typeof DialogPrimitive.Overlay> & {
   allowTitlebarDismiss?: boolean;
 }) {
-  // 遮罩是半透明 scrim：只负责输入捕获，不参与 native 洞遮罩回填。
-  // 整窗回填会把所有终端洞抹空（不透明 backing 下终端整块消失）；
-  // 真正绘制的 Dialog 卡片由 DialogContent 单独登记。
-  const overlayRef = useTerminalOverlay({ paints: false });
+  // 遮罩是半透明 scrim：不回填洞（整窗回填会把终端换成不透明 backing），
+  // 把 computed background 交给 native，在洞里画同色。卡片单独回填。
+  const overlayRef = useTerminalOverlay({ paints: false, scrim: true });
   const composedRef = useComposedRefs(props.ref, overlayRef);
   return (
     <DialogPrimitive.Overlay
       className={cn(
-        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 pointer-events-none fixed inset-0 isolate z-50 bg-overlay-scrim duration-100 data-closed:animate-out data-open:animate-in",
+        "app-no-drag pointer-events-none fixed inset-0 isolate z-50 bg-overlay-scrim data-closed:animate-[pier-overlay-fade-out_100ms_ease-out] data-open:animate-[pier-overlay-fade-in_100ms_ease-out]",
         className
       )}
       data-slot="dialog-overlay"
@@ -209,7 +208,14 @@ function DialogContent({
       )}
       <DialogPrimitive.Content
         className={cn(
-          "app-no-drag data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-[calc(var(--app-titlebar-height)+(100vh-var(--app-titlebar-height))/2)] left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[min(var(--radius-4xl),24px)] bg-popover p-6 text-popover-foreground text-sm shadow-xl outline-none duration-100 data-closed:animate-out data-open:animate-in sm:max-w-md",
+          // 壳几何必须全程静止：洞回填是快照管道（IPC 往返），追不上逐帧
+          // 动画。淡入只动 opacity（pier-overlay-fade-*）。tw-animate 的
+          // enter 会在整段过渡写全零 blur / 三维位移（gpu-compositing 治理
+          // 禁的正是这两个标记），filter 破坏洞合成，底部状态栏也会和洞里
+          // 的蒙层错拍。
+          // top 是标题栏下沿、bottom 贴窗口底，h-fit + m-auto 把盒子居中。
+          // top 写成中线会让上边缘落在中线，弹窗下移半高。
+          "app-no-drag fixed inset-x-0 top-[var(--app-titlebar-height)] bottom-0 z-50 m-auto grid h-fit w-full max-w-[calc(100%-2rem)] gap-6 rounded-[min(var(--radius-4xl),24px)] bg-popover p-6 text-popover-foreground text-sm shadow-xl outline-none data-closed:animate-[pier-overlay-fade-out_100ms_ease-out] data-open:animate-[pier-overlay-fade-in_100ms_ease-out] sm:max-w-md",
           className
         )}
         data-slot="dialog-content"

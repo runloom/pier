@@ -853,11 +853,32 @@ private struct TerminalWindowEntry: Codable {
     let visible: Bool
 }
 
+private struct TerminalScrimColorEntry: Codable {
+    let a: Double
+    let b: Double
+    let g: Double
+    let r: Double
+}
+
+private struct TerminalBoxShadowEntry: Codable {
+    let blur: Double
+    let color: TerminalScrimColorEntry
+    let spread: Double
+    let x: Double
+    let y: Double
+}
+
 private struct TerminalWebOverlayRectEntry: Codable {
     let frame: TerminalWindowFrame
     let id: String
     /// false = 仅输入捕获，不参与洞遮罩回填；缺省 true（见 TS 契约）。
     let paints: Bool?
+    /// 半透明蒙层色。只在 paints == false 时画进终端洞，不回填。
+    let scrim: TerminalScrimColorEntry?
+    /// 外扩 box-shadow。不参与回填，画在合成层之下。
+    let shadows: [TerminalBoxShadowEntry]?
+    /// 均匀圆角，content-view px。圆角外的角从回填里挖回洞。
+    let radius: Double?
 }
 
 private struct TerminalKeyboardTargetEnvelope: Codable {
@@ -1285,7 +1306,52 @@ final class GhosttyBridgeImpl {
             terminals: holeViewports,
             overlays: state.webOverlayRects
                 .filter { $0.paints != false }
-                .map { $0.frame.nsRect }
+                .map {
+                    TerminalHoleMask.Overlay(
+                        radius: CGFloat($0.radius ?? 0),
+                        rect: $0.frame.nsRect
+                    )
+                }
+        )
+        // 蒙层不回填洞。同色半透明画在合成层之下，终端内容仍透出来。
+        TerminalScrim.apply(
+            contentView: contentView,
+            terminals: holeViewports,
+            scrims: state.webOverlayRects.compactMap { entry in
+                guard entry.paints == false, let scrim = entry.scrim else { return nil }
+                return TerminalScrim.Source(
+                    color: TerminalScrim.WashColor(
+                        a: scrim.a,
+                        b: scrim.b,
+                        g: scrim.g,
+                        r: scrim.r
+                    ),
+                    frame: entry.frame.nsRect
+                )
+            }
+        )
+        // 盒外阴影不回填。画在合成层之下，才能叠在终端上而不是叠在 backing 上。
+        TerminalShadow.apply(
+            contentView: contentView,
+            shadows: state.webOverlayRects.flatMap { entry in
+                guard entry.paints != false else { return [TerminalShadow.Source]() }
+                return (entry.shadows ?? []).reversed().map { shadow in
+                    TerminalShadow.Source(
+                        blur: CGFloat(shadow.blur),
+                        color: TerminalScrim.WashColor(
+                            a: shadow.color.a,
+                            b: shadow.color.b,
+                            g: shadow.color.g,
+                            r: shadow.color.r
+                        ),
+                        frame: entry.frame.nsRect,
+                        radius: CGFloat(entry.radius ?? 0),
+                        spread: CGFloat(shadow.spread),
+                        x: CGFloat(shadow.x),
+                        y: CGFloat(shadow.y)
+                    )
+                }
+            }
         )
         CATransaction.commit()
 
@@ -2157,6 +2223,8 @@ final class GhosttyBridgeImpl {
         // 没有终端了，web 合成层不该再被挖洞。
         if let contentView = parent.contentView {
             TerminalHoleMask.clear(contentView: contentView)
+            TerminalScrim.clear(contentView: contentView)
+            TerminalShadow.clear(contentView: contentView)
         }
     }
 
@@ -2432,6 +2500,7 @@ final class GhosttyBridgeImpl {
         ]
         if let contentView {
             windowPayload["holeMask"] = TerminalHoleMask.debugPayload(contentView: contentView)
+            windowPayload["scrim"] = TerminalScrim.debugPayload(contentView: contentView)
         }
         if let controllerDiagnostics = controllers[windowId]?.pierDiagnostics {
             windowPayload["appTickCount"] = Double(controllerDiagnostics.appTickCount)

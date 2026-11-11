@@ -18,6 +18,31 @@
 @variant dark (:root:not(.light) &);
 
 /*
+ * 弹窗蒙层和卡片只淡 opacity。tw-animate 的 enter/exit 会在整段过渡里
+ * 把 filter 写成全零 blur、transform 写成全零三维位移（这两个标记正是
+ * gpu-compositing 治理所禁的）。filter 破坏终端洞合成；底部状态栏在洞外
+ * 跟着这层 opacity，洞里的 native 蒙层必须乘上同一个 opacity，不能停在
+ * 终值。
+ */
+@keyframes pier-overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pier-overlay-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/*
  * Rich Input Lexical chip hosts.
  *
  * - ::before/::after gutters: contenteditable carets sit on the decorator

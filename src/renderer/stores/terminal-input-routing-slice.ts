@@ -1,7 +1,9 @@
 import type { TerminalFocusRoutingDebugSnapshot } from "@shared/contracts/terminal/debug.ts";
 import type {
+  TerminalBoxShadow,
   TerminalFrame,
   TerminalKeyboardFocusTarget,
+  TerminalScrimColor,
 } from "@shared/contracts/terminal.ts";
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import {
@@ -9,7 +11,6 @@ import {
   sameKeyboardFocusTarget as sameBasePanel,
   TRANSIENT_WEB_CLICK_FOCUS_ID,
 } from "@shared/terminal-keyboard-target.ts";
-import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
 import {
   getTerminalFocusTraceEvents,
   recordTerminalFocusTrace,
@@ -19,8 +20,21 @@ import {
   resetTerminalHostStateForTests,
   updateTerminalHostInputFacts,
 } from "@/lib/workspace/terminal-host-state-reconciler.ts";
-import { readTerminalViewportFrame } from "@/panel-kits/terminal/viewport.ts";
+import {
+  type OverlayAppearance,
+  readOverlayAppearance,
+  readOverlayFrame,
+} from "@/stores/terminal-scrim/appearance.ts";
+import {
+  sameScrim,
+  watchDocumentTheme,
+} from "@/stores/terminal-scrim/color.ts";
+import { bindTerminalWebOverlayRect } from "@/stores/terminal-scrim/fullscreen.ts";
+import { bindScrimFade } from "@/stores/terminal-scrim/motion.ts";
+import { sameOverlayShadows } from "@/stores/terminal-scrim/shadow.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
+
+export { registerTerminalFullscreenWebOverlay } from "@/stores/terminal-scrim/fullscreen.ts";
 
 // ===========================================================================
 // slice.inputRouting — 模块级变量 + rAF coalesce（高频路径保留原设计）
@@ -55,6 +69,12 @@ interface WebOverlayEntry {
   frame: TerminalFrame;
   /** false = 仅输入捕获，不参与 native 洞遮罩回填（见契约注释）。 */
   paints: boolean;
+  /** 均匀圆角，content-view px。0 不写入。 */
+  radius?: number;
+  /** 半透明蒙层色。缺省表示不压暗终端。 */
+  scrim?: TerminalScrimColor;
+  /** 外扩 box-shadow。缺省或空数组不写入。 */
+  shadows?: TerminalBoxShadow[];
 }
 
 const webOverlayRects = new Map<string, WebOverlayEntry>();
@@ -78,9 +98,7 @@ function hasDurableWebFocusRequest(): boolean {
     }
   }
   return false;
-}
-
-/**
+} /**
  * 全局策略（所有非 pier.click 的 durable owner，不限设置）：
  * durable 全部释放后不得只剩 pier.click 把键盘钉在 web。
  * 只清瞬态 pier.click；不调 requestTerminalFocusIntent——
@@ -118,9 +136,7 @@ function frameKey(frame: TerminalFrame): string {
   return `${frame.x},${frame.y},${frame.width},${frame.height}`;
 }
 
-function sortedIds(ids: Iterable<string>): string[] {
-  return Array.from(ids).sort();
-}
+const sortedIds = (ids: Iterable<string>): string[] => Array.from(ids).sort();
 
 function applyTerminalInputRouting(): void {
   const nextEffectiveKind = computeEffectiveKeyboardTarget(
@@ -161,6 +177,9 @@ function applyTerminalInputRouting(): void {
         frame: entry.frame,
         id,
         paints: entry.paints,
+        ...(entry.radius === undefined ? {} : { radius: entry.radius }),
+        ...(entry.scrim === undefined ? {} : { scrim: entry.scrim }),
+        ...(entry.shadows === undefined ? {} : { shadows: entry.shadows }),
       })),
       webRequestCount: webRequestIds.size,
     },
@@ -183,7 +202,7 @@ export function getTerminalFocusRoutingDebugSnapshot(): TerminalFocusRoutingDebu
 
 /**
  * 声明某终端面板的原生聚焦开关（Agent Composer 挂载即关闭原生 FR）。
- * 关闭期间：main 不会把键盘交给该终端；native pin surface focus（防 ESC[O]）
+ * 关闭期间：main 不把键盘交给该终端；native pin surface focus（防 ESC[O]）
  * 并 suppress 绘制光标（避免双闪）。探针仍读 DECTCEM 模式位。
  */
 export function setTerminalNativeFocusDisabled(
@@ -205,7 +224,10 @@ export function setTerminalNativeFocusDisabled(
 function setWebOverlayRect(
   id: string,
   frame: TerminalFrame | null,
-  paints = true
+  paints = true,
+  scrim?: TerminalScrimColor,
+  radius = 0,
+  shadows?: TerminalBoxShadow[]
 ): void {
   const previous = webOverlayRects.get(id);
   if (!frame) {
@@ -216,31 +238,29 @@ function setWebOverlayRect(
     applyTerminalInputRouting();
     return;
   }
+  const nextRadius = radius > 0 ? radius : undefined;
+  const nextShadows = shadows?.length ? shadows : undefined;
   if (
     previous &&
     previous.paints === paints &&
+    sameScrim(previous.scrim, scrim) &&
+    sameOverlayShadows(previous.shadows, nextShadows) &&
+    previous.radius === nextRadius &&
     frameKey(previous.frame) === frameKey(frame)
   ) {
     return;
   }
-  webOverlayRects.set(id, { frame, paints });
+  webOverlayRects.set(id, {
+    frame,
+    paints,
+    ...(nextRadius === undefined ? {} : { radius: nextRadius }),
+    ...(scrim === undefined ? {} : { scrim }),
+    ...(nextShadows === undefined ? {} : { shadows: nextShadows }),
+  });
   applyTerminalInputRouting();
 }
 
-function cssDomRectToTerminalFrame(rect: DOMRect): TerminalFrame | null {
-  if (rect.width <= 0 || rect.height <= 0) {
-    return null;
-  }
-  return cssRectToContentViewRect(
-    {
-      height: rect.height,
-      width: rect.width,
-      x: rect.x,
-      y: rect.y,
-    },
-    useZoomStore.getState().windowZoomLevel
-  );
-}
+bindTerminalWebOverlayRect(setWebOverlayRect);
 
 export function setTerminalBasePanel(
   target: TerminalKeyboardFocusTarget
@@ -280,10 +300,9 @@ export function clearTransientWebClickFocus(): void {
 
 /**
  * 浮在终端上的 web 元素声明一次键盘焦点意图。任意活跃请求即把 effective 拉成
- * web。返回的释放函数 idempotent —— 多次调用只在首次真正移除请求时重算。
- *
- * durable（非 pier.click）释放后：若已无其它 durable，则 microtask 调和掉残留
- * pier.click，避免「关设置/菜单后 base 仍是 terminal、键却钉在 web」。
+ * web。释放函数 idempotent。durable（非 pier.click）释放后：若已无其它
+ * durable，则 microtask 调和掉残留 pier.click，避免「关设置/菜单后 base 仍是
+ * terminal、键却钉在 web」。
  */
 export function requestTerminalWebFocus(id: string): () => void {
   if (!webRequestIds.has(id)) {
@@ -302,25 +321,38 @@ export function requestTerminalWebFocus(id: string): () => void {
     }
     // 先落下 durable 计数，再 microtask 清 pier.click（排在同指针 down 之后）。
     applyTerminalInputRouting();
-    queueMicrotask(() => {
-      reconcileAfterDurableWebFocusRelease();
-    });
+    queueMicrotask(reconcileAfterDurableWebFocusRelease);
   };
 }
 
 export function registerTerminalElementWebOverlay(
   id: string,
   element: HTMLElement,
-  options?: { paints?: boolean }
+  options?: { paints?: boolean; scrim?: boolean }
 ): WebOverlayRegistration {
-  const paints = options?.paints ?? true;
+  const scrim = options?.scrim === true;
+  // 蒙层必须留在洞外：整窗回填会把终端换成不透明 backing。
+  const paints = scrim ? false : (options?.paints ?? true);
+  const zoomLevel = () => useZoomStore.getState().windowZoomLevel;
+  let lastAppearance: OverlayAppearance = {
+    radius: 0,
+    scrim: undefined,
+    shadows: undefined,
+  };
   let frameRequest: number | null = null;
 
   const flush = () => {
+    lastAppearance = readOverlayAppearance(element, zoomLevel(), {
+      paints,
+      scrim,
+    });
     setWebOverlayRect(
       id,
-      cssDomRectToTerminalFrame(element.getBoundingClientRect()),
-      paints
+      readOverlayFrame(element, zoomLevel()),
+      paints,
+      lastAppearance.scrim,
+      lastAppearance.radius,
+      lastAppearance.shadows
     );
   };
 
@@ -342,6 +374,29 @@ export function registerTerminalElementWebOverlay(
     window.pier?.window?.onLayoutPulse?.((_pulse: WindowLayoutPulse) => {
       flushTrailing();
     }) ?? null;
+  // 主题 class 翻转影响蒙层色，也影响阴影 token 色（都是 computed 读出）。
+  const stopThemeWatch =
+    scrim || paints ? watchDocumentTheme(flushTrailing) : undefined;
+  // 淡入改 opacity：蒙层 alpha 和阴影 alpha 都要逐帧跟着走，否则阴影在
+  // animationend 才出现，终端上先无影后跳影。
+  const stopFade = scrim || paints ? bindScrimFade(element, flush) : undefined;
+  // 动画结束只补几何（transform 入场会挪矩形）：色强沿用缓存，避免淡出
+  // 结束后按回弹的全 opacity 重发一帧蒙层/阴影，终端上闪一下。
+  const onMotionEnd = (event: Event) => {
+    if (event.target !== element) {
+      return;
+    }
+    setWebOverlayRect(
+      id,
+      readOverlayFrame(element, zoomLevel()),
+      paints,
+      lastAppearance.scrim,
+      lastAppearance.radius,
+      lastAppearance.shadows
+    );
+  };
+  element.addEventListener("animationend", onMotionEnd);
+  element.addEventListener("transitionend", onMotionEnd);
   flushTrailing();
 
   return {
@@ -352,60 +407,11 @@ export function registerTerminalElementWebOverlay(
       }
       resizeObserver.disconnect();
       window.removeEventListener("resize", flushTrailing);
+      element.removeEventListener("animationend", onMotionEnd);
+      element.removeEventListener("transitionend", onMotionEnd);
       disposePulse?.();
-      setWebOverlayRect(id, null);
-    },
-    flush,
-  };
-}
-
-export function registerTerminalFullscreenWebOverlay(
-  id: string
-): WebOverlayRegistration {
-  let frameRequest: number | null = null;
-
-  // 全屏输入捕获层本身不画像素：只进事件路由，不参与 native 洞遮罩回填。
-  // 若把整窗矩形当 web 可绘制区，洞会被全部抹掉；不透明 backing 下终端
-  // 会整块消失（2026-11-09 sash 拖拽复现）。真正绘制的浮层内容
-  // （菜单 / popover / toast）各自用 registerTerminalElementWebOverlay 登记。
-  const flush = () => {
-    setWebOverlayRect(id, readTerminalViewportFrame(), false);
-  };
-
-  const flushTrailing = () => {
-    flush();
-    if (frameRequest !== null) {
-      cancelAnimationFrame(frameRequest);
-    }
-    frameRequest = requestAnimationFrame(() => {
-      frameRequest = null;
-      flush();
-    });
-  };
-
-  const onWindowLayoutPulse = (pulse: WindowLayoutPulse) => {
-    if (
-      pulse.reason === "view-zoom" &&
-      typeof pulse.windowZoomLevel === "number"
-    ) {
-      useZoomStore.setState({ windowZoomLevel: pulse.windowZoomLevel });
-    }
-    flushTrailing();
-  };
-
-  window.addEventListener("resize", flushTrailing);
-  const disposePulse =
-    window.pier?.window?.onLayoutPulse?.(onWindowLayoutPulse) ?? null;
-  flushTrailing();
-
-  return {
-    dispose() {
-      if (frameRequest !== null) {
-        cancelAnimationFrame(frameRequest);
-        frameRequest = null;
-      }
-      window.removeEventListener("resize", flushTrailing);
-      disposePulse?.();
+      stopThemeWatch?.();
+      stopFade?.();
       setWebOverlayRect(id, null);
     },
     flush,
