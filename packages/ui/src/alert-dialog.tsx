@@ -58,15 +58,16 @@ function AlertDialogOverlay({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Overlay> & {
   terminalOverlayId?: string;
 }) {
-  // 同 DialogOverlay：scrim 只做输入捕获，不回填终端洞；卡片单独登记。
+  // 同 DialogOverlay：scrim 不回填洞，native 按 computed background 压暗终端。
   const overlay = useTerminalOverlayRegistration(terminalOverlayId, {
     paints: false,
+    scrim: true,
   });
   const composedRef = useComposedRefs(props.ref, overlay.ref);
   return (
     <AlertDialogPrimitive.Overlay
       className={cn(
-        "app-no-drag data-open:fade-in-0 data-closed:fade-out-0 pointer-events-none fixed inset-0 z-50 bg-overlay-scrim duration-100 data-closed:animate-out data-open:animate-in",
+        "app-no-drag pointer-events-none fixed inset-0 z-50 bg-overlay-scrim data-closed:animate-[pier-overlay-fade-out_100ms_ease-out] data-open:animate-[pier-overlay-fade-in_100ms_ease-out]",
         className
       )}
       data-slot="alert-dialog-overlay"
@@ -101,7 +102,8 @@ function AlertDialogContent({
       />
       <AlertDialogPrimitive.Content
         className={cn(
-          "app-no-drag group/alert-dialog-content data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 pointer-events-auto fixed top-[calc(var(--app-titlebar-height)+(100vh-var(--app-titlebar-height))/2)] left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-5 text-popover-foreground shadow-xl outline-none ring-1 ring-foreground/5 duration-100 data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-closed:animate-out data-open:animate-in data-[size=default]:sm:max-w-sm dark:ring-foreground/10",
+          // 同 DialogContent：只淡 opacity，几何全程静止。top 是标题栏下沿。
+          "app-no-drag group/alert-dialog-content pointer-events-auto fixed inset-x-0 top-[var(--app-titlebar-height)] bottom-0 z-50 m-auto grid h-fit w-full gap-4 rounded-xl bg-popover p-5 text-popover-foreground shadow-xl outline-none ring-1 ring-foreground/5 data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-closed:animate-[pier-overlay-fade-out_100ms_ease-out] data-open:animate-[pier-overlay-fade-in_100ms_ease-out] data-[size=default]:sm:max-w-sm dark:ring-foreground/10",
           className
         )}
         data-size={size}

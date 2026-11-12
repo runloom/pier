@@ -120,7 +120,9 @@ describe("AppDialogHost", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(dialog).toHaveAttribute("data-state", "closed");
-    expect(dialog).toHaveClass("data-closed:animate-out");
+    expect(dialog).toHaveClass(
+      "data-closed:animate-[pier-overlay-fade-out_100ms_ease-out]"
+    );
     await act(() => Promise.resolve());
     expect(resolvedValue).toBe(false);
     await expect(result).resolves.toBe(false);

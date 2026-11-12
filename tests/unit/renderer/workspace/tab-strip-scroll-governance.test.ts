@@ -60,6 +60,10 @@ describe("tab strip scroll ownership governance", () => {
     expect(spec).toContain("layout-restore");
     expect(spec).toContain("reveal-active");
     expect(spec).toContain("G5");
+    // 到边不回弹：产品禁弹性格（用户决策 2026-11-12），overscroll-behavior
+    // 必须是 none（覆盖 dockview 上游的 contain），规格要记录这个偏离。
+    expect(spec).toContain("overscroll-behavior");
+    expect(spec).toContain("不回弹");
 
     const owner = readFileSync(
       join(ROOT, "src/renderer/lib/workspace/tab-strip-scroll.ts"),
@@ -84,6 +88,41 @@ describe("tab strip scroll ownership governance", () => {
     expect(reveal).toContain("REVEAL_SETTLE_TIMEOUT_MS");
     expect(reveal).not.toMatch(
       /requestAnimationFrame\(\(\)\s*=>\s*\{[\s\S]*?requestAnimationFrame\(/
+    );
+  });
+
+  it("disables rubber-band bounce on the tab strip", () => {
+    // .dv-tabs-container 由 dockview 拥有（overflow:auto + 上游 contain 保
+    // 留了 macOS 弹性）。产品决策：到边不回弹——工作台 chrome 不是内容
+    // 滚动面，回弹的「还有更多」信号已由 scroll-fade 和 ▾ 溢出菜单承担。
+    // 覆盖必须挂在 dockview-theme-pier 选择器下（单一主题命名空间），
+    // 只关 x 轴弹性；y 轴是纵向 tab 条（touch-action: pan-y）不在本决策内。
+    const css = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const override = css.match(
+      /\.dockview-theme-pier \.dv-tabs-container\s*\{[^}]*\}/
+    );
+    expect(override).not.toBeNull();
+    expect(override?.[0]).toContain("overscroll-behavior-x: none");
+    // 不能顺手把上游的 contain 全量放开或改成 none 之外的手段。
+    expect(override?.[0]).not.toContain("overscroll-behavior:");
+  });
+
+  it("renders the overflow count with tabular numerals", () => {
+    // 溢出计数（▾ 12）由 dockview 动态创建、无 class，宽度随位数变化会跳。
+    // 数字型 chrome 一律 tabular-nums（同 tab 尾部 git ±N / git 状态条）；
+    // 不整段换 mono：JetBrains 字形和 tab 标题的 system-ui 混排不协调。
+    const css = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    expect(css).toContain(
+      ".dockview-theme-pier .dv-tabs-overflow-dropdown-default > span"
+    );
+    expect(css).toMatch(
+      /\.dockview-theme-pier \.dv-tabs-overflow-dropdown-default > span\s*\{[^}]*font-variant-numeric:\s*tabular-nums;/
     );
   });
 

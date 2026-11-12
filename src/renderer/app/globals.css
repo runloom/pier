@@ -18,6 +18,31 @@
 @variant dark (:root:not(.light) &);
 
 /*
+ * 弹窗蒙层和卡片只淡 opacity。tw-animate 的 enter/exit 会在整段过渡里
+ * 把 filter 写成全零 blur、transform 写成全零三维位移（这两个标记正是
+ * gpu-compositing 治理所禁的）。filter 破坏终端洞合成；底部状态栏在洞外
+ * 跟着这层 opacity，洞里的 native 蒙层必须乘上同一个 opacity，不能停在
+ * 终值。
+ */
+@keyframes pier-overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pier-overlay-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/*
  * Rich Input Lexical chip hosts.
  *
  * - ::before/::after gutters: contenteditable carets sit on the decorator
@@ -1150,6 +1175,26 @@ body {
 /* Tab 栏底部分隔线 */
 .dockview-theme-pier .dv-tabs-and-actions-container {
   border-bottom: 1px solid var(--border);
+}
+
+/*
+ * Tab 条到边不回弹（权威：2026-08-11-tab-strip-scroll-ownership-gold-standard.md）。
+ * 上游 .dv-tabs-container 是 overflow:auto + overscroll-behavior:contain，
+ * macOS 下到边仍有橡皮筋。工作台 chrome 不是内容滚动面，「还有更多」的
+ * 信号由 scroll-fade 与溢出 ▾ 菜单承担，回弹是多余物理反馈，关掉。
+ * 只关 x 轴：纵向 tab 条（pan-y）不在本决策内。
+ */
+.dockview-theme-pier .dv-tabs-container {
+  overscroll-behavior-x: none;
+}
+
+/*
+ * 溢出计数（▾ N）用表格数字：dockview 动态创建该 span、无 class，继承
+ * UI 字体栈的比例数字，位数变化时宽度跳动。tabular-nums 让数字等宽，
+ * 字形仍随 UI 字体（不整段换 mono，避免和 tab 标题混排不协调）。
+ */
+.dockview-theme-pier .dv-tabs-overflow-dropdown-default > span {
+  font-variant-numeric: tabular-nums;
 }
 
 /*

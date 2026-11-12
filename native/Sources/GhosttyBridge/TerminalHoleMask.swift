@@ -30,15 +30,31 @@ enum TerminalHoleMask {
 
     // MARK: - Public
 
+    /// 圆角卡片的抗锯齿是对着不透明 backing 烘焙的。洞比 CSS 圆角再吃进 1pt，
+    /// 把这条脏边裁掉；直边不动。
+    static let roundedCornerOutset: CGFloat = 1
+
+    struct Overlay: Equatable {
+        var radius: CGFloat
+        var rect: NSRect
+    }
+
     /// 重新计算并应用洞遮罩。terminals / overlays 都是 contentView top-left 坐标。
     static func apply(
         contentView: NSView,
         terminals: [NSRect],
-        overlays: [NSRect]
+        overlays: [Overlay]
     ) {
         guard let compositor = findCompositor(in: contentView) else { return }
-        let holes = holeRects(terminals: terminals, overlays: overlays)
-        guard !holes.isEmpty else {
+        let overlayRects = overlays.map(\.rect)
+        let holes = holeRects(terminals: terminals, overlays: overlayRects)
+        let corners = cornerHolePath(
+            overlays: overlays.map { (rect: $0.rect, radius: $0.radius) },
+            terminals: terminals
+        )
+        // 洞空但圆角楔非空（回填卡片完全盖住终端）：楔也要挖，否则 1pt outset
+        // 与圆角弧外的角露兜底色。两者都空才摘 mask。
+        guard !holes.isEmpty || !corners.isEmpty else {
             removeMask(from: compositor)
             return
         }
@@ -64,6 +80,12 @@ enum TerminalHoleMask {
         path.addRect(CGRect(origin: .zero, size: compositor.bounds.size))
         for hole in holes {
             path.addRect(layerRect(hole, contentView: contentView, compositor: compositor))
+        }
+        if !corners.isEmpty {
+            var transform = contentToLayerTransform(contentView: contentView, compositor: compositor)
+            if let mapped = corners.copy(using: &transform) {
+                path.addPath(mapped)
+            }
         }
         mask.path = path
         hostLayer.mask = mask
@@ -188,6 +210,48 @@ enum TerminalHoleMask {
         return pieces
     }
 
+    /// 圆角浮层外接矩形里、圆角曲线外的角。只保留和终端相交、且不被**其它**
+    /// 浮层回填盖住的部分：这些角若留在回填里，看到的是不透明 backing；但落进
+    /// 上层浮层回填的楔也不能挖——那会把上层卡片自己的像素打穿露出终端。
+    /// 坐标与 holeRects 相同（contentView top-left）。
+    static func cornerHolePath(
+        overlays: [(rect: NSRect, radius: CGFloat)],
+        terminals: [NSRect]
+    ) -> CGPath {
+        var combined: CGPath?
+        for (index, overlay) in overlays.enumerated() {
+            let limit = min(overlay.rect.width, overlay.rect.height) / 2
+            let radius = min(max(overlay.radius, 0) + roundedCornerOutset, limit)
+            guard radius > 0, overlay.rect.width > 0, overlay.rect.height > 0 else { continue }
+            let box = CGPath(rect: overlay.rect, transform: nil)
+            let rounded = CGPath(
+                roundedRect: overlay.rect,
+                cornerWidth: radius,
+                cornerHeight: radius,
+                transform: nil
+            )
+            var wedges = box.subtracting(rounded, using: .winding)
+            // 自己的 box 例外（贴边浮层的角就在自己 box 里）；其余回填浮层
+            // 画在上面，楔被它盖住的部分必须留在回填侧。
+            for (otherIndex, other) in overlays.enumerated()
+            where otherIndex != index && other.rect != overlay.rect {
+                wedges = wedges.subtracting(
+                    CGPath(rect: other.rect, transform: nil),
+                    using: .winding
+                )
+            }
+            for terminal in terminals where terminal.width > 0 && terminal.height > 0 {
+                let clipped = wedges.intersection(
+                    CGPath(rect: terminal, transform: nil),
+                    using: .winding
+                )
+                guard !clipped.isEmpty else { continue }
+                combined = combined?.union(clipped, using: .winding) ?? clipped
+            }
+        }
+        return combined ?? CGMutablePath()
+    }
+
     /// contentView top-left 矩形 → compositor 本地 mask 路径坐标。
     static func layerRect(
         _ topLeft: NSRect,
@@ -209,6 +273,36 @@ enum TerminalHoleMask {
         local.origin.x -= compositor.bounds.minX
         local.origin.y -= compositor.bounds.minY
         return local
+    }
+
+    /// 把 top-left 路径变到 layerRect 用的同一套 compositor 坐标。
+    private static func contentToLayerTransform(
+        contentView: NSView,
+        compositor: NSView
+    ) -> CGAffineTransform {
+        let origin = layerRect(
+            NSRect(x: 0, y: 0, width: 1, height: 1),
+            contentView: contentView,
+            compositor: compositor
+        )
+        let right = layerRect(
+            NSRect(x: 1, y: 0, width: 1, height: 1),
+            contentView: contentView,
+            compositor: compositor
+        )
+        let down = layerRect(
+            NSRect(x: 0, y: 1, width: 1, height: 1),
+            contentView: contentView,
+            compositor: compositor
+        )
+        return CGAffineTransform(
+            a: right.minX - origin.minX,
+            b: right.maxY - origin.maxY,
+            c: down.minX - origin.minX,
+            d: down.maxY - origin.maxY,
+            tx: origin.minX,
+            ty: origin.maxY
+        )
     }
 
     // MARK: - Private

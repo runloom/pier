@@ -23,7 +23,7 @@ Chromium 的合成层（`ViewsCompositorSuperview`）覆盖整个窗口，终端
 宿主在 `ViewsCompositorSuperview.layer` 上挂 `CAShapeLayer` mask（`TerminalHoleMask`）做**硬裁**：
 
 1. 遮罩基础路径 = 整个 compositor 窗口矩形；所有 **visible** 终端 viewport 矩形挖成洞（even-odd），web 在洞里一个像素都画不出来。终端矩形先合并相交项，保证 even-odd 不会把重叠交集翻回可见。
-2. `webOverlayRects` 与终端 viewport 的交集回填为可见：登记浮层仍能盖在终端上（终端 floating pill、工具提示、上下文菜单、命令面板、dockview 分栏 sash 等）。`webOverlayRects` 是 web 覆盖终端的唯一几何真源。条目带 `paints: false` 的浮层**只参与事件路由**（全屏输入捕获：菜单 / popover 打开期间改道点击、sash / tab 拖拽），不参与回填——它们本身不画像素，整窗矩形若回填会把所有洞抹空。
+2. `webOverlayRects` 与终端 viewport 的交集回填为可见：登记浮层仍能盖在终端上（终端 floating pill、工具提示、上下文菜单、命令面板、dockview 分栏 sash 等）。`webOverlayRects` 是 web 覆盖终端的唯一几何真源。条目带 `paints: false` 的浮层**只参与事件路由**（全屏输入捕获：菜单 / popover 打开期间改道点击、sash / tab 拖拽），不参与回填——它们本身不画像素，整窗矩形若回填会把所有洞抹空。弹窗 / 确认框的整窗蒙层同样是 `paints: false`，但带 `scrim` 色：native `TerminalScrim` 在蒙层矩形与终端 viewport 的交集上、web 合成层之下画同色半透明，终端内容被压暗，而不是被不透明 backing 替换，也不是从蒙层里被裁掉。纯输入捕获不带 `scrim`，不压暗。
 3. 终端不可见（`visible=false`，如 content preview suppress）→ 不挖洞；没有可见终端 → 移除 mask；`closeAll` / `detachWindow` 清 mask。
 4. 坐标：renderer 的 `TerminalFrame` 是 contentView top-left CSS px；合成层未翻转（Electron 43 macOS 实测 `isFlipped=false`），mask 路径用 bottom-left，换算必须做 Y-flip；compositor 重建后由下一次 `applyWindowState` 重新挂上。
 5. mask 路径更新必须在 `CATransaction.setDisableActions(true)` 内，避免洞位动画滞后。
@@ -80,3 +80,15 @@ Markdown 预览字号复用图片 zoom 胶囊，带上 `backdrop-blur-sm`。源�
 同日终端状态栏文字重影（用户 HTML 玻璃页在场时缩放窗口即复现）：截图里同一组 chip 出现两份，旧份与缩放前像素逐点一致，`webContents.invalidate()` 全量重绘可清、随后的局部重绘又复发；摘掉 native mask 后重影仍在。根因不是洞遮罩，而是 `WebContentsView` 用了透明 backing：Chromium 部分重绘（buffer age / partial swap）把新帧透明区域混合在旧帧像素上，旧文字从「状态栏透明底」透出。修复是 web backing 改为不透明兜底色并与窗口背景同步（见 hard guarantee 第 7 条）；终端可见性继续由洞遮罩硬裁，不靠 web 透明度。
 
 同日 web backing 改不透明后，sash 拖拽瞬间终端整块变成兜底色：全屏输入捕获层把整窗矩形登记进 `webOverlayRects`，被洞遮罩当作「web 可绘制区」回填，所有终端洞被减空 → 移除 mask → 不透明 backing 直接盖住终端。修复不是恢复透明 backing，而是把「输入捕获」与「允许绘制」分成两个语义：全屏捕获层以 `paints: false` 登记，只进事件路由；真正绘制的浮层内容（菜单 / popover / toast / sash）仍按元素几何回填（见 hard guarantee 第 2 条）。
+
+弹窗蒙层沿用 `paints: false` 之后，终端矩形里蒙层像素被洞裁掉，终端保持原亮度。不能把蒙层改回 `paints: true`：半透明 scrim 叠在不透明 backing 上，看到的是兜底色而不是被压暗的终端。修复是 native 在洞内画与蒙层 computed background 同色的半透明（`TerminalScrim`），洞本身保持挖开。淡入淡出只用 `pier-overlay-fade-in` / `pier-overlay-fade-out`（只动画 opacity；禁止 tw-animate `enter` / `exit`，那两个 keyframe 会在整段过渡写全零 blur / 三维位移）。native 蒙层 alpha 要乘上元素当前 opacity，并在动画进行中逐帧重读：底部状态栏在洞外跟着网页 opacity，洞里若停在终值，过渡中底部状态栏和终端不是同一亮度。回填矩形带均匀 `radius` 时，圆角曲线外、且与终端相交的角挖回洞（再吃进 1pt，盖住对着不透明 backing 烘焙的抗锯齿脏边）；圆角外的角若留在回填里，终端上会看到兜底色边角。下拉 / popover 的 `box-shadow` 画在 border box 之外：洞只回填 `getBoundingClientRect()`，阴影只在终端上被硬裁，落在非终端区域时同一条 CSS 阴影仍在。不要把回填矩形扩到阴影盒，半透明像素会露出不透明 backing。computed outset shadow（不含 inset）交给 `TerminalShadow`，画在 web 合成层之下、终端之上；CSS blur 在 CoreGraphics 里取一半，alpha 乘元素 opacity。
+
+同一轮评审定下的取舍与补丁：
+
+- **楔不穿上层回填**：圆角楔若落进另一块 `paints: true` 回填矩形的 box 内，必须从楔路径里排除（`other.rect != overlay.rect` 例外只放过自身 box），否则 even-odd 会把上层卡片像素打穿露出终端（toast 大圆角胶囊 + 上层菜单场景）。
+- **洞空不早退**：回填卡片完全盖住终端时 `holeRects` 为空，但楔仍非空——两者都空才摘 mask；否则 1pt outset 与圆角弧外的角在终端四角露兜底色。
+- **层序**：`TerminalScrim`（蒙层压暗一切）在最下，`TerminalShadow`（浮层自己的铬）在其上，web 合成层再其上。scrim 后于 shadow apply 时要插进已有 shadow 之下，不能贴着合成层插（会把投影抬到蒙层上面，洞里投影不跟着变暗）。已接受的不一致：蒙层不调制投影颜色，toast 阴影在弹窗蒙层下保持原强度。
+- **阴影层数超限截断不拒绝**：main 校验只认「每项合法」，层数超上限在 focus-coordinator 截断前 16 层——一份装饰过度的快照不能让整窗洞遮罩停更。
+- **fail-quiet 解析**：`parseCssColor` 只认 Chromium computed 实际产出的记法（legacy/modern rgb、srgb、oklab），认不出返回 undefined、native 不画，不猜颜色；`COLOR_FN` 与它的能力集保持一致。透明度采样只跟 opacity 动画/过渡（keyframe 名含 fade 或 transition 属性是 opacity/all），注册浮层上的无限动画（pulse / spin）不会把逐帧 flush 链无限续命。
+- **animationend 只补几何**：淡出结束 fill-mode none 让 computed opacity 回弹到 1，此刻整份重读会把蒙层/阴影按全强度重发一帧（终端上闪一下）；逐帧链已发过当前 opacity 的终帧，动画结束沿用最近一次采样只更新矩形。
+- **统一最大圆角**：四角不一致取最大（现在产品只有对称圆角卡）。已接受的权衡：不对称圆角（sheet 形）会在 painted 直角上多挖一个楔（洞里露终端，比兜底色楔轻）；真出现 sheet 形再升级契约为四角数组。

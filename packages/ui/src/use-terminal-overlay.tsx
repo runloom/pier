@@ -26,11 +26,17 @@ import {
  */
 export interface TerminalOverlayOptions {
   /**
-   * 是否允许该浮层回填 native 洞遮罩。全屏输入捕获层（Dialog 遮罩等）
-   * 只参与事件路由、不画自身内容覆盖终端时必须传 `false`；否则整窗矩形
-   * 会把所有终端洞抹空，不透明 backing 下终端整块消失。
+   * 是否允许该浮层回填 native 洞遮罩。全屏输入捕获层（菜单打开、sash
+   * 拖拽）只参与事件路由、不画自身内容覆盖终端时必须传 `false`；否则整窗
+   * 矩形会把所有终端洞抹空，不透明 backing 下终端整块消失。
+   * 弹窗蒙层同样传 `false`，另加 `scrim`，由 native 在洞里画半透明。
    */
   paints?: boolean;
+  /**
+   * 半透明蒙层。强制不回填洞，并把元素 computed background 交给 native，
+   * 在与终端相交处画同色。纯输入捕获不要设。
+   */
+  scrim?: boolean;
 }
 
 export interface TerminalOverlayRegistry {
@@ -76,6 +82,7 @@ export function useTerminalOverlayRegistration(
   const id = useId();
   const registrationRef = useRef<TerminalOverlayRegistration | null>(null);
   const paints = options?.paints;
+  const scrim = options?.scrim === true;
   const ref = useCallback(
     (el: HTMLElement | null) => {
       registrationRef.current?.dispose();
@@ -84,12 +91,19 @@ export function useTerminalOverlayRegistration(
         return;
       }
       const overlayId = explicitId ?? `terminal-overlay:${id}`;
+      if (scrim) {
+        registrationRef.current = registry.registerElement(overlayId, el, {
+          paints: false,
+          scrim: true,
+        });
+        return;
+      }
       registrationRef.current =
         paints === undefined
           ? registry.registerElement(overlayId, el)
           : registry.registerElement(overlayId, el, { paints });
     },
-    [explicitId, id, paints, registry]
+    [explicitId, id, paints, registry, scrim]
   );
   const flush = useCallback(() => registrationRef.current?.flush(), []);
   return useMemo(() => ({ flush, ref }), [flush, ref]);

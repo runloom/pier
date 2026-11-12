@@ -29,6 +29,9 @@ const RAW_COLOR_WHOLE_FILE_OWNERS = new Set([
   "src/renderer/lib/live-modules/pier-canvas-world-ink.ts",
 ]);
 const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([
+  // Terminal-scrim shadow color scanner: matches the same computed-color
+  // grammar parseCssColor accepts before handing RGBA to native.
+  ["src/renderer/stores/terminal-scrim/shadow.ts", /rgba?\(\s*[^)]*\)/gi],
   ["packages/ui/src/chart.tsx", /#(?:ccc|fff)\b/gi],
   // Scroll fade masks use opaque black stops; alpha is via transparent end, not product chrome.
   ["packages/ui/src/scroll-area.tsx", /#000\b/gi],

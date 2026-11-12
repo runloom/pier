@@ -57,6 +57,27 @@ export type TerminalPresentationReason =
   | "window-resize"
   | `window-${"resize" | "view-zoom" | "zoom"}`;
 
+/** 0–1 sRGB。与 web 蒙层 computed background 一致，含 alpha。 */
+export interface TerminalScrimColor {
+  a: number;
+  b: number;
+  g: number;
+  r: number;
+}
+
+/**
+ * 外扩 box-shadow，content-view px。洞只回填 border box，盒外阴影会被硬裁；
+ * 这些值交给 native 画在合成层之下。inset 不在这里（盒内 web 自己画）。
+ * `blur` 是 CSS blur，不是 CoreGraphics sigma。
+ */
+export interface TerminalBoxShadow {
+  blur: number;
+  color: TerminalScrimColor;
+  spread: number;
+  x: number;
+  y: number;
+}
+
 export interface TerminalWebOverlayRect {
   frame: TerminalFrame;
   id: string;
@@ -68,6 +89,22 @@ export interface TerminalWebOverlayRect {
    * 配合不透明 web backing 会整块盖住终端（2026-11-09 分栏拖拽复现）。
    */
   paints?: boolean;
+  /**
+   * 均匀圆角，content-view px。只对会回填的浮层有意义：洞按外接矩形
+   * 回填时，圆角外的角是不透明 backing，终端上会看到脏色边角。缺省 0。
+   */
+  radius?: number;
+  /**
+   * 半透明蒙层色。只在 `paints: false` 时生效：不回填洞，由 native 在该矩形
+   * 与终端 viewport 的交集上画同色，终端内容被压暗而不是被裁出蒙层。
+   * 纯输入捕获（菜单 / sash）不要带。
+   */
+  scrim?: TerminalScrimColor;
+  /**
+   * 外扩 box-shadow。只对会回填的浮层有意义：不要为了阴影去加大回填矩形，
+   * 透明像素会露出不透明 backing。缺省表示没有需要 native 补的投影。
+   */
+  shadows?: TerminalBoxShadow[];
 }
 
 export type TerminalKeyboardFocusTarget =

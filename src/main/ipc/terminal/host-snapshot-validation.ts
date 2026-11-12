@@ -80,6 +80,68 @@ function isKeyboardTarget(
   );
 }
 
+function isUnitChannel(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1
+  );
+}
+
+function isScrimColor(value: unknown): boolean {
+  if (value === undefined) {
+    return true;
+  }
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  const color = value as Record<string, unknown>;
+  return (
+    isUnitChannel(color.r) &&
+    isUnitChannel(color.g) &&
+    isUnitChannel(color.b) &&
+    isUnitChannel(color.a)
+  );
+}
+
+function isCornerRadius(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (typeof value === "number" && Number.isFinite(value) && value >= 0)
+  );
+}
+
+function isShadowLength(value: unknown, allowNegative: boolean): boolean {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    Math.abs(value) <= MAX_COORDINATE &&
+    (allowNegative || value >= 0)
+  );
+}
+
+function isBoxShadow(value: unknown): boolean {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  const shadow = value as Record<string, unknown>;
+  return (
+    isShadowLength(shadow.x, true) &&
+    isShadowLength(shadow.y, true) &&
+    isShadowLength(shadow.blur, false) &&
+    isShadowLength(shadow.spread, true) &&
+    shadow.color !== undefined &&
+    isScrimColor(shadow.color)
+  );
+}
+
+function isOverlayShadows(value: unknown): boolean {
+  return (
+    value === undefined || (Array.isArray(value) && value.every(isBoxShadow))
+  );
+}
+
 function isOverlayRect(value: unknown): value is TerminalWebOverlayRect {
   if (value === null || typeof value !== "object") {
     return false;
@@ -88,7 +150,10 @@ function isOverlayRect(value: unknown): value is TerminalWebOverlayRect {
   return (
     isPanelId(rect.id) &&
     isFiniteFrame(rect.frame) &&
-    (rect.paints === undefined || typeof rect.paints === "boolean")
+    (rect.paints === undefined || typeof rect.paints === "boolean") &&
+    isScrimColor(rect.scrim) &&
+    isCornerRadius(rect.radius) &&
+    isOverlayShadows(rect.shadows)
   );
 }
 

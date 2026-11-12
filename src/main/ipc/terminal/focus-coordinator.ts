@@ -17,6 +17,10 @@ import {
 } from "../../services/pier-resource/terminal-session-registry.ts";
 import type { AppWindow } from "../../windows/app-window.ts";
 import { isTerminalHostSnapshot } from "./host-snapshot-validation.ts";
+
+/** 超出上限的阴影层数截断：一层装饰过度不能冻结整窗洞遮罩。 */
+const MAX_SHADOW_LAYERS = 16;
+
 import type { NativeAddon } from "./native-addon.ts";
 import { fromNativePanelKey, toNativePanelKey } from "./panel-id.ts";
 
@@ -75,6 +79,22 @@ export class TerminalFocusCoordinator {
         status: "error",
       };
     }
+    // 阴影层数超限的浮层截断到上限，不拒整份快照（拒了会让全窗洞遮罩停更）。
+    const sanitized: TerminalHostSnapshot = {
+      ...snapshot,
+      webOverlayRects: snapshot.webOverlayRects.map((rect) => {
+        if (
+          rect.shadows === undefined ||
+          rect.shadows.length <= MAX_SHADOW_LAYERS
+        ) {
+          return rect;
+        }
+        const { shadows, ...rest } = rect;
+        return shadows === undefined
+          ? rest
+          : { ...rest, shadows: shadows.slice(0, MAX_SHADOW_LAYERS) };
+      }),
+    };
 
     if (record.desired) {
       if (snapshot.rendererSequence < record.desired.rendererSequence) {
@@ -108,9 +128,9 @@ export class TerminalFocusCoordinator {
       }
     }
 
-    record.desired = snapshot;
+    record.desired = sanitized;
     record.dirty = true;
-    return this.reconcile(record, snapshot.reason);
+    return this.reconcile(record, sanitized.reason);
   }
 
   acceptNativeFocusIntent(

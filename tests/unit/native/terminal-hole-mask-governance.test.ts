@@ -22,6 +22,7 @@ const WINDOW_MANAGER_TEST =
   "tests/unit/main/app-core/window-manager-webcontents-view.test.ts";
 const DIALOG = "packages/ui/src/dialog.tsx";
 const ALERT_DIALOG = "packages/ui/src/alert-dialog.tsx";
+const COMMAND = "packages/ui/src/command.tsx";
 
 function read(rel: string): string {
   return readFileSync(join(ROOT, rel), "utf8");
@@ -80,7 +81,7 @@ describe("terminal hole mask governance (transparent web over Ghostty)", () => {
     // 调用点必须同时传终端与浮层，浮层是回填的唯一来源；仅输入捕获
     // （paints=false）的全屏浮层不得参与回填，否则整窗矩形会抹空所有洞。
     expect(bridge).toMatch(
-      /TerminalHoleMask\.apply\(\s*contentView: contentView,\s*terminals: holeViewports,\s*overlays: state\.webOverlayRects\s*\.filter \{ \$0\.paints != false \}\s*\.map \{ \$0\.frame\.nsRect \}\s*\)/u
+      /TerminalHoleMask\.apply\(\s*contentView: contentView,\s*terminals: holeViewports,\s*overlays: state\.webOverlayRects\s*\.filter \{ \$0\.paints != false \}\s*\.map \{\s*TerminalHoleMask\.Overlay\(\s*radius: CGFloat\(\$0\.radius \?\? 0\),\s*rect: \$0\.frame\.nsRect\s*\)\s*\}\s*\)/u
     );
     // closeAll（renderer reload / window close）必须清 mask，防止无终端时仍挖洞。
     expect(bridge).toContain(
@@ -98,7 +99,7 @@ describe("terminal hole mask governance (transparent web over Ghostty)", () => {
     expect(source).toContain("mask.fillRule = .evenOdd");
     expect(source).toContain("CATransaction.setDisableActions(true)");
     // 无洞时移除，而不是留一张全透明的消费层。
-    expect(source).toContain("guard !holes.isEmpty else {");
+    expect(source).toContain("guard !holes.isEmpty || !corners.isEmpty else {");
     expect(source).toContain("removeMask(from: compositor)");
     // 浮层回填必须做矩形减法，不是把整块浮层矩形加进路径。
     expect(source).toContain("terminals: [NSRect], overlays: [NSRect]");
@@ -139,8 +140,8 @@ describe("terminal hole mask governance (transparent web over Ghostty)", () => {
     // 它必须留在事件路由里，但不得回填进洞，否则整窗矩形会抹空所有洞，
     // 不透明 backing 下终端整块消失（2026-11-09 sash 拖拽复现）。
     const slice = read("src/renderer/stores/terminal-input-routing-slice.ts");
-    expect(slice).toContain(
-      "setWebOverlayRect(id, readTerminalViewportFrame(), false)"
+    expect(read("src/renderer/stores/terminal-scrim/fullscreen.ts")).toContain(
+      "overlayRect(id, readTerminalViewportFrame(), false)"
     );
     expect(slice).toContain("paints: entry.paints");
 
@@ -151,22 +152,60 @@ describe("terminal hole mask governance (transparent web over Ghostty)", () => {
       "src/main/ipc/terminal/host-snapshot-validation.ts"
     );
     expect(validation).toContain("rect.paints === undefined");
+    expect(validation).toContain("isScrimColor(rect.scrim)");
+    expect(validation).toContain("isCornerRadius(rect.radius)");
+    expect(read("src/shared/contracts/terminal.ts")).toContain(
+      "radius?: number"
+    );
+    expect(read(MASK)).toContain("cornerHolePath");
+    expect(slice).toContain("readOverlayAppearance");
+    expect(read("src/renderer/stores/terminal-scrim/appearance.ts")).toContain(
+      "readOverlayShadows"
+    );
 
     const bridge = read(BRIDGE);
     expect(bridge).toContain("let paints: Bool?");
     expect(bridge).toContain("$0.paints != false");
+    expect(bridge).toContain("TerminalScrim.apply");
+    expect(bridge).toContain("TerminalScrim.clear");
+    expect(read("native/Sources/GhosttyBridge/TerminalScrim.swift")).toContain(
+      "contentView.addSubview(view, positioned: .below, relativeTo: compositor)"
+    );
 
     expect(read("AGENTS.md")).toContain("paints: false");
+    expect(read("AGENTS.md")).toContain("TerminalScrim");
     expect(read(SPEC)).toContain("paints: false");
+    expect(read(SPEC)).toContain("TerminalScrim");
+    expect(read(SPEC)).toContain("TerminalShadow");
+    expect(read("AGENTS.md")).toContain("TerminalShadow");
+    expect(read("native/Sources/GhosttyBridge/TerminalShadow.swift")).toContain(
+      "layerBlur"
+    );
+    expect(bridge).toContain("TerminalShadow.apply");
+    expect(bridge).toContain("TerminalShadow.clear");
+    expect(read("src/shared/contracts/terminal.ts")).toContain(
+      "shadows?: TerminalBoxShadow[]"
+    );
+    expect(validation).toContain("isOverlayShadows(rect.shadows)");
+
+    const css = read("src/renderer/app/globals.css");
+    const fadeIn = css.slice(
+      css.indexOf("@keyframes pier-overlay-fade-in"),
+      css.indexOf("@keyframes pier-overlay-fade-out")
+    );
+    expect(fadeIn).toContain("opacity");
+    expect(fadeIn).not.toContain("transform");
+    expect(fadeIn).not.toContain("filter");
   });
 
   it("keeps modal scrims as input capture while registering dialog cards", () => {
-    // 设置 / 确认弹窗的整窗 scrim 是输入捕获层：paints:false 只进事件路由，
-    // 否则整窗回填会把所有终端洞抹空，不透明 backing 下设置打开时终端整块
-    // 消失。卡片本身是不透明 web 面，必须单独登记回填，native 终端才不会
-    // 盖住 Dialog 内容。
+    // 设置 / 确认弹窗的整窗 scrim 不回填洞：paints:false 只进事件路由，
+    // 否则整窗回填会把所有终端洞抹空。蒙层色经 scrim 交给 native，在洞里
+    // 画同色半透明。卡片本身是不透明 web 面，必须单独登记回填。
     const dialog = read(DIALOG);
-    expect(dialog).toContain("useTerminalOverlay({ paints: false })");
+    expect(dialog).toContain(
+      "useTerminalOverlay({ paints: false, scrim: true })"
+    );
     expect(dialog).toContain(
       "const contentOverlay = useTerminalOverlayRegistration()"
     );
@@ -174,8 +213,63 @@ describe("terminal hole mask governance (transparent web over Ghostty)", () => {
 
     const alertDialog = read(ALERT_DIALOG);
     expect(alertDialog).toContain("paints: false");
+    expect(alertDialog).toContain("scrim: true");
     expect(alertDialog).toContain(":content");
     expect(alertDialog).toContain("ref={contentRef}");
+  });
+
+  it("keeps modal shells geometrically still so the hole tracks them", () => {
+    // 快照管道有 IPC 往返，追不上逐帧动画。卡片壳若用 transform 入场
+    // （zoom-in / slide-in），100ms 内矩形一直在滑，洞冻结在动画起点的
+    // 位置 → 洞外的卡片被硬裁、洞里露出终端（设置框左上角穿帮）。
+    // 壳的居中也不许靠 transform：enter keyframe 的 from 恒为
+    // translate3d(0,0,0)，与 -translate-x/y-1/2 抢同一属性，fade 也会滑
+    // 半张卡片。居中走 inset + margin。top 必须是标题栏下沿而不是旧的
+    // 垂直中线：去掉 -translate-y-1/2 后若 top 仍是中线，上边缘会落在
+    // 中线，弹窗整体下移半高（设置框 h-[90vh] 大半掉出窗口）。
+    const dialog = read(DIALOG);
+    // tw-animate 的 enter/exit 不只改 opacity：整段过渡 filter 都是
+    // blur(0)、transform 都是 translate3d(0,0,0)。filter 正是洞合成禁止的，
+    // 底部状态栏在洞外跟着这层走，和洞里的 native 蒙层错拍。淡入淡出只能动 opacity。
+    expect(dialog).not.toContain("data-open:fade-in-0");
+    expect(dialog).not.toContain("data-open:animate-in");
+    expect(dialog).toContain("pier-overlay-fade-in");
+    expect(dialog).toContain("pier-overlay-fade-out");
+    expect(dialog).not.toContain("data-open:zoom-in-95");
+    expect(dialog).not.toContain("-translate-x-1/2");
+    expect(dialog).not.toContain("-translate-y-1/2");
+    expect(dialog).not.toContain("(100vh-var(--app-titlebar-height))/2");
+    expect(dialog).toContain("fixed inset-x-0");
+    expect(dialog).toContain("top-[var(--app-titlebar-height)]");
+    expect(dialog).toContain("bottom-0");
+    expect(dialog).toContain("h-fit");
+    expect(dialog).toContain("m-auto");
+    expect(dialog).toContain("w-full");
+    expect(dialog).not.toContain("w-fit");
+
+    const alertDialog = read(ALERT_DIALOG);
+    expect(alertDialog).not.toContain("data-open:fade-in-0");
+    expect(alertDialog).not.toContain("data-open:animate-in");
+    expect(alertDialog).toContain("pier-overlay-fade-in");
+    expect(alertDialog).toContain("pier-overlay-fade-out");
+    expect(alertDialog).not.toContain("data-open:zoom-in-95");
+    expect(alertDialog).not.toContain("-translate-x-1/2");
+    expect(alertDialog).not.toContain("-translate-y-1/2");
+    expect(alertDialog).not.toContain("(100vh-var(--app-titlebar-height))/2");
+    expect(alertDialog).toContain("fixed inset-x-0");
+    expect(alertDialog).toContain("top-[var(--app-titlebar-height)]");
+    expect(alertDialog).toContain("bottom-0");
+    expect(alertDialog).toContain("h-fit");
+    expect(alertDialog).toContain("m-auto");
+    expect(alertDialog).toContain("w-full");
+    expect(alertDialog).not.toContain("w-fit");
+
+    // 命令面板钉在 1/3。bottom 必须放开，否则 m-auto 会在 top-1/3 和
+    // 窗口底之间重新居中，面板比原来更低。不要再用 translate 抵消。
+    const command = read(COMMAND);
+    expect(command).toContain("top-1/3");
+    expect(command).toContain("bottom-auto");
+    expect(command).not.toContain("translate-y-0");
   });
 
   it("registers the composer autocomplete portal as a paint overlay", () => {

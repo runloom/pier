@@ -100,6 +100,7 @@
 | **K7** | 修根因 R2：dockview-core patch 在无溢出时 **保留** `_scrollOffset`；restore 不再依赖嵌套多 rAF | 对齐文件树禁令 |
 | **K8** | tab 条 `scrollLeft` **不**写入 workspace layout JSON；跨窗口 transfer / 冷启动归 0 可接受 | 避免 layout 膨胀与还原竞态 |
 | **K9** | G0–G5 全绿前不得称金标准；P0 补丁可合但须在 PR/文档标明「非金标准」 | 防口号跑赢验收 |
+| **K10** | **到边不回弹**（2026-11-12 用户决策）：产品覆盖 `overscroll-behavior-x: none`（`.dockview-theme-pier .dv-tabs-container`），偏离上游 dockview 的 `contain`（contain 有意保留 macOS 橡皮筋）。只关 x 轴；纵向 tab 条不在本决策内 | 工作台 chrome 不是内容滚动面；「还有更多」的信号由 scroll-fade 与溢出 ▾ 菜单承担，到边回弹是多余物理反馈 |
 
 ---
 
