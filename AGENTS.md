@@ -17,13 +17,9 @@ Pier 是本地 AI 开发工作台。参考 loomdesk 产品形态，使用 bay �
 ## 02 技术栈
 
 - Electron 43 · React 19 · TypeScript 6 strict
-- electron-vite 5 + Vite 8（main / preload / renderer 三端）
-- dockview-react 6.6.1（panel 布局核心：tab + split + floating + drag）
-- Tailwind CSS v4 + shadcn primitives
-- Zustand 5（client state）
-- Biome 2.5 + Ultracite（lint + format 单工具栈）
-- pnpm 11
-- Vitest 4 + Playwright（测试）
+- electron-vite 5 + Vite 8（main / preload / renderer 三端）· dockview-react 6.6.1（panel 布局核心：tab + split + floating + drag）
+- Tailwind CSS v4 + shadcn primitives · Zustand 5（client state）· Biome 2.5 + Ultracite（lint + format 单工具栈）
+- pnpm 11 · Vitest 4 + Playwright（测试）
 
 ## 03 架构边界
 
@@ -172,6 +168,10 @@ Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 - `isDeletionOnlyDirty` 不亮未保存圆点，关 tab 不问保存。不新增「删除时关 tab」设置。
 
 检查点在 `tests/unit/plugins/files/deleted-open-document-tab-governance.test.ts`。
+
+### Files 文档预览（PDF / DOCX / XLSX）
+
+权威规格：[`docs/superpowers/specs/2026-11-12-files-document-preview-gold-standard.md`](docs/superpowers/specs/2026-11-12-files-document-preview-gold-standard.md)（只读；分类先于文本上限；token 单次 fetch；CSP / Worker / CMaps；加密与旧格式回退；DOCX 清洗；XLSX 截断提示）。检查点：`tests/unit/plugins/files/document-preview-governance.test.ts`。
 
 ### Canvas 画板视口记忆
 

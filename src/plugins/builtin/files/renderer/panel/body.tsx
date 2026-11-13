@@ -17,8 +17,6 @@ import {
   type MarkdownCrossModeAnchor,
   sourceOffsetForLine,
 } from "../markdown/cross-mode-anchor.ts";
-import { FileImagePreview } from "../preview/image.tsx";
-import { FilesFindUnavailableNotice } from "../search/use-find-unavailable.ts";
 import { isCanvasDiskDoc } from "./canvas-doc.ts";
 import {
   FileDeletedOnDiskBar,
@@ -40,6 +38,10 @@ import {
   MissingTemporaryState,
   ReadOnlyErrorState,
 } from "./parts.tsx";
+import {
+  FilePanelPreviewBranch,
+  shouldRenderPreviewBranch,
+} from "./preview/index.tsx";
 import { UnsupportedFilePanel } from "./unsupported-state.tsx";
 import { useDiskConflictActions } from "./use-disk-conflict-actions.ts";
 import { useFilePanelMarkdownChrome } from "./use-markdown-chrome.ts";
@@ -318,18 +320,17 @@ export function ResolvedFilePanel({
 
   const deletedChrome = { controller, document, panelId, t };
 
-  if (document.preview && context) {
+  if (shouldRenderPreviewBranch(document) && context) {
     return (
-      <FileDeletedOnDiskChrome {...deletedChrome}>
-        <FilesFindUnavailableNotice
-          context={context}
-          panelId={panelId}
-          searchRequest={searchRequest}
-          t={t}
-        >
-          <FileImagePreview context={context} document={document} t={t} />
-        </FilesFindUnavailableNotice>
-      </FileDeletedOnDiskChrome>
+      <FilePanelPreviewBranch
+        context={context}
+        controller={controller}
+        document={document}
+        panelId={panelId}
+        preview={document.preview}
+        searchRequest={searchRequest}
+        t={t}
+      />
     );
   }
 

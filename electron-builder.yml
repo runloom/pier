@@ -47,6 +47,12 @@ extraResources:
     to: notification-sounds
   - from: resources/system-skills
     to: system-skills
+  - from: node_modules/pdfjs-dist/cmaps
+    to: pdfjs/cmaps
+  - from: node_modules/pdfjs-dist/standard_fonts
+    to: pdfjs/standard_fonts
+  - from: node_modules/pdfjs-dist/wasm
+    to: pdfjs/wasm
     filter:
       - "**/*"
   # tsserver plugin: remap pier/canvas + pier/host in canvas source mode.

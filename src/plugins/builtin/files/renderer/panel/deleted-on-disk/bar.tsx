@@ -53,10 +53,15 @@ function FileDeletedOnDiskBar({
           {t("filePanel.deleted.bannerTitle", "This file was deleted")}
         </p>
         <p className="text-muted-foreground text-xs">
-          {t(
-            "filePanel.deleted.bannerBody",
-            "Save to restore it in the original location."
-          )}
+          {canSave
+            ? t(
+                "filePanel.deleted.bannerBody",
+                "Save to restore it in the original location."
+              )
+            : t(
+                "filePanel.deleted.bannerBodyReadOnly",
+                "This preview shows the last version. Restore the file to open it again."
+              )}
         </p>
       </div>
       {canSave ? (

@@ -6,11 +6,16 @@ import {
 export { FILE_PREVIEW_SCHEME } from "@shared/file-preview-url.ts";
 
 import {
+  FILE_PREVIEW_MIME_BY_DOCUMENT_FORMAT,
+  type FilePreviewDocumentMime,
+} from "@shared/contracts/file/document.ts";
+import {
   isAbsoluteFilePreviewLocator,
   isGitBlobFilePreviewLocator,
 } from "@shared/contracts/file/preview-ticket.ts";
 import type { OnBeforeRequestListenerDetails } from "electron";
 import { protocol as electronProtocol } from "electron";
+import { classifyDocumentPreview } from "../services/files/document-classifier.ts";
 import {
   resolveExistingFileIdentity,
   revisionForFileBytes,
@@ -23,6 +28,7 @@ import {
   readFileWithinImagePreviewLimit,
 } from "./image-preview-file.ts";
 import { classifyPreviewImageBytes } from "./image-signature.ts";
+import { readFileHeader } from "./preview-file.ts";
 import {
   type FilePreviewTicketRegistry,
   filePreviewTicketRegistry,
@@ -67,7 +73,15 @@ function conflict(): Response {
   });
 }
 
-function imageResponse(
+const DOCUMENT_PREVIEW_MIMES = new Set<string>(
+  Object.values(FILE_PREVIEW_MIME_BY_DOCUMENT_FORMAT)
+);
+
+function isDocumentPreviewMime(mime: string): mime is FilePreviewDocumentMime {
+  return DOCUMENT_PREVIEW_MIMES.has(mime);
+}
+
+function previewResponse(
   bytes: Buffer,
   mime: string,
   revision: string
@@ -108,7 +122,7 @@ export async function resolveFilePreviewResponse(
       ) {
         return conflict();
       }
-      return imageResponse(
+      return previewResponse(
         resolved.bytes,
         resolved.locator.mime,
         resolved.locator.revision
@@ -131,15 +145,29 @@ export async function resolveFilePreviewResponse(
       ) {
         return conflict();
       }
-      return imageResponse(resolved.bytes, resolved.mime, resolved.revision);
+      return previewResponse(resolved.bytes, resolved.mime, resolved.revision);
     }
     const { path, revision: requestedRevision, root } = entry.locator;
+    const requestedMime = entry.locator.mime;
+    const documentMime = isDocumentPreviewMime(requestedMime);
     const identity = await resolveExistingFileIdentity(root, path);
     if (unsupportedFileType(identity.stat)) {
       return notFound();
     }
     if (identity.stat.size > MAX_IMAGE_PREVIEW_FILE_BYTES) {
       return payloadTooLarge();
+    }
+    if (documentMime) {
+      const classification = classifyDocumentPreview({
+        header: await readFileHeader(identity.canonicalTarget, 1024),
+        path,
+      });
+      if (
+        classification.kind !== "document" ||
+        classification.mime !== requestedMime
+      ) {
+        return notFound();
+      }
     }
     const bytes = await readFileWithinImagePreviewLimit(
       identity.canonicalTarget,
@@ -148,15 +176,24 @@ export async function resolveFilePreviewResponse(
     if (!bytes) {
       return payloadTooLarge();
     }
-    const mime = classifyPreviewImageBytes(bytes);
-    if (!mime || mime !== entry.locator.mime) {
+    let mime: string | null;
+    if (documentMime) {
+      const classification = classifyDocumentPreview({
+        header: bytes.subarray(0, 1024),
+        path,
+      });
+      mime = classification.kind === "document" ? classification.mime : null;
+    } else {
+      mime = classifyPreviewImageBytes(bytes);
+    }
+    if (!mime || mime !== requestedMime) {
       return notFound();
     }
     const revision = revisionForFileBytes(identity, bytes);
     if (revision !== requestedRevision) {
       return conflict();
     }
-    return imageResponse(bytes, mime, revision);
+    return previewResponse(bytes, mime, revision);
   } catch {
     return notFound();
   }
@@ -181,20 +218,30 @@ export function authorizeFilePreviewRequest(
   );
 }
 
+export function filePreviewSchemeRegistration(): {
+  privileges: {
+    corsEnabled: boolean;
+    secure: boolean;
+    standard: boolean;
+    supportFetchAPI: boolean;
+  };
+  scheme: typeof FILE_PREVIEW_SCHEME;
+} {
+  return {
+    privileges: {
+      corsEnabled: true,
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+    },
+    scheme: FILE_PREVIEW_SCHEME,
+  };
+}
+
 export function registerFilePreviewScheme(
   protocol: ProtocolRegistration = electronProtocol
 ): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      privileges: {
-        corsEnabled: true,
-        secure: true,
-        standard: true,
-        supportFetchAPI: true,
-      },
-      scheme: FILE_PREVIEW_SCHEME,
-    },
-  ]);
+  protocol.registerSchemesAsPrivileged([filePreviewSchemeRegistration()]);
 }
 
 export function handleFilePreviewProtocol(

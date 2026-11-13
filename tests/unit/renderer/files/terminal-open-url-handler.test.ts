@@ -728,4 +728,30 @@ describe("handleFilesTerminalOpenUrl", () => {
     );
     expect(openPath).not.toHaveBeenCalled();
   });
+
+  it.each([
+    "report.pdf",
+    "notes.docx",
+    "data.xlsx",
+  ])("opens %s in the Files panel without system open", async (fileName) => {
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "text",
+        panelId: "t1",
+        url: fileName,
+      })
+    ).resolves.toBe(true);
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          source: {
+            kind: "disk",
+            path: fileName,
+            root: "/repo/src",
+          },
+        }),
+      })
+    );
+    expect(openPath).not.toHaveBeenCalled();
+  });
 });

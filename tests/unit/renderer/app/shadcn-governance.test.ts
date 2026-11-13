@@ -40,6 +40,8 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/lib/comments/action-dialog.tsx",
   // Agent collaboration session rows: Item asChild full-row select hit target.
   "src/renderer/lib/agent-runtime/collaboration-dialog.tsx",
+  // PDF annotation overlays are absolutely positioned page-geometry hit targets.
+  "src/plugins/builtin/files/renderer/preview/pdf/page.tsx",
 ]);
 const ITEM_AS_CHILD_BUTTON_OWNERS = new Set([
   "src/plugins/builtin/files/renderer/search/result-row.tsx",

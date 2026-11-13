@@ -25,42 +25,61 @@ describe("file preview startup governance", () => {
     expect(readyIndex).toBeGreaterThan(registerCallIndex);
     expect(attachCallIndex).toBeGreaterThan(readyIndex);
 
-    expect(bootstrapSource).toContain("registerFilePreviewScheme()");
     expect(bootstrapSource).toContain("handleFilePreviewProtocol()");
-    expect(bootstrapSource).toContain("registerLiveModuleProtocolScheme()");
     expect(bootstrapSource).toContain("attachLiveModuleProtocolHandler()");
-    expect(bootstrapSource).toContain("registerHtmlPreviewScheme()");
     expect(bootstrapSource).toContain("handleHtmlPreviewProtocol()");
     expect(bootstrapSource).toContain("registerPreviewRequestGuards()");
     expect(bootstrapSource).not.toContain("registerFilePreviewRequestGuard()");
     expect(bootstrapSource).not.toContain("registerHtmlPreviewRequestGuard()");
 
+    // Electron replaces the privileged scheme list on every
+    // registerSchemesAsPrivileged call, so bootstrap must register all schemes
+    // in a single call; per-scheme registrations would unprivilege the rest.
+    expect(
+      bootstrapSource.match(/registerSchemesAsPrivileged\(/gu)
+    ).toHaveLength(1);
     const schemeFnIndex = bootstrapSource.indexOf(
       "export function registerPrivilegedProtocolSchemes"
     );
     const handlerFnIndex = bootstrapSource.indexOf(
       "export function attachPrivilegedProtocolHandlers"
     );
-    const filePreviewSchemeIndex = bootstrapSource.indexOf(
-      "registerFilePreviewScheme()"
+    const schemeCallIndex = bootstrapSource.indexOf(
+      "electronProtocol.registerSchemesAsPrivileged("
     );
-    const filePreviewHandlerIndex = bootstrapSource.indexOf(
-      "handleFilePreviewProtocol()"
-    );
-
+    const schemeDescriptors = [
+      "assetSchemeRegistration()",
+      "pluginAssetSchemeRegistration()",
+      "filePreviewSchemeRegistration()",
+      "htmlPreviewSchemeRegistration()",
+      "liveModuleSchemeRegistration()",
+    ];
     expect(schemeFnIndex).toBeGreaterThan(-1);
     expect(handlerFnIndex).toBeGreaterThan(schemeFnIndex);
-    expect(filePreviewSchemeIndex).toBeGreaterThan(schemeFnIndex);
-    expect(filePreviewSchemeIndex).toBeLessThan(handlerFnIndex);
-    expect(filePreviewHandlerIndex).toBeGreaterThan(handlerFnIndex);
-    const htmlPreviewSchemeIndex = bootstrapSource.indexOf(
-      "registerHtmlPreviewScheme()"
+    expect(schemeCallIndex).toBeGreaterThan(schemeFnIndex);
+    expect(schemeCallIndex).toBeLessThan(handlerFnIndex);
+    for (const descriptor of schemeDescriptors) {
+      const descriptorIndex = bootstrapSource.indexOf(descriptor);
+      expect(descriptorIndex).toBeGreaterThan(schemeFnIndex);
+      expect(descriptorIndex).toBeLessThan(handlerFnIndex);
+    }
+    for (const wrapper of [
+      "registerAssetScheme()",
+      "registerPluginAssetScheme()",
+      "registerFilePreviewScheme()",
+      "registerHtmlPreviewScheme()",
+      "registerLiveModuleProtocolScheme()",
+    ]) {
+      expect(bootstrapSource).not.toContain(wrapper);
+    }
+
+    const filePreviewHandlerIndex = bootstrapSource.indexOf(
+      "handleFilePreviewProtocol()"
     );
     const htmlPreviewHandlerIndex = bootstrapSource.indexOf(
       "handleHtmlPreviewProtocol()"
     );
-    expect(htmlPreviewSchemeIndex).toBeGreaterThan(schemeFnIndex);
-    expect(htmlPreviewSchemeIndex).toBeLessThan(handlerFnIndex);
+    expect(filePreviewHandlerIndex).toBeGreaterThan(handlerFnIndex);
     expect(htmlPreviewHandlerIndex).toBeGreaterThan(handlerFnIndex);
   });
 });

@@ -37,7 +37,7 @@ export function FileImagePreview({
     "loading"
   );
   const source = document.source;
-  const preview = document.preview;
+  const preview = document.preview?.kind === "image" ? document.preview : null;
   const previewMime = preview?.mime;
   const previewRevision = preview?.revision;
   const diskPath = source.kind === "disk" ? source.path : null;

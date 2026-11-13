@@ -29,6 +29,43 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     NoopResizeObserver as unknown as typeof ResizeObserver;
 }
 
+// react-data-grid 7 在渲染期使用 TC39 的 Map.prototype.getOrInsertComputed;
+// 当前 Node 运行时尚未提供,补一个语义等价的最小实现。
+if (typeof globalThis.Map.prototype.getOrInsertComputed !== "function") {
+  Object.defineProperty(Map.prototype, "getOrInsertComputed", {
+    configurable: true,
+    value<K, V>(this: Map<K, V>, key: K, callback: (key: K) => V): V {
+      if (this.has(key)) {
+        return this.get(key) as V;
+      }
+      const value = callback(key);
+      this.set(key, value);
+      return value;
+    },
+    writable: true,
+  });
+}
+
+if (typeof globalThis.WeakMap.prototype.getOrInsertComputed !== "function") {
+  Object.defineProperty(WeakMap.prototype, "getOrInsertComputed", {
+    configurable: true,
+    value<K extends WeakKey, V>(
+      this: WeakMap<K, V>,
+      key: K,
+      callback: (key: K) => V
+    ): V {
+      const existing = this.get(key);
+      if (existing !== undefined || this.has(key)) {
+        return existing as V;
+      }
+      const value = callback(key);
+      this.set(key, value);
+      return value;
+    },
+    writable: true,
+  });
+}
+
 function createEmptyDomRectList(): DOMRectList {
   const rects: DOMRect[] = [];
   return {

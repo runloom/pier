@@ -238,7 +238,9 @@ export function FilePanelLayout({
           className={cn(
             // 4px 布局宽度：更宽会把 50% 夹宽契约（End → 组宽一半）压出容差；
             // 命中区只能向右扩展（after:w-2.5），不得向左侵入树的原生滚动条。
-            "pointer-coarse:w-5 w-1 border-border border-l bg-transparent after:left-0 after:w-2.5 after:translate-x-0 after:bg-transparent data-[separator=active]:border-primary data-[separator=hover]:border-primary/60",
+            // 分隔线贴正文左缘：命中区用树底色填满、border-r 落在正文边上，
+            // 不得让 bg-transparent 在正文前留一条白缝（2026-11-13 修正）。
+            "pointer-coarse:w-5 w-1 border-border border-r bg-sidebar after:left-0 after:w-2.5 after:translate-x-0 after:bg-transparent data-[separator=active]:border-primary data-[separator=hover]:border-primary/60",
             !sidebarVisible && "hidden"
           )}
           disabled={!sidebarVisible}

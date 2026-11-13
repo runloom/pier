@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MAX_IMAGE_PREVIEW_FILE_BYTES } from "@main/files/image-preview-file.ts";
 import { createFileService } from "@main/services/files/service.ts";
+import { MAX_DOCUMENT_PREVIEW_FILE_BYTES } from "@shared/contracts/file/document.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let tempDirs: string[] = [];
@@ -784,5 +785,81 @@ describe("createFileService", () => {
     expect(new Set(renameFile.mock.calls.map(([source]) => source)).size).toBe(
       2
     );
+  });
+});
+
+describe("readFileDocument document previews", () => {
+  const zipMagic = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+  const cfbMagic = Buffer.from([
+    0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1,
+  ]);
+
+  it("classifies OOXML above the editable text limit as a document", async () => {
+    for (const size of [9, 11]) {
+      const bytes = Buffer.concat([
+        zipMagic,
+        Buffer.alloc(size * 1024 * 1024 - zipMagic.length, 0),
+      ]);
+      await writeFile(join(root, `large-${size}.docx`), bytes);
+      const service = createFileService();
+      const result = await service.readDocument({
+        path: `large-${size}.docx`,
+        root,
+      });
+      expect(result).toMatchObject({
+        format: "docx",
+        kind: "document",
+        mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        size: bytes.length,
+      });
+    }
+  });
+
+  it("reports a document above 64 MiB as unsupported too-large without hashing", async () => {
+    const path = join(root, "huge.pdf");
+    await writeFile(path, "%PDF-1.7\n");
+    await truncate(path, MAX_DOCUMENT_PREVIEW_FILE_BYTES + 1);
+
+    const service = createFileService();
+    const result = await service.readDocument({ path: "huge.pdf", root });
+
+    expect(result).toMatchObject({
+      format: "pdf",
+      kind: "document-unsupported",
+      reason: "too-large",
+      size: MAX_DOCUMENT_PREVIEW_FILE_BYTES + 1,
+    });
+  });
+
+  it("reports CFB OOXML as encrypted", async () => {
+    await writeFile(join(root, "secret.docx"), cfbMagic);
+    const service = createFileService();
+    await expect(
+      service.readDocument({ path: "secret.docx", root })
+    ).resolves.toMatchObject({
+      format: "docx",
+      kind: "document-unsupported",
+      reason: "encrypted",
+    });
+  });
+
+  it("reports pptx as not supported", async () => {
+    await writeFile(join(root, "slides.pptx"), zipMagic);
+    const service = createFileService();
+    await expect(
+      service.readDocument({ path: "slides.pptx", root })
+    ).resolves.toMatchObject({
+      format: "pptx",
+      kind: "document-unsupported",
+      reason: "not-supported",
+    });
+  });
+
+  it("keeps a spoofed .pdf on the binary path", async () => {
+    await writeFile(join(root, "spoof.pdf"), zipMagic);
+    const service = createFileService();
+    await expect(
+      service.readDocument({ path: "spoof.pdf", root })
+    ).resolves.toMatchObject({ kind: "binary", mime: null });
   });
 });

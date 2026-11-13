@@ -393,4 +393,16 @@ describe("FilePanelLayout shared tree width", () => {
     expect(handle?.expand).toHaveBeenCalled();
     expect(handle?.resize).toHaveBeenCalledWith("320px");
   });
+
+  it("keeps the divider flush with the content edge", () => {
+    const view = renderGitReviewLayout(<aside>git-tree</aside>);
+    const separator = view.container.querySelector("[data-separator]");
+    expect(separator).not.toBeNull();
+    const tokens = (separator?.getAttribute("class") ?? "").split(/\s+/);
+    // 命中区填树底色、分隔线贴正文左缘；透明命中区会在预览前留一条白缝。
+    expect(tokens).toContain("border-r");
+    expect(tokens).toContain("bg-sidebar");
+    expect(tokens).not.toContain("border-l");
+    expect(tokens).not.toContain("bg-transparent");
+  });
 });

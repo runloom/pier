@@ -5,7 +5,12 @@ import type { FilesDocument } from "./types.ts";
 export const DISK_SAVE_CAPABILITIES = ["save", "saveAs"] as const;
 
 function unsupportedReadOnlyReason(
-  result: Exclude<FileDocumentReadResult, { kind: "image" | "text" }>
+  result: Exclude<
+    FileDocumentReadResult,
+    {
+      kind: "image" | "text" | "document" | "document-unsupported";
+    }
+  >
 ): NonNullable<FilesDocument["readOnlyReason"]> {
   if (result.kind === "binary") {
     return "binary";
@@ -34,6 +39,106 @@ export function withDocumentReadResult(
   result: FileDocumentReadResult
 ): FilesDocument {
   const createdEmptyEol = createdEmptyEolAfterRead(document, result);
+  if (result.kind === "document") {
+    if (protectsLocalBufferFromDisk(document)) {
+      return {
+        ...document,
+        capabilities: [],
+        createdEmptyEol,
+        deletedOnDisk: false,
+        diskConflict: true,
+        error: null,
+        hasBackingStore: true,
+        loadState: "loaded",
+        mime: result.mime,
+        preview: null,
+        readOnly: true,
+        readOnlyReason: "binary",
+        size: result.size,
+      };
+    }
+    return {
+      ...document,
+      baseMtimeMs: result.mtimeMs,
+      capabilities: [],
+      canonicalPath: result.canonicalPath,
+      conflictDiskContents: null,
+      currentContents: "",
+      createdEmptyEol,
+      deletedOnDisk: false,
+      dirty: false,
+      diskConflict: false,
+      eol: null,
+      error: null,
+      format: null,
+      hasBackingStore: true,
+      loadState: "loaded",
+      mode: null,
+      mime: result.mime,
+      preview: {
+        format: result.format,
+        kind: "document",
+        mime: result.mime,
+        revision: result.revision,
+      },
+      readOnly: true,
+      readOnlyReason: null,
+      revision: result.revision,
+      savedContents: "",
+      savedEol: null,
+      savedFormat: null,
+      size: result.size,
+    };
+  }
+  if (result.kind === "document-unsupported") {
+    if (protectsLocalBufferFromDisk(document)) {
+      return {
+        ...document,
+        capabilities: [],
+        createdEmptyEol,
+        deletedOnDisk: false,
+        diskConflict: true,
+        error: null,
+        hasBackingStore: true,
+        loadState: "loaded",
+        mime: result.mime,
+        preview: null,
+        readOnly: true,
+        readOnlyReason: "binary",
+        size: result.size,
+      };
+    }
+    return {
+      ...document,
+      capabilities: [],
+      canonicalPath: result.canonicalPath,
+      conflictDiskContents: null,
+      currentContents: "",
+      createdEmptyEol,
+      deletedOnDisk: false,
+      dirty: false,
+      diskConflict: false,
+      eol: null,
+      error: null,
+      format: null,
+      hasBackingStore: true,
+      loadState: "loaded",
+      mode: null,
+      mime: result.mime,
+      preview: {
+        format: result.format,
+        kind: "document-unsupported",
+        reason: result.reason,
+      },
+      readOnly: true,
+      readOnlyReason: null,
+      revision: null,
+      savedContents: "",
+      savedEol: null,
+      savedFormat: null,
+      size: result.size,
+    };
+  }
   if (result.kind === "image") {
     if (protectsLocalBufferFromDisk(document)) {
       return {
