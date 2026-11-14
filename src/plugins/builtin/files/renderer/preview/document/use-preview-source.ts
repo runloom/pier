@@ -16,6 +16,53 @@ class PreviewSourceFailure extends Error {
   }
 }
 
+/**
+ * Deleted-on-disk documents must keep showing their last preview. The bytes
+ * cannot be fetched again, so the most recent successful reads stay in a
+ * small LRU owned by the renderer session, keyed by the content revision.
+ */
+const MAX_RETAINED_PREVIEW_BYTES = MAX_FILE_PREVIEW_BYTES;
+const MAX_RETAINED_PREVIEWS = 8;
+const retainedPreviews = new Map<string, Uint8Array>();
+let retainedPreviewBytes = 0;
+
+function previewCacheKey(root: string, path: string, revision: string): string {
+  return `${root}\u0000${path}\u0000${revision}`;
+}
+
+function readRetainedPreview(key: string): Uint8Array | null {
+  const bytes = retainedPreviews.get(key);
+  if (!bytes) {
+    return null;
+  }
+  // Refresh LRU position.
+  retainedPreviews.delete(key);
+  retainedPreviews.set(key, bytes);
+  return bytes;
+}
+
+function retainPreview(key: string, bytes: Uint8Array): void {
+  const existing = retainedPreviews.get(key);
+  if (existing) {
+    retainedPreviewBytes -= existing.byteLength;
+    retainedPreviews.delete(key);
+  }
+  retainedPreviews.set(key, bytes);
+  retainedPreviewBytes += bytes.byteLength;
+  while (
+    retainedPreviews.size > MAX_RETAINED_PREVIEWS ||
+    retainedPreviewBytes > MAX_RETAINED_PREVIEW_BYTES
+  ) {
+    const oldestKey = retainedPreviews.keys().next().value;
+    if (oldestKey === undefined) {
+      break;
+    }
+    const oldest = retainedPreviews.get(oldestKey);
+    retainedPreviews.delete(oldestKey);
+    retainedPreviewBytes -= oldest?.byteLength ?? 0;
+  }
+}
+
 function failureError(error: unknown): PreviewSourceError {
   if (error instanceof PreviewSourceFailure) {
     return error.error;
@@ -39,20 +86,26 @@ function isAbortError(error: unknown): boolean {
 /**
  * Issue one preview ticket, fetch the whole document once, then release the
  * ticket immediately after the bytes are in memory. No Range, no second fetch.
+ *
+ * When `deletedOnDisk` is set and no retained bytes exist, do not issue a
+ * ticket for a path that no longer exists: report the deletion instead of a
+ * misleading fetch failure.
  */
 export function usePreviewSource(args: {
   context: DocumentPreviewContext;
+  deletedOnDisk?: boolean;
   mime: string;
   path: string;
   revision: string;
   root: string;
 }): PreviewSourceState & { retry: () => void } {
-  const { context, mime, path, revision, root } = args;
+  const { context, deletedOnDisk = false, mime, path, revision, root } = args;
   const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<PreviewSourceState>({
-    bytes: null,
-    error: null,
-    status: "loading",
+  const [state, setState] = useState<PreviewSourceState>(() => {
+    const retained = readRetainedPreview(previewCacheKey(root, path, revision));
+    return retained
+      ? { bytes: retained, error: null, status: "ready" }
+      : { bytes: null, error: null, status: "loading" };
   });
   const ticketRef = useRef<string | null>(null);
 
@@ -62,6 +115,17 @@ export function usePreviewSource(args: {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` explicitly retries a failed fetch.
   useEffect(() => {
+    const cacheKey = previewCacheKey(root, path, revision);
+    const retained = readRetainedPreview(cacheKey);
+    if (retained) {
+      setState({ bytes: retained, error: null, status: "ready" });
+      return;
+    }
+    if (deletedOnDisk) {
+      setState({ bytes: null, error: "deleted", status: "error" });
+      return;
+    }
+
     const controller = new AbortController();
     let cancelled = false;
     let ticket: string | null = null;
@@ -123,8 +187,10 @@ export function usePreviewSource(args: {
         if (cancelled) {
           return;
         }
+        const bytes = new Uint8Array(buffer);
+        retainPreview(cacheKey, bytes);
         setState({
-          bytes: new Uint8Array(buffer),
+          bytes,
           error: null,
           status: "ready",
         });
@@ -148,7 +214,7 @@ export function usePreviewSource(args: {
       controller.abort();
       releaseTicket();
     };
-  }, [attempt, context, mime, path, revision, root]);
+  }, [attempt, context, deletedOnDisk, mime, path, revision, root]);
 
   useEffect(
     () => () => {

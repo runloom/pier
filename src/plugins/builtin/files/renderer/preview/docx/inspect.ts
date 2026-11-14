@@ -8,8 +8,14 @@ export type DocxInspection =
 export async function inspectDocxPackage(
   bytes: Uint8Array
 ): Promise<DocxInspection> {
-  if (!inspectZipCentralDirectory(bytes).ok) {
-    return { ok: false, reason: "zip-limit" };
+  const guard = inspectZipCentralDirectory(bytes);
+  if (!guard.ok) {
+    // A truncated / corrupt archive is not a document that expands past the
+    // safe limit; only the real size guards map to the zip-limit copy.
+    return {
+      ok: false,
+      reason: guard.reason === "truncated" ? "not-docx" : "zip-limit",
+    };
   }
   try {
     const zip = await JSZip.loadAsync(bytes);

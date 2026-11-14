@@ -1,5 +1,14 @@
-import { useTerminalOverlayRegistration } from "@pier/ui/use-terminal-overlay.tsx";
-import { type ReactNode, useLayoutEffect, useState } from "react";
+import {
+  paintedChildOf,
+  useTerminalOverlayRegistration,
+} from "@pier/ui/use-terminal-overlay.tsx";
+import {
+  type ReactNode,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { COMPOSER_SUGGEST_GAP_PX } from "./composer-suggest-layout.ts";
 
@@ -25,8 +34,21 @@ export function ComposerAutocompletePortal({
     left: number;
     width: number;
   } | null>(null);
+  // portal 外壳只做 fixed 定位；圆角 / 阴影 / 底在补全列表卡片上。
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const appearanceElement = useCallback(
+    () => paintedChildOf(hostRef.current),
+    []
+  );
   const { flush: flushOverlay, ref: overlayRef } =
-    useTerminalOverlayRegistration();
+    useTerminalOverlayRegistration(undefined, { appearanceElement });
+  const setHostRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      hostRef.current = element;
+      overlayRef(element);
+    },
+    [overlayRef]
+  );
 
   useLayoutEffect(() => {
     if (!anchor) {
@@ -74,7 +96,7 @@ export function ComposerAutocompletePortal({
     <div
       className="pointer-events-auto fixed z-50"
       data-testid="terminal-composer-autocomplete-portal"
-      ref={overlayRef}
+      ref={setHostRef}
       style={{
         bottom: box.bottom,
         left: box.left,

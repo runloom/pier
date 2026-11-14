@@ -45,6 +45,49 @@ export function parseCssColor(value: string): TerminalScrimColor | undefined {
   return finish(Number(rgb[1]), Number(rgb[2]), Number(rgb[3]), rgb[4], 255);
 }
 
+/**
+ * 从一条 computed 声明（如单层 box-shadow）里找出第一个颜色 token。
+ * 颜色语法只由 `parseCssColor` 定义——调用点不得再维护第二套颜色正则：
+ * Chromium 会把 color-mix 结果序列化成 OKLab 记法，只认 RGB 的正则会把整层
+ * 阴影静默丢掉。token 按顶层空白切分，括号内的空格不切。
+ */
+export function findCssColor(value: string): TerminalScrimColor | undefined {
+  for (const token of topLevelTokens(value)) {
+    const color = parseCssColor(token);
+    if (color) {
+      return color;
+    }
+  }
+  return;
+}
+
+function topLevelTokens(value: string): string[] {
+  const tokens: string[] = [];
+  let depth = 0;
+  let start = -1;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index] ?? "";
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")") {
+      depth = Math.max(0, depth - 1);
+    }
+    const separator = depth === 0 && /\s/.test(char);
+    if (separator) {
+      if (start !== -1) {
+        tokens.push(value.slice(start, index));
+        start = -1;
+      }
+    } else if (start === -1) {
+      start = index;
+    }
+  }
+  if (start !== -1) {
+    tokens.push(value.slice(start));
+  }
+  return tokens;
+}
+
 /** CSS Color 4 OKLab → sRGB。Electron 把 color-mix 结果序列化成 OKLab 记法。 */
 function oklabToSrgb(
   L: number,

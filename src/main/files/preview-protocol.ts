@@ -113,7 +113,10 @@ export async function resolveFilePreviewResponse(
         entry.locator.absolutePath
       );
       if (!resolved.ok) {
-        return resolved.reason === "too-large" ? payloadTooLarge() : notFound();
+        if (resolved.reason === "too-large") {
+          return payloadTooLarge();
+        }
+        return resolved.reason === "changed" ? conflict() : notFound();
       }
       if (
         resolved.locator.mime !== entry.locator.mime ||
@@ -169,13 +172,20 @@ export async function resolveFilePreviewResponse(
         return notFound();
       }
     }
-    const bytes = await readFileWithinImagePreviewLimit(
+    const read = await readFileWithinImagePreviewLimit(
       identity.canonicalTarget,
       identity.stat.size
     );
-    if (!bytes) {
+    if (read.kind === "too-large") {
       return payloadTooLarge();
     }
+    if (read.kind === "changed") {
+      // The file grew while it was being read. Its revision no longer matches
+      // the ticket; answer 409 so the client reloads instead of pretending the
+      // file is over the size limit.
+      return conflict();
+    }
+    const bytes = read.bytes;
     let mime: string | null;
     if (documentMime) {
       const classification = classifyDocumentPreview({

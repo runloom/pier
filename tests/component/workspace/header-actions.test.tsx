@@ -672,6 +672,63 @@ describe("WorkspaceHeaderActions", () => {
     header.remove();
   });
 
+  it("holds the overflow count during a scroll gesture and updates after settle", async () => {
+    // K11: 手势中每个滚动步都会让 tab 从两侧进出，逐帧重算会让计数翻转；
+    // 计数只在 scroll settle 后更新一次。
+    const header = document.createElement("div");
+    const tabsContainer = document.createElement("div");
+    const firstTab = document.createElement("div");
+    const firstContent = document.createElement("div");
+    const secondTab = document.createElement("div");
+    const secondContent = document.createElement("div");
+    const actionsContainer = document.createElement("div");
+
+    header.className = "dv-tabs-and-actions-container";
+    tabsContainer.className = "dv-tabs-container";
+    firstTab.className = "dv-tab";
+    secondTab.className = "dv-tab";
+    firstContent.dataset.panelTabId = "terminal-1";
+    secondContent.dataset.panelTabId = "terminal-2";
+    firstTab.append(firstContent);
+    secondTab.append(secondContent);
+    tabsContainer.append(firstTab, secondTab);
+    header.append(tabsContainer, actionsContainer);
+    document.body.append(header);
+
+    setRect(tabsContainer, { bottom: 34, left: 0, right: 120, top: 0 });
+    setRect(firstTab, { bottom: 34, left: 0, right: 80, top: 0 });
+    setRect(secondTab, { bottom: 34, left: 120, right: 200, top: 0 });
+
+    render(
+      <WorkspaceHeaderActions
+        {...createProps([
+          createPanel("terminal-1", "Terminal 1"),
+          createPanel("terminal-2", "Terminal 2"),
+        ])}
+      />,
+      { container: actionsContainer }
+    );
+
+    const trigger = await screen.findByRole("button", {
+      name: "Hidden tabs",
+    });
+    expect(trigger).toHaveTextContent("1");
+    expect(trigger.querySelector("span")).toHaveClass("tabular-nums");
+
+    // Both tabs now sit left of the strip viewport; a raw scroll would flip
+    // the count immediately if it were recomputed per event.
+    setRect(tabsContainer, { bottom: 34, left: 200, right: 280, top: 0 });
+    fireEvent.scroll(tabsContainer);
+
+    expect(trigger).toHaveTextContent("1");
+
+    await waitFor(() => {
+      expect(trigger).toHaveTextContent("2");
+    });
+
+    header.remove();
+  });
+
   it("shows overflow options and activates the selected hidden tab", async () => {
     const header = document.createElement("div");
     const tabsContainer = document.createElement("div");

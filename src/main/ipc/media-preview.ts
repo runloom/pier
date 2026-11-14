@@ -123,7 +123,10 @@ export function registerMediaPreviewIpc(): void {
         parsed.data.absolutePath
       );
       if (!resolved.ok) {
-        return { issued: false, reason: resolved.reason };
+        return {
+          issued: false,
+          reason: resolved.reason === "changed" ? "not-found" : resolved.reason,
+        };
       }
       if (
         parsed.data.previousTicket &&

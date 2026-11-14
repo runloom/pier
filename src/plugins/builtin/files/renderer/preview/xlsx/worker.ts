@@ -1,7 +1,5 @@
-import * as XLSX from "xlsx";
 import { inspectZipCentralDirectory } from "../document/zip-guard.ts";
-import { XLSX_LIMITS } from "./limits.ts";
-import { buildXlsxSheets } from "./model.ts";
+import { parseXlsxWorkbook } from "./parse.ts";
 import type { XlsxWorkerRequest, XlsxWorkerResponse } from "./protocol.ts";
 
 const workerScope = self as unknown as {
@@ -20,20 +18,13 @@ function fail(id: number, code: "parse-failed" | "zip-limit"): void {
 workerScope.onmessage = (event) => {
   const { bytes, id } = event.data;
   try {
-    if (!inspectZipCentralDirectory(new Uint8Array(bytes)).ok) {
-      fail(id, "zip-limit");
+    const guard = inspectZipCentralDirectory(new Uint8Array(bytes));
+    if (!guard.ok) {
+      // A truncated archive is corrupt input, not a "too complex" document.
+      fail(id, guard.reason === "truncated" ? "parse-failed" : "zip-limit");
       return;
     }
-    const workbook = XLSX.read(new Uint8Array(bytes), {
-      bookVBA: false,
-      cellFormula: false,
-      cellHTML: false,
-      cellStyles: false,
-      sheetRows: XLSX_LIMITS.maxRows + 1,
-      type: "array",
-      WTF: false,
-    });
-    const sheets = buildXlsxSheets(workbook);
+    const sheets = parseXlsxWorkbook(new Uint8Array(bytes));
     if (sheets.length === 0) {
       fail(id, "parse-failed");
       return;

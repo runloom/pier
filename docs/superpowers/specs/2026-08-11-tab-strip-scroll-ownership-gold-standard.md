@@ -2,7 +2,7 @@
 
 日期：2026-08-11  
 状态：**草案（P0–P5 代码与验收项已落地；产品附录 B 未确认）** — 意图优先级、写路径、R2 patch、e2e G3/G4、治理扫描已齐；附录 B 产品项与 sash（S5）仍可单独立项。  
-实现进度：**P0–P3** 见前；**P4** `patches/dockview-core@7.0.2.patch` 保留 Scrollbar offset + restore 改 ResizeObserver settle（禁嵌套多 rAF）；**P5** `tab-strip-scroll-governance.test.ts` 锁白名单 / patch / host 接线。  
+实现进度：**P0–P3** 见前；**P4** `patches/dockview-core@7.0.2.patch` 保留 Scrollbar offset + restore 改 ResizeObserver settle（禁嵌套多 rAF）；**P5** `tests/unit/renderer/workspace/tab-strip/scroll-governance.test.ts` 锁白名单 / patch / host 接线。  
 范围：dockview **每个 group 的 tab 条**（`.dv-tabs-container` 的水平 `scrollLeft`）及 Pier 侧 **reveal active tab**。  
 不包含：面板正文滚动、文件树、编辑器、工作台物料网格。
 
@@ -100,7 +100,8 @@
 | **K7** | 修根因 R2：dockview-core patch 在无溢出时 **保留** `_scrollOffset`；restore 不再依赖嵌套多 rAF | 对齐文件树禁令 |
 | **K8** | tab 条 `scrollLeft` **不**写入 workspace layout JSON；跨窗口 transfer / 冷启动归 0 可接受 | 避免 layout 膨胀与还原竞态 |
 | **K9** | G0–G5 全绿前不得称金标准；P0 补丁可合但须在 PR/文档标明「非金标准」 | 防口号跑赢验收 |
-| **K10** | **到边不回弹**（2026-11-12 用户决策）：产品覆盖 `overscroll-behavior-x: none`（`.dockview-theme-pier .dv-tabs-container`），偏离上游 dockview 的 `contain`（contain 有意保留 macOS 橡皮筋）。只关 x 轴；纵向 tab 条不在本决策内 | 工作台 chrome 不是内容滚动面；「还有更多」的信号由 scroll-fade 与溢出 ▾ 菜单承担，到边回弹是多余物理反馈 |
+| **K10** | **到边不回弹**（2026-11-12 用户决策，2026-11-14 两次修正）：产品禁止工作台出现 macOS 橡皮筋。分两层，缺一不可：① **窗口根滚动面** `html` / `body` 在 `globals.css` 上 `overscroll-behavior: none`——触摸板的**动量 / 惯性阶段**滚轮事件由 compositor 直接投递、可能以不可取消形式到达 renderer，`preventDefault()` 无处生效；只有根滚动面自己禁止弹性才能覆盖鼠标与触摸板全路径（鼠标滚轮正常、双指触摸板仍回弹＝动量段未被取消，2026-11-14 用户实测）。② **tab 条捕获守卫**（`tab-strip-wheel-guard.ts`，由 `tab-strip-behavior.ts` 挂载在 document 捕获阶段）：范围是整个 `.dv-tabs-and-actions-container`（标签、自定义滚动条、void 空白区、右侧动作区 ▾ / ＋ 都算 chrome），取消首段滚势进入原生滚动链；捕获阶段保证下游 `stopPropagation` 无法绕过。dockview 7 默认自定义 Scrollbar，`.dv-tabs-container` 实际是 `overflow: hidden`，滚轮由 dockview JS 写 `scrollLeft`；`preventDefault()` 不阻止传播，所以 dockview 自己的映射照常执行。2026-11-14 实测：右侧动作区未被旧选择器覆盖时，首个 wheel 未被取消，后续事件变成 `cancelable: false` 并交给 compositor。CSS `.dockview-theme-pier .dv-tabs-container { overscroll-behavior-x: none }` 保留作 `scrollbars: "native"` 模式的逐容器防御，但当前模式下对弹性**无效**——不得再把它当唯一修复。守卫只处理起手于 tab 条的滚势；内容滚动面（正文 / 列表）拖手滚动不受影响，只是不再把到边余量转成窗口回弹 | 工作台 chrome 不是内容滚动面；「还有更多」的信号由 scroll-fade 与溢出 ▾ 菜单承担，到边回弹是多余物理反馈 |
+| **K11** | **溢出计数在滚动手势中保持稳定**（2026-11-14 用户实测抖动）：计数 = tab 条中非全可见（左右任一侧被 `CLIP_EPSILON_PX` 裁切）的 tab 数，供溢出 ▾ 菜单跳转。① **滚动不驱动重算**：`scroll` 事件只登记 scroll-settle（约 160ms 静置）后的一次重算；布局变化（resize / tab 增删 / 标题变化）仍即时重算。手势中每个滚动步都会让新 tab 从右侧进入、旧 tab 从左侧裁出，计数会在 12/13 间翻转（2026-11-14 实测 1.5s 内 6 次）——那是采样噪声，不是状态变化；② **数字 chrome 一律 tabular-nums**：Pier 自己的 `PanelOverflowMenu` 计数与 dockview 内置 dropdown 同规则，比例数字的数字宽差会让按钮宽度在 0.3px 级抖动并回馈给被测量的 tab 条；③ 计数控件不得参与它测量的布局：文本变化不得改变按钮宽度。业界参照：VS Code 的溢出入口是「…」菜单本身不显示实时计数；macOS 原生 chrome 的 `NSScrollView` 弹性关闭、计数器只在状态变化时更新 | 滚动是连续手势，计数是离散状态；chrome 计数器跟随手势逐帧变化＝视觉噪声，且会通过宽度回馈污染测量 |
 
 ---
 
@@ -221,7 +222,7 @@ P0 用 `onDidMaximizedGroupChange` + freeze **近似** 该时序，但快照偏�
 | **G2** | 单元 / 组件：意图优先级 — restore 进行中模拟 user scroll 后，第二帧不得盖回 | unit |
 | **G3** | e2e：双 group、右 group 多 tab 滚出 → 左 group maximize → 还原 → 右 `scrollLeft` 与 maximize 前一致 | e2e **已绿**（`maximize restore keeps the other group's tab strip scrollLeft`） |
 | **G4** | e2e：多 tab 使 active 不可见 → 离开后经 **分组导航**（`Ctrl+Shift+ArrowRight` / `reveal: always`）回来 → active tab 完全可见；终端 surface 跨 group 仍 **不** reveal（同文件既有用例） | e2e **已绿**（`group focus navigation reveals the active tab`） |
-| **G5** | 根因：无嵌套多 rAF 死钉；R2 patch 在位；workspace `scrollLeft` 白名单治理 | **已绿**（`tab-strip-scroll-governance.test.ts` + owner 实现） |
+| **G5** | 根因：无嵌套多 rAF 死钉；R2 patch 在位；workspace `scrollLeft` 白名单治理 | **已绿**（`tests/unit/renderer/workspace/tab-strip/scroll-governance.test.ts` + owner 实现） |
 
 探针建议（G2/G5）：
 
@@ -239,7 +240,7 @@ P0 用 `onDidMaximizedGroupChange` + freeze **近似** 该时序，但快照偏�
 | **P2**（已完成） | 用户 scroll abort in-flight restore/reveal | G2 |
 | **P3**（已完成） | e2e G3/G4（CLI 建 tab + UI maximize / focusRight） | G3 G4 绿 |
 | **P4**（已完成） | `patches/dockview-core@7.0.2.patch` 保留无溢出 offset；restore → ResizeObserver settle | G5 根因 |
-| **P5**（已完成） | `tab-strip-scroll-governance.test.ts` 锁 patch / 白名单 / host 接线 | 防回归 |
+| **P5**（已完成） | `tests/unit/renderer/workspace/tab-strip/scroll-governance.test.ts` 锁 patch / 白名单 / host 接线 | 防回归 |
 
 ---
 
@@ -261,14 +262,15 @@ P0 用 `onDidMaximizedGroupChange` + freeze **近似** 该时序，但快照偏�
 | 能力 | 路径 |
 |------|------|
 | scroll 记忆 / freeze / restore | `src/renderer/lib/workspace/tab-strip-scroll.ts` |
+| 到边不回弹（wheel 守卫） | `src/renderer/lib/workspace/tab-strip-wheel-guard.ts` |
 | reveal suppress | `src/renderer/lib/workspace/tab-reveal-suppress.ts` |
 | reveal 几何 | `src/renderer/lib/workspace/tab-visibility.ts` |
 | host 订阅 | `src/renderer/components/workspace/tab-strip-behavior.ts` |
 | 挂载 | `src/renderer/components/workspace/host.tsx` |
 | 终端 no-reveal | `src/renderer/lib/workspace/terminal-focus-request.ts` |
 | R2 patch | `patches/dockview-core@7.0.2.patch`（`pnpm-workspace.yaml` patchedDependencies） |
-| 单测 | `tab-strip-scroll.test.ts`、`tab-reveal-suppress.test.ts`、`tab-strip-behavior.test.ts` |
-| 治理 | `tests/unit/renderer/workspace/tab-strip-scroll-governance.test.ts` |
+| 单测 | `tab-strip/{scroll-governance,wheel-guard,behavior,scroll-fade}.test.ts`、`tab-reveal-suppress.test.ts` |
+| 治理 | `tests/unit/renderer/workspace/tab-strip/scroll-governance.test.ts` |
 | e2e G3/G4 | `tests/e2e/native/terminal-focus.spec.ts` |
 
 ---

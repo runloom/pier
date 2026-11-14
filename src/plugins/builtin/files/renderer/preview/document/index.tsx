@@ -82,6 +82,7 @@ function DocumentSourcePreview(props: {
   const source = document.source;
   const sourceState = usePreviewSource({
     context,
+    deletedOnDisk: document.deletedOnDisk,
     mime: preview.mime,
     path: source.kind === "disk" ? source.path : "",
     revision: preview.revision,

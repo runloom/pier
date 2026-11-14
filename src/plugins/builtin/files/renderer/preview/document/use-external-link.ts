@@ -41,7 +41,7 @@ export function useDocumentExternalLink(args: {
             await context.dialogs.alert({
               body: t(
                 "filePanel.documentPreview.externalLink.failed",
-                "The link could not be opened."
+                "The link could not be opened. Check the URL and try again."
               ),
               intent: "default",
               title: t(
@@ -51,10 +51,13 @@ export function useDocumentExternalLink(args: {
             });
           }
         })
-        .catch(async (error: unknown) => {
+        .catch(async () => {
           await context.dialogs
             .alert({
-              body: error instanceof Error ? error.message : String(error),
+              body: t(
+                "filePanel.documentPreview.externalLink.failed",
+                "The link could not be opened. Check the URL and try again."
+              ),
               intent: "default",
               title: t(
                 "filePanel.markdown.externalOpenFailed.title",

@@ -10,6 +10,7 @@ import {
 import { classifyPreviewImageBytes } from "./image-signature.ts";
 
 export type AbsoluteImagePreviewResolveFailure =
+  | "changed"
   | "not-found"
   | "too-large"
   | "unsupported";
@@ -63,10 +64,14 @@ export async function resolveAbsoluteImagePreview(
   if (info.size > MAX_IMAGE_PREVIEW_FILE_BYTES) {
     return { ok: false, reason: "too-large" };
   }
-  const bytes = await readFileWithinImagePreviewLimit(canonicalPath, info.size);
-  if (!bytes) {
-    return { ok: false, reason: "too-large" };
+  const read = await readFileWithinImagePreviewLimit(canonicalPath, info.size);
+  if (read.kind !== "ok") {
+    return {
+      ok: false,
+      reason: read.kind === "too-large" ? "too-large" : "changed",
+    };
   }
+  const bytes = read.bytes;
   const mime = classifyPreviewImageBytes(bytes);
   if (!mime) {
     return { ok: false, reason: "unsupported" };

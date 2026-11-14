@@ -14,6 +14,28 @@ export function fileDocumentCanRestoreBySave(document: FilesDocument): boolean {
   );
 }
 
+function deletedBannerBody(document: FilesDocument, t: FilesTranslate): string {
+  if (fileDocumentCanRestoreBySave(document)) {
+    return t(
+      "filePanel.deleted.bannerBody",
+      "Save to restore it in the original location."
+    );
+  }
+  if (
+    document.preview !== null &&
+    document.preview.kind !== "document-unsupported"
+  ) {
+    return t(
+      "filePanel.deleted.bannerBodyReadOnly",
+      "This preview shows the last version. Restore the file to open it again."
+    );
+  }
+  return t(
+    "filePanel.deleted.bannerBodyUnsupported",
+    "Restore the file to open it again."
+  );
+}
+
 function FileDeletedOnDiskBar({
   controller,
   document,
@@ -53,15 +75,7 @@ function FileDeletedOnDiskBar({
           {t("filePanel.deleted.bannerTitle", "This file was deleted")}
         </p>
         <p className="text-muted-foreground text-xs">
-          {canSave
-            ? t(
-                "filePanel.deleted.bannerBody",
-                "Save to restore it in the original location."
-              )
-            : t(
-                "filePanel.deleted.bannerBodyReadOnly",
-                "This preview shows the last version. Restore the file to open it again."
-              )}
+          {deletedBannerBody(document, t)}
         </p>
       </div>
       {canSave ? (

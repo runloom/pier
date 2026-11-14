@@ -29,11 +29,25 @@ test.skip(process.platform !== "darwin", "native terminal is macOS-only");
  *  3. Cmd+F 走 DOM keybinding 打开搜索栏（窗口非 OS 焦点时键盘目标即 web）。
  */
 
+interface DebugWebOverlayRect {
+  frame: { height: number; width: number; x: number; y: number };
+  id: string;
+  radius?: number;
+  shadows?: {
+    blur: number;
+    color?: { a: number; b: number; g: number; r: number };
+    spread: number;
+    x: number;
+    y: number;
+  }[];
+}
+
 interface DebugCoordinator {
   desired?: {
-    webOverlayRects?: { frame: unknown; id: string }[];
+    webOverlayRects?: DebugWebOverlayRect[];
     webRequestCount?: number;
   };
+  effective?: { windowFocused?: boolean };
 }
 
 interface DebugNativeWindow {
@@ -43,6 +57,12 @@ interface DebugNativeWindow {
 interface DebugSnapshot {
   coordinator?: DebugCoordinator;
   native?: { window?: DebugNativeWindow };
+  renderer?: {
+    panels: {
+      panelId: string;
+      terminalLifecycle?: { nativeTerminalReady?: boolean };
+    }[];
+  };
 }
 
 function readSnapshot(win: Page): Promise<DebugSnapshot> {
@@ -72,6 +92,45 @@ function hasOverlayIdContaining(
   return overlayRectIds(snapshot).some((id) => id.includes(needle));
 }
 
+function findOverlayRect(
+  snapshot: DebugSnapshot,
+  needle: string
+): DebugWebOverlayRect | undefined {
+  return (snapshot.coordinator?.desired?.webOverlayRects ?? []).find((rect) =>
+    rect.id.includes(needle)
+  );
+}
+
+/**
+ * 外观采样的端到端断言：radius 已送到 native（洞按圆角切角）且有至少一层
+ * 外扩阴影（native TerminalShadow 有据可画）。radius 必须落在 border box
+ * 短边一半以内，和浏览器 used radius 一致。
+ */
+async function expectOverlayAppearance(
+  win: Page,
+  needle: string
+): Promise<DebugWebOverlayRect> {
+  await expect
+    .poll(
+      async () => {
+        const rect = findOverlayRect(await readSnapshot(win), needle);
+        return (rect?.radius ?? 0) > 0 && (rect?.shadows?.length ?? 0) > 0;
+      },
+      { timeout: 8000 }
+    )
+    .toBe(true);
+  const rect = findOverlayRect(await readSnapshot(win), needle);
+  if (!rect) {
+    throw new Error(`overlay ${needle} missing from host snapshot`);
+  }
+  expect(rect.radius ?? 0).toBeGreaterThan(0);
+  expect(rect.radius ?? 0).toBeLessThanOrEqual(
+    Math.min(rect.frame.width, rect.frame.height) / 2 + 0.5
+  );
+  expect(rect.shadows ?? []).not.toHaveLength(0);
+  return rect;
+}
+
 async function waitForTerminalCount(win: Page, count: number): Promise<void> {
   await expect(win.locator(".terminal-anchor")).toHaveCount(count, {
     timeout: 10_000,
@@ -86,6 +145,68 @@ async function readTerminalPanelId(win: Page): Promise<string> {
     throw new Error("terminal panel id not found in DOM");
   }
   return panelId;
+}
+
+async function waitForTerminalReady(win: Page, panelId: string): Promise<void> {
+  // The anchor and native view exist before Ghostty presents its first frame.
+  await expect
+    .poll(
+      async () =>
+        (await readSnapshot(win)).renderer?.panels.find(
+          (panel) => panel.panelId === panelId
+        )?.terminalLifecycle,
+      { timeout: 15_000 }
+    )
+    .toMatchObject({ nativeTerminalReady: true });
+}
+
+/**
+ * Composer 只在面板进入 agent 活动态（或已有草稿）时挂载；裸 shell 终端没有
+ * 真实前台活动。与 agent-composer.spec.ts 同构：补发一条高于当前 ts 的
+ * `pier://foreground-activity:changed`，让挂载判定拿到 kind: "agent"。
+ */
+async function broadcastAgentActivity(
+  app: ElectronApplication,
+  win: Page,
+  panelId: string
+): Promise<void> {
+  const ts = await win.evaluate(() =>
+    (
+      window as unknown as {
+        pier: {
+          foregroundActivity: {
+            snapshot: () => Promise<{ ts: number }>;
+          };
+        };
+      }
+    ).pier.foregroundActivity
+      .snapshot()
+      .then((snapshot) => snapshot.ts)
+  );
+  const seq = ts + 1;
+  const activity = {
+    agentId: "claude",
+    kind: "agent",
+    panelId,
+    source: "launch",
+    spawnedAt: seq,
+    subagentCount: 0,
+    updatedAt: seq,
+    windowId: "e2e-fixed-window",
+  };
+  await app.evaluate(
+    ({ webContents }, args: { activity: unknown; ts: number }) => {
+      for (const contents of webContents.getAllWebContents()) {
+        if (contents.getType() === "window" && !contents.isDestroyed()) {
+          contents.send("pier://foreground-activity:changed", {
+            activities: [args.activity],
+            ts: args.ts,
+          });
+        }
+      }
+    },
+    { activity, ts: seq }
+  );
 }
 
 /**
@@ -195,7 +316,25 @@ test.describe("Terminal overlay coexistence e2e", () => {
         )
         .toBe(true);
 
-      // 4. 模拟终端焦点意图
+      // 3b. 圆角与阴影真的送到了 native：
+      //   静态工具槽外壳是透明直角盒，外观必须采自绘制子元素（搜索条）。
+      //   radius 为 0 → 洞按直角回填，胶囊四角露不透明 backing；
+      //   shadows 为空 → 终端洞把 CSS 阴影裁掉，只留一圈生硬边。
+      await expectOverlayAppearance(win, "terminal-search");
+
+      // 4. 模拟终端焦点意图（native 只有在窗口 key 时才把键盘交给终端；
+      //    macOS 不保证新窗口自动获得焦点，显式激活并等 main 真的看到 focus）。
+      await app.evaluate(({ app: electronApp }) => {
+        electronApp.focus({ steal: true });
+      });
+      await expect
+        .poll(
+          async () =>
+            (await readSnapshot(win)).coordinator?.effective?.windowFocused ??
+            false,
+          { timeout: 8000 }
+        )
+        .toBe(true);
       await simulateTerminalFocusIntent(app, panelId);
 
       // 5. 键盘交回终端：webRequestCount 归零 + native target=terminal，
@@ -330,6 +469,94 @@ test.describe("Terminal overlay coexistence e2e", () => {
           { timeout: 8000 }
         )
         .toBe(false);
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("add-panel popover keeps its shadow after the enter animation", async () => {
+    // Radix 弹层用 tw-animate `enter` 淡入，挂载时 computed opacity 为 0。
+    // 若只按 keyframe 名含 fade 来跟 opacity，阴影取样会停在 alpha 0，
+    // 菜单压在终端上时就是直角 + 无影。动画结束后必须回到满强度。
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-overlay-e2e-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await waitForTerminalCount(win, 1);
+
+      await win.keyboard.press("Meta+KeyN");
+      const popover = win.locator('[data-slot="popover-content"]');
+      await expect(popover).toBeVisible({ timeout: 8000 });
+      const box = await popover.boundingBox();
+      if (!box) {
+        throw new Error("add-panel popover has no bounding box");
+      }
+
+      const matchingRect = async (): Promise<
+        DebugWebOverlayRect | undefined
+      > => {
+        const rects =
+          (await readSnapshot(win)).coordinator?.desired?.webOverlayRects ?? [];
+        return rects.find(
+          (rect) =>
+            rect.id.includes("terminal-overlay") &&
+            Math.abs(rect.frame.width - box.width) < 2
+        );
+      };
+
+      // computed shadow-lg 的颜色是黑色 10%；>0.08 只可能在动画接近终态
+      // 时采到，能区分「满强度阴影」和「冻在淡入起点」。
+      await expect
+        .poll(
+          async () =>
+            Math.max(
+              ...((await matchingRect())?.shadows ?? []).map(
+                (shadow) => shadow.color?.a ?? 0
+              )
+            ),
+          { timeout: 8000 }
+        )
+        .toBeGreaterThan(0.08);
+
+      const rect = await matchingRect();
+      expect(rect?.radius ?? 0).toBeGreaterThan(0);
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("composer overlay samples appearance from the chrome card", async () => {
+    // composer 注册的是 absolute 定位外壳，圆角 / 阴影画在内部 chrome 卡片上。
+    // 同一个外观采样契约必须从这里读出 radius + shadows，否则 composer 压在
+    // 终端上时同样是直角回填 + 无阴影。
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-overlay-e2e-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await waitForTerminalCount(win, 1);
+      const panelId = await readTerminalPanelId(win);
+      await waitForTerminalReady(win, panelId);
+      await broadcastAgentActivity(app, win, panelId);
+
+      await win.evaluate((id) => {
+        window.dispatchEvent(
+          new CustomEvent("pier:terminal:open-composer", {
+            detail: { panelId: id },
+          })
+        );
+      }, panelId);
+
+      const composer = win.locator('[data-testid="terminal-composer"]');
+      await expect(composer).toBeAttached({ timeout: 8000 });
+      await expectOverlayAppearance(win, "terminal-composer-hit");
     } finally {
       await app.close();
       rmSync(userDataDir, { recursive: true, force: true });

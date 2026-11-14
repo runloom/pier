@@ -137,6 +137,12 @@ export function PdfPage(props: {
 
       const textContainer = textRef.current;
       if (textContainer) {
+        // Await first: a stale effect must not clear the container the newer
+        // zoom generation is already filling.
+        const textContent = await page.getTextContent();
+        if (cancelled) {
+          return;
+        }
         textContainer.replaceChildren();
         textContainer.style.setProperty(
           "--total-scale-factor",
@@ -144,7 +150,7 @@ export function PdfPage(props: {
         );
         textLayer = new TextLayer({
           container: textContainer,
-          textContentSource: await page.getTextContent(),
+          textContentSource: textContent,
           viewport,
         });
         await textLayer.render();
@@ -154,6 +160,9 @@ export function PdfPage(props: {
       }
 
       const annotations = await page.getAnnotations();
+      if (cancelled) {
+        return;
+      }
       const targets = pdfLinkTargets(
         annotations.map((annotation) => ({
           dest: annotation.dest,

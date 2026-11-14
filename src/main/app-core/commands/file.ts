@@ -36,7 +36,19 @@ export async function executeFileCommand(
       if (!services.files) {
         return failure(requestId, "internal_error", "file service unavailable");
       }
-      return success(requestId, await services.files.readDocument(command));
+      try {
+        return success(requestId, await services.files.readDocument(command));
+      } catch (error) {
+        // A file that changed between classification and inspection is a
+        // conflict with the caller's read, not an internal failure.
+        if (
+          error instanceof Error &&
+          (error as Error & { code?: unknown }).code === "file_conflict"
+        ) {
+          return failure(requestId, "file_conflict", error.message);
+        }
+        throw error;
+      }
     case "file.writeText":
       if (!services.files) {
         return failure(requestId, "internal_error", "file service unavailable");

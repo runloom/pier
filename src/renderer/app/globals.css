@@ -1000,6 +1000,13 @@ body {
   -webkit-font-smoothing: antialiased;
   color: var(--foreground);
   background: transparent;
+  /*
+   * 工作台是应用壳，不是文档：触摸板到边不回弹（K10）。
+   * 动量 / 惯性阶段的滚轮事件由 compositor 投递，可能不可取消，
+   * tab 条上的 wheel 守卫拦不到；根滚动面自己禁止弹性才能覆盖
+   * 鼠标与触摸板全路径。内容区各自是独立滚动盒，拖手滚动不受影响。
+   */
+  overscroll-behavior: none;
 }
 
 /*
@@ -1179,9 +1186,10 @@ body {
 
 /*
  * Tab 条到边不回弹（权威：2026-08-11-tab-strip-scroll-ownership-gold-standard.md）。
- * 上游 .dv-tabs-container 是 overflow:auto + overscroll-behavior:contain，
- * macOS 下到边仍有橡皮筋。工作台 chrome 不是内容滚动面，「还有更多」的
- * 信号由 scroll-fade 与溢出 ▾ 菜单承担，回弹是多余物理反馈，关掉。
+ * dockview 7 默认自定义 Scrollbar：.dv-tabs-container 实际是 overflow: hidden，
+ * 滚轮由 dockview JS 写 scrollLeft，弹性由 Pier 的冒泡阶段 wheel 守卫
+ * （lib/workspace/tab-strip-wheel-guard.ts）取消；这条 CSS 只是将来改回
+ * scrollbars: "native" 模式的防御，当前模式下对弹性无效。
  * 只关 x 轴：纵向 tab 条（pan-y）不在本决策内。
  */
 .dockview-theme-pier .dv-tabs-container {

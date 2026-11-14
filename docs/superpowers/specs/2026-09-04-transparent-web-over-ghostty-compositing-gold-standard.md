@@ -34,6 +34,19 @@ Chromium 的合成层（`ViewsCompositorSuperview`）覆盖整个窗口，终端
 
 ---
 
+## 外观采样契约（圆角 / 阴影 / 蒙层）
+
+洞遮罩回填的是**几何**；圆角楔、盒外阴影、蒙层色都来自 renderer 对 computed style 的**采样**。采样错了 native 不会报错，只会画成直角、无影或无色——2026-11-13 终端运行时胶囊的「额外边角 + 阴影不生效」就是这条链路上的纯采样失败。规则：
+
+1. **几何元素 ≠ 绘制元素**。`registerElement` 的 `element` 永远是命中与几何真源；若它只是布局外壳（透明、直角、无阴影），注册时用 `appearanceElement: () => 绘制子元素`，圆角 / 阴影 / 蒙层从绘制元素读。静态工具槽 `TerminalFloatingStaticItem` 固定如此（外观取 `firstElementChild`）。绘制元素缺席（尚未挂载 / 已卸载）时按「无外观」发布，**不得回退采样外壳**——外壳的圆角 / 阴影是另一套语义。禁止给外壳补一份假的圆角 / 阴影 CSS 充数，也禁止把外壳尺寸当真源另起一个壳。
+2. **颜色语法单一来源**。`box-shadow` 里的颜色（含 color-mix 序列化成的 `oklab(...)`）只能经 `parseCssColor` / `findCssColor` 解析；任何调用点禁止另写颜色正则。认不出 → fail-quiet（native 不画），但开发态按整层原文 `console.warn` 一次，禁止静默丢层。
+3. **长度允许指数记法**。Chromium computed 的 Tailwind `rounded-full` 是 `1.67772e+07px`，阴影长度也可能是指数形式；解析正则必须接受 `e[+-]?\d+`。圆角还要接受 `%`（按 border box 短边换算）与椭圆单角两值（`10px 20px`，取较大者，宁可多挖露终端也不欠挖留 backing 角）；CSS used radius 会钳到短边一半，采样必须同钳，否则 native 画的楔与浏览器绘制不一致。
+4. **只送「画得出来」的阴影**。inset 不送（盒内 web 自己画）；`x` / `y` / `blur` / `spread` 全零的层不送（送出去只会在圆角洞里衬一块实色）；负 blur 不送。alpha 乘元素 opacity，淡入淡出时阴影与蒙层同拍。opacity 采样必须跟**运行中且 keyframes 真的在动画 opacity** 的动画：tw-animate 的 `enter` / `exit` 名字不含 fade，opacity 由 `--tw-enter-opacity` / `--tw-exit-opacity` 驱动，只按名字匹配会把弹层钉在挂载时的 opacity=0，阴影 alpha 永远为 0。无限动画（pulse / spin）不续帧；逐帧链先确认动画仍在运行再读色，最后一步不得读 `fill-mode: none` 的回弹帧（否则淡出结束按全强度重发一帧）。
+5. **一次 flush，两个采样源**。ResizeObserver / layout pulse / animationend 观察注册元素；几何取注册元素、外观取 `appearanceElement()`，两者必须写进同一份快照。禁止把外观目标再注册成第二个浮层条目（会多出一块回填矩形）。
+6. **回归矩阵**。单测必须覆盖 Chromium 真实序列化：指数圆角、`oklab(...)` 阴影、透明 ring 层、`%` 圆角与钳位、椭圆两值圆角、透明外壳 + 绘制子元素、tw-animate `enter` 从 opacity 0 起步后的满强度阴影、无限 opacity 动画不续帧。E2E（`tests/e2e/terminal/overlay-coexistence.spec.ts`）从 `debugSnapshot().coordinator.desired.webOverlayRects` 断言 `terminal-search` 条目 `radius > 0` 且 `radius <= min(frame)/2`、`shadows` 非空；再用 `Meta+N` 打开新建菜单，断言 `terminal-overlay` 条目阴影 alpha 回到满强度——这条链路直接对应终端上的边角与阴影，不靠截图猜。
+
+---
+
 ## 决策树
 
 1. **终端锚点 / 状态栏透明洞** → 保持透明；不要 `backdrop-filter`、不要三维位移、不要半透明大面积叠在洞上。
@@ -89,6 +102,10 @@ Markdown 预览字号复用图片 zoom 胶囊，带上 `backdrop-blur-sm`。源�
 - **洞空不早退**：回填卡片完全盖住终端时 `holeRects` 为空，但楔仍非空——两者都空才摘 mask；否则 1pt outset 与圆角弧外的角在终端四角露兜底色。
 - **层序**：`TerminalScrim`（蒙层压暗一切）在最下，`TerminalShadow`（浮层自己的铬）在其上，web 合成层再其上。scrim 后于 shadow apply 时要插进已有 shadow 之下，不能贴着合成层插（会把投影抬到蒙层上面，洞里投影不跟着变暗）。已接受的不一致：蒙层不调制投影颜色，toast 阴影在弹窗蒙层下保持原强度。
 - **阴影层数超限截断不拒绝**：main 校验只认「每项合法」，层数超上限在 focus-coordinator 截断前 16 层——一份装饰过度的快照不能让整窗洞遮罩停更。
-- **fail-quiet 解析**：`parseCssColor` 只认 Chromium computed 实际产出的记法（legacy/modern rgb、srgb、oklab），认不出返回 undefined、native 不画，不猜颜色；`COLOR_FN` 与它的能力集保持一致。透明度采样只跟 opacity 动画/过渡（keyframe 名含 fade 或 transition 属性是 opacity/all），注册浮层上的无限动画（pulse / spin）不会把逐帧 flush 链无限续命。
+- **fail-quiet 解析**：`parseCssColor` 只认 Chromium computed 实际产出的记法（legacy/modern rgb、srgb、oklab），认不出返回 undefined、native 不画，不猜颜色；复合声明（如 `box-shadow`）里的颜色 token 只经 `findCssColor` 交给同一解析器，调用点不得维护第二套颜色正则。透明度采样只跟真的在动画 opacity 的 keyframes（tw-animate `enter` / `exit` 也算，名字不要求含 fade）或 opacity / all transition；注册浮层上的无限动画（pulse / spin）不会把逐帧 flush 链无限续命。
 - **animationend 只补几何**：淡出结束 fill-mode none 让 computed opacity 回弹到 1，此刻整份重读会把蒙层/阴影按全强度重发一帧（终端上闪一下）；逐帧链已发过当前 opacity 的终帧，动画结束沿用最近一次采样只更新矩形。
 - **统一最大圆角**：四角不一致取最大（现在产品只有对称圆角卡）。已接受的权衡：不对称圆角（sheet 形）会在 painted 直角上多挖一个楔（洞里露终端，比兜底色楔轻）；真出现 sheet 形再升级契约为四角数组。
+
+2026-11-13 终端运行时胶囊「四角露兜底色 + 阴影不生效」：`rounded-full` 的 computed radius 是 `1.67772e+07px`，十进制 px 正则解析成 0 → 回填按直角切角，胶囊四角露出不透明 backing；`shadow-background/40` 的 computed 颜色是 `oklab(...)`，阴影解析自己维护的 `COLOR_FN` 只认 rgb/color → 整层被静默丢弃。同一轮还发现终端搜索条注册的是透明的静态槽外壳（圆角 / 阴影画在子元素上），即使解析修好也仍是直角无影。修复：半径解析接受指数记法 / `%` / 椭圆两值（取大）并钳到短边一半；阴影颜色改走共享 `findCssColor` → `parseCssColor`；注册契约增加 `appearanceElement`，静态槽从绘制子元素采样，绘制目标缺席按无外观发布、不回退外壳；同缺陷类扩到 composer（定位外壳 vs chrome 卡）与补全 portal；浮层拖拽的整面板输入捕获改回 `paints: false`，不再抹空终端洞。无法解析的可见阴影层在开发态告警一次。教训：洞遮罩的几何是硬保证，外观采样是软环节；采样失败必须留下线索，不能让 native 静默画错。
+
+同日 add-panel / dropdown 弹层压在终端上没有阴影：Radix 弹层用 tw-animate `enter` 淡入，挂载时 computed opacity 为 0；透明度采样只按 keyframe 名是否含 fade 匹配，而 `enter` 名字不带 fade，逐帧链没有启动，`animationend` 又只补几何、沿用缓存外观，阴影 alpha 永远停在 0（圆角正常，只剩「有角无影」）。修复：opacity 采样改看 keyframes 是否真的动画 opacity（`enter` / `exit` 都算），无限动画不续帧，逐帧链先确认动画仍在运行再读色、避免淡出结束回弹帧按全强度闪一下；E2E 用 `Meta+N` 打开新建菜单，断言 `terminal-overlay` 条目的阴影 alpha 回到满强度。教训：动画里的外观不是挂载时的一个静态值，采样必须覆盖整段动画直到终态。

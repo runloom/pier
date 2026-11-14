@@ -5,7 +5,10 @@ import {
   classifyPreviewImageSignature,
   IMAGE_SIGNATURE_BYTES,
 } from "./image-signature.ts";
-import { readFileWithinPreviewLimit } from "./preview-file.ts";
+import {
+  type BoundedPreviewRead,
+  readFileWithinPreviewLimit,
+} from "./preview-file.ts";
 
 export const MAX_IMAGE_PREVIEW_FILE_BYTES = MAX_FILE_PREVIEW_BYTES;
 
@@ -26,6 +29,6 @@ export async function readPreviewImageMime(
 export function readFileWithinImagePreviewLimit(
   path: string,
   expectedSize: number
-): Promise<Buffer<ArrayBuffer> | null> {
+): Promise<BoundedPreviewRead> {
   return readFileWithinPreviewLimit(path, expectedSize);
 }

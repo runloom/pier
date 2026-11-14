@@ -108,9 +108,18 @@ describe("inspectDocxPackage", () => {
     });
   });
 
-  it("reports the ZIP limit before opening the archive", async () => {
+  it("reports a truncated archive as corrupt rather than over the ZIP limit", async () => {
     await expect(
       inspectDocxPackage(Uint8Array.from([0x50, 0x4b, 0x03, 0x04]))
+    ).resolves.toEqual({ ok: false, reason: "not-docx" });
+  });
+
+  it("still reports a real archive expansion limit as zip-limit", async () => {
+    const entries = Array.from({ length: 10_001 }, () => ({
+      uncompressedBytes: 1,
+    }));
+    await expect(
+      inspectDocxPackage(zipCentralDirectory(entries))
     ).resolves.toEqual({ ok: false, reason: "zip-limit" });
   });
 });

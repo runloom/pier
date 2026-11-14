@@ -19,10 +19,13 @@ export function bindScrimFade(
 
   const step = () => {
     frame = null;
-    flush();
-    if (isFading(element)) {
-      frame = requestAnimationFrame(step);
+    // 先确认动画仍在跑再读色：fill-mode none 的淡出结束后 computed opacity
+    // 会回弹到 1，再读一次会把阴影/蒙层按全强度重发一帧（终端上闪一下）。
+    if (!isFading(element)) {
+      return;
     }
+    flush();
+    frame = requestAnimationFrame(step);
   };
 
   const start = () => {
@@ -38,8 +41,30 @@ export function bindScrimFade(
     }
   };
 
+  // rAF 链在动画结束前的最后一帧就停了（step 先判 isFading）。进场动画
+  // 的终值是 opacity 1，补读一次拿到终帧；退场动画结束后 fill-mode none
+  // 会回弹到 1，不能读，否则按全强度重发一帧。
+  const onAnimationEnd = (event: Event) => {
+    if (event.target !== element || isExitAnimation(event)) {
+      return;
+    }
+    flush();
+  };
+  // transition 不会回弹到起点；opacity / all 结束时补读终值。
+  const onTransitionEnd = (event: Event) => {
+    if (event.target !== element) {
+      return;
+    }
+    const property = "propertyName" in event ? event.propertyName : "";
+    if (property === "opacity" || property === "all") {
+      flush();
+    }
+  };
+
   element.addEventListener("animationstart", onStart);
   element.addEventListener("transitionstart", onStart);
+  element.addEventListener("animationend", onAnimationEnd);
+  element.addEventListener("transitionend", onTransitionEnd);
   if (isFading(element)) {
     start();
   }
@@ -48,7 +73,14 @@ export function bindScrimFade(
     stop();
     element.removeEventListener("animationstart", onStart);
     element.removeEventListener("transitionstart", onStart);
+    element.removeEventListener("animationend", onAnimationEnd);
+    element.removeEventListener("transitionend", onTransitionEnd);
   };
+}
+
+function isExitAnimation(event: Event): boolean {
+  const name = "animationName" in event ? event.animationName : "";
+  return typeof name === "string" && /exit|out/i.test(name);
 }
 
 function isFading(element: HTMLElement): boolean {
@@ -56,7 +88,16 @@ function isFading(element: HTMLElement): boolean {
   return animations.some((animation) => isOpacityAnimation(animation));
 }
 
-/** 只跟 opacity：transition 的属性是 opacity，或 keyframe 名含 fade。 */
+interface KeyframeEffectLike {
+  getComputedTiming?: () => { iterations?: number };
+  getKeyframes?: () => Keyframe[];
+}
+
+/**
+ * 只跟 opacity：transition 的属性是 opacity，或 keyframes 真的在动画 opacity。
+ * tw-animate 的 `enter` / `exit` 名字不含 fade，opacity 由 --tw-enter-opacity /
+ * --tw-exit-opacity 驱动；按名字匹配会把 Radix 弹层钉在挂载时的 opacity=0。
+ */
 function isOpacityAnimation(animation: Animation): boolean {
   if (animation.playState !== "running") {
     return false;
@@ -64,6 +105,14 @@ function isOpacityAnimation(animation: Animation): boolean {
   if ("transitionProperty" in animation) {
     const property = animation.transitionProperty;
     return property === "opacity" || property === "all";
+  }
+  const effect = animation.effect as unknown as KeyframeEffectLike | null;
+  // pulse / spin 这类无限动画不能把逐帧 flush 链无限续命。
+  if (effect?.getComputedTiming?.().iterations === Number.POSITIVE_INFINITY) {
+    return false;
+  }
+  if (effect?.getKeyframes?.().some((frame) => "opacity" in frame)) {
+    return true;
   }
   const name = "animationName" in animation ? animation.animationName : "";
   return typeof name === "string" && /fade/i.test(name);

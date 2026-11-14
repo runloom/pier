@@ -60,6 +60,8 @@ Files 面板原生、只读地预览三类文档：
 - ticket TTL 10 分钟且不滑动；PDF.js / SheetJS 从内存解析。
 - fetch 前校验：`issued: true`、`content-type === mime`、`byteLength <= 64 MiB`。
 - HTTP 409 → `stale`；413 → `too-large`；其它失败 → `fetch-failed`。
+- 409 覆盖两类「内容已不是 ticket 对应版本」：revision 校验失败，以及有界读取时文件在 stat 之后增长到预期大小之外。文件在读取过程中变大不是 413：`readFileWithinPreviewLimit` 返回 `{ kind: "changed" }`，协议映射 409；只有 stat 时已超过 64 MiB 才是 413。ticket 签发阶段的 `changed` 在 host media preview 归一为 not-found。
+- 分类/读取竞态（读头后文件被替换）在 main 抛 `file_conflict` 错误码；`file.readDocument` 返回 `file_conflict`，renderer loader 映射为本地化「文件在读取时发生变化，重新加载以查看当前版本」，禁止把内部英文错误消息透给用户。
 - 读取结束/中止/卸载/代次不符时释放 ticket。
 - 协议拒绝 absolute / git-blob 文档 locator；P0 只从 Files rooted locator 进入。
 - 协议响应保留 `access-control-allow-origin: *`、`cache-control: private, immutable`、`content-length`、`etag`、`x-content-type-options: nosniff`。
@@ -77,6 +79,10 @@ Files 面板原生、只读地预览三类文档：
   - PDF：高保真，不显示保真提示。
 - `stale` 的重试走 `controller.reloadDocumentFromDisk`，用新 revision 重新取字节；不得用旧 revision 二次 fetch。
 - 已删除文件：标签保留，继续显示最后预览 + deleted chrome；不调用 `closeInstance`。
+- 已删除文件最后预览的字节在 renderer 会话内保留：按 `(root, path, revision)` 的小型 LRU（最多 8 份、总字节 ≤ 64 MiB）。重新挂载同一删除文档时直接复用保留字节，不再为已不存在的路径签发 ticket；没有保留字节时进入专门的 `deleted` 错误态（不签发 ticket），而不是误导性的 fetch 失败。保留只存在于当前 renderer 会话，不写 userData；窗口重载后删除文档回到 `deleted` 状态。
+- 删除态文案必须与渲染出的动作一致：`DocumentUnsupportedState` 有「在默认应用中打开」时提示打开；删除且该按钮被抑制时提示恢复文件。禁止承诺未渲染的按钮。
+- reload 失败必须可见：`FilePanelPreviewBranch` 的 reload rejection 在加载错误态之外显示本地化失败提示；加载错误态自身已接管时（`loadState === "error"`）不重复提示。文档预览的查找不可用提示使用文档专用文案，不得提示切换到编辑器。
+- 外部链接打开失败使用本地化「带下一步」文案，禁止透出 raw `error.message`。
 
 ## 6. PDF
 
@@ -86,8 +92,10 @@ Files 面板原生、只读地预览三类文档：
   - 偏差记录：pdfjs-dist 6 已移除 `isEvalSupported` 选项，实现不再传该参数；CSP 仍不含 `unsafe-eval`，PDF.js 走打包 worker 的正常解析路径。
 - `PasswordException` → `encrypted`；其它解析失败 → `parse-failed`。
 - 翻页、缩放（0.5–3）、适合宽度；canvas 任一边像素 clamp 16,384；devicePixelRatio clamp 2。
+- **适合宽度是几何关系，不是缩放档位**：`fitScale = containerWidth / pageWidth` 不得被 0.5–3 钳制；仅用户缩放倍率走 `clampPdfZoom`，最终 `scale = fitScale * clampPdfZoom(zoom)`。钳制 fitScale 会让宽页面永远宽于视口、小页面永远填不满。
+- 文本层：每页必须先 `await page.getTextContent()` 再触碰共享文本容器，并在每个 await（文本内容、TextLayer 渲染、annotations）之后检查 cancelled；取消后不得创建/渲染 TextLayer 或绑定链接，避免上一页晚到的文本层覆盖当前页。
 - 视口宽度从滚动正文测量：PdfPage 根节点占满视口，ResizeObserver 不得观察随 canvas 收缩的包装盒。否则渲染宽度会回灌 `fitScale`，每次缩放乘法叠加（点一次放大直接冲到 3× 上限，适合宽度失效）。
-- 每个文档独立 worker 以注入 `port` 创建；销毁时必须同时终止 loading task、PDFWorker 和底层 Worker 线程 —— `PDFWorker.destroy()` 不会 `terminate()` 注入的 port，worker 端 `Terminate` 也不关闭线程。
+- 每个文档独立 worker 以注入 `port` 创建；销毁顺序固定 `await loadingTask.destroy()` → `PDFWorker.destroy()` → `port.terminate()`，任一步抛错/拒绝都要继续后续销毁 —— `PDFWorker.destroy()` 不会 `terminate()` 注入的 port，worker 端 `Terminate` 也不关闭线程；cleanup 对 `destroyPdfResources` 的 rejection 兜底。
 - 文本层可选，样式只来自 `pdf-text-layer.css`，作用域 `[data-slot="document-preview-pdf"]`；选区底色复用宿主 `--editor-selection-bg`，不新增 `color-mix`。
 - 纸面由 PDF.js canvas 自身以白色绘制（`background` 缺省即白），CSS 不写固定 `bg-white` / 十六进制纸面色。
 - 链接：只处理 `subtype === "Link"`；外链只允许 `https:` / `mailto:`；内部 dest 由 `getPageIndex` 解析；禁止导航宿主。
@@ -104,6 +112,7 @@ Files 面板原生、只读地预览三类文档：
   - 总 uncompressed ≤ 256 MiB
   - 支持 ZIP64；越界/签名不符 → `truncated`
 - 包检查：必须包含 `[Content_Types].xml` 与 `word/document.xml`；否则 `parse-failed`。
+- central directory 的 `truncated` 表示包本身损坏/不完整，映射 `not-docx`（parse-failed 文案）；只有 entries / 单条 / 总量超限才映射 `zip-limit`。不得把截断归档谎报为解压上限。
 - 残余风险（2026-11-12）：central directory 声明的解压大小可被伪造，JSZip 在解压结束后才校验 `DataLength`；因此恶意 DOCX 仍可能在 renderer 主线程耗尽内存。P0 依赖 64 MiB 文件上限与 central-directory 预检，未做解压输出硬截断；DOCX 解析放入 Worker 并加输出上限留作后续加固。
 - 清洗（渲染后）：
   - 删除 `script` / `iframe` / `object` / `embed` / `link` / `meta` / `form` / `input` / `button`。
@@ -118,10 +127,12 @@ Files 面板原生、只读地预览三类文档：
 
 - SheetJS 官方发布包（`https://cdn.sheetjs.com/...`，≥ 0.20.2），禁止 npm `xlsx@0.18.5`。
 - 解析在 Worker 中完成；主线程只 `import type`，SheetJS 运行时不进主线程 chunk。
-- `XLSX.read`：`bookVBA: false`、`cellFormula: false`、`cellHTML: false`、`cellStyles: false`、`sheetRows = 50,001`、`WTF: false`。
-- 上限：50,000 行 / 256 列 / 500,000 单元格。先裁行、再裁列；若 `rows * columns > 500,000`，保留列并减行到 `max(1, floor(500_000 / columns))`。
-- 截断必须可见：顶部 infobar 显示行/列/单元格数字，并提示在默认应用中打开完整文件；禁止静默截断。
-- 合并单元格只显示左上值；网格不合并。
+- `XLSX.read` 首遍：`bookVBA: false`、`cellFormula: false`、`cellHTML: false`、`cellStyles: false`、`sheetRows = maxRows + 1`、`WTF: false`。
+- **偏移工作表修复**：SheetJS 的 `sheetRows` 从第 0 行起算，用于起点很靠后的 used range（例如从第 60,000 行开始）会把可见数据整段截掉，同时仍用 `!fullref` 指向完整范围。解析必须比对 `!fullref` 与 `!ref`：当 `fullref.s.r + maxRows - 1 > ref.e.r` 时，只对该 sheet 以 `sheetRows = fullref.s.r + maxRows + 1` 重读；若起点超过 `maxParseStartRow = 100,000`，不再重读，输出 `rowCount: 0`、`truncated: true`、`truncatedReason: "offset"` 的空壳，UI 使用专用 offset 文案。禁止静默显示不完整数据。
+- **工作簿级预算**：跨 sheet 的序列化单元格总数上限 1,000,000。每个 sheet 从剩余预算调用 `clipXlsxRange(..., availableCells)`；预算耗尽的 sheet 输出空壳（`truncatedReason: "cells"`），offset 空壳不消耗预算。只有 per-sheet 上限会让多 sheet 工作簿把内存乘上 sheet 数。
+- 上限：50,000 行 / 256 列 / 500,000 单元格（受工作簿剩余预算约束）。先取 `min(full, 上限)`；若 `rows * columns` 超过预算，保留列并把行减到 `floor(budget / columns)`（可为 0）。裁剪原因优先级：列裁剪 → `columns`；否则单元格预算压行 → `cells`；否则行裁剪 → `rows`。
+- 截断必须可见：顶部 infobar 显示行/列/单元格数字，并提示在默认应用中打开完整文件；`truncatedReason: "offset"` 使用独立文案。禁止静默截断。
+- 合并单元格只显示左上值；网格不合并。`!merges` 只与已渲染范围求交，格子 key 用 `row * 16384 + column` 数值；禁止按 sheet 全范围枚举（16k × 1M 会瞬间打爆内存）。
 - 列宽：与 CSV 预览共用同一策略 —— 不读取 `!cols`；每列基础宽度 96px，按容器可用宽度等比放大（上限 320px），窄面板保留横向滚动；行高 28px。导出型工作簿常缺 `!cols` 或全是默认宽度，固定 120px 会在宽面板里留下大片空白并截断内容（2026-11-13 修正）。
 - 行列坐标跟随 used range 起点：`SerializedXlsxSheet` 必须带 `startColumn` / `startRow`，列头与行号从 `!ref` / `!fullref` 的绝对坐标起算（例如范围从 C5 开始，首列标 C、首行标 5），禁止固定从 A/1 开始，否则复制/阅读到的位置与文件不一致（2026-11-13 修正）。
 - 复制只作用于真实数据行：react-data-grid 的列头活动位是 `rowIdx = -1`；该位置或工作表切换后失效的活动位必须直接放行原生复制，不得 `preventDefault` 并写入空串（会清空系统剪贴板）。
@@ -144,7 +155,7 @@ Files 面板原生、只读地预览三类文档：
 
 ## 10. 生命周期与入口
 
-- revision 变化：abort 旧请求、释放旧 ticket、重新 issue+fetch；不保留旧字节。
+- revision 变化：abort 旧请求、释放旧 ticket、重新 issue+fetch；不保留旧字节。保留字节按 `(root, path, revision)` 键控，新 revision 绝不复用旧 revision 的字节。
 - 删除：保留最后预览 + banner；不关闭标签；打开默认应用按钮隐藏。
 - 只读预览没有 Save：删除 banner 必须按 `fileDocumentCanRestoreBySave` 分文案。可保存文件才提示「保存以恢复」；只读预览改为说明当前显示的是最后版本的预览，并给出恢复文件后可再次打开的下一步，禁止提示一个不存在的保存动作（2026-11-13 修正）。
 - 入口复用现有链路：终端文件链接 / `pier://file` / `context.files.openInEditor` → Files 面板 → `document.preview` 分支直接渲染；不新增 `preferPreview`。
@@ -192,7 +203,7 @@ Files 面板原生、只读地预览三类文档：
 - `tests/unit/main/files/service.test.ts`
 - `tests/unit/main/app-core/csp.test.ts`
 - `tests/unit/main/app-core/pdfjs-assets-governance.test.ts`
-- `tests/unit/plugins/files/document-preview/{read-result,zip-guard,sanitize,links,pdf-layout,pdf-errors,xlsx-model,xlsx-limits,lifecycle}.test.ts`
+- `tests/unit/plugins/files/document-preview/{read-result,zip-guard,sanitize,links,pdf-layout,pdf-errors,pdf-worker-lifecycle,xlsx-model,xlsx-limits,xlsx-parse,use-preview-source,lifecycle}.test.ts`
 - `tests/component/files/document-preview.test.tsx`
 - `tests/unit/plugins/files/document-preview-governance.test.ts`
 - `tests/e2e/files/document-preview.spec.ts`

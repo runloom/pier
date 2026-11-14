@@ -56,7 +56,9 @@ export function usePdfDocument(bytes: Uint8Array): PdfDocumentState {
 
     return () => {
       cancelled = true;
-      destroyPdfResources({ loadingTask, port, worker });
+      // Teardown is async; do not block React, but keep the port alive until
+      // loadingTask.destroy() has finished.
+      destroyPdfResources({ loadingTask, port, worker }).catch(() => undefined);
     };
   }, [bytes]);
 

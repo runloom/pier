@@ -1,5 +1,6 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { ReactNode } from "react";
+import { getDocument } from "../../document/store.ts";
 import type {
   FilesDocument,
   FilesDocumentPreview,
@@ -34,6 +35,32 @@ export function FilePanelPreviewBranch(props: {
   t: FilesTranslate;
 }): ReactNode {
   const { context, controller, document, panelId, preview, t } = props;
+  const reload = () => {
+    controller.reloadDocumentFromDisk(document.id).catch(() => {
+      // A read failure already surfaces through the document error state;
+      // anything else (document gone, reload unavailable) would be silent.
+      if (getDocument(document.id)?.loadState !== "error") {
+        context.notifications.error(
+          t(
+            "filePanel.documentPreview.reloadFailed",
+            "Couldn't reload the document. Try again."
+          )
+        );
+      }
+    });
+  };
+  const body =
+    preview.kind === "image" ? (
+      <FileImagePreview context={context} document={document} t={t} />
+    ) : (
+      <FileDocumentPreview
+        context={context}
+        document={document}
+        onReload={reload}
+        preview={preview}
+        t={t}
+      />
+    );
   return (
     <FileDeletedOnDiskChrome
       controller={controller}
@@ -43,25 +70,21 @@ export function FilePanelPreviewBranch(props: {
     >
       <FilesFindUnavailableNotice
         context={context}
+        fallbackMessage={
+          preview.kind === "image"
+            ? undefined
+            : "Find isn't available in document previews."
+        }
+        messageKey={
+          preview.kind === "image"
+            ? undefined
+            : "filePanel.documentPreview.findUnavailable"
+        }
         panelId={panelId}
         searchRequest={props.searchRequest}
         t={t}
       >
-        {preview.kind === "image" ? (
-          <FileImagePreview context={context} document={document} t={t} />
-        ) : (
-          <FileDocumentPreview
-            context={context}
-            document={document}
-            onReload={() => {
-              controller
-                .reloadDocumentFromDisk(document.id)
-                .catch(() => undefined);
-            }}
-            preview={preview}
-            t={t}
-          />
-        )}
+        {body}
       </FilesFindUnavailableNotice>
     </FileDeletedOnDiskChrome>
   );

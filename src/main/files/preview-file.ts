@@ -18,20 +18,27 @@ export async function readFileHeader(
   }
 }
 
+export type BoundedPreviewRead =
+  | { bytes: Buffer<ArrayBuffer>; kind: "ok" }
+  | { kind: "changed" }
+  | { kind: "too-large" };
+
 /**
  * Read exactly the inspected byte count, refusing files that grew or exceed
- * the preview ceiling. Returns null when the bounded read cannot be honored.
+ * the preview ceiling. A file that merely changed while being read is
+ * reported as `changed` so callers can answer 409 (reload) instead of 413
+ * ("too large") — the latter would send the user to the wrong next step.
  */
 export async function readFileWithinPreviewLimit(
   path: string,
   expectedSize: number
-): Promise<Buffer<ArrayBuffer> | null> {
+): Promise<BoundedPreviewRead> {
   if (
     !Number.isSafeInteger(expectedSize) ||
     expectedSize < 0 ||
     expectedSize > MAX_FILE_PREVIEW_BYTES
   ) {
-    return null;
+    return { kind: "too-large" };
   }
 
   const handle = await open(path, "r");
@@ -56,11 +63,11 @@ export async function readFileWithinPreviewLimit(
     const growthProbe = Buffer.allocUnsafe(1);
     const { bytesRead: grew } = await handle.read(growthProbe, 0, 1, offset);
     if (grew !== 0) {
-      return null;
+      return { kind: "changed" };
     }
     return offset === expectedSize
-      ? bytes
-      : Buffer.from(bytes.subarray(0, offset));
+      ? { bytes, kind: "ok" }
+      : { bytes: Buffer.from(bytes.subarray(0, offset)), kind: "ok" };
   } finally {
     await handle.close();
   }

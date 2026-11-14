@@ -1,4 +1,5 @@
 import type { XlsxCell } from "./format.ts";
+import type { XlsxTruncationReason } from "./limits.ts";
 
 export interface SerializedXlsxSheet {
   columnCount: number;
@@ -12,6 +13,8 @@ export interface SerializedXlsxSheet {
   /** 0-based row index of the used range's first cell. */
   startRow: number;
   truncated: boolean;
+  /** Why the sheet was clipped; absent only on legacy fixtures. */
+  truncatedReason?: XlsxTruncationReason | null;
 }
 
 export interface XlsxWorkerRequest {

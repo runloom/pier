@@ -46,8 +46,14 @@ export function pdfPageRenderSize(input: {
     Number.isFinite(input.containerWidth) && input.containerWidth > 0
       ? input.containerWidth
       : input.pageWidth;
-  const fitScale = input.pageWidth > 0 ? containerWidth / input.pageWidth : 1;
-  const scale = clampPdfZoom(fitScale) * clampPdfZoom(input.zoom);
+  // Fit width is a geometry relationship, not a user zoom step: clamping it
+  // to PDF_MIN_ZOOM / PDF_MAX_ZOOM leaves wide pages wider than the viewport
+  // and small pages unable to fill it. Only the user's zoom is clamped.
+  const rawFitScale =
+    input.pageWidth > 0 ? containerWidth / input.pageWidth : 1;
+  const fitScale =
+    Number.isFinite(rawFitScale) && rawFitScale > 0 ? rawFitScale : 1;
+  const scale = fitScale * clampPdfZoom(input.zoom);
   const cssWidth = Math.max(1, input.pageWidth * scale);
   const cssHeight = Math.max(1, input.pageHeight * scale);
   const ratio = Math.min(

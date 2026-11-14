@@ -116,6 +116,17 @@ export async function inspectFileWriteTarget(
   };
 }
 
+function changedDuringRead(): never {
+  // Internal marker only: the command layer turns this into a typed
+  // `file_conflict` and the renderer maps it to localized copy. The raw
+  // English message must never reach the UI.
+  const error = new Error("file changed while reading its preview") as Error & {
+    code: "file_conflict";
+  };
+  error.code = "file_conflict";
+  throw error;
+}
+
 function documentUnsupportedResult(
   request: FileReadDocumentRequest,
   canonicalPath: string,
@@ -177,7 +188,7 @@ export async function readFileDocument(
       inspected.identity.canonicalTarget
     );
     if (!inspectedMime) {
-      throw new Error("file changed while classifying image preview");
+      changedDuringRead();
     }
     return {
       canonicalPath: inspected.identity.canonicalPath,
@@ -215,7 +226,7 @@ export async function readFileDocument(
       inspectedClassification.kind !== "document" ||
       inspectedClassification.format !== documentClassification.format
     ) {
-      throw new Error("file changed while classifying document preview");
+      changedDuringRead();
     }
     if (inspected.identity.stat.size > MAX_DOCUMENT_PREVIEW_FILE_BYTES) {
       return documentUnsupportedResult(

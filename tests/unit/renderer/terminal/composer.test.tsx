@@ -1,3 +1,7 @@
+import {
+  TerminalOverlayContext,
+  type TerminalOverlayOptions,
+} from "@pier/ui/use-terminal-overlay.tsx";
 import type {
   TerminalComposerPathsResult,
   TerminalComposerPickResult,
@@ -203,11 +207,16 @@ function renderComposer(
     onClose: () => void;
     onHeightChange: (heightPx: number) => void;
     panelId: string;
+    registerElement: (
+      id: string,
+      el: HTMLElement,
+      options?: TerminalOverlayOptions
+    ) => { dispose(): void; flush(): void };
   }> = {}
 ) {
   const onClose = overrides.onClose ?? vi.fn();
   const onHeightChange = overrides.onHeightChange ?? vi.fn();
-  const view = render(
+  const composer = (
     <TerminalComposer
       agentKind={overrides.agentKind ?? null}
       attachRequest={overrides.attachRequest ?? 0}
@@ -219,6 +228,17 @@ function renderComposer(
       onHeightChange={onHeightChange}
       panelId={overrides.panelId ?? "t-1"}
     />
+  );
+  const view = render(
+    overrides.registerElement ? (
+      <TerminalOverlayContext.Provider
+        value={{ registerElement: overrides.registerElement }}
+      >
+        {composer}
+      </TerminalOverlayContext.Provider>
+    ) : (
+      composer
+    )
   );
   return { onClose, onHeightChange, view };
 }
@@ -243,6 +263,30 @@ describe("TerminalComposer", () => {
     expect(
       screen.queryByTestId("terminal-composer-collapsed")
     ).not.toBeInTheDocument();
+  });
+
+  it("registers the positioning container but samples appearance from the chrome card", () => {
+    // 注册元素是 absolute 定位外壳（透明、直角、无阴影）；圆角 / 阴影 / 底
+    // 画在内部 chrome 卡片上。外观必须读卡片，否则 composer 压在终端上时
+    // 回填按直角切角、native 也没有阴影可画。
+    const registerElement = vi.fn(
+      (_id: string, _el: HTMLElement, _options?: TerminalOverlayOptions) => ({
+        dispose: vi.fn(),
+        flush: vi.fn(),
+      })
+    );
+    renderComposer({ registerElement });
+
+    const call = registerElement.mock.calls.find(([id]) =>
+      String(id).startsWith("terminal-composer-hit:")
+    );
+    expect(call?.[1]).toHaveAttribute(
+      "data-testid",
+      "terminal-composer-container"
+    );
+    expect(call?.[2]?.appearanceElement?.()).toBe(
+      screen.getByTestId("terminal-composer")
+    );
   });
 
   it("opens the file picker once per attachRequest bump, not on remount at 0", async () => {

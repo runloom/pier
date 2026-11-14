@@ -36,6 +36,13 @@ import { tabStatusIndicator } from "./panel-tab-tooltip.tsx";
 import { PanelTabTrailingView } from "./panel-tab-trailing.tsx";
 
 const CLIP_EPSILON_PX = 1;
+/**
+ * 溢出计数只反映「静止后的视口」（K11）：手势进行中每个滚动步都会让新 tab
+ * 从右侧进入、旧 tab 从左侧裁出，逐帧重算会让右端计数在两个值之间翻转
+ * （2026-11-14 实测 1.5s 内 6 次）。滚动只登记 settle，静止后重算一次；
+ * resize / tab 增删 / 标题变化仍然即时重算。
+ */
+const OVERFLOW_SCROLL_SETTLE_MS = 160;
 const OVERFLOW_ANCHOR_CLASS = "h-full w-0 shrink-0 overflow-hidden";
 const OVERFLOW_MENU_CLASS =
   "flex h-full shrink-0 items-center justify-center px-1";
@@ -130,6 +137,7 @@ function useOverflowPanelIds(
 
   useLayoutEffect(() => {
     let frame: number | null = null;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleUpdate = () => {
       if (frame !== null) {
         cancelAnimationFrame(frame);
@@ -138,6 +146,15 @@ function useOverflowPanelIds(
         frame = null;
         updateOverflowPanels();
       });
+    };
+    const scheduleSettledUpdate = () => {
+      if (settleTimer !== null) {
+        clearTimeout(settleTimer);
+      }
+      settleTimer = setTimeout(() => {
+        settleTimer = null;
+        scheduleUpdate();
+      }, OVERFLOW_SCROLL_SETTLE_MS);
     };
 
     scheduleUpdate();
@@ -150,7 +167,9 @@ function useOverflowPanelIds(
       };
     }
 
-    tabsContainer.addEventListener("scroll", scheduleUpdate, { passive: true });
+    tabsContainer.addEventListener("scroll", scheduleSettledUpdate, {
+      passive: true,
+    });
 
     const resizeObserver =
       typeof ResizeObserver === "undefined"
@@ -178,7 +197,10 @@ function useOverflowPanelIds(
       if (frame !== null) {
         cancelAnimationFrame(frame);
       }
-      tabsContainer.removeEventListener("scroll", scheduleUpdate);
+      if (settleTimer !== null) {
+        clearTimeout(settleTimer);
+      }
+      tabsContainer.removeEventListener("scroll", scheduleSettledUpdate);
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
     };
@@ -341,7 +363,7 @@ export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
             variant="secondary"
           >
             <ChevronDown data-icon="inline-start" />
-            <span>{overflowPanels.length}</span>
+            <span className="tabular-nums">{overflowPanels.length}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent

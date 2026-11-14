@@ -67,4 +67,36 @@ describe("buildXlsxSheets", () => {
     expect(offset?.rows[0]?.[0]).toEqual({ align: "left", text: "Header" });
     expect(offset?.rows[1]?.[1]).toEqual({ align: "right", text: "1" });
   });
+
+  it("spends one cell budget across every sheet in the workbook", () => {
+    const sheets = buildXlsxSheets(workbook(), { maxWorkbookCells: 6 });
+
+    expect(sheets[0]).toMatchObject({
+      rowCount: 2,
+      truncated: true,
+      truncatedReason: "cells",
+    });
+    expect(sheets[1]).toMatchObject({
+      rowCount: 0,
+      truncated: true,
+      truncatedReason: "cells",
+    });
+  });
+
+  it("clips merged rectangles before enumerating covered cells", () => {
+    const book = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ["Top", "covered"],
+      ["covered", "covered"],
+    ]);
+    // A sheet-sized merge must not enumerate 16k columns x 1M rows.
+    sheet["!merges"] = [{ e: { c: 16_383, r: 1_048_575 }, s: { c: 0, r: 0 } }];
+    XLSX.utils.book_append_sheet(book, sheet, "Huge");
+
+    const [huge] = buildXlsxSheets(book);
+    expect(huge?.rowCount).toBe(2);
+    expect(huge?.rows[0]?.[0]).toEqual({ align: "left", text: "Top" });
+    expect(huge?.rows[0]?.[1]).toEqual({ align: "left", text: "" });
+    expect(huge?.rows[1]?.[0]).toEqual({ align: "left", text: "" });
+  });
 });

@@ -27,7 +27,7 @@ describe("pdfPageRenderSize", () => {
     expect(size.pixelHeight).toBe(Math.round(size.cssHeight));
   });
 
-  it("clamps the fit scale and the zoom", () => {
+  it("clamps only the user zoom, not the fit scale", () => {
     expect(clampPdfZoom(0.1)).toBe(PDF_MIN_ZOOM);
     expect(clampPdfZoom(9)).toBe(PDF_MAX_ZOOM);
     const size = pdfPageRenderSize({
@@ -38,6 +38,30 @@ describe("pdfPageRenderSize", () => {
       zoom: 10,
     });
     expect(size.scale).toBeCloseTo(1.8);
+  });
+
+  it("fits a wide page to the container instead of clamping the fit scale", () => {
+    const size = pdfPageRenderSize({
+      containerWidth: 100,
+      devicePixelRatio: 1,
+      pageHeight: 1000,
+      pageWidth: 1000,
+      zoom: 1,
+    });
+    expect(size.scale).toBeCloseTo(0.1);
+    expect(size.cssWidth).toBeCloseTo(100);
+  });
+
+  it("lets a small page fill a wide container", () => {
+    const size = pdfPageRenderSize({
+      containerWidth: 800,
+      devicePixelRatio: 1,
+      pageHeight: 100,
+      pageWidth: 100,
+      zoom: 1,
+    });
+    expect(size.scale).toBeCloseTo(8);
+    expect(size.cssWidth).toBeCloseTo(800);
   });
 
   it("uses the page width when the container is not measured yet", () => {

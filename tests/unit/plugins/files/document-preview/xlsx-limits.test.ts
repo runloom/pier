@@ -26,6 +26,28 @@ describe("clipXlsxRange", () => {
     expect(wide.fullRowCount).toBe(60_001);
     expect(wide.fullColumnCount).toBe(301);
     expect(wide.truncated).toBe(true);
+    expect(wide.truncatedReason).toBe("columns");
+  });
+
+  it("reports why the range was clipped", () => {
+    expect(
+      clipXlsxRange({ e: { c: 9, r: 60_000 }, s: { c: 0, r: 0 } })
+        .truncatedReason
+    ).toBe("rows");
+    expect(
+      clipXlsxRange({ e: { c: 9, r: 1000 }, s: { c: 0, r: 0 } }, 100)
+        .truncatedReason
+    ).toBe("cells");
+  });
+
+  it("honors a workbook-wide cell budget down to zero", () => {
+    const clipped = clipXlsxRange(
+      { e: { c: 9, r: 1000 }, s: { c: 0, r: 0 } },
+      0
+    );
+    expect(clipped.rowCount).toBe(0);
+    expect(clipped.truncated).toBe(true);
+    expect(clipped.truncatedReason).toBe("cells");
   });
 
   it("keeps small ranges untouched", () => {
@@ -40,6 +62,7 @@ describe("clipXlsxRange", () => {
       range: { e: { c: 3, r: 9 }, s: { c: 1, r: 2 } },
       rowCount: 8,
       truncated: false,
+      truncatedReason: null,
     });
   });
 

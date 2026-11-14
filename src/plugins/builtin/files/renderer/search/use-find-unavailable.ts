@@ -27,19 +27,21 @@ export function useFindUnavailableToast(
 export function FilesFindUnavailableNotice({
   children,
   context,
+  fallbackMessage = DEFAULT_UNAVAILABLE,
+  messageKey = "filePanel.search.unavailable",
   panelId,
   searchRequest,
   t,
 }: {
   children: ReactNode;
   context?: RendererPluginContext | undefined;
+  fallbackMessage?: string | undefined;
+  messageKey?: string | undefined;
   panelId?: string | undefined;
   searchRequest?: number | undefined;
   t?: FilesTranslate | undefined;
 }): ReactNode {
-  const message =
-    t?.("filePanel.search.unavailable", DEFAULT_UNAVAILABLE) ??
-    DEFAULT_UNAVAILABLE;
+  const message = t?.(messageKey, fallbackMessage) ?? fallbackMessage;
   const skipSearchRequest = useRef(false);
   const emit = useCallback(() => {
     context?.notifications.info(message);

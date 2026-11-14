@@ -5,7 +5,11 @@ export type DocumentPreviewContext = Pick<
   "dialogs" | "externalNavigation" | "filePreviews" | "files" | "notifications"
 >;
 
-export type PreviewSourceError = "fetch-failed" | "stale" | "too-large";
+export type PreviewSourceError =
+  | "deleted"
+  | "fetch-failed"
+  | "stale"
+  | "too-large";
 
 export type DocumentRenderError =
   | PreviewSourceError

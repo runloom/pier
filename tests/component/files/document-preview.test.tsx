@@ -1,8 +1,10 @@
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { createDiskDocumentRecord } from "@plugins/builtin/files/renderer/document/factory.ts";
 import type { FilesDocument } from "@plugins/builtin/files/renderer/document/types.ts";
 import type { FileEditorController } from "@plugins/builtin/files/renderer/editor/controller.ts";
 import type { FilesTranslate } from "@plugins/builtin/files/renderer/i18n.ts";
 import { FileDeletedOnDiskBar } from "@plugins/builtin/files/renderer/panel/deleted-on-disk/bar.tsx";
+import { FilePanelPreviewBranch } from "@plugins/builtin/files/renderer/panel/preview/index.tsx";
 import { openDocumentInDefaultApp } from "@plugins/builtin/files/renderer/preview/document/open-default.ts";
 import { DocumentPreviewFrame } from "@plugins/builtin/files/renderer/preview/document/shell.tsx";
 import {
@@ -135,6 +137,11 @@ describe("FileDeletedOnDiskBar", () => {
       capabilities: [],
       deletedOnDisk: true,
       hasBackingStore: false,
+      preview: {
+        kind: "image",
+        mime: "image/png",
+        revision: "r1",
+      },
       readOnly: true,
       revision: null,
     };
@@ -154,6 +161,37 @@ describe("FileDeletedOnDiskBar", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Save to Restore" })
+    ).toBeNull();
+  });
+
+  it("does not promise a last-version preview for unsupported documents", () => {
+    const document: FilesDocument = {
+      ...diskDocument("report.pptx"),
+      capabilities: [],
+      deletedOnDisk: true,
+      hasBackingStore: false,
+      preview: {
+        format: "pptx",
+        kind: "document-unsupported",
+        reason: "not-supported",
+      },
+      readOnly: true,
+      revision: null,
+    };
+    render(
+      <FileDeletedOnDiskBar
+        controller={{} as FileEditorController}
+        document={document}
+        panelId={undefined}
+        t={t}
+      />
+    );
+
+    expect(
+      screen.getByText("Restore the file to open it again.")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/This preview shows the last version/u)
     ).toBeNull();
   });
 });
@@ -196,6 +234,29 @@ describe("DocumentUnsupportedState", () => {
     );
     expect(
       screen.queryByRole("button", { name: "Open in default app" })
+    ).toBeNull();
+  });
+
+  it("tells a deleted unsupported document to restore it", () => {
+    render(
+      <DocumentUnsupportedState
+        document={{ ...diskDocument("report.pptx"), deletedOnDisk: true }}
+        preview={{
+          format: "pptx",
+          kind: "document-unsupported",
+          reason: "not-supported",
+        }}
+        t={t}
+      />
+    );
+
+    expect(
+      screen.getByText("Restore the file to open it again.")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Open it in the default app to view the full document."
+      )
     ).toBeNull();
   });
 });
@@ -368,7 +429,7 @@ describe("usePreviewSource", () => {
       usePreviewSource({
         context,
         mime: "application/pdf",
-        path: "a.pdf",
+        path: "too-large.pdf",
         revision: "r1",
         root: "/repo",
       })
@@ -398,7 +459,7 @@ describe("usePreviewSource", () => {
       usePreviewSource({
         context,
         mime: "application/pdf",
-        path: "a.pdf",
+        path: "stale.pdf",
         revision: "r1",
         root: "/repo",
       })
@@ -436,7 +497,7 @@ describe("usePreviewSource", () => {
         usePreviewSource({
           context,
           mime: "application/pdf",
-          path: "a.pdf",
+          path: "refetch.pdf",
           revision,
           root: "/repo",
         }),
@@ -450,6 +511,103 @@ describe("usePreviewSource", () => {
     await waitFor(() => expect(issue).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(result.current.status).toBe("ready"));
     expect(release).toHaveBeenCalledWith("t1");
+  });
+});
+
+describe("FilePanelPreviewBranch", () => {
+  it("reports a failed reload instead of swallowing the rejection", async () => {
+    const issue = vi.fn(async () => ({
+      expiresAt: 0,
+      issued: true as const,
+      ticket: "t1",
+      url: "pier-file-preview://file/t1",
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 409 }))
+    );
+    const notifications = { error: vi.fn(), info: vi.fn() };
+    const context = {
+      ...previewContext({
+        filePreviews: { issue, release: vi.fn(async () => true) },
+        notifications,
+      }),
+      notifications,
+    } as unknown as RendererPluginContext;
+    const reloadDocumentFromDisk = vi.fn(async () => {
+      throw new Error("reload unavailable");
+    });
+    const controller = {
+      reloadDocumentFromDisk,
+    } as unknown as FileEditorController;
+    const preview = {
+      format: "pdf" as const,
+      kind: "document" as const,
+      mime: "application/pdf" as const,
+      revision: "r1",
+    };
+    const document: FilesDocument = {
+      ...diskDocument("reload.pdf"),
+      loadState: "loaded",
+      preview,
+    };
+
+    render(
+      <FilePanelPreviewBranch
+        context={context}
+        controller={controller}
+        document={document}
+        panelId={undefined}
+        preview={preview}
+        searchRequest={0}
+        t={t}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(reloadDocumentFromDisk).toHaveBeenCalledOnce());
+    await waitFor(() => expect(notifications.error).toHaveBeenCalledOnce());
+    expect(notifications.error.mock.calls[0]?.[0]).toBe(
+      "Couldn't reload the document. Try again."
+    );
+  });
+
+  it("uses document copy when find is requested in a document preview", async () => {
+    const info = vi.fn();
+    const context = {
+      ...previewContext({ notifications: { info } }),
+      notifications: { info },
+    } as unknown as RendererPluginContext;
+    const preview = {
+      format: "pptx" as const,
+      kind: "document-unsupported" as const,
+      reason: "not-supported" as const,
+    };
+    const document: FilesDocument = {
+      ...diskDocument("find.pptx"),
+      loadState: "loaded",
+      preview,
+    };
+    const branch = (searchRequest: number) => (
+      <FilePanelPreviewBranch
+        context={context}
+        controller={{} as FileEditorController}
+        document={document}
+        panelId={undefined}
+        preview={preview}
+        searchRequest={searchRequest}
+        t={t}
+      />
+    );
+
+    const { rerender } = render(branch(0));
+    rerender(branch(1));
+
+    await waitFor(() =>
+      expect(info).toHaveBeenCalledWith(
+        "Find isn't available in document previews."
+      )
+    );
   });
 });
 
@@ -705,6 +863,23 @@ describe("FileXlsxPreview", () => {
 
     expect(
       screen.getByText(/Showing 2 rows × 2 columns \(4 cells\)/u)
+    ).toBeInTheDocument();
+  });
+
+  it("explains an offset-only truncation without fake row counts", async () => {
+    renderPreview();
+    await respondWithSheets([
+      {
+        ...dataSheet,
+        rowCount: 0,
+        rows: [],
+        truncated: true,
+        truncatedReason: "offset",
+      },
+    ]);
+
+    expect(
+      screen.getByText(/used range starts below the preview row limit/u)
     ).toBeInTheDocument();
   });
 

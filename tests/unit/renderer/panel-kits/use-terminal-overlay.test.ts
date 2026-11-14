@@ -56,6 +56,17 @@ function snapshot() {
   return getLastTerminalHostSnapshot();
 }
 
+/** jsdom 没有 AnimationEvent / TransitionEvent 构造器，补同名属性即可。 */
+function namedEvent(
+  type: string,
+  property: "animationName" | "propertyName",
+  value: string
+): Event {
+  const event = new Event(type);
+  Object.defineProperty(event, property, { value });
+  return event;
+}
+
 const registry = {
   registerElement: registerTerminalElementWebOverlay,
 };
@@ -139,6 +150,7 @@ describe("useTerminalOverlay", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -306,6 +318,123 @@ describe("useTerminalOverlay", () => {
     el.remove();
   });
 
+  it("follows tw-animate enter opacity so shadows are not frozen at zero", () => {
+    // Radix popover / dropdown 的淡入是 tw-animate `enter` keyframes：
+    // animationName 不含 "fade"，opacity 由 --tw-enter-opacity 驱动。只按
+    // 名字匹配会停在挂载时的 opacity=0，阴影 alpha 永远为 0。
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const { result } = renderHook(() => useTerminalOverlay(), { wrapper });
+    const el = makeSizedElement();
+    el.style.boxShadow = "rgba(0, 0, 0, 0.1) 0px 10px 15px -3px";
+    el.style.opacity = "0";
+    let running = true;
+    el.getAnimations = () =>
+      (running
+        ? [
+            {
+              animationName: "enter",
+              effect: {
+                getComputedTiming: () => ({ iterations: 1 }),
+                getKeyframes: () => [{ opacity: "var(--tw-enter-opacity, 1)" }],
+              },
+              playState: "running",
+            },
+          ]
+        : []) as unknown as Animation[];
+    document.body.append(el);
+
+    result.current(el);
+    const drain = () => {
+      const batch = frames.splice(0);
+      for (const callback of batch) {
+        callback(0);
+      }
+    };
+    drain();
+
+    // 运行中的 enter 动画必须续帧；否则不会再读 opacity。
+    expect(frames.length).toBeGreaterThan(0);
+
+    el.style.opacity = "1";
+    drain();
+
+    const shadows = snapshot()?.webOverlayRects[0]?.shadows;
+    expect(shadows).toHaveLength(1);
+    expect(shadows?.[0]?.color.a).toBeCloseTo(0.1);
+
+    running = false;
+    drain();
+    el.remove();
+  });
+
+  it("flushes the enter terminal frame but ignores the exit rebound", () => {
+    // 逐帧链在动画结束前的最后一帧就停了；进场终帧必须补读一次，否则
+    // native 蒙层/阴影永远差最后一点点。退场结束后 fill-mode none 会
+    // 回弹到 opacity 1，此时不能重读，否则终端上闪一帧全强度。
+    const { result } = renderHook(() => useTerminalOverlay(), { wrapper });
+    const el = makeSizedElement();
+    el.style.boxShadow = "rgba(0, 0, 0, 0.4) 0px 8px 16px 0px";
+    el.style.opacity = "0.5";
+    document.body.append(el);
+    result.current(el);
+
+    const shadowAlpha = () =>
+      snapshot()?.webOverlayRects[0]?.shadows?.[0]?.color.a;
+    expect(shadowAlpha()).toBeCloseTo(0.2);
+
+    el.style.opacity = "1";
+    el.dispatchEvent(namedEvent("animationend", "animationName", "enter"));
+    expect(shadowAlpha()).toBeCloseTo(0.4);
+
+    el.style.opacity = "0.25";
+    el.dispatchEvent(namedEvent("transitionend", "propertyName", "opacity"));
+    expect(shadowAlpha()).toBeCloseTo(0.1);
+
+    // exit 结束 CSS 回弹到 opacity 1；缓存的退场强度必须保留。
+    el.style.opacity = "1";
+    el.dispatchEvent(namedEvent("animationend", "animationName", "exit"));
+    expect(shadowAlpha()).toBeCloseTo(0.1);
+
+    el.remove();
+  });
+
+  it("does not keep flushing for an infinite opacity animation", () => {
+    // pulse 等无限动画动画的也是 opacity，但逐帧 flush 链不能无限续命。
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const { result } = renderHook(() => useTerminalOverlay(), { wrapper });
+    const el = makeSizedElement();
+    el.style.boxShadow = "rgba(0, 0, 0, 0.1) 0px 10px 15px -3px";
+    el.getAnimations = () =>
+      [
+        {
+          animationName: "pulse",
+          effect: {
+            getComputedTiming: () => ({ iterations: Number.POSITIVE_INFINITY }),
+            getKeyframes: () => [{ opacity: "0.5" }],
+          },
+          playState: "running",
+        },
+      ] as unknown as Animation[];
+    document.body.append(el);
+
+    result.current(el);
+    const batch = frames.splice(0);
+    for (const callback of batch) {
+      callback(0);
+    }
+
+    expect(frames).toHaveLength(0);
+    el.remove();
+  });
+
   it("publishes outset box-shadows and drops inset ones", () => {
     // 洞只回填 border box。shadow-lg 画在盒外，终端洞会把阴影硬裁掉；
     // 非终端区域没有洞，同一条 CSS 阴影仍然可见。inset 在盒内，web 自己画。
@@ -365,6 +494,137 @@ describe("useTerminalOverlay", () => {
     expect(readOverlayRadiusPx(el, 0)).toBe(24);
 
     el.remove();
+  });
+
+  it("reads rounded-full's exponent-serialized radius and clamps it to the box", () => {
+    // Tailwind rounded-full 在 Chromium computed style 里是 1.67772e+07px，
+    // 不是十进制 px。按字面 px 正则解析会得到 0，洞按直角回填，胶囊四角
+    // 露出不透明 backing。CSS 的 used radius 还会被浏览器钳到短边一半。
+    const el = makeSizedElement();
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      borderBottomLeftRadius: "1.67772e+07px",
+      borderBottomRightRadius: "1.67772e+07px",
+      borderTopLeftRadius: "1.67772e+07px",
+      borderTopRightRadius: "1.67772e+07px",
+      boxShadow: "none",
+      opacity: "1",
+    } as CSSStyleDeclaration);
+
+    expect(readOverlayRadiusPx(el, 0)).toBe(25);
+  });
+
+  it("reads a percentage radius against the shorter border-box edge", () => {
+    // computed 值也可能是 50%。CSS 横向按宽、纵向按高；契约只要均匀圆角，
+    // 取短边作基准，与用于钳位的 used radius 保持同一套几何。
+    const el = makeSizedElement();
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      borderBottomLeftRadius: "50%",
+      borderBottomRightRadius: "50%",
+      borderTopLeftRadius: "50%",
+      borderTopRightRadius: "50%",
+      boxShadow: "none",
+      opacity: "1",
+    } as CSSStyleDeclaration);
+
+    expect(readOverlayRadiusPx(el, 0)).toBe(25);
+  });
+
+  it("reads an elliptical corner radius as the larger component", () => {
+    // computed 单角可以是 `水平 垂直` 椭圆两值。按整串匹配会得到 0，洞按
+    // 直角回填；取较大者保证挖掉的角至少覆盖绘制形状（宁可多挖露终端，
+    // 不可欠挖留 backing 角）。
+    const el = makeSizedElement();
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      borderBottomLeftRadius: "10px 20px",
+      borderBottomRightRadius: "10px 20px",
+      borderTopLeftRadius: "10px 20px",
+      borderTopRightRadius: "10px 20px",
+      boxShadow: "none",
+      opacity: "1",
+    } as CSSStyleDeclaration);
+
+    expect(readOverlayRadiusPx(el, 0)).toBe(20);
+  });
+
+  it("reads colored shadows from Chromium's oklab serialization", () => {
+    // Tailwind shadow-background/40 经 color-mix 后 computed box-shadow 的
+    // 颜色是 oklab(...)，不是 rgba(...)。只认 rgb/color 的 token 正则会把
+    // 整层阴影丢掉，native 便无影可画。
+    const el = makeSizedElement();
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      boxShadow: [
+        "rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+        "oklab(0.2 0 0 / 0.4) 0px 10px 15px -3px",
+        "oklab(0.2 0 0 / 0.4) 0px 4px 6px -4px",
+      ].join(", "),
+      opacity: "1",
+    } as CSSStyleDeclaration);
+
+    const shadows = readOverlayShadows(el, 0);
+    expect(shadows).toHaveLength(2);
+    expect(shadows[0]).toMatchObject({ blur: 15, spread: -3, x: 0, y: 10 });
+    expect(shadows[0]?.color.a).toBeCloseTo(0.4);
+    expect(shadows[0]?.color.r).toBeLessThan(0.2);
+    expect(shadows[1]).toMatchObject({ blur: 6, spread: -4, x: 0, y: 4 });
+  });
+
+  it("samples appearance from the painted child when the geometry wrapper is transparent", () => {
+    // 静态工具槽的注册元素只是布局外壳（无底色、无圆角、无阴影），
+    // 真正画胶囊的是它的子元素。几何取外壳，外观必须取绘制元素。
+    const wrapperEl = makeSizedElement();
+    const painted = document.createElement("div");
+    painted.style.borderTopLeftRadius = "24px";
+    painted.style.borderTopRightRadius = "24px";
+    painted.style.borderBottomRightRadius = "24px";
+    painted.style.borderBottomLeftRadius = "24px";
+    painted.style.boxShadow = "rgba(0, 0, 0, 0.2) 0px 8px 16px 0px";
+    wrapperEl.append(painted);
+    document.body.append(wrapperEl);
+
+    const registration = registerTerminalElementWebOverlay(
+      "painted-child",
+      wrapperEl,
+      { appearanceElement: () => painted }
+    );
+
+    const rect = snapshot()?.webOverlayRects.find(
+      (entry) => entry.id === "painted-child"
+    );
+    expect(rect?.radius).toBe(24);
+    expect(rect?.shadows).toHaveLength(1);
+
+    registration.dispose();
+    wrapperEl.remove();
+  });
+
+  it("does not fall back to the geometry wrapper when the painted target is missing", () => {
+    // 指定了 appearanceElement 就表示「外观只属于绘制子元素」。子元素尚未
+    // 挂载 / 已卸载时不能回头采样外壳——外壳的圆角阴影可能是另一套语义，
+    // 会重新画出直角回填或错位阴影。目标缺席即「无外观」。
+    const wrapperEl = makeSizedElement();
+    wrapperEl.style.borderTopLeftRadius = "24px";
+    wrapperEl.style.borderTopRightRadius = "24px";
+    wrapperEl.style.borderBottomRightRadius = "24px";
+    wrapperEl.style.borderBottomLeftRadius = "24px";
+    wrapperEl.style.boxShadow = "rgba(0, 0, 0, 0.2) 0px 8px 16px 0px";
+    document.body.append(wrapperEl);
+
+    const registration = registerTerminalElementWebOverlay(
+      "painted-child-missing",
+      wrapperEl,
+      { appearanceElement: () => null }
+    );
+
+    const rect = snapshot()?.webOverlayRects.find(
+      (entry) => entry.id === "painted-child-missing"
+    );
+    expect(rect?.frame).toMatchObject({ height: 50, width: 100 });
+    expect(rect?.radius).toBeUndefined();
+    expect(rect?.shadows).toBeUndefined();
+
+    registration.dispose();
+    wrapperEl.remove();
   });
 
   it("passes paints:false through for input-capture-only surfaces", () => {

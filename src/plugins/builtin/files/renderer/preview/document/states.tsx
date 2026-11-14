@@ -41,6 +41,14 @@ function errorCopy(
   t: FilesTranslate
 ): { description: string; title: string } {
   switch (error) {
+    case "deleted":
+      return {
+        description: t(
+          "filePanel.documentPreview.deleted.description",
+          "Restore the file to preview it again."
+        ),
+        title: t("filePanel.deleted.bannerTitle", "This file was deleted"),
+      };
     case "fetch-failed":
       return {
         description: t(
@@ -184,6 +192,28 @@ function unsupportedCopy(
   }
 }
 
+function unsupportedHint(
+  document: FilesDocument,
+  t: FilesTranslate,
+  hasOpenAction: boolean
+): string | null {
+  // Never promise a default-app action that is not rendered: deleted-on-disk
+  // documents suppress the button, so the hint must change with it.
+  if (hasOpenAction) {
+    return t(
+      "filePanel.documentPreview.unsupported.hint",
+      "Open it in the default app to view the full document."
+    );
+  }
+  if (document.deletedOnDisk) {
+    return t(
+      "filePanel.documentPreview.unsupported.restoreHint",
+      "Restore the file to open it again."
+    );
+  }
+  return null;
+}
+
 export function DocumentUnsupportedState(props: {
   document: FilesDocument;
   onOpenInDefaultApp?: (() => void) | undefined;
@@ -193,6 +223,11 @@ export function DocumentUnsupportedState(props: {
   >;
   t: FilesTranslate;
 }): ReactNode {
+  const hint = unsupportedHint(
+    props.document,
+    props.t,
+    props.onOpenInDefaultApp !== undefined
+  );
   return (
     <Empty
       className="min-h-64"
@@ -207,12 +242,7 @@ export function DocumentUnsupportedState(props: {
         <EmptyDescription>
           {unsupportedCopy(props.preview, props.t)}
         </EmptyDescription>
-        <EmptyDescription>
-          {props.t(
-            "filePanel.documentPreview.unsupported.hint",
-            "Open it in the default app to view the full document."
-          )}
-        </EmptyDescription>
+        {hint ? <EmptyDescription>{hint}</EmptyDescription> : null}
       </EmptyHeader>
       {props.onOpenInDefaultApp ? (
         <EmptyContent>

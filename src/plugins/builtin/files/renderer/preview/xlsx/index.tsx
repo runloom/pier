@@ -139,15 +139,20 @@ export default function FileXlsxPreview(props: {
             variant="warning"
           >
             <AlertTitle>
-              {t(
-                "filePanel.documentPreview.xlsx.truncated",
-                "Showing {rows} rows × {columns} columns ({cells} cells). Open in the default app for the full sheet.",
-                {
-                  cells: sheet.rowCount * sheet.columnCount,
-                  columns: sheet.columnCount,
-                  rows: sheet.rowCount,
-                }
-              )}
+              {sheet.truncatedReason === "offset"
+                ? t(
+                    "filePanel.documentPreview.xlsx.offsetTruncated",
+                    "This sheet's used range starts below the preview row limit, so it can't be shown here. Open in the default app for the full sheet."
+                  )
+                : t(
+                    "filePanel.documentPreview.xlsx.truncated",
+                    "Showing {rows} rows × {columns} columns ({cells} cells). Open in the default app for the full sheet.",
+                    {
+                      cells: sheet.rowCount * sheet.columnCount,
+                      columns: sheet.columnCount,
+                      rows: sheet.rowCount,
+                    }
+                  )}
             </AlertTitle>
           </Alert>
         ) : null
