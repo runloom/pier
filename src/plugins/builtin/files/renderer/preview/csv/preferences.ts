@@ -1,3 +1,7 @@
+import {
+  readStoredColumnWidths,
+  writeStoredColumnWidths,
+} from "../shared/preferences.ts";
 import type { CsvDelimiter } from "./parser.ts";
 
 export interface CsvFileSettings {
@@ -73,25 +77,7 @@ export function readCsvColumnWidths(
   documentId: string,
   structureKey: string
 ): Record<string, number> | null {
-  const raw = preferenceStorage()?.getItem(widthsKey(documentId, structureKey));
-  if (!raw) {
-    return null;
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") {
-      return null;
-    }
-    const widths: Record<string, number> = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-        widths[key] = Math.round(value);
-      }
-    }
-    return Object.keys(widths).length > 0 ? widths : null;
-  } catch {
-    return null;
-  }
+  return readStoredColumnWidths(widthsKey(documentId, structureKey));
 }
 
 export function writeCsvColumnWidths(input: {
@@ -99,12 +85,8 @@ export function writeCsvColumnWidths(input: {
   structureKey: string;
   widths: Record<string, number>;
 }): void {
-  try {
-    preferenceStorage()?.setItem(
-      widthsKey(input.documentId, input.structureKey),
-      JSON.stringify(input.widths)
-    );
-  } catch {
-    // Preference persistence never breaks the grid.
-  }
+  writeStoredColumnWidths(
+    widthsKey(input.documentId, input.structureKey),
+    input.widths
+  );
 }

@@ -1,12 +1,34 @@
 import type { XlsxCell } from "./format.ts";
 import type { XlsxTruncationReason } from "./limits.ts";
 
+export interface SerializedXlsxMerge {
+  /** 0-based column index inside the rendered range. */
+  column: number;
+  /** Number of rendered columns covered by the anchor cell; at least 2. */
+  columnSpan: number;
+  /** 0-based row index inside the rendered range. */
+  row: number;
+}
+
+export interface SerializedXlsxRowHeight {
+  /** Document or estimated multi-line height in CSS pixels. */
+  height: number;
+  /** 0-based row index inside the rendered range. */
+  row: number;
+}
+
 export interface SerializedXlsxSheet {
   columnCount: number;
+  /** Document `!cols` widths for rendered columns; null = no usable hint. */
+  columnWidthsPx: Array<number | null>;
   fullColumnCount: number;
   fullRowCount: number;
+  /** Horizontal merges whose anchor is inside the rendered range. */
+  merges: SerializedXlsxMerge[];
   name: string;
   rowCount: number;
+  /** Rows whose document or estimated height differs from the grid default. */
+  rowHeights: SerializedXlsxRowHeight[];
   rows: XlsxCell[][];
   /** 0-based column index of the used range's first cell (A = 0). */
   startColumn: number;

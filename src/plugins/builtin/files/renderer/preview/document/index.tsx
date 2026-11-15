@@ -31,6 +31,7 @@ function DocumentPreviewLoading(props: { t: FilesTranslate }) {
 function DocumentFormatPreview(props: {
   bytes: Uint8Array;
   context: DocumentPreviewContext;
+  documentId: string;
   fileName: string;
   format: Extract<FilesDocumentDocumentPreview, { kind: "document" }>["format"];
   onOpenInDefaultApp: (() => void) | undefined;
@@ -53,7 +54,7 @@ function DocumentFormatPreview(props: {
     case "docx":
       return <FileDocxPreview {...shared} context={props.context} />;
     case "xlsx":
-      return <FileXlsxPreview {...shared} />;
+      return <FileXlsxPreview {...shared} documentId={props.documentId} />;
     default:
       return (
         <DocumentPreviewFrame t={props.t}>
@@ -133,6 +134,7 @@ function DocumentSourcePreview(props: {
         <DocumentFormatPreview
           bytes={sourceState.bytes}
           context={context}
+          documentId={document.id}
           fileName={document.name}
           format={preview.format}
           onOpenInDefaultApp={onOpenInDefaultApp}

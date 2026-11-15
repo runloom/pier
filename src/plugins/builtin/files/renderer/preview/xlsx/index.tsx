@@ -1,5 +1,5 @@
 import { Alert, AlertTitle } from "@pier/ui/alert.tsx";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FilesTranslate } from "../../i18n.ts";
 import { DocumentPreviewFrame } from "../document/shell.tsx";
 import {
@@ -9,11 +9,18 @@ import {
 import type { DocumentRenderError } from "../document/types.ts";
 import { XlsxGrid } from "./grid.tsx";
 import { XLSX_PARSE_TIMEOUT_MS } from "./limits.ts";
+import {
+  readXlsxColumnWidths,
+  writeXlsxColumnWidths,
+  xlsxColumnStructureKey,
+} from "./preferences.ts";
 import type { SerializedXlsxSheet } from "./protocol.ts";
 import { SheetTabs } from "./sheet-tabs.tsx";
 import { createXlsxWorker } from "./worker-client.ts";
 
 let nextXlsxRequestId = 1;
+
+const XLSX_WIDTH_WRITE_DEBOUNCE_MS = 250;
 
 type XlsxState =
   | { error: null; sheets: null; status: "loading" }
@@ -26,18 +33,82 @@ type XlsxState =
 
 export default function FileXlsxPreview(props: {
   bytes: Uint8Array;
+  documentId: string;
   fileName: string;
   onOpenInDefaultApp?: (() => void) | undefined;
   onRetry: () => void;
   t: FilesTranslate;
 }) {
-  const { bytes, onOpenInDefaultApp, onRetry, t } = props;
+  const { bytes, documentId, onOpenInDefaultApp, onRetry, t } = props;
   const [state, setState] = useState<XlsxState>({
     error: null,
     sheets: null,
     status: "loading",
   });
   const [selected, setSelected] = useState(0);
+  const activeSheet =
+    state.status === "ready"
+      ? state.sheets[Math.min(selected, state.sheets.length - 1)]
+      : undefined;
+  const structureKey = activeSheet
+    ? xlsxColumnStructureKey(activeSheet.name, activeSheet.columnCount)
+    : null;
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const widthTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  );
+  const pendingWidthsRef = useRef<{
+    documentId: string;
+    structureKey: string;
+    widths: Record<string, number>;
+  } | null>(null);
+
+  const flushPendingWidths = useCallback(() => {
+    const pending = pendingWidthsRef.current;
+    if (!pending) {
+      return;
+    }
+    pendingWidthsRef.current = null;
+    writeXlsxColumnWidths(pending);
+  }, []);
+
+  // Widths belong to one worksheet shape. Read on sheet/key change and flush
+  // the previous sheet's pending write first, so quickly switching sheets
+  // cannot drop the resize the user just made.
+  useEffect(() => {
+    setColumnWidths(
+      structureKey ? (readXlsxColumnWidths(documentId, structureKey) ?? {}) : {}
+    );
+    return () => {
+      if (widthTimerRef.current !== undefined) {
+        clearTimeout(widthTimerRef.current);
+        widthTimerRef.current = undefined;
+      }
+      flushPendingWidths();
+    };
+  }, [documentId, flushPendingWidths, structureKey]);
+
+  const handleColumnWidthsChange = useCallback(
+    (next: Record<string, number>) => {
+      setColumnWidths(next);
+      if (!structureKey) {
+        return;
+      }
+      pendingWidthsRef.current = {
+        documentId,
+        structureKey,
+        widths: next,
+      };
+      if (widthTimerRef.current !== undefined) {
+        clearTimeout(widthTimerRef.current);
+      }
+      widthTimerRef.current = setTimeout(() => {
+        widthTimerRef.current = undefined;
+        flushPendingWidths();
+      }, XLSX_WIDTH_WRITE_DEBOUNCE_MS);
+    },
+    [documentId, flushPendingWidths, structureKey]
+  );
 
   useEffect(() => {
     const worker = createXlsxWorker();
@@ -102,7 +173,7 @@ export default function FileXlsxPreview(props: {
   }
 
   const sheetIndex = Math.min(selected, state.sheets.length - 1);
-  const sheet = state.sheets[sheetIndex];
+  const sheet = activeSheet;
   if (!sheet) {
     return (
       <DocumentPreviewFrame t={t}>
@@ -160,7 +231,12 @@ export default function FileXlsxPreview(props: {
       {...(onOpenInDefaultApp ? { onOpenInDefaultApp } : {})}
       t={t}
     >
-      <XlsxGrid sheet={sheet} t={t} />
+      <XlsxGrid
+        columnWidths={columnWidths}
+        onColumnWidthsChange={handleColumnWidthsChange}
+        sheet={sheet}
+        t={t}
+      />
     </DocumentPreviewFrame>
   );
 }

@@ -88,6 +88,51 @@ export const PIER_XML_FILE_ICON_SYMBOL = symbol(
   "M5.5 3.2 1.7 8l3.8 4.8 1.15-.92L3.85 8l2.8-3.88zm5 0-1.15.92L12.15 8l-2.8 3.88 1.15.92L14.3 8z"
 );
 
+/**
+ * Document-type glyphs. The built-in complete sheet ships `text` / `table`
+ * but no PDF / Word / Slides mark, so those extensions otherwise fall back to
+ * the generic file icon. Same two-layer structure as `file-tree-builtin-text`
+ * (40% page body + full-opacity fold and mark) so tree, tab and overflow
+ * menu share one visual weight. Spreadsheet extensions stay on the built-in
+ * `table` glyph: it is already type-specific and shares the CSV family.
+ */
+export const PIER_PDF_FILE_ICON_SYMBOL_ID = "file-tree-pier-pdf";
+export const PIER_PDF_FILE_ICON_TOKEN = "pdf";
+export const PIER_WORD_FILE_ICON_SYMBOL_ID = "file-tree-pier-word";
+export const PIER_WORD_FILE_ICON_TOKEN = "word";
+export const PIER_SLIDES_FILE_ICON_SYMBOL_ID = "file-tree-pier-slides";
+export const PIER_SLIDES_FILE_ICON_TOKEN = "slides";
+
+const FILE_PAGE_BODY_PATH =
+  "M8 4a3 3 0 0 0 3 3h3v5.5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 12.5v-9A2.5 2.5 0 0 1 4.5 1H8z";
+const FILE_PAGE_FOLD_PATH =
+  "M9.5 1a.5.5 0 0 1 .354.146l4 4A.5.5 0 0 1 14 5.5V6h-3a2 2 0 0 1-2-2V1z";
+
+function documentSymbol(id: string, mark: string, evenOdd = false): string {
+  const fillRule = evenOdd ? ' fill-rule="evenodd"' : "";
+  return `<symbol id="${id}" viewBox="0 0 16 16"><path fill="currentColor" d="${FILE_PAGE_BODY_PATH}" opacity=".4"/><path fill="currentColor"${fillRule} d="${FILE_PAGE_FOLD_PATH}${mark}"/></symbol>`;
+}
+
+export const PIER_PDF_FILE_ICON_SYMBOL = documentSymbol(
+  PIER_PDF_FILE_ICON_SYMBOL_ID,
+  // Bold "P" with a counter, matching the full-opacity weight of the fold.
+  "M4.7 7.5h3.1c1.55 0 2.55.95 2.55 2.35s-1 2.35-2.55 2.35H6.2v1.3H4.7zM6.2 8.8v2.1h1.5c.75 0 1.15-.38 1.15-1.05s-.4-1.05-1.15-1.05z",
+  true
+);
+
+export const PIER_WORD_FILE_ICON_SYMBOL = documentSymbol(
+  PIER_WORD_FILE_ICON_SYMBOL_ID,
+  // Zigzag "W" sized to the same optical box as the PDF mark.
+  "M4.2 7.6h1.55l.95 3.2.95-3.2h1.3l.95 3.2.95-3.2h1.55l-1.75 5.4h-1.4L8 9.8l-.9 3.2H5.95z"
+);
+
+export const PIER_SLIDES_FILE_ICON_SYMBOL = documentSymbol(
+  PIER_SLIDES_FILE_ICON_SYMBOL_ID,
+  // Presentation screen with a cut-out play mark plus a stand.
+  "M3.6 7.2h8.8v4.9H3.6zM7 8.6l2.4 1.2L7 11zM7.2 12.1h1.6v1.1h2v1.1H5.2v-1.1h2z",
+  true
+);
+
 export const PIER_CUSTOM_FILE_ICON_SYMBOLS: readonly string[] = [
   PIER_CANVAS_FILE_ICON_SYMBOL,
   PIER_DART_FILE_ICON_SYMBOL,
@@ -101,6 +146,9 @@ export const PIER_CUSTOM_FILE_ICON_SYMBOLS: readonly string[] = [
   PIER_SCALA_FILE_ICON_SYMBOL,
   PIER_TOML_FILE_ICON_SYMBOL,
   PIER_XML_FILE_ICON_SYMBOL,
+  PIER_PDF_FILE_ICON_SYMBOL,
+  PIER_WORD_FILE_ICON_SYMBOL,
+  PIER_SLIDES_FILE_ICON_SYMBOL,
 ];
 
 /** Tokens that are not in `@pierre/trees` built-in colored-icon CSS. */
@@ -117,6 +165,9 @@ export const PIER_CUSTOM_FILE_ICON_TOKENS = [
   "scala",
   "toml",
   "xml",
+  PIER_PDF_FILE_ICON_TOKEN,
+  PIER_WORD_FILE_ICON_TOKEN,
+  PIER_SLIDES_FILE_ICON_TOKEN,
 ] as const;
 
 export type PierCustomFileIconToken =

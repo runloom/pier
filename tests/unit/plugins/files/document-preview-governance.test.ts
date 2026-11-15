@@ -120,6 +120,87 @@ describe("files document preview gold standard", () => {
     expect(pkg.dependencies.xlsx).not.toContain("0.18");
   });
 
+  it("lets XLSX columns resize with sheet-scoped width memory", () => {
+    const grid = read(`${XLSX}/grid.tsx`);
+    const preferences = read(`${XLSX}/preferences.ts`);
+    const csvPreferences = read(`${PREVIEW}/csv/preferences.ts`);
+    const sharedPreferences = read(`${PREVIEW}/shared/preferences.ts`);
+    const spec = read(SPEC);
+
+    expect(grid).toContain("resizable: true");
+    expect(grid).toContain("onColumnWidthsChange");
+    expect(preferences).toContain("pier.files.xlsx.columnWidths.v1:");
+    expect(preferences).toContain("sheetName");
+    // Width validation lives in one place for CSV and XLSX.
+    expect(preferences).toContain("../shared/preferences.ts");
+    expect(csvPreferences).toContain("../shared/preferences.ts");
+    expect(sharedPreferences).toContain("readStoredColumnWidths");
+    expect(sharedPreferences).toContain("writeStoredColumnWidths");
+    expect(spec).toContain("列宽可拖拽");
+    expect(spec).toContain("文件图标");
+  });
+
+  it("renders spreadsheet widths and horizontal merges like a real grid", () => {
+    const grid = read(`${XLSX}/grid.tsx`);
+    const filler = read(`${XLSX}/filler.ts`);
+    const layout = read(`${XLSX}/layout.ts`);
+    const model = read(`${XLSX}/model.ts`);
+    const parse = read(`${XLSX}/parse.ts`);
+    const protocol = read(`${XLSX}/protocol.ts`);
+    const spec = read(SPEC);
+
+    // SheetJS drops `!cols` unless styles are parsed.
+    expect(parse).toContain("cellStyles: true");
+    expect(protocol).toContain("columnWidthsPx");
+    expect(protocol).toContain("SerializedXlsxMerge");
+    expect(model).toContain("customwidth");
+    expect(model).toContain("horizontalMerges");
+    expect(model).toContain("serializedRowHeights");
+    // Excel stores row height in points; SheetJS's hpx is an identity.
+    expect(model).toContain("hpt");
+    expect(model).toContain("Math.ceil((points * 4) / 3)");
+    // Geometry bounds have exactly one owner shared by worker and renderer.
+    expect(layout).toContain("XLSX_ROW_HEIGHT_PX = 28");
+    expect(layout).toContain("MIN_COLUMN_WIDTH = 48");
+    expect(layout).toContain("estimatedMultiLineRowHeightPx");
+    expect(model).toContain('from "./layout.ts"');
+    expect(grid).toContain('from "./layout.ts"');
+    expect(model).not.toContain("MIN_DOCUMENT_COLUMN_WIDTH");
+    expect(grid).not.toContain("const MIN_COLUMN_WIDTH");
+    expect(protocol).toContain("rowHeights");
+    expect(grid).toContain("colSpan");
+    expect(grid).toContain("whitespace-pre-wrap");
+    expect(grid).toContain("sheet.columnWidthsPx[index]");
+    // A short sheet still paints cells to the edges like Excel.
+    expect(filler).toContain("FILLER_ROW_COUNT = 200");
+    expect(filler).toContain("FILLER_COLUMN_WIDTH = 64");
+    expect(filler).toContain("fillerColumns");
+    expect(grid).toContain("FILLER_ROW_COUNT");
+    // Blank columns stop at the content box, not the scrollbar-inclusive width.
+    expect(grid).toContain("scrollbarWidth");
+    expect(grid).toContain("grid.offsetWidth - grid.clientWidth");
+    expect(spec).toContain("48–1200px");
+    expect(spec).toContain("`colSpan`");
+    expect(spec).toContain("行高与换行");
+    expect(spec).toContain("按列宽估算行高");
+    expect(spec).toContain("双击列边界");
+    expect(spec).toContain("数据下方与右侧不得露白");
+  });
+
+  it("gives document types dedicated file icons and keeps xlsx on table", () => {
+    const iconConfig = read("packages/ui/src/file/icon-config.ts");
+
+    for (const mapping of [
+      "pdf: PDF_FILE_ICON",
+      "doc: WORD_FILE_ICON",
+      "docx: WORD_FILE_ICON",
+      "ppt: SLIDES_FILE_ICON",
+      "pptx: SLIDES_FILE_ICON",
+    ]) {
+      expect(iconConfig).toContain(mapping);
+    }
+  });
+
   it("ships PDF.js assets and opens CSP for document bytes and workers", () => {
     const builder = read("electron-builder.yml");
     const csp = read("src/main/csp.ts");

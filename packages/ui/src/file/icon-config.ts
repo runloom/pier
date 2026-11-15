@@ -10,10 +10,16 @@ import {
   PIER_JAVA_FILE_ICON_SYMBOL_ID,
   PIER_KOTLIN_FILE_ICON_SYMBOL_ID,
   PIER_LUA_FILE_ICON_SYMBOL_ID,
+  PIER_PDF_FILE_ICON_SYMBOL_ID,
+  PIER_PDF_FILE_ICON_TOKEN,
   PIER_PHP_FILE_ICON_SYMBOL_ID,
   PIER_R_FILE_ICON_SYMBOL_ID,
   PIER_SCALA_FILE_ICON_SYMBOL_ID,
+  PIER_SLIDES_FILE_ICON_SYMBOL_ID,
+  PIER_SLIDES_FILE_ICON_TOKEN,
   PIER_TOML_FILE_ICON_SYMBOL_ID,
+  PIER_WORD_FILE_ICON_SYMBOL_ID,
+  PIER_WORD_FILE_ICON_TOKEN,
   PIER_XML_FILE_ICON_SYMBOL_ID,
 } from "./icon-glyphs.ts";
 
@@ -24,6 +30,12 @@ export {
   PIER_CUSTOM_FILE_ICON_TOKENS,
   PIER_DART_FILE_ICON_SYMBOL,
   PIER_DART_FILE_ICON_SYMBOL_ID,
+  PIER_PDF_FILE_ICON_SYMBOL_ID,
+  PIER_PDF_FILE_ICON_TOKEN,
+  PIER_SLIDES_FILE_ICON_SYMBOL_ID,
+  PIER_SLIDES_FILE_ICON_TOKEN,
+  PIER_WORD_FILE_ICON_SYMBOL_ID,
+  PIER_WORD_FILE_ICON_TOKEN,
   SIMPLE_ICONS_DART_PATH,
 } from "./icon-glyphs.ts";
 
@@ -47,6 +59,12 @@ export {
  * Filename remaps only reuse tokens that already exist in this sheet
  * (`npm` / `python` / `ruby` / …). No Makefile / Prisma / Nix glyphs —
  * those stay on the default file mark.
+ *
+ * Document types get Pier-owned glyphs because the built-in complete sheet
+ * stops at generic `text` / `table`: `.pdf`, Word (`.doc` / `.docx`) and
+ * Slides (`.ppt` / `.pptx`) otherwise render the default file icon in tree,
+ * tab and overflow menu. Spreadsheet types deliberately stay on the built-in
+ * `table` glyph — it is already type-specific and shares the CSV family.
  */
 
 /**
@@ -156,6 +174,18 @@ const R_FILE_ICON = tokenIcon(PIER_R_FILE_ICON_SYMBOL_ID, "r");
 const SCALA_FILE_ICON = tokenIcon(PIER_SCALA_FILE_ICON_SYMBOL_ID, "scala");
 const TOML_FILE_ICON = tokenIcon(PIER_TOML_FILE_ICON_SYMBOL_ID, "toml");
 const XML_FILE_ICON = tokenIcon(PIER_XML_FILE_ICON_SYMBOL_ID, "xml");
+const PDF_FILE_ICON = tokenIcon(
+  PIER_PDF_FILE_ICON_SYMBOL_ID,
+  PIER_PDF_FILE_ICON_TOKEN
+);
+const WORD_FILE_ICON = tokenIcon(
+  PIER_WORD_FILE_ICON_SYMBOL_ID,
+  PIER_WORD_FILE_ICON_TOKEN
+);
+const SLIDES_FILE_ICON = tokenIcon(
+  PIER_SLIDES_FILE_ICON_SYMBOL_ID,
+  PIER_SLIDES_FILE_ICON_TOKEN
+);
 const DOCKER_FILE_ICON = tokenIcon("file-tree-builtin-docker", "docker");
 
 const canvasByFileExtension = Object.fromEntries(
@@ -249,6 +279,11 @@ export const PIER_FILE_TREE_ICONS = {
     toml: TOML_FILE_ICON,
     xml: XML_FILE_ICON,
     plist: XML_FILE_ICON,
+    pdf: PDF_FILE_ICON,
+    doc: WORD_FILE_ICON,
+    docx: WORD_FILE_ICON,
+    ppt: SLIDES_FILE_ICON,
+    pptx: SLIDES_FILE_ICON,
     dockerfile: DOCKER_FILE_ICON,
     cmake: CPP_FILE_ICON,
     m: CPP_FILE_ICON,

@@ -14,7 +14,7 @@ Files 面板原生、只读地预览三类文档：
 | --- | --- | --- |
 | `.pdf` | PDF.js 页面渲染 + 文本层 | 支持翻页、缩放、适合宽度、页内链接 |
 | `.docx` | docx-preview + Shadow DOM | 近似版式；图片走 `data:`；不执行脚本 |
-| `.xlsx` | SheetJS Worker + 只读网格 | 多 sheet、列宽、数字格式、TSV 复制 |
+| `.xlsx` | SheetJS Worker + 只读网格 | 多 sheet、列宽（可拖拽、按文档 + sheet 记忆）、数字格式、TSV 复制 |
 
 ### 1.2 非目标
 
@@ -132,10 +132,16 @@ Files 面板原生、只读地预览三类文档：
 - **工作簿级预算**：跨 sheet 的序列化单元格总数上限 1,000,000。每个 sheet 从剩余预算调用 `clipXlsxRange(..., availableCells)`；预算耗尽的 sheet 输出空壳（`truncatedReason: "cells"`），offset 空壳不消耗预算。只有 per-sheet 上限会让多 sheet 工作簿把内存乘上 sheet 数。
 - 上限：50,000 行 / 256 列 / 500,000 单元格（受工作簿剩余预算约束）。先取 `min(full, 上限)`；若 `rows * columns` 超过预算，保留列并把行减到 `floor(budget / columns)`（可为 0）。裁剪原因优先级：列裁剪 → `columns`；否则单元格预算压行 → `cells`；否则行裁剪 → `rows`。
 - 截断必须可见：顶部 infobar 显示行/列/单元格数字，并提示在默认应用中打开完整文件；`truncatedReason: "offset"` 使用独立文案。禁止静默截断。
-- 合并单元格只显示左上值；网格不合并。`!merges` 只与已渲染范围求交，格子 key 用 `row * 16384 + column` 数值；禁止按 sheet 全范围枚举（16k × 1M 会瞬间打爆内存）。
-- 列宽：与 CSV 预览共用同一策略 —— 不读取 `!cols`；每列基础宽度 96px，按容器可用宽度等比放大（上限 320px），窄面板保留横向滚动；行高 28px。导出型工作簿常缺 `!cols` 或全是默认宽度，固定 120px 会在宽面板里留下大片空白并截断内容（2026-11-13 修正）。
+- **合并单元格（2026-11-14 修正）**：横向合并按真实表格渲染。`!merges` 只与已渲染范围求交；只输出锚点在渲染范围内的水平跨度 `{ row, column, columnSpan }`（sheet 相对坐标，`columnSpan >= 2`），网格用 react-data-grid `colSpan` 让锚点格横跨、被覆盖格为空；格子 key 用 `row * 16384 + column` 数值；禁止按 sheet 全范围枚举（16k × 1M 会瞬间打爆内存）。纵向合并（跨行）仍只显示左上值、其余格为空：react-data-grid 不支持 `rowSpan`，本期不另造第二套网格——这是能力边界，不是「网格不合并」策略。
+- **列宽（2026-11-14 修正，取代不读取 `!cols`）**：优先级 = 用户持久化宽度 > 文档 `!cols` > 内容估算。`!cols` 必须用 `XLSX.read({ cellStyles: true })` 解析（`cellStyles: false` 时 SheetJS 直接丢弃列宽）；当 `!cols` 至少一列带显式 `customwidth`，或渲染列宽度不均一时视为文档意图，按 `wpx`（缺失时用 `wch` / `width` 换算）渲染并 clamp 到 48–1200px；整表同一默认宽度视为无意义并回退内容估算。有文档宽度或持久化宽度时禁止按容器等比放大——真实表格软件不会为填满窗口拉伸列。两者都没有时按列内容采样估算基础宽度，再按容器可用宽度等比放大（单列上限 320px），窄面板保留横向滚动；无文档行高且无内嵌换行时行高 28px。导出型工作簿常缺 `!cols` 或全是默认宽度，不能把默认宽度当文档意图（保留 2026-11-13 修正的意图）。
+- **列宽可拖拽（2026-11-14）**：数据列 `resizable: true`，行号列固定且不参与拖拽。拖拽是阅读姿态，不是编辑：不写文件、不改数据、不产生 dirty。react-data-grid 的列宽是加法物理，只改被拖列，表宽 = Σ；上下限 48–1200px——必须容纳文档自带宽度（例如 660px 的说明列），72–480px 会把真实列宽压窄。
+- **行高与换行（2026-11-14）**：`cellStyles: true` 同时解析 `!rows` 的 `hpt`。Excel 的 `ht` 单位是点，必须换算为 CSS px：`ceil(hpt × 4/3)`（SheetJS 的 `hpx` 因固定 `PPI = 96` 实际等于点值，直接当像素会把行高缩小 25%，长单元格底部被裁）。换算后大于 28px 的行加 1px 边框余量并 clamp 到 545px；无文档行高且无内嵌换行用 28px。文档行高大于 28px 的行按多行内容处理：单元格保留 `\n` 并按列宽折行；无文档行高但单元格含 `\n` 的行按列宽估算行高（行数 × 20px + 8px，clamp 28–545px，优先文档高度；估算使用文档 `!cols` 或默认 96px，不随列宽拖拽重算，与 Excel 固定行高一致）并折行——程序生成的工作簿常只写换行不写 `!rows`，禁止在 28px 行里把多行文本裁成单行省略号。只有单行内容才用省略号。
+- **数据下方与右侧不得露白（2026-11-14）**：网格必须像 Excel 一样铺满可视区。真实数据之后追加空白行（行号继续，沿用 CSV 预览的 200 行尾部行），真实列之后追加空白列（列号继续 D/E/F…，按剩余宽度均分、单列约 64px 默认宽）；空白列不拉伸真实列宽、不可拖拽、不写列宽记忆。只有面板窄于表宽时才出现横向滚动，表宽小于面板时右侧由空白列补满。
+- **列宽记忆**：键为 `(documentId, sheet 名, 列数)`，存 `localStorage` 族 `pier.files.xlsx.columnWidths.v1:`，不进 userData；sheet 名必须进键，禁止同文件不同 sheet 串宽度。键变化（切 sheet / 列数变化）必须重读并中止旧写入。
+- 无持久化宽度且无文档 `!cols` 时走内容自动 fit；一旦该 sheet 有持久化宽度或文档宽度，其余列不再按容器等比放大（与 CSV 一致，避免拖过列后整表随窗口抖动）。松手才写盘（debounce），切 sheet / 卸载时 flush；拖拽中禁止逐帧写。
+- 不新增专用重置 / 自适应按钮：双击列边界由 react-data-grid 自带 `max-content` 自适应并写入列宽记忆，与 CSV 预览同构；禁止为此另造一套 chrome。
 - 行列坐标跟随 used range 起点：`SerializedXlsxSheet` 必须带 `startColumn` / `startRow`，列头与行号从 `!ref` / `!fullref` 的绝对坐标起算（例如范围从 C5 开始，首列标 C、首行标 5），禁止固定从 A/1 开始，否则复制/阅读到的位置与文件不一致（2026-11-13 修正）。
-- 复制只作用于真实数据行：react-data-grid 的列头活动位是 `rowIdx = -1`；该位置或工作表切换后失效的活动位必须直接放行原生复制，不得 `preventDefault` 并写入空串（会清空系统剪贴板）。
+- 复制只作用于真实数据单元格（真实数据行 + 数据列）：react-data-grid 的列头活动位是 `rowIdx = -1`，补白行 / 补白列不是文档数据；这些位置、工作表切换后失效的活动位以及空文本必须直接放行原生复制，不得 `preventDefault` 并写入空串（会清空系统剪贴板）。
 - 数字/日期右对齐，布尔居中，其它左对齐。
 - 多 sheet 底部 tab（36px 外壳 + 28px 轨道，`aria-selected`）：使用 `@pier/ui/tabs` 的 line 变体，尺寸与内距跟审查 surface switcher 同源 —— 共享 28px 轨道、`text-xs`、line 轨道的 `px-2.5` / `gap-4`、非激活 `text-foreground/60`、激活 `text-foreground` + 2px `bg-foreground` 选中线；禁止用 `bg-muted` 胶囊表示激活。底栏外壳 36px（`h-9`，与终端 composer chrome 同档），28px 轨道在其中垂直居中，上下各 4px 呼吸位；比 `FilePanelHeader` 的 40px 少 4px，footer 只有 tabs，不抢 header 高度。sheet 条保留表面 chrome（全宽、横向滚动、外壳顶部分隔线），轨道纵向 padding 归零，使选中线贴住内容侧边缘。只读，不提供编辑/插入/删除。
 - **选中线永远朝向内容侧**：上方 tab 条（设置页、审查 surface）用底边下划线；sheet 条停靠在预览底缘、网格在上方，所以激活下划线必须落在 **28px 条内顶边**（`aria-selected:after:top-0` + `bottom: auto`）。不得贴面板底缘（与内容断开、贴到下方无关 chrome），也不得沿用 line 变体默认的 `after:bottom-[-5px]`（会被底缘裁掉）。Excel / Google Sheets 的底边色条是工作表标签色装饰，其选中主信号是白底与表格连成一片，不能只照搬底边线（2026-11-13 修正）。
@@ -171,6 +177,13 @@ Files 面板原生、只读地预览三类文档：
 - 纯展示层不进 Tab 序；不新增 `tabIndex={0}`。
 - 用户文案只进 locale（zh-CN / en / ja / ko）；错误与空态带下一步。
 
+### 文件图标（2026-11-14）
+
+- 文档类型必须有专用文件图标，不允许 PDF / Word / Slides 回落到默认文件图标。字形走既有 `packages/ui/src/file/icon-glyphs.ts` 自定义 overlay（16×16 `currentColor`，与内置图标同一套「page bg + fold + mark」两层结构），映射走 `PIER_FILE_TREE_ICONS.byFileExtension`；Files 树、tab、溢出菜单三处同构生效。
+- 映射：`.pdf` → `pdf`；`.doc` / `.docx` → `word`；`.ppt` / `.pptx` → `slides`。`.xlsx` / `.xls` / `.csv` / `.tsv` / `.ods` 保持内置 `table` 字形——它已不是默认文件图标，且与 CSV 同族；禁止再给电子表格造第二个字形。
+- 颜色只走现有文件图标色板：`pdf` → red、`word` → blue、`slides` → orange；不得在业务源码新增十六进制。
+- 检查点：`tests/unit/renderer/files/icon.test.tsx`。
+
 ## 12. CSP、Worker 与打包
 
 宿主 CSP dev / prod 必须包含：
@@ -194,6 +207,7 @@ Files 面板原生、只读地预览三类文档：
 - 单文档上限 64 MiB；一次完整 fetch；不 Range、不流式。
 - PDF 只渲染当前页；缩放时重渲染当前页并取消旧 render task。
 - XLSX 网格用 `react-data-grid` 虚拟化；最多 500k 单元格。
+- `cellStyles: true` 只为文档宽度 / 行高 / 数字格式服务：实测 16 MB、50k × 10 工作簿解析增量约 2–3%，可以接受；样式对象不跨 Worker 边界。
 - DOCX 渲染失败/清洗失败显示错误态，不拖垮 Files 面板（error boundary）。
 
 ## 14. 治理检查点
@@ -203,7 +217,8 @@ Files 面板原生、只读地预览三类文档：
 - `tests/unit/main/files/service.test.ts`
 - `tests/unit/main/app-core/csp.test.ts`
 - `tests/unit/main/app-core/pdfjs-assets-governance.test.ts`
-- `tests/unit/plugins/files/document-preview/{read-result,zip-guard,sanitize,links,pdf-layout,pdf-errors,pdf-worker-lifecycle,xlsx-model,xlsx-limits,xlsx-parse,use-preview-source,lifecycle}.test.ts`
+- `tests/unit/plugins/files/document-preview/{read-result,zip-guard,sanitize,links,pdf-layout,pdf-errors,pdf-worker-lifecycle,xlsx-model,xlsx-limits,xlsx-parse,xlsx-columns,xlsx-filler,use-preview-source,lifecycle}.test.ts`
+- `tests/unit/renderer/files/icon.test.tsx`（文档类型图标）
 - `tests/component/files/document-preview.test.tsx`
 - `tests/unit/plugins/files/document-preview-governance.test.ts`
 - `tests/e2e/files/document-preview.spec.ts`

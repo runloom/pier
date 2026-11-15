@@ -740,10 +740,13 @@ describe("FileDocxPreview", () => {
 
 const dataSheet: SerializedXlsxSheet = {
   columnCount: 2,
+  columnWidthsPx: [null, null],
   fullColumnCount: 2,
   fullRowCount: 2,
+  merges: [],
   name: "Data",
   rowCount: 2,
+  rowHeights: [],
   rows: [
     [
       { align: "left", text: "Name" },
@@ -761,10 +764,13 @@ const dataSheet: SerializedXlsxSheet = {
 
 const summarySheet: SerializedXlsxSheet = {
   columnCount: 1,
+  columnWidthsPx: [null],
   fullColumnCount: 1,
   fullRowCount: 2,
+  merges: [],
   name: "Summary",
   rowCount: 2,
+  rowHeights: [],
   rows: [[{ align: "left", text: "Total" }], [{ align: "right", text: "42" }]],
   startColumn: 0,
   startRow: 0,
@@ -813,6 +819,7 @@ describe("FileXlsxPreview", () => {
     render(
       <FileXlsxPreview
         bytes={new Uint8Array([0x50, 0x4b, 0x03, 0x04])}
+        documentId="doc-1"
         fileName="a.xlsx"
         {...(onOpenInDefaultApp ? { onOpenInDefaultApp } : {})}
         onRetry={vi.fn()}
@@ -923,8 +930,17 @@ describe("FileXlsxPreview", () => {
 });
 
 describe("XlsxGrid", () => {
+  const noopColumnWidths = () => undefined;
+
   it("copies the active cell as TSV text from the native copy event", async () => {
-    render(<XlsxGrid sheet={dataSheet} t={t} />);
+    render(
+      <XlsxGrid
+        columnWidths={{}}
+        onColumnWidthsChange={noopColumnWidths}
+        sheet={dataSheet}
+        t={t}
+      />
+    );
 
     const cell = await screen.findByText("Alice");
     fireEvent.mouseDown(cell);
@@ -937,7 +953,12 @@ describe("XlsxGrid", () => {
 
   it("labels columns and rows from the used-range origin", () => {
     render(
-      <XlsxGrid sheet={{ ...dataSheet, startColumn: 2, startRow: 4 }} t={t} />
+      <XlsxGrid
+        columnWidths={{}}
+        onColumnWidthsChange={noopColumnWidths}
+        sheet={{ ...dataSheet, startColumn: 2, startRow: 4 }}
+        t={t}
+      />
     );
 
     const headerNames = screen
@@ -949,17 +970,28 @@ describe("XlsxGrid", () => {
     const rowNumbers = [...document.querySelectorAll(".pier-csv-rownum")].map(
       (node) => node.textContent
     );
-    expect(rowNumbers).toEqual(["5", "6"]);
+    expect(rowNumbers.slice(0, 2)).toEqual(["5", "6"]);
+    // Trailing empty rows keep the sheet filling the viewport like Excel.
+    expect(rowNumbers[2]).toBe("7");
   });
 
   it("leaves the clipboard untouched when the active cell is gone", () => {
-    const { rerender } = render(<XlsxGrid sheet={dataSheet} t={t} />);
+    const { rerender } = render(
+      <XlsxGrid
+        columnWidths={{}}
+        onColumnWidthsChange={noopColumnWidths}
+        sheet={dataSheet}
+        t={t}
+      />
+    );
     const cell = screen.getByText("Alice");
     fireEvent.mouseDown(cell);
     fireEvent.click(cell);
 
     rerender(
       <XlsxGrid
+        columnWidths={{}}
+        onColumnWidthsChange={noopColumnWidths}
         sheet={{
           ...summarySheet,
           fullRowCount: 1,
@@ -973,6 +1005,138 @@ describe("XlsxGrid", () => {
     fireEvent.copy(screen.getByRole("grid"), { clipboardData: clipboard });
 
     expect(clipboard.setData).not.toHaveBeenCalled();
+  });
+
+  it("leaves the clipboard untouched for blank cells", () => {
+    render(
+      <XlsxGrid
+        columnWidths={{}}
+        onColumnWidthsChange={noopColumnWidths}
+        sheet={{
+          ...dataSheet,
+          columnCount: 1,
+          columnWidthsPx: [null],
+          fullColumnCount: 1,
+          rows: [[{ align: "left", text: "" }], [{ align: "left", text: "" }]],
+        }}
+        t={t}
+      />
+    );
+    const [cell] = screen.getAllByRole("gridcell");
+    if (!cell) {
+      throw new Error("blank grid cell is missing");
+    }
+    fireEvent.mouseDown(cell);
+    fireEvent.click(cell);
+    const clipboard = { setData: vi.fn() };
+    fireEvent.copy(cell, { clipboardData: clipboard });
+
+    // Writing an empty string would wipe the system clipboard.
+    expect(clipboard.setData).not.toHaveBeenCalled();
+  });
+
+  it("makes data columns resizable while the row-number column stays fixed", () => {
+    render(
+      <XlsxGrid
+        columnWidths={{}}
+        onColumnWidthsChange={noopColumnWidths}
+        sheet={dataSheet}
+        t={t}
+      />
+    );
+
+    const headers = screen.getAllByRole("columnheader");
+    expect(headers[0]).not.toHaveClass("rdg-cell-resizable");
+    expect(headers[1]).toHaveClass("rdg-cell-resizable");
+  });
+
+  it("applies a persisted width instead of the auto-fit width", () => {
+    render(
+      <XlsxGrid
+        columnWidths={{ c0: 300 }}
+        onColumnWidthsChange={noopColumnWidths}
+        sheet={dataSheet}
+        t={t}
+      />
+    );
+
+    expect(screen.getByRole("grid").getAttribute("style")).toContain(
+      "grid-template-columns: 56px 300px"
+    );
+  });
+
+  it("renders document column widths when the user has not resized", () => {
+    render(
+      <XlsxGrid
+        columnWidths={{}}
+        onColumnWidthsChange={noopColumnWidths}
+        sheet={{ ...dataSheet, columnWidthsPx: [200, 120] }}
+        t={t}
+      />
+    );
+
+    expect(screen.getByRole("grid").getAttribute("style")).toContain(
+      "grid-template-columns: 56px 200px 120px"
+    );
+  });
+
+  it("lets a persisted width override the document width", () => {
+    render(
+      <XlsxGrid
+        columnWidths={{ c0: 300 }}
+        onColumnWidthsChange={noopColumnWidths}
+        sheet={{ ...dataSheet, columnWidthsPx: [200, 120] }}
+        t={t}
+      />
+    );
+
+    expect(screen.getByRole("grid").getAttribute("style")).toContain(
+      "grid-template-columns: 56px 300px"
+    );
+  });
+
+  it("spans horizontal merges instead of clipping the anchored value", () => {
+    render(
+      <XlsxGrid
+        columnWidths={{}}
+        onColumnWidthsChange={noopColumnWidths}
+        sheet={{
+          ...dataSheet,
+          merges: [{ column: 0, columnSpan: 2, row: 1 }],
+        }}
+        t={t}
+      />
+    );
+
+    expect(
+      screen.getByText("Alice").closest('[role="gridcell"]')
+    ).toHaveAttribute("aria-colspan", "2");
+  });
+
+  it("honors document row heights and wraps tall rows", () => {
+    render(
+      <XlsxGrid
+        columnWidths={{}}
+        onColumnWidthsChange={noopColumnWidths}
+        sheet={{
+          ...dataSheet,
+          rowHeights: [
+            { height: 21, row: 0 },
+            { height: 120, row: 1 },
+          ],
+        }}
+        t={t}
+      />
+    );
+
+    // react-data-grid applies variable heights through the grid template.
+    const gridStyle = screen.getByRole("grid").getAttribute("style");
+    expect(gridStyle).toContain("120px");
+    expect(gridStyle).toContain("28px");
+    expect(screen.getByText("Alice").className).toContain(
+      "whitespace-pre-wrap"
+    );
+    expect(screen.getByText("Name").className).toContain("whitespace-nowrap");
   });
 });
 

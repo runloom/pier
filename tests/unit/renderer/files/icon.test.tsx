@@ -17,6 +17,9 @@ import {
   PIER_FILE_TREE_ICONS,
   PIER_GO_FILE_NAMES,
   PIER_MANIFEST_FILE_ICONS,
+  PIER_PDF_FILE_ICON_SYMBOL_ID,
+  PIER_SLIDES_FILE_ICON_SYMBOL_ID,
+  PIER_WORD_FILE_ICON_SYMBOL_ID,
   SIMPLE_ICONS_DART_PATH,
 } from "@pier/ui/file/icon-config.ts";
 import {
@@ -296,6 +299,64 @@ describe("Pier file icon", () => {
     expect(icon).toHaveStyle({ color: "var(--pier-file-icon-teal)" });
     expect(pierFileTreeStyle(undefined)).toMatchObject({
       "--trees-file-icon-color-dart": "var(--pier-file-icon-teal)",
+    });
+  });
+
+  it.each([
+    ["report.pdf", "pdf", "#file-tree-pier-pdf"],
+    ["docs/contract.doc", "word", "#file-tree-pier-word"],
+    ["docs/contract.docx", "word", "#file-tree-pier-word"],
+    ["deck.ppt", "slides", "#file-tree-pier-slides"],
+    ["deck.pptx", "slides", "#file-tree-pier-slides"],
+  ] as const)("gives %s the %s document glyph", (fileName, token, href) => {
+    const { container } = render(<PierFileIcon fileName={fileName} />);
+    const icon = container.querySelector("[data-pier-file-icon]");
+    expect(icon).toHaveAttribute("data-icon-token", token);
+    expect(icon?.querySelector("use")).toHaveAttribute("href", href);
+  });
+
+  it.each([
+    "data.xlsx",
+    "data.xls",
+    "data.csv",
+    "data.tsv",
+  ] as const)("keeps %s on the built-in table glyph", (fileName) => {
+    const { container } = render(<PierFileIcon fileName={fileName} />);
+    const icon = container.querySelector("[data-pier-file-icon]");
+    expect(icon).toHaveAttribute("data-icon-token", "table");
+    expect(icon?.querySelector("use")).toHaveAttribute(
+      "href",
+      "#file-tree-builtin-table"
+    );
+  });
+
+  it("ships document glyphs in the Pier custom sprite sheet", () => {
+    for (const symbolId of [
+      PIER_PDF_FILE_ICON_SYMBOL_ID,
+      PIER_WORD_FILE_ICON_SYMBOL_ID,
+      PIER_SLIDES_FILE_ICON_SYMBOL_ID,
+    ]) {
+      expect(PIER_FILE_ICON_CUSTOM_SPRITE_SHEET).toContain(`id="${symbolId}"`);
+    }
+  });
+
+  it("keeps the document fold flush with the page edge", () => {
+    // Same fold geometry as the built-in `file-tree-builtin-text`: starting
+    // at x=9.5 makes the 4px diagonal land at (13.854, 5.146), so the corner
+    // arc collapses to a clean rounded corner inside the page's x=14 edge.
+    // Starting at 11.5 overshoots the page and scales the arc radius into a
+    // protruding lobe; starting at 8.5 leaves the diagonal too long for the
+    // arc's 0.5px radius and produces the same bump.
+    expect(PIER_FILE_ICON_CUSTOM_SPRITE_SHEET).toContain(
+      "M9.5 1a.5.5 0 0 1 .354.146l4 4A.5.5 0 0 1 14 5.5V6h-3a2 2 0 0 1-2-2V1z"
+    );
+  });
+
+  it("assigns document tokens to existing file-icon palette colors", () => {
+    expect(pierFileTreeStyle(undefined)).toMatchObject({
+      "--trees-file-icon-color-pdf": "var(--pier-file-icon-red)",
+      "--trees-file-icon-color-slides": "var(--pier-file-icon-orange)",
+      "--trees-file-icon-color-word": "var(--pier-file-icon-blue)",
     });
   });
 });

@@ -128,11 +128,22 @@ export function writeMinimalXlsx(
 ): string {
   const path = join(directory, fileName);
   const book = XLSX.utils.book_new();
+  const longNote = [
+    "面向技术同事的需求对照清单，按列宽换行显示。",
+    "多行文本保留源文件中的换行符。",
+    "单元格高度跟随文档行高。",
+  ].join("\n");
   const data = XLSX.utils.aoa_to_sheet([
-    ["Name", "Score"],
-    ["Alice", 42],
+    ["Pier XLSX preview"],
+    ["Name", "Score", "Note"],
+    ["Alice", 42, longNote],
+    ["Bob", 7, longNote],
   ]);
-  data["!cols"] = [{ wch: 16 }, { wch: 10 }];
+  data["!merges"] = [{ e: { c: 2, r: 0 }, s: { c: 0, r: 0 } }];
+  // Explicit document widths and heights must render like a spreadsheet
+  // instead of stretching to fill the panel.
+  data["!cols"] = [{ wpx: 48 }, { wpx: 156 }, { wpx: 660 }];
+  data["!rows"] = [{ hpx: 21 }, { hpx: 28 }, { hpx: 80 }, { hpx: 80 }];
   XLSX.utils.book_append_sheet(book, data, "Data");
   const summary = XLSX.utils.aoa_to_sheet([["Total"], [42]]);
   XLSX.utils.book_append_sheet(book, summary, "Summary");

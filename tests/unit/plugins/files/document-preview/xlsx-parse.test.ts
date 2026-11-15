@@ -59,4 +59,29 @@ describe("parseXlsxWorkbook", () => {
       truncatedReason: "offset",
     });
   });
+
+  it("reads document widths, row heights and merges through the binary parser", () => {
+    const book = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ["Title"],
+      ["Name", "Note"],
+      ["Alice", "line one\nline two"],
+    ]);
+    sheet["!merges"] = [{ e: { c: 1, r: 0 }, s: { c: 0, r: 0 } }];
+    sheet["!cols"] = [{ wpx: 48 }, { wpx: 660 }];
+    // SheetJS serializes `hpx` through the identity `px2pt`, so the workbook
+    // stores 21/28/80 as point heights. Reading them back must convert to CSS.
+    sheet["!rows"] = [{ hpx: 21 }, { hpx: 28 }, { hpx: 80 }];
+    XLSX.utils.book_append_sheet(book, sheet, "Data");
+
+    const [data] = parseXlsxWorkbook(writeWorkbook(book));
+    expect(data?.columnWidthsPx).toEqual([48, 660]);
+    expect(data?.merges).toEqual([{ column: 0, columnSpan: 2, row: 0 }]);
+    expect(data?.rowHeights).toEqual([
+      { height: 28, row: 0 },
+      { height: 39, row: 1 },
+      { height: 108, row: 2 },
+    ]);
+    expect(data?.rows[2]?.[1]?.text).toBe("line one\nline two");
+  });
 });

@@ -7,7 +7,9 @@ const READ_OPTIONS = {
   bookVBA: false,
   cellFormula: false,
   cellHTML: false,
-  cellStyles: false,
+  // SheetJS only materializes `!cols` widths when styles are parsed; without
+  // them the preview cannot honor the document's own column layout.
+  cellStyles: true,
   sheetRows: XLSX_LIMITS.maxRows + 1,
   type: "array" as const,
   WTF: false,

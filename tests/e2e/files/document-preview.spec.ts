@@ -216,8 +216,8 @@ test("previews PDF, DOCX and XLSX read-only and falls back for unsupported docum
     const grid = page.locator('[role="grid"]');
     await expect(grid).toBeVisible({ timeout: 30_000 });
     await expect(grid).toContainText("Alice");
-    // The grid is flush with the panel body and columns scale to the panel
-    // width like the CSV preview instead of staying at a narrow fixed width.
+    // The grid is flush with the panel body and keeps the document's own
+    // column widths, merge spans and row heights instead of stretching.
     const gridGeometry = await page.evaluate(() => {
       const gridElement = document.querySelector('[role="grid"]');
       const bodyElement = document.querySelector(
@@ -227,14 +227,35 @@ test("previews PDF, DOCX and XLSX read-only and falls back for unsupported docum
         throw new Error("XLSX grid is missing");
       }
       const headers = gridElement.querySelectorAll('[role="columnheader"]');
+      const titleCell = [
+        ...gridElement.querySelectorAll('[role="gridcell"]'),
+      ].find((cell) => cell.textContent === "Pier XLSX preview");
+      const aliceRow = [...gridElement.querySelectorAll(".rdg-row")].find(
+        (row) => row.textContent?.includes("Alice")
+      );
+      const noteCell = aliceRow?.querySelectorAll('[role="gridcell"]')[3];
       return {
         bodyLeft: bodyElement.getBoundingClientRect().left,
-        firstDataWidth: headers[1]?.getBoundingClientRect().width ?? 0,
         gridLeft: gridElement.getBoundingClientRect().left,
+        headerWidths: [...headers]
+          .slice(1, 4)
+          .map((header) => header.getBoundingClientRect().width),
+        tallRowHeight: aliceRow?.getBoundingClientRect().height ?? 0,
+        titleColSpan: titleCell?.getAttribute("aria-colspan") ?? null,
+        wraps: Boolean(
+          noteCell
+            ?.querySelector("span")
+            ?.className.includes("whitespace-pre-wrap")
+        ),
       };
     });
     expect(gridGeometry.gridLeft).toBeCloseTo(gridGeometry.bodyLeft, 0);
-    expect(gridGeometry.firstDataWidth).toBeGreaterThan(250);
+    expect(gridGeometry.headerWidths[0]).toBeCloseTo(48, 0);
+    expect(gridGeometry.headerWidths[1]).toBeCloseTo(156, 0);
+    expect(gridGeometry.headerWidths[2]).toBeCloseTo(660, 0);
+    expect(gridGeometry.titleColSpan).toBe("3");
+    expect(gridGeometry.tallRowHeight).toBeGreaterThan(60);
+    expect(gridGeometry.wraps).toBe(true);
     const sheetTabGeometry = await page.evaluate(() => {
       const activeTab = [
         ...document.querySelectorAll('[data-slot="tabs-trigger"]'),
@@ -314,6 +335,75 @@ test("previews PDF, DOCX and XLSX read-only and falls back for unsupported docum
     // Leave the workbook on its first sheet so the narrow pass is deterministic.
     await page.getByRole("tab", { name: "Data", exact: true }).click();
     await expect(grid).toContainText("Alice");
+
+    // Wide panel: Excel-style empty columns continue after the used range and
+    // trailing empty rows keep the sheet filling the panel, so a small sheet
+    // never exposes a blank strip or a blank block below the data.
+    await hideFileTree(page);
+    await setWindowSize(application, page, 1400, 900);
+    const readGridGeometry = () =>
+      page.evaluate(() => {
+        const gridElement = document.querySelector('[role="grid"]');
+        if (!gridElement) {
+          throw new Error("XLSX grid is missing");
+        }
+        const headers = [
+          ...gridElement.querySelectorAll('[role="columnheader"]'),
+        ];
+        const rowLabels = [
+          ...gridElement.querySelectorAll(".pier-csv-rownum"),
+        ].map((node) => Number(node.textContent));
+        return {
+          clientWidth: gridElement.clientWidth,
+          headerNames: headers.map((header) => header.textContent),
+          headerWidths: headers.map(
+            (header) => header.getBoundingClientRect().width
+          ),
+          lastRowLabel: rowLabels.at(-1) ?? 0,
+          scrollWidth: gridElement.scrollWidth,
+        };
+      });
+    let filledGeometry = await readGridGeometry();
+    let stableSamples = 0;
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      await page.waitForTimeout(100);
+      const next = await readGridGeometry();
+      if (
+        next.clientWidth === filledGeometry.clientWidth &&
+        next.scrollWidth === filledGeometry.scrollWidth
+      ) {
+        stableSamples += 1;
+        filledGeometry = next;
+        if (stableSamples >= 3) {
+          break;
+        }
+      } else {
+        stableSamples = 0;
+        filledGeometry = next;
+      }
+    }
+    // Fixture used range is A:C (48 + 156 + 660) plus the 56px row header.
+    // Whether filler columns exist depends on the actual panel width: display
+    // work areas clamp the window on CI. Both outcomes are correct as long as
+    // they match the spec: filler when the table fits, horizontal scroll when
+    // it does not.
+    const fixtureWidth = 56 + 48 + 156 + 660;
+    if (filledGeometry.clientWidth + 1 >= fixtureWidth) {
+      expect(filledGeometry.headerNames).toContain("D");
+      expect(filledGeometry.scrollWidth).toBeLessThanOrEqual(
+        filledGeometry.clientWidth + 1
+      );
+    } else {
+      expect(filledGeometry.headerNames).not.toContain("D");
+      expect(filledGeometry.scrollWidth).toBeGreaterThan(
+        filledGeometry.clientWidth
+      );
+    }
+    expect(filledGeometry.lastRowLabel).toBeGreaterThan(4);
+    await page.screenshot({
+      path: testInfo.outputPath("document-preview-xlsx-wide.png"),
+    });
+    await showFileTree(page);
 
     // Unsupported formats explain the state and offer the default app.
     await page.getByText("deck.pptx", { exact: true }).first().click();
