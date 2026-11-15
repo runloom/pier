@@ -44,6 +44,15 @@
 
 若失败发生在发布资产上传前，且仅需修复 workflow，可将修复合入 `main` 后手动运行 **Release App**（workflow 分支选 `main`，`tag` 填原 tag）。构建仍 checkout 原 tag，不移动 tag，也不改变应用源码；已有发布内容不得通过这种方式改写。
 
+### 公证 403「A required agreement is missing or has expired」
+
+`notarytool` 能认证但公证被拒（HTTP 403）时，问题在 Apple 账号侧，不在构建或 workflow：签名、打包、上传都还没开始，重试与改代码都不会变绿。
+
+- 团队 API key（`APPLE_API_ISSUER` 非空）用的是**该团队**的协议记录；个人账号页面上协议有效，不代表这个团队有效。以 `pnpm build:dist` 预检打印的 team issuer 指纹（Issuer ID 的 SHA-256 前 12 位）核对失败的是哪个团队：App Store Connect → Users and Access → Keys。
+- 只有 **Account Holder** 能在 App Store Connect → Business → Agreements 接受/续签 Apple Developer Program License Agreement；签署后可能还需要一段时间传播。
+- 签署后仍 403 属于 Apple 账号记录未同步，走 Apple Developer Support（附日期、Team ID、issuer 指纹与错误原文；403 发生在提交前，没有 Submission ID）。
+- 修好后不移动 tag、不改版本：`gh workflow run release-app.yml -f tag=vX.Y.Z`。`build-dist.sh` 会在构建前用 `notarytool history` 预检同一套凭据，协议没生效时很快失败并给出 403 / 401 归因，不再等整包签名后才报错。
+
 官网博客（CI 仓库 Secrets，不进 `electron-builder.env`）：
 
 | Secret | 用途 |
