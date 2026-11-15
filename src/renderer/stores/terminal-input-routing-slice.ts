@@ -1,3 +1,4 @@
+import type { TerminalOverlayOptions } from "@pier/ui/use-terminal-overlay.tsx";
 import type { TerminalFocusRoutingDebugSnapshot } from "@shared/contracts/terminal/debug.ts";
 import type {
   TerminalBoxShadow,
@@ -50,7 +51,11 @@ export function beginTerminalPanelWebDragCapture(
   panelElement: HTMLElement
 ): { dispose(): void } {
   const id = `terminal-floating-drag:${panelId}`;
-  const route = registerTerminalElementWebOverlay(id, panelElement);
+  // 整面板只做输入捕获（paints:false）；胶囊自身绘制并在每次渲染 flush。
+  // 整面板若参与回填会抹空所有终端洞，不透明 backing 直接盖住终端。
+  const route = registerTerminalElementWebOverlay(id, panelElement, {
+    paints: false,
+  });
   const releaseFocus = requestTerminalWebFocus(id);
   let disposed = false;
   return {
@@ -126,10 +131,8 @@ function reconcileAfterDurableWebFocusRelease(): void {
   clearTransientWebClickFocus();
 }
 
-// effective terminal→web 翻转后, main 会调 webContents.focus() 做 first responder
-// 交接 (terminal NSView → Chromium view)。该交接会给 renderer 派发一对瞬时
-// window blur→focus (实测间隔 1-5ms, 落在 pointerdown 后 ~30-60ms)。250ms 覆盖
-// IPC 往返 + native 交接的最慢路径, 又远短于任何两次用户操作的间隔。
+// terminal→web 翻转后 main 调 webContents.focus() 交接 first responder，renderer
+// 会收到一对瞬时 window blur→focus（实测 1-5ms）。250ms 覆盖 IPC 往返上限。
 const WEB_FOCUS_HAND_OFF_BLUR_SUPPRESS_MS = 250;
 
 function frameKey(frame: TerminalFrame): string {
@@ -328,7 +331,7 @@ export function requestTerminalWebFocus(id: string): () => void {
 export function registerTerminalElementWebOverlay(
   id: string,
   element: HTMLElement,
-  options?: { paints?: boolean; scrim?: boolean }
+  options?: TerminalOverlayOptions
 ): WebOverlayRegistration {
   const scrim = options?.scrim === true;
   // 蒙层必须留在洞外：整窗回填会把终端换成不透明 backing。
@@ -342,10 +345,13 @@ export function registerTerminalElementWebOverlay(
   let frameRequest: number | null = null;
 
   const flush = () => {
-    lastAppearance = readOverlayAppearance(element, zoomLevel(), {
-      paints,
-      scrim,
-    });
+    // appearanceElement 声明外观只属于绘制元素；目标缺席按无外观发布。
+    const appearanceTarget = options?.appearanceElement
+      ? options.appearanceElement()
+      : element;
+    lastAppearance = appearanceTarget
+      ? readOverlayAppearance(appearanceTarget, zoomLevel(), { paints, scrim })
+      : { radius: 0, scrim: undefined, shadows: undefined };
     setWebOverlayRect(
       id,
       readOverlayFrame(element, zoomLevel()),
@@ -380,8 +386,7 @@ export function registerTerminalElementWebOverlay(
   // 淡入改 opacity：蒙层 alpha 和阴影 alpha 都要逐帧跟着走，否则阴影在
   // animationend 才出现，终端上先无影后跳影。
   const stopFade = scrim || paints ? bindScrimFade(element, flush) : undefined;
-  // 动画结束只补几何（transform 入场会挪矩形）：色强沿用缓存，避免淡出
-  // 结束后按回弹的全 opacity 重发一帧蒙层/阴影，终端上闪一下。
+  // 动画结束只补几何；色强沿用缓存，避免淡出结束按回弹全 opacity 重发闪一帧。
   const onMotionEnd = (event: Event) => {
     if (event.target !== element) {
       return;

@@ -7,8 +7,9 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   Ref,
+  RefObject,
 } from "react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import type { ImeCompositionGate } from "@/lib/keybindings/ime-composition-gate.ts";
@@ -66,6 +67,8 @@ export interface TerminalComposerViewProps {
   attachments: readonly ComposerAttachment[];
   bottomOffsetPx: number;
   canSend: boolean;
+  /** 绘制 chrome 卡片的元素；浮层外观采样用（注册元素是定位外壳）。 */
+  chromeElementRef: RefObject<HTMLDivElement | null>;
   compact: boolean;
   disabled: boolean;
   editorRef: Ref<StructuredComposerEditorHandle>;
@@ -100,6 +103,7 @@ export function TerminalComposerView({
   inputFocusRisk,
   bottomOffsetPx,
   canSend,
+  chromeElementRef,
   compact,
   disabled,
   notice,
@@ -128,6 +132,13 @@ export function TerminalComposerView({
   const t = useT();
   /** Full chrome card — autocomplete list width matches this element. */
   const [chromeEl, setChromeEl] = useState<HTMLDivElement | null>(null);
+  const setChromeElement = useCallback(
+    (element: HTMLDivElement | null) => {
+      chromeElementRef.current = element;
+      setChromeEl(element);
+    },
+    [chromeElementRef]
+  );
   const attachShortcut = useMemo(
     () => formatChord(parseChord(COMPOSER_ATTACH_CHORD, isMac())),
     []
@@ -167,7 +178,7 @@ export function TerminalComposerView({
         data-chrome={compact ? "compact" : "expanded"}
         data-testid="terminal-composer"
         onMouseDown={onChromeMouseDown}
-        ref={setChromeEl}
+        ref={setChromeElement}
       >
         {!compact && hasAttachments ? (
           <div className="px-2 pt-2 pb-0.5">

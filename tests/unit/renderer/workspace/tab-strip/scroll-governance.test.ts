@@ -92,11 +92,16 @@ describe("tab strip scroll ownership governance", () => {
   });
 
   it("disables rubber-band bounce on the tab strip", () => {
-    // .dv-tabs-container 由 dockview 拥有（overflow:auto + 上游 contain 保
-    // 留了 macOS 弹性）。产品决策：到边不回弹——工作台 chrome 不是内容
-    // 滚动面，回弹的「还有更多」信号已由 scroll-fade 和 ▾ 溢出菜单承担。
-    // 覆盖必须挂在 dockview-theme-pier 选择器下（单一主题命名空间），
-    // 只关 x 轴弹性；y 轴是纵向 tab 条（touch-action: pan-y）不在本决策内。
+    // 产品决策：到边不回弹——工作台 chrome 不是内容滚动面，回弹的「还有更多」
+    // 信号已由 scroll-fade 和 ▾ 溢出菜单承担。
+    //
+    // dockview 7 默认走自定义 Scrollbar：.dv-tabs-container 是 overflow:
+    // hidden，滚轮增量由 dockview JS 写 scrollLeft。CSS overscroll-behavior
+    // 对这种非原生滚动是惰性的，只对将来改回 scrollbars: "native" 的模式
+    // 有效；真正生效的守卫是 Pier 的捕获阶段 document wheel 监听，覆盖整个
+    // .dv-tabs-and-actions-container（标签 / 滚动条 / void / 右侧动作区），
+    // 取消浏览器默认动作；preventDefault 不阻断传播，dockview 自己的映射照常
+    // 执行，下游 stopPropagation 也无法把滚势放进原生滚动链。
     const css = readFileSync(
       join(ROOT, "src/renderer/app/globals.css"),
       "utf8"
@@ -108,12 +113,42 @@ describe("tab strip scroll ownership governance", () => {
     expect(override?.[0]).toContain("overscroll-behavior-x: none");
     // 不能顺手把上游的 contain 全量放开或改成 none 之外的手段。
     expect(override?.[0]).not.toContain("overscroll-behavior:");
+
+    const guard = readFileSync(
+      join(ROOT, "src/renderer/lib/workspace/tab-strip-wheel-guard.ts"),
+      "utf8"
+    );
+    expect(guard).toContain("TAB_STRIP_WHEEL_GUARD_SELECTOR");
+    expect(guard).toContain('".dv-tabs-and-actions-container"');
+    expect(guard).toContain("capture: true");
+    expect(guard).toContain("passive: false");
+    expect(guard).toContain("event.preventDefault()");
+
+    const behavior = readFileSync(
+      join(ROOT, "src/renderer/components/workspace/tab-strip-behavior.ts"),
+      "utf8"
+    );
+    expect(behavior).toContain("installTabStripWheelGuard");
+    expect(behavior).toContain("uninstallWheelGuard");
   });
 
-  it("renders the overflow count with tabular numerals", () => {
-    // 溢出计数（▾ 12）由 dockview 动态创建、无 class，宽度随位数变化会跳。
-    // 数字型 chrome 一律 tabular-nums（同 tab 尾部 git ±N / git 状态条）；
-    // 不整段换 mono：JetBrains 字形和 tab 标题的 system-ui 混排不协调。
+  it("forbids viewport elastic overscroll at the root scroller", () => {
+    // 触摸板动量阶段的 wheel 事件可能由 compositor 以不可取消形式投递，
+    // tab 条上的 preventDefault 拦不到；工作台是应用壳，根滚动面必须自己
+    // 禁止 macOS 橡皮筋（K10）。
+    const css = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const rootBlock = css.match(/(?:^|\n)html,\s*\n?body\s*\{[^}]*\}/);
+    expect(rootBlock).not.toBeNull();
+    expect(rootBlock?.[0]).toContain("overscroll-behavior: none");
+  });
+
+  it("renders the overflow count with tabular numerals and a scroll settle", () => {
+    // K11：溢出计数（▾ 12）不得在滚动手势里逐帧重算，也不得因数字宽度变化
+    // 抖动。Pier 自己的 PanelOverflowMenu 是真实 UI；dockview 内置 dropdown
+    // 保留同一数字规则作将来启用时的防御。
     const css = readFileSync(
       join(ROOT, "src/renderer/app/globals.css"),
       "utf8"
@@ -123,6 +158,17 @@ describe("tab strip scroll ownership governance", () => {
     );
     expect(css).toMatch(
       /\.dockview-theme-pier \.dv-tabs-overflow-dropdown-default > span\s*\{[^}]*font-variant-numeric:\s*tabular-nums;/
+    );
+
+    const overflow = readFileSync(
+      join(ROOT, "src/renderer/components/workspace/panel-overflow.tsx"),
+      "utf8"
+    );
+    expect(overflow).toContain("OVERFLOW_SCROLL_SETTLE_MS");
+    expect(overflow).toContain('className="tabular-nums"');
+    // 滚动只登记 settle；即时路径（resize / mutation）仍走 scheduleUpdate。
+    expect(overflow).toContain(
+      'tabsContainer.addEventListener("scroll", scheduleSettledUpdate'
     );
   });
 

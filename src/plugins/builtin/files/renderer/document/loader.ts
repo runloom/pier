@@ -1,6 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   fileEditorErrorMessage,
+  isFileConflictError,
   isFileMissingError,
   isFolderAccessBlockedError,
 } from "../editor/errors.ts";
@@ -167,13 +168,18 @@ export class FileDocumentLoader {
         }
         markDocumentError(
           latest.id,
-          fileEditorErrorMessage(
-            error,
-            this.#t(
-              "filePanel.errors.read.fallback",
-              "Unable to read file contents."
-            )
-          ),
+          isFileConflictError(error)
+            ? this.#t(
+                "filePanel.errors.read.changed",
+                "The file changed while it was being read. Reload it to see the current version."
+              )
+            : fileEditorErrorMessage(
+                error,
+                this.#t(
+                  "filePanel.errors.read.fallback",
+                  "Unable to read file contents."
+                )
+              ),
           isFolderAccessBlockedError(error)
         );
       }

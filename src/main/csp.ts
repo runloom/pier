@@ -19,20 +19,22 @@ export function buildCspPolicy(isDev: boolean): string {
         "default-src 'self' http://localhost:* ws://localhost:*",
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' http://localhost:* pier-plugin: pier-live:",
         "style-src 'self' 'unsafe-inline' pier-plugin: pier-live:",
-        "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* pier-live:",
+        "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* pier-file-preview: pier-asset: pier-live:",
         "img-src 'self' data: blob: pier-plugin: pier-file-preview: pier-live:",
         "font-src 'self' data: pier-asset: pier-plugin: pier-live:",
         "media-src 'self' pier-asset:",
+        "worker-src 'self' blob:",
         "frame-src 'self' pier-html-preview:",
       ].join("; ")
     : [
         "default-src 'self'",
         "script-src 'self' 'wasm-unsafe-eval' pier-plugin: pier-live:",
         "style-src 'self' 'unsafe-inline' pier-plugin: pier-live:",
-        "connect-src 'self' http://localhost:* http://127.0.0.1:* pier-live:",
+        "connect-src 'self' http://localhost:* http://127.0.0.1:* pier-file-preview: pier-asset: pier-live:",
         "img-src 'self' data: pier-plugin: pier-file-preview: pier-live:",
         "font-src 'self' data: pier-asset: pier-plugin: pier-live:",
         "media-src 'self' pier-asset:",
+        "worker-src 'self' blob:",
         "frame-src 'self' pier-html-preview:",
       ].join("; ");
 }

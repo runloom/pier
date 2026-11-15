@@ -278,8 +278,11 @@ describe("terminal hole mask governance (transparent web over Ghostty)", () => {
       "src/renderer/panel-kits/terminal/structured-composer/composer-autocomplete-portal.tsx"
     );
     expect(portal).toContain("useTerminalOverlayRegistration");
-    expect(portal).toContain("ref={overlayRef}");
+    expect(portal).toContain("ref={setHostRef}");
+    expect(portal).toContain("overlayRef(element)");
     expect(portal).toContain("flushOverlay()");
+    // 外壳只做 fixed 定位，外观（圆角 / 阴影 / 底）在列表卡片上。
+    expect(portal).toContain("appearanceElement");
   });
 
   it("carries native tests for holes, overlay re-add, clearing and coordinate flip", () => {

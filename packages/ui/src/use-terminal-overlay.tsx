@@ -26,6 +26,12 @@ import {
  */
 export interface TerminalOverlayOptions {
   /**
+   * 真正绘制圆角 / 阴影 / 蒙层的元素。几何与命中始终用注册元素；静态工具槽
+   * 的外壳只是布局盒（透明、直角、无阴影）时，外观必须读它的绘制子元素。
+   * 回调需保持稳定（useCallback），否则每次渲染都会重新注册。
+   */
+  appearanceElement?: (() => HTMLElement | null) | undefined;
+  /**
    * 是否允许该浮层回填 native 洞遮罩。全屏输入捕获层（菜单打开、sash
    * 拖拽）只参与事件路由、不画自身内容覆盖终端时必须传 `false`；否则整窗
    * 矩形会把所有终端洞抹空，不透明 backing 下终端整块消失。
@@ -45,6 +51,15 @@ export interface TerminalOverlayRegistry {
     el: HTMLElement,
     options?: TerminalOverlayOptions
   ): TerminalOverlayRegistration;
+}
+
+/**
+ * 布局外壳的绘制子元素。静态工具槽 / portal 外壳只做定位与命中，圆角和
+ * 阴影画在第一个子元素上；配合 `appearanceElement` 使用。
+ */
+export function paintedChildOf(host: HTMLElement | null): HTMLElement | null {
+  const first = host?.firstElementChild;
+  return first instanceof HTMLElement ? first : null;
 }
 
 export interface TerminalOverlayRegistration {
@@ -83,6 +98,7 @@ export function useTerminalOverlayRegistration(
   const registrationRef = useRef<TerminalOverlayRegistration | null>(null);
   const paints = options?.paints;
   const scrim = options?.scrim === true;
+  const appearanceElement = options?.appearanceElement;
   const ref = useCallback(
     (el: HTMLElement | null) => {
       registrationRef.current?.dispose();
@@ -95,15 +111,20 @@ export function useTerminalOverlayRegistration(
         registrationRef.current = registry.registerElement(overlayId, el, {
           paints: false,
           scrim: true,
+          ...(appearanceElement === undefined ? {} : { appearanceElement }),
         });
         return;
       }
-      registrationRef.current =
-        paints === undefined
-          ? registry.registerElement(overlayId, el)
-          : registry.registerElement(overlayId, el, { paints });
+      if (paints === undefined && appearanceElement === undefined) {
+        registrationRef.current = registry.registerElement(overlayId, el);
+        return;
+      }
+      registrationRef.current = registry.registerElement(overlayId, el, {
+        ...(paints === undefined ? {} : { paints }),
+        ...(appearanceElement === undefined ? {} : { appearanceElement }),
+      });
     },
-    [explicitId, id, paints, registry, scrim]
+    [appearanceElement, explicitId, id, paints, registry, scrim]
   );
   const flush = useCallback(() => registrationRef.current?.flush(), []);
   return useMemo(() => ({ flush, ref }), [flush, ref]);

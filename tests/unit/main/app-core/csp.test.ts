@@ -5,16 +5,23 @@ describe("buildCspPolicy", () => {
   it.each([
     true,
     false,
-  ])("allows file previews only as images when dev=%s", (isDev) => {
+  ])("routes file preview bytes through img-src and connect-src when dev=%s", (isDev) => {
     const directives = buildCspPolicy(isDev).split("; ");
-    const previewDirectives = directives.filter((directive) =>
-      directive.includes("pier-file-preview:")
+    const imgSrc = directives.find((directive) =>
+      directive.startsWith("img-src ")
+    );
+    const connectSrc = directives.find((directive) =>
+      directive.startsWith("connect-src ")
+    );
+    const frameSrc = directives.find((directive) =>
+      directive.startsWith("frame-src ")
     );
 
-    // pier-file-preview is img-only; pier-live may share the same img-src line.
-    expect(previewDirectives).toEqual([
-      expect.stringMatching(/^img-src .* pier-file-preview:/u),
-    ]);
+    expect(imgSrc).toContain("pier-file-preview:");
+    expect(connectSrc).toContain("pier-file-preview:");
+    expect(connectSrc).toContain("pier-asset:");
+    expect(frameSrc).not.toContain("pier-file-preview:");
+    expect(frameSrc).not.toContain("pier-asset:");
     expect(
       directives.some(
         (directive) =>
@@ -22,6 +29,17 @@ describe("buildCspPolicy", () => {
           directive.includes("pier-file-preview:")
       )
     ).toBe(false);
+  });
+
+  it.each([
+    true,
+    false,
+  ])("allows blob workers for document parsers when dev=%s", (isDev) => {
+    const workerSrc = buildCspPolicy(isDev)
+      .split("; ")
+      .find((directive) => directive.startsWith("worker-src "));
+
+    expect(workerSrc).toBe("worker-src 'self' blob:");
   });
 
   it("allows loopback connect-src in both modes without https or a bare host wildcard", () => {

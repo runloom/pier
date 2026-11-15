@@ -1,34 +1,43 @@
+import { protocol as electronProtocol } from "electron";
 import { installCsp } from "./csp.ts";
 import {
   handleHtmlPreviewProtocol,
-  registerHtmlPreviewScheme,
+  htmlPreviewSchemeRegistration,
 } from "./files/html-preview-protocol.ts";
 import {
+  filePreviewSchemeRegistration,
   handleFilePreviewProtocol,
-  registerFilePreviewScheme,
 } from "./files/preview-protocol.ts";
 import { registerPreviewRequestGuards } from "./files/preview-request-guard.ts";
 import {
+  assetSchemeRegistration,
   handleAssetProtocol,
-  registerAssetScheme,
 } from "./fonts/asset-protocol.ts";
 import {
   attachLiveModuleProtocolHandler,
-  registerLiveModuleProtocolScheme,
+  liveModuleSchemeRegistration,
 } from "./live-modules/install-protocol.ts";
 import {
   handlePluginAssetProtocol,
-  registerPluginAssetScheme,
+  pluginAssetSchemeRegistration,
 } from "./plugins/asset-protocol.ts";
 import type { ManagedPluginRuntimeSource } from "./services/managed-plugins/install-runtime.ts";
 
-/** Register privileged custom schemes before `app.whenReady()`. */
+/**
+ * Register privileged custom schemes before `app.whenReady()`.
+ *
+ * Electron replaces the privileged scheme list on every call, so all schemes
+ * must go through one `registerSchemesAsPrivileged` call. Registering them in
+ * separate calls leaves only the last batch with fetch/stream privileges.
+ */
 export function registerPrivilegedProtocolSchemes(): void {
-  registerAssetScheme();
-  registerPluginAssetScheme();
-  registerFilePreviewScheme();
-  registerHtmlPreviewScheme();
-  registerLiveModuleProtocolScheme();
+  electronProtocol.registerSchemesAsPrivileged([
+    assetSchemeRegistration(),
+    pluginAssetSchemeRegistration(),
+    filePreviewSchemeRegistration(),
+    htmlPreviewSchemeRegistration(),
+    liveModuleSchemeRegistration(),
+  ]);
 }
 
 /** Attach protocol handlers after `app.whenReady()`. */

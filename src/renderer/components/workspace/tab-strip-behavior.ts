@@ -10,6 +10,7 @@ import {
   setActiveTabStripScrollMemory,
   setTabStripRevealAbortHook,
 } from "@/lib/workspace/tab-strip-scroll.ts";
+import { installTabStripWheelGuard } from "@/lib/workspace/tab-strip-wheel-guard.ts";
 import {
   abortScheduledDockviewTabReveal,
   scheduleRevealDockviewTabByPanelId,
@@ -62,6 +63,11 @@ export function attachWorkspaceTabStripBehavior(
   };
   const listenerDocument =
     root instanceof Document ? root : (root as Element).ownerDocument;
+  // macOS elastic overscroll on the strip is native-scroll behavior; workbench
+  // chrome is not a content surface (K10). Cancel it for gestures on the strip.
+  const uninstallWheelGuard = listenerDocument
+    ? installTabStripWheelGuard(listenerDocument)
+    : () => undefined;
   listenerDocument?.addEventListener("pointerdown", onContentPointerDown, {
     capture: true,
   });
@@ -131,6 +137,7 @@ export function attachWorkspaceTabStripBehavior(
   );
 
   return () => {
+    uninstallWheelGuard();
     listenerDocument?.removeEventListener("pointerdown", onContentPointerDown, {
       capture: true,
     });

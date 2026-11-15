@@ -130,7 +130,8 @@ describe("terminal panel floating host", () => {
     );
     expect(registerElement).toHaveBeenCalledWith(
       "terminal-floating:terminal-1:terminal-search",
-      expect.any(HTMLElement)
+      expect.any(HTMLElement),
+      expect.objectContaining({ appearanceElement: expect.any(Function) })
     );
     const primary = container.querySelector<HTMLElement>(
       '[data-floating-item="runtime-controls"]'
@@ -177,11 +178,15 @@ describe("terminal panel floating host", () => {
       pointerId: 7,
     });
     expect(primary).toHaveAttribute("data-dragging", "true");
+    // 拖拽会话只做整面板输入捕获，不绘制像素：paints:false 只进事件路由。
+    // 若按默认 paints:true 回填整块面板，洞会被抹空，终端在不透明 backing
+    // 后面整块消失（胶囊自己仍按自身几何回填）。
     expect(getLastTerminalHostSnapshot()).toMatchObject({
       webOverlayRects: [
         {
           frame: { height: 300, width: 500, x: 0, y: 0 },
           id: "terminal-floating-drag:terminal-1",
+          paints: false,
         },
       ],
     });

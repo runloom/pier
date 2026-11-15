@@ -2,7 +2,12 @@ import { readFile } from "node:fs/promises";
 import { join, normalize } from "node:path";
 import { protocol } from "electron";
 import { resolveBundledSoundAbsolutePath } from "../sounds/asset-paths.ts";
-import { assetRootDir } from "./asset-paths.ts";
+import {
+  assetRootDir,
+  pdfjsAssetContentType,
+  pdfjsAssetRootDir,
+  resolvePdfjsAssetPath,
+} from "./asset-paths.ts";
 
 export const ASSET_SCHEME = "pier-asset";
 
@@ -20,19 +25,30 @@ const soundCache = new Map<string, Buffer<ArrayBuffer>>();
  * `stream: true` 是 HTMLAudio/HTMLVideo 走自定义协议的硬性要求：
  * 缺失时媒体元素一律 NotSupportedError（fetch/字体不受影响，易漏测）。
  */
-export function registerAssetScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: ASSET_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        stream: true,
-        supportFetchAPI: true,
-        corsEnabled: true,
-      },
+export function assetSchemeRegistration(): {
+  privileges: {
+    corsEnabled: boolean;
+    secure: boolean;
+    standard: boolean;
+    stream: boolean;
+    supportFetchAPI: boolean;
+  };
+  scheme: typeof ASSET_SCHEME;
+} {
+  return {
+    privileges: {
+      corsEnabled: true,
+      secure: true,
+      standard: true,
+      stream: true,
+      supportFetchAPI: true,
     },
-  ]);
+    scheme: ASSET_SCHEME,
+  };
+}
+
+export function registerAssetScheme(): void {
+  protocol.registerSchemesAsPrivileged([assetSchemeRegistration()]);
 }
 
 /**
@@ -79,6 +95,29 @@ export function handleAssetProtocol(): void {
         const buf = await readFile(absolute);
         soundCache.set(file, buf);
         return new Response(buf, { headers: { "content-type": "audio/wav" } });
+      } catch {
+        return new Response(null, { status: 404 });
+      }
+    }
+
+    if (url.host === "pdfjs") {
+      const relative = url.pathname.replace(LEADING_SLASHES, "");
+      const absolute = resolvePdfjsAssetPath({
+        relative,
+        root: pdfjsAssetRootDir(),
+      });
+      if (!absolute) {
+        console.warn("[pier-asset] 拒绝非法 PDF.js 资源请求:", request.url);
+        return new Response(null, { status: 404 });
+      }
+      try {
+        const buf = await readFile(absolute);
+        return new Response(buf, {
+          headers: {
+            "access-control-allow-origin": "*",
+            "content-type": pdfjsAssetContentType(absolute),
+          },
+        });
       } catch {
         return new Response(null, { status: 404 });
       }

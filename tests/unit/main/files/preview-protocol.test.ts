@@ -228,14 +228,14 @@ describe("file preview protocol", () => {
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   });
 
-  it("aborts a bounded read when the file grew after metadata inspection", async () => {
+  it("reports a file that grew after metadata inspection as changed, not too large", async () => {
     const target = join(root, "growing.png");
     const inspectedSize = 8;
     await writeFile(target, Buffer.alloc(inspectedSize + 1, 1));
 
     await expect(
       readFileWithinImagePreviewLimit(target, inspectedSize)
-    ).resolves.toBeNull();
+    ).resolves.toEqual({ kind: "changed" });
   });
 
   it("authorizes only the ticket-owning partition and webContents", () => {

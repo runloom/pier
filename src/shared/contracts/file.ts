@@ -1,4 +1,28 @@
 import { z } from "zod";
+import {
+  fileDocumentPreviewFormatSchema,
+  fileDocumentUnsupportedFormatSchema,
+  fileDocumentUnsupportedReasonSchema,
+  filePreviewDocumentMimeSchema,
+} from "./file/document.ts";
+
+export type {
+  DocumentPreviewClassification,
+  FileDocumentPreviewFormat,
+  FileDocumentUnsupportedFormat,
+  FileDocumentUnsupportedReason,
+  FilePreviewDocumentMime,
+} from "./file/document.ts";
+export {
+  FILE_PREVIEW_MIME_BY_DOCUMENT_FORMAT,
+  FILE_PREVIEW_MIME_BY_UNSUPPORTED_FORMAT,
+  fileDocumentPreviewFormatSchema,
+  fileDocumentUnsupportedFormatSchema,
+  fileDocumentUnsupportedReasonSchema,
+  filePreviewDocumentMimeSchema,
+  MAX_DOCUMENT_PREVIEW_FILE_BYTES,
+  MAX_FILE_PREVIEW_BYTES,
+} from "./file/document.ts";
 
 const driveAbsolutePathPattern = /^[A-Za-z]:[\\/]/;
 const pathSegmentSeparatorPattern = /[\\/]+/;
@@ -297,6 +321,27 @@ export const fileDocumentReadResultSchema = z.discriminatedUnion("kind", [
       mime: filePreviewImageMimeSchema,
       mtimeMs: z.number().nonnegative(),
       revision: z.string().min(1),
+      size: z.number().int().nonnegative(),
+    })
+    .strict(),
+  fileDocumentLocatorResultSchema
+    .extend({
+      canonicalPath: nonEmptyFileRootRelativePathSchema,
+      format: fileDocumentPreviewFormatSchema,
+      kind: z.literal("document"),
+      mime: filePreviewDocumentMimeSchema,
+      mtimeMs: z.number().nonnegative(),
+      revision: z.string().min(1),
+      size: z.number().int().nonnegative(),
+    })
+    .strict(),
+  fileDocumentLocatorResultSchema
+    .extend({
+      canonicalPath: nonEmptyFileRootRelativePathSchema,
+      format: fileDocumentUnsupportedFormatSchema,
+      kind: z.literal("document-unsupported"),
+      mime: z.string().min(1),
+      reason: fileDocumentUnsupportedReasonSchema,
       size: z.number().int().nonnegative(),
     })
     .strict(),

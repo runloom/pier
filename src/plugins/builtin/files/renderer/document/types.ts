@@ -1,3 +1,9 @@
+import type {
+  FileDocumentPreviewFormat,
+  FileDocumentUnsupportedFormat,
+  FileDocumentUnsupportedReason,
+  FilePreviewDocumentMime,
+} from "@shared/contracts/file/document.ts";
 import {
   type FileDocumentEol,
   type FileDocumentFormat,
@@ -172,6 +178,29 @@ export type FileViewMode = "diff" | "preview" | "source";
 // tree actions, not the document capability list.
 export type FilesDocumentCapability = "save" | "saveAs";
 
+export type FilesDocumentPreview =
+  | {
+      kind: "image";
+      mime: FilePreviewImageMime;
+      revision: string;
+    }
+  | {
+      kind: "document";
+      format: FileDocumentPreviewFormat;
+      mime: FilePreviewDocumentMime;
+      revision: string;
+    }
+  | {
+      kind: "document-unsupported";
+      format: FileDocumentUnsupportedFormat;
+      reason: FileDocumentUnsupportedReason;
+    };
+
+export type FilesDocumentDocumentPreview = Extract<
+  FilesDocumentPreview,
+  { kind: "document" | "document-unsupported" }
+>;
+
 export interface FilesDocument {
   /** Disk mtime captured at last successful load/save; used for write conflict checks. */
   baseMtimeMs: number | null;
@@ -201,11 +230,7 @@ export interface FilesDocument {
   mode: number | null;
   name: string;
   needsSaveAs: boolean;
-  preview: {
-    kind: "image";
-    mime: FilePreviewImageMime;
-    revision: string;
-  } | null;
+  preview: FilesDocumentPreview | null;
   readOnly: boolean;
   readOnlyReason:
     | "binary"

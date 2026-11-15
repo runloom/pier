@@ -238,6 +238,10 @@ test.describe("Agent composer e2e", () => {
         .toBe(0);
 
       // 7. Open again then idle broadcast → eligibility loss unmounts.
+      // 真实 aggregator 的后续广播会覆盖注入的 agent 态；重新注入以消除
+      // 「注入态能存活多久」的时序依赖。
+      seq = (await currentForegroundActivityTs(win)) + 1;
+      await broadcastActivity(app, { kind: "agent", panelId, seq: seq++ });
       await openComposer(win, panelId);
       await expect(composer).toBeAttached({ timeout: 5000 });
       await broadcastActivity(app, { kind: "idle", panelId, seq: seq++ });

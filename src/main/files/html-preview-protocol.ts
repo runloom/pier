@@ -141,20 +141,30 @@ export function authorizeHtmlPreviewRequest(
   );
 }
 
+export function htmlPreviewSchemeRegistration(): {
+  privileges: {
+    corsEnabled: boolean;
+    secure: boolean;
+    standard: boolean;
+    supportFetchAPI: boolean;
+  };
+  scheme: typeof HTML_PREVIEW_SCHEME;
+} {
+  return {
+    privileges: {
+      corsEnabled: true,
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+    },
+    scheme: HTML_PREVIEW_SCHEME,
+  };
+}
+
 export function registerHtmlPreviewScheme(
   protocol: ProtocolRegistration = electronProtocol
 ): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      privileges: {
-        corsEnabled: true,
-        secure: true,
-        standard: true,
-        supportFetchAPI: true,
-      },
-      scheme: HTML_PREVIEW_SCHEME,
-    },
-  ]);
+  protocol.registerSchemesAsPrivileged([htmlPreviewSchemeRegistration()]);
 }
 
 export function handleHtmlPreviewProtocol(

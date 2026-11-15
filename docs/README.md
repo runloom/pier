@@ -37,6 +37,7 @@ Pier 是给命令行 AI 用的桌面工作台。根目录 [`README.md`](../READM
 | --- | --- |
 | [`design/`](./design/) | 仍生效的专题契约，例如 [LSP 语言矩阵](./design/lsp-language-matrix.md) 与 [LSP 会话策略](./design/workspace-lsp-policy.md) |
 | [`superpowers/`](./superpowers/) | 仍在引用或持续更新的规格与计划；不等同于完整的现行 API 文档 |
+| [`superpowers/specs/`](./superpowers/specs/) | 各表面的金标准规格；Files 文档预览见 [PDF / DOCX / XLSX 金标准](./superpowers/specs/2026-11-12-files-document-preview-gold-standard.md) |
 | [`archive/`](./archive/) | 已落地、已被取代的历史规格、计划、探索与专题设计 |
 | [`AGENTS.md`](../AGENTS.md) | 编码助手使用的架构与界面治理硬约束；不是用户手册 |
 

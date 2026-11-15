@@ -51,34 +51,76 @@ export function readOverlayFrame(
  * 浮层均匀圆角，换成和 frame 同一套 content-view px。四角不一致取最大：
  * 宁可在 painted 直角上多挖一个楔（洞里露终端），也不在圆角上留兜底色楔。
  * 契约只传一个数；若未来出现 sheet 形（上圆下方）再升级成四角数组。
+ *
+ * Chromium 对 rounded-full 的 computed radius 是 `1.67772e+07px`（指数记法），
+ * 且 CSS used radius 会被浏览器钳到 border box 短边的一半。按字面十进制 px
+ * 正则解析会得到 0，洞按直角回填——胶囊四角露不透明 backing。
  */
 export function readOverlayRadiusPx(
   element: HTMLElement,
   windowZoomLevel: number
 ): number {
   const style = getComputedStyle(element);
+  const rect = element.getBoundingClientRect();
+  const box = { height: rect.height, width: rect.width };
   const css = Math.max(
-    parsePx(style.borderTopLeftRadius),
-    parsePx(style.borderTopRightRadius),
-    parsePx(style.borderBottomRightRadius),
-    parsePx(style.borderBottomLeftRadius)
+    parseRadiusComponent(style.borderTopLeftRadius, box),
+    parseRadiusComponent(style.borderTopRightRadius, box),
+    parseRadiusComponent(style.borderBottomRightRadius, box),
+    parseRadiusComponent(style.borderBottomLeftRadius, box)
   );
   if (css <= 0) {
     return 0;
   }
-  return cssRectToContentViewRect(
+  const scaled = cssRectToContentViewRect(
     { height: 0, width: css, x: 0, y: 0 },
     windowZoomLevel
   ).width;
+  const scaledBox = cssRectToContentViewRect(
+    { height: rect.height, width: rect.width, x: 0, y: 0 },
+    windowZoomLevel
+  );
+  const limit = Math.min(scaledBox.width, scaledBox.height) / 2;
+  return limit > 0 ? Math.min(scaled, limit) : scaled;
 }
 
-const CSS_PX = /^([\d.]+)px$/;
+const CSS_PX = /^(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)px$/i;
+const CSS_PERCENT = /^(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)%$/;
 
-function parsePx(value: string): number {
-  const match = CSS_PX.exec(value.trim());
-  if (!match) {
-    return 0;
+/**
+ * border-radius 的 computed 值可能是 `24px`、`1.67772e+07px` 或 `50%`；
+ * 单个角还可能序列化成椭圆两值 `水平 垂直`。百分比横向按宽、纵向按高
+ * 解析；契约只要一个均匀圆角，取短边作基准，椭圆两值取较大者——宁可多
+ * 挖一个楔露出终端，也不因欠挖在圆角上留下不透明 backing 角。
+ */
+function parseRadiusComponent(
+  value: string,
+  box: { height: number; width: number }
+): number {
+  return Math.max(
+    0,
+    ...value
+      .trim()
+      .split(/\s+/u)
+      .map((token) => parseRadiusToken(token, box))
+  );
+}
+
+function parseRadiusToken(
+  token: string,
+  box: { height: number; width: number }
+): number {
+  const px = CSS_PX.exec(token);
+  if (px) {
+    const parsed = Number(px[1]);
+    return Number.isFinite(parsed) ? parsed : 0;
   }
-  const parsed = Number(match[1]);
-  return Number.isFinite(parsed) ? parsed : 0;
+  const percent = CSS_PERCENT.exec(token);
+  if (percent) {
+    const parsed = Number(percent[1]);
+    return Number.isFinite(parsed)
+      ? (Math.min(box.width, box.height) * parsed) / 100
+      : 0;
+  }
+  return 0;
 }

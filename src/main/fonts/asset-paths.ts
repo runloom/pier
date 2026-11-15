@@ -36,3 +36,52 @@ export function bundledFontPaths(): string[] {
     "JetBrainsMonoNerdFontMono-BoldItalic.ttf",
   ].map((f) => join(root, f));
 }
+
+/** PDF.js CMaps / standard fonts / wasm asset root. */
+export function pdfjsAssetRootDir(): string {
+  return isDevRuntime()
+    ? join(process.cwd(), "node_modules/pdfjs-dist")
+    : join(process.resourcesPath, "pdfjs");
+}
+
+const PDFJS_DIRS = new Set(["cmaps", "standard_fonts", "wasm"]);
+const PDFJS_ASSET_EXTENSION = /\.(?:bcmap|otf|pfb|ttf|wasm)$/u;
+
+export function resolvePdfjsAssetPath(input: {
+  relative: string;
+  root: string;
+}): string | null {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(input.relative);
+  } catch {
+    return null;
+  }
+  if (decoded.includes("\\")) {
+    return null;
+  }
+  const segments = decoded.split("/");
+  const dir = segments[0] ?? "";
+  const rest = segments.slice(1);
+  if (
+    !PDFJS_DIRS.has(dir) ||
+    rest.length === 0 ||
+    rest.some(
+      (segment) => segment === "" || segment === "." || segment === ".."
+    )
+  ) {
+    return null;
+  }
+  const fileName = rest.at(-1) ?? "";
+  if (!PDFJS_ASSET_EXTENSION.test(fileName)) {
+    return null;
+  }
+  return join(input.root, ...segments);
+}
+
+export function pdfjsAssetContentType(path: string): string {
+  if (path.endsWith(".wasm")) {
+    return "application/wasm";
+  }
+  return path.endsWith(".ttf") ? "font/ttf" : "application/octet-stream";
+}

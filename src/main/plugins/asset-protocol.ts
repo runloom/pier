@@ -24,18 +24,28 @@ import type { ManagedPluginRuntimeSource } from "../services/managed-plugins/ins
  *   no `access-control-allow-credentials`.
  */
 
-export function registerPluginAssetScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      privileges: {
-        corsEnabled: true,
-        secure: true,
-        standard: true,
-        supportFetchAPI: true,
-      },
-      scheme: "pier-plugin",
+export function pluginAssetSchemeRegistration(): {
+  privileges: {
+    corsEnabled: boolean;
+    secure: boolean;
+    standard: boolean;
+    supportFetchAPI: boolean;
+  };
+  scheme: "pier-plugin";
+} {
+  return {
+    privileges: {
+      corsEnabled: true,
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
     },
-  ]);
+    scheme: "pier-plugin",
+  };
+}
+
+export function registerPluginAssetScheme(): void {
+  protocol.registerSchemesAsPrivileged([pluginAssetSchemeRegistration()]);
 }
 
 const MIME_BY_EXT: Record<string, string> = {

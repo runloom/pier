@@ -94,6 +94,8 @@ export function TerminalComposer({
   const sendBlocked = sendDisabled || frozen;
   const overlayId = `terminal-composer:${panelId}`;
   const rootRef = useRef<HTMLDivElement>(null);
+  const chromeElementRef = useRef<HTMLDivElement | null>(null);
+  const appearanceElement = useCallback(() => chromeElementRef.current, []);
   const editorRef = useRef<StructuredComposerEditorHandle>(null);
   const [value, setValue] = useComposerDraft(session);
   const draftStatus = useTerminalDraftStore(
@@ -105,7 +107,8 @@ export function TerminalComposer({
     (state) => state.activeOverlayId
   );
   const hitOverlay = useTerminalOverlayRegistration(
-    `terminal-composer-hit:${panelId}`
+    `terminal-composer-hit:${panelId}`,
+    { appearanceElement }
   );
   const valueRef = useRef(value);
   valueRef.current = value;
@@ -459,6 +462,7 @@ export function TerminalComposer({
       attachments={attachments.attachments}
       bottomOffsetPx={bottomOffsetPx}
       canSend={canSend}
+      chromeElementRef={chromeElementRef}
       compact={compact}
       disabled={frozen}
       editorRef={editorRef}

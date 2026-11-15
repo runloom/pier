@@ -3,14 +3,11 @@ import type {
   TerminalScrimColor,
 } from "@shared/contracts/terminal.ts";
 import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
-import { parseCssColor, sameScrim } from "@/stores/terminal-scrim/color.ts";
+import { findCssColor, sameScrim } from "@/stores/terminal-scrim/color.ts";
 
-// 与 parseCssColor 已支持的记法保持一致（legacy/modern rgb、srgb、oklab）。
-// Chromium computed boxShadow 会把 color 归一化成 rgb()/rgba()，不列 oklch 等
-// 只因 parseCssColor 也不认——认不出时静默丢这一层，native 不画（fail-quiet，
-// 不猜颜色）。当前产品阴影色都走 rgba token，覆盖足够。
-const COLOR_FN = /(?:rgba?|color)\(\s*[^)]*\)|#[0-9a-fA-F]{3,8}/;
-const LENGTH = /(-?(?:\d+\.?\d*|\.\d+))px/g;
+// computed boxShadow 里的长度一律 px；Chromium 对超大值会用指数记法。
+const LENGTH = /(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)px/gi;
+const seenShadowWarnings = new Set<string>();
 
 /**
  * 外扩 box-shadow，单位换成和 frame 同一套 content-view px。
@@ -90,14 +87,6 @@ function parseShadow(
   if (/\binset\b/i.test(piece)) {
     return;
   }
-  const colorMatch = COLOR_FN.exec(piece);
-  if (!colorMatch) {
-    return;
-  }
-  const color = parseCssColor(colorMatch[0]);
-  if (!color) {
-    return;
-  }
   const lengths = [...piece.matchAll(LENGTH)].map((match) => Number(match[1]));
   if (lengths.length < 2) {
     return;
@@ -106,8 +95,16 @@ function parseShadow(
   if (blur < 0) {
     return;
   }
-  // 完全落在 border box 里的投影看不见，送出去只会在圆角洞里衬一块实色。
-  if (blur === 0 && spread <= 0 && x === 0 && y === 0) {
+  const extendsOutside = blur > 0 || spread > 0 || x !== 0 || y !== 0;
+  if (!extendsOutside) {
+    // 完全落在 border box 里的投影看不见，送出去只会在圆角洞里衬一块实色。
+    return;
+  }
+  const color = findCssColor(piece);
+  if (!color) {
+    // 只认颜色语法单一来源；认不出时 native 不画（fail-quiet），但开发态
+    // 必须留下线索——静默丢层正是圆角胶囊连续几轮没有阴影的原因。
+    warnUnparsedShadow(piece);
     return;
   }
   const scaled = scalePx(color, opacity);
@@ -118,6 +115,14 @@ function parseShadow(
     x: scaleLength(x, windowZoomLevel),
     y: scaleLength(y, windowZoomLevel),
   };
+}
+
+function warnUnparsedShadow(piece: string): void {
+  if (!import.meta.env.DEV || seenShadowWarnings.has(piece)) {
+    return;
+  }
+  seenShadowWarnings.add(piece);
+  console.warn("[terminal-overlay] unparsed box-shadow layer:", piece);
 }
 
 function scalePx(

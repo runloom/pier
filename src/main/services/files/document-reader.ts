@@ -1,6 +1,11 @@
 import { constants, type Stats } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { extname } from "node:path";
+import {
+  type FileDocumentUnsupportedFormat,
+  type FileDocumentUnsupportedReason,
+  MAX_DOCUMENT_PREVIEW_FILE_BYTES,
+} from "@shared/contracts/file/document.ts";
 import type {
   FileDocumentReadResult,
   FileInspectWriteTargetRequest,
@@ -11,6 +16,8 @@ import {
   MAX_IMAGE_PREVIEW_FILE_BYTES,
   readPreviewImageMime,
 } from "../../files/image-preview-file.ts";
+import { readFileHeader } from "../../files/preview-file.ts";
+import { classifyDocumentPreview } from "./document-classifier.ts";
 import { decodeFileDocument } from "./document-codec.ts";
 import {
   inspectFileRevision,
@@ -109,6 +116,37 @@ export async function inspectFileWriteTarget(
   };
 }
 
+function changedDuringRead(): never {
+  // Internal marker only: the command layer turns this into a typed
+  // `file_conflict` and the renderer maps it to localized copy. The raw
+  // English message must never reach the UI.
+  const error = new Error("file changed while reading its preview") as Error & {
+    code: "file_conflict";
+  };
+  error.code = "file_conflict";
+  throw error;
+}
+
+function documentUnsupportedResult(
+  request: FileReadDocumentRequest,
+  canonicalPath: string,
+  size: number,
+  format: FileDocumentUnsupportedFormat,
+  mime: string,
+  reason: FileDocumentUnsupportedReason
+): FileDocumentReadResult {
+  return {
+    canonicalPath,
+    format,
+    kind: "document-unsupported",
+    mime,
+    path: request.path,
+    reason,
+    root: request.root,
+    size,
+  };
+}
+
 export async function readFileDocument(
   request: FileReadDocumentRequest
 ): Promise<FileDocumentReadResult> {
@@ -150,7 +188,7 @@ export async function readFileDocument(
       inspected.identity.canonicalTarget
     );
     if (!inspectedMime) {
-      throw new Error("file changed while classifying image preview");
+      changedDuringRead();
     }
     return {
       canonicalPath: inspected.identity.canonicalPath,
@@ -162,6 +200,65 @@ export async function readFileDocument(
       root: request.root,
       size: inspected.identity.stat.size,
     };
+  }
+  const documentHeader = await readFileHeader(identity.canonicalTarget, 1024);
+  const documentClassification = classifyDocumentPreview({
+    header: documentHeader,
+    path: request.path,
+  });
+  if (documentClassification.kind === "document") {
+    if (identity.stat.size > MAX_DOCUMENT_PREVIEW_FILE_BYTES) {
+      return documentUnsupportedResult(
+        request,
+        identity.canonicalPath,
+        identity.stat.size,
+        documentClassification.format,
+        documentClassification.mime,
+        "too-large"
+      );
+    }
+    const inspected = await inspectFileRevision(request.root, request.path);
+    const inspectedClassification = classifyDocumentPreview({
+      header: await readFileHeader(inspected.identity.canonicalTarget, 1024),
+      path: request.path,
+    });
+    if (
+      inspectedClassification.kind !== "document" ||
+      inspectedClassification.format !== documentClassification.format
+    ) {
+      changedDuringRead();
+    }
+    if (inspected.identity.stat.size > MAX_DOCUMENT_PREVIEW_FILE_BYTES) {
+      return documentUnsupportedResult(
+        request,
+        inspected.identity.canonicalPath,
+        inspected.identity.stat.size,
+        inspectedClassification.format,
+        inspectedClassification.mime,
+        "too-large"
+      );
+    }
+    return {
+      canonicalPath: inspected.identity.canonicalPath,
+      format: inspectedClassification.format,
+      kind: "document",
+      mime: inspectedClassification.mime,
+      mtimeMs: inspected.identity.stat.mtimeMs,
+      path: request.path,
+      revision: inspected.revision,
+      root: request.root,
+      size: inspected.identity.stat.size,
+    };
+  }
+  if (documentClassification.kind === "unsupported") {
+    return documentUnsupportedResult(
+      request,
+      identity.canonicalPath,
+      identity.stat.size,
+      documentClassification.format,
+      documentClassification.mime,
+      documentClassification.reason
+    );
   }
   if (identity.stat.size > MAX_EDITABLE_FILE_BYTES) {
     return {

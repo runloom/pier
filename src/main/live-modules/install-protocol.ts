@@ -5,6 +5,8 @@ import {
   registerLiveModuleScheme,
 } from "./protocol.ts";
 
+export { liveModuleSchemeRegistration } from "./protocol.ts";
+
 /** Privileged scheme registration (before app.whenReady). */
 export function registerLiveModuleProtocolScheme(): void {
   registerLiveModuleScheme();
