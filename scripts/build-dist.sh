@@ -182,8 +182,32 @@ if [ "$(uname -s)" = "Darwin" ]; then
                 exit 1
             fi
         elif [ -n "${APPLE_API_KEY:-}" ] && [ -n "${APPLE_API_KEY_ID:-}" ] && [ -n "${APPLE_API_ISSUER:-}" ]; then
+            # API key 也要真验一次。只判变量非空会在凭据/账号协议失效时一直
+            # 跑到打包、签名之后才在 notarytool submit 拿到 403（2026-11-15
+            # v0.1.60 发布即如此，整包白建 4 分钟到 20 分钟）。
+            # history 与 submit 用同一套认证：403 agreement → 团队协议未生效；
+            # 401 → key-id / issuer 与 .p8 不匹配。issuer 指纹用于确认
+            # 失败的是哪个团队（App Store Connect → Users and Access → Keys）。
+            api_key_fingerprint="$(printf '%s' "$APPLE_API_ISSUER" | shasum -a 256 | cut -c1-12)"
+            api_key_error="$(
+                xcrun notarytool history \
+                    --key "$APPLE_API_KEY" \
+                    --key-id "$APPLE_API_KEY_ID" \
+                    --issuer "$APPLE_API_ISSUER" \
+                    --output-format json 2>&1 >/dev/null || true
+            )"
+            if [ -n "$api_key_error" ]; then
+                echo "[build:dist] ERROR: App Store Connect API key 公证认证失败（team issuer 指纹 ${api_key_fingerprint}）" >&2
+                printf '%s\n' "$api_key_error" >&2
+                if printf '%s' "$api_key_error" | grep -q "403"; then
+                    echo "[build:dist] 403 = 团队账号协议未生效：账号持有人须在 App Store Connect → Business → Agreements 签署/续签，生效后重跑发布 workflow。" >&2
+                elif printf '%s' "$api_key_error" | grep -qiE "401|unauthor"; then
+                    echo "[build:dist] 401 = key 与 issuer 不匹配：确认 APPLE_API_KEY_ID / APPLE_API_ISSUER 来自同一团队的 Keys 页面。" >&2
+                fi
+                exit 1
+            fi
             has_notary=1
-            echo "[build:dist] notarize via App Store Connect API key"
+            echo "[build:dist] notarize API key ok (team issuer 指纹 ${api_key_fingerprint})"
         elif [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
             has_notary=1
             echo "[build:dist] notarize via Apple ID + app-specific password"
