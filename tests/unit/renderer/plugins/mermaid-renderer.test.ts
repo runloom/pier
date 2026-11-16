@@ -86,6 +86,20 @@ describe("createMermaidRenderer facade semantics", () => {
     await renderer.render("graph TD;N96-->Z");
     expect(renderSvg).toHaveBeenCalledTimes(98);
   });
+
+  it("evicts by total SVG size as well as entry count", async () => {
+    const renderSvg = vi.fn(async () => ({ svg: "x".repeat(3_000_000) }));
+    const renderer = createMermaidRenderer({ renderSvg });
+    await renderer.render("graph TD;A-->B");
+    await renderer.render("graph TD;B-->C");
+    await renderer.render("graph TD;C-->D");
+    // 3 × 3M chars > 4M char budget: only the newest entry survives each add.
+    await renderer.render("graph TD;A-->B");
+    expect(renderSvg).toHaveBeenCalledTimes(4);
+    // The just-added entry stays cached.
+    await renderer.render("graph TD;A-->B");
+    expect(renderSvg).toHaveBeenCalledTimes(4);
+  });
 });
 
 /**

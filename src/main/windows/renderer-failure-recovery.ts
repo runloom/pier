@@ -14,6 +14,10 @@ import {
   type RendererHangSampleResult,
 } from "./renderer-hang-capture.ts";
 import {
+  attachRendererHangDebugger,
+  type RendererHangStackCapture,
+} from "./renderer-hang-debugger.ts";
+import {
   buildRendererRecoveryCopy,
   isRendererRecoveryCloseUrl,
   isRendererRecoveryReloadUrl,
@@ -60,6 +64,10 @@ interface InstallRendererFailureRecoveryArgs {
   captureHangSample?(
     input: CaptureRendererHangSampleInput
   ): Promise<RendererHangSampleResult>;
+  /** Test seam; production pauses the per-window hang debugger. */
+  captureHangStack?(
+    webContents: WebContents
+  ): Promise<RendererHangStackCapture>;
   isContentVisible(): boolean;
   isQuitting(): boolean;
   /** Load the real app entry (not recovery data URL / not bare reload). */
@@ -257,6 +265,7 @@ export function installRendererFailureRecovery({
   beforeLoadFailure,
   beforeRendererGone,
   captureHangSample = captureRendererHangSample,
+  captureHangStack,
   isContentVisible,
   isQuitting,
   reloadAppEntry,
@@ -270,6 +279,9 @@ export function installRendererFailureRecovery({
     reloadAppEntry
   );
   const incidents = createRendererFailureIncidentTracker();
+  // 卡死取证：常驻 DevTools Debugger（实测无可测吞吐开销）。挂在 load 前，
+  // 保证卡死时 `Debugger.pause` 只走中断，不必再排队 enable。
+  attachRendererHangDebugger(window.webContents, { log });
 
   const snapshotFor = () =>
     collectRendererFailureDiagnostics({ isContentVisible, window });
@@ -348,6 +360,7 @@ export function installRendererFailureRecovery({
   });
   const unresponsive = createUnresponsiveHandler({
     ...(captureHangSample === undefined ? {} : { captureHangSample }),
+    ...(captureHangStack === undefined ? {} : { captureHangStack }),
     incidents,
     isQuitting,
     log,

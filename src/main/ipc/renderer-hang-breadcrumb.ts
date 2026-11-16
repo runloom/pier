@@ -13,6 +13,10 @@ import {
   findRendererProcessMetric,
   type RendererProcessMetricSnapshot,
 } from "../windows/renderer-hang-capture.ts";
+import {
+  getRendererHangDebugger,
+  type RendererMemorySample,
+} from "../windows/renderer-hang-debugger.ts";
 import { rememberHangBreadcrumb } from "./renderer-hang-breadcrumb-store.ts";
 
 export {
@@ -85,19 +89,40 @@ export function readRendererMetricForSender(
 
 function enrich(
   crumb: RendererHangBreadcrumb,
-  metric: RendererMetricEnrichment | null
+  metric: RendererMetricEnrichment | null,
+  memory: RendererMemorySample | null
 ): RendererHangBreadcrumb {
+  const attached = memory === null ? crumb : addMemoryFields(crumb, memory);
   if (metric === null) {
-    return crumb;
+    return attached;
   }
   return {
-    ...crumb,
+    ...attached,
     ...(metric.cpuPercent === null
       ? {}
       : { rendererCpuPercent: metric.cpuPercent }),
     ...(metric.workingSetMb === null
       ? {}
       : { rendererWorkingSetMb: metric.workingSetMb }),
+  };
+}
+
+function addMemoryFields(
+  crumb: RendererHangBreadcrumb,
+  memory: RendererMemorySample
+): RendererHangBreadcrumb {
+  return {
+    ...crumb,
+    ...(memory.jsHeapUsedMb === null
+      ? {}
+      : { rendererJsHeapUsedMb: memory.jsHeapUsedMb }),
+    ...(memory.jsHeapTotalMb === null
+      ? {}
+      : { rendererJsHeapTotalMb: memory.jsHeapTotalMb }),
+    ...(memory.domNodes === null ? {} : { rendererDomNodes: memory.domNodes }),
+    ...(memory.eventListeners === null
+      ? {}
+      : { rendererEventListeners: memory.eventListeners }),
   };
 }
 
@@ -115,10 +140,15 @@ export function registerRendererHangBreadcrumbIpc(
     readMetric?: (
       sender: Pick<WebContents, "getOSProcessId">
     ) => RendererMetricEnrichment | null;
+    readMemorySample?: (sender: WebContents) => RendererMemorySample | null;
   } = {}
 ): void {
   const readMetric =
     deps.readMetric ?? ((sender) => readRendererMetricForSender(sender));
+  const readMemorySample =
+    deps.readMemorySample ??
+    ((sender) =>
+      getRendererHangDebugger(sender)?.getLastMemorySample() ?? null);
 
   ipcMain.on(PIER.RENDERER_HANG_BREADCRUMB, (event, raw) => {
     const win = findAppWindowByWebContents(event.sender);
@@ -139,9 +169,15 @@ export function registerRendererHangBreadcrumbIpc(
     } catch {
       // Metrics are best-effort; the trail still gets written.
     }
+    let memorySample: RendererMemorySample | null = null;
+    try {
+      memorySample = readMemorySample(event.sender);
+    } catch {
+      // Memory sampling is best-effort too.
+    }
     const receivedAt = Date.now();
     const stored: StoredRendererHangBreadcrumb[] = crumbs.map((crumb) => ({
-      ...enrich(crumb, metric),
+      ...enrich(crumb, metric, memorySample),
       receivedAt,
     }));
     for (const crumb of stored) {

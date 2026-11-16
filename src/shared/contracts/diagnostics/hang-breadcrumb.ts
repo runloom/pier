@@ -79,12 +79,27 @@ export const rendererHangBreadcrumbSchema = z
     path: pathHint.optional(),
     phase: z.enum(["end", "start", "state", "tick"]).optional(),
     /**
-     * Main-side enrich 的 renderer CPU / 工作集（MB）。renderer 自己填不了：
-     * `performance.memory.usedJSHeapSize` 在未开启
+     * Main-side enrich 的 renderer CPU / 工作集（MB）与 JS 堆 / DOM 节点数。
+     * renderer 自己填不了：`performance.memory.usedJSHeapSize` 在未开启
      * `--enable-precise-memory-info` 时是恒定占位值（实测 75s 内分配 1.3GB
-     * 仍纹丝不动），不能用来判断「卡死前内存是不是在爬」。
+     * 仍纹丝不动）。真实工作集来自 `app.getAppMetrics()`；JS 堆 / DOM
+     * 来自常驻 hang debugger 每 30s 的 CDP 采样。
      */
     rendererCpuPercent: z.number().nonnegative().max(10_000).optional(),
+    rendererJsHeapTotalMb: z.number().nonnegative().max(1_048_576).optional(),
+    rendererJsHeapUsedMb: z.number().nonnegative().max(1_048_576).optional(),
+    rendererDomNodes: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(100_000_000)
+      .optional(),
+    rendererEventListeners: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(100_000_000)
+      .optional(),
     rendererWorkingSetMb: z.number().nonnegative().max(1_048_576).optional(),
   })
   .strict();

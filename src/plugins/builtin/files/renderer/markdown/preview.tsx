@@ -22,6 +22,7 @@ import { captureMarkdownPreviewAnchor } from "./cross-mode-anchor.ts";
 import { MARKDOWN_GIT_BAR_SLOT_PX } from "./git-bars/layout.ts";
 import { MarkdownPreviewGitBars } from "./git-bars/rail.tsx";
 import { MarkdownIrRenderer } from "./ir-renderer.tsx";
+import { useMarkdownPreviewParse } from "./parse/use-preview-parse.ts";
 import {
   MarkdownPreviewArticleLayout,
   MarkdownPreviewOverlayRail,
@@ -51,10 +52,7 @@ import {
   MARKDOWN_TOC_CONTENT_INSET_PX,
   MARKDOWN_TOC_INSET_PX,
 } from "./preview-toc-layout.ts";
-import type {
-  MarkdownPreviewProps,
-  MarkdownPreviewState,
-} from "./preview-types.ts";
+import type { MarkdownPreviewProps } from "./preview-types.ts";
 import { markdownRuntime } from "./runtime.ts";
 import { useScrollMemory } from "./scroll-memory.ts";
 import {
@@ -106,9 +104,7 @@ export function MarkdownPreview({
   worktreeKey,
   zoomLabels = DEFAULT_ZOOM_LABELS,
 }: MarkdownPreviewProps) {
-  const [state, setState] = useState<MarkdownPreviewState>({
-    status: "loading",
-  });
+  const state = useMarkdownPreviewParse({ runtime, sessionId, value });
   const [appearanceCodeTheme, setAppearanceCodeTheme] = useState(
     () => appearance?.current().codeTheme ?? FALLBACK_DARK_CODE_THEME
   );
@@ -157,7 +153,6 @@ export function MarkdownPreview({
     }
   }, [initialAnchorRequestId]);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const revisionRef = useRef(0);
   const headings =
     state.status === "ready" ? state.pagination.headings : undefined;
   const headingIds = useMemo(
@@ -219,39 +214,6 @@ export function MarkdownPreview({
     scrollRootRef: commentsScrollRootRef,
     worktreeKey,
   });
-
-  useEffect(() => {
-    let active = true;
-    revisionRef.current += 1;
-    const revision = `${sessionId}:${revisionRef.current}`;
-    // Same-document live updates (disk reload / buffer change): keep the
-    // previous ready render while the newer revision parses. First paint and
-    // document identity remounts (see adapter key={documentId}) use skeleton.
-    setState((current) =>
-      current.status === "ready" ? current : { status: "loading" }
-    );
-    runtime
-      .parse({ revision, sessionId, source: value })
-      .then((outcome) => {
-        if (!(active && outcome.revision === revision)) return;
-        if (outcome.status === "parsed") {
-          setState({
-            document: outcome.document,
-            sourceValue: value,
-            pagination: outcome.pagination,
-            status: "ready",
-          });
-        } else if (outcome.status === "error") {
-          setState({ status: "error" });
-        }
-      })
-      .catch(() => {
-        if (active) setState({ status: "error" });
-      });
-    return () => {
-      active = false;
-    };
-  }, [runtime, sessionId, value]);
 
   useEffect(
     () => () => {
