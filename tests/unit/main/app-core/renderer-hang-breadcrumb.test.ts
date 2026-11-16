@@ -75,6 +75,14 @@ describe("registerRendererHangBreadcrumbIpc", () => {
     readMetric?: () => {
       cpuPercent: number | null;
       workingSetMb: number | null;
+    } | null,
+    readMemorySample?: () => {
+      backingStorageMb: number | null;
+      domNodes: number | null;
+      eventListeners: number | null;
+      jsHeapTotalMb: number | null;
+      jsHeapUsedMb: number | null;
+      sampledAt: number;
     } | null
   ): (raw: unknown) => void {
     let handler: Handler | null = null;
@@ -84,7 +92,12 @@ describe("registerRendererHangBreadcrumbIpc", () => {
           handler = listener;
         },
       } as never,
-      readMetric === undefined ? {} : { readMetric: () => readMetric() }
+      {
+        ...(readMetric === undefined ? {} : { readMetric: () => readMetric() }),
+        ...(readMemorySample === undefined
+          ? {}
+          : { readMemorySample: () => readMemorySample() }),
+      }
     );
     if (handler === null) {
       throw new Error("handler not registered");
@@ -112,6 +125,33 @@ describe("registerRendererHangBreadcrumbIpc", () => {
     });
     expect(stored[1]).toMatchObject({
       kind: "longtask",
+      rendererWorkingSetMb: 1445,
+    });
+  });
+
+  it("stamps JS heap and DOM counters from the hang debugger", () => {
+    findAppWindowByWebContents.mockReturnValue({ id: WINDOW_ID } as never);
+    const send = install(
+      () => ({ cpuPercent: 76.4, workingSetMb: 1445 }),
+      () => ({
+        backingStorageMb: 12,
+        domNodes: 89_012,
+        eventListeners: 4567,
+        jsHeapTotalMb: 64,
+        jsHeapUsedMb: 31,
+        sampledAt: 1234,
+      })
+    );
+
+    send({ kind: "heartbeat", phase: "tick", detail: "alive-4" });
+
+    const stored = getHangBreadcrumbsForWindow(WINDOW_ID);
+    expect(stored[0]).toMatchObject({
+      detail: "alive-4",
+      rendererDomNodes: 89_012,
+      rendererEventListeners: 4567,
+      rendererJsHeapTotalMb: 64,
+      rendererJsHeapUsedMb: 31,
       rendererWorkingSetMb: 1445,
     });
   });

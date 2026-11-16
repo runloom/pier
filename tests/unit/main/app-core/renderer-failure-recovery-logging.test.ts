@@ -261,6 +261,67 @@ describe("installRendererFailureRecovery logging", () => {
     pending[1]?.();
   });
 
+  it("logs a function-level JS stack before force-crashing", async () => {
+    const { installRendererFailureRecovery } = await import(
+      "@main/windows/renderer-failure-recovery.ts"
+    );
+    const captureHangStack = vi.fn(async () => ({
+      frames: [
+        {
+          column: 12,
+          functionName: "walkBlockTree",
+          line: 88,
+          url: "assets/markdown.js",
+        },
+      ],
+      ok: true,
+    }));
+    installRendererFailureRecovery({
+      beforeLoadFailure: vi.fn(),
+      beforeRendererGone: vi.fn(),
+      captureHangSample: vi.fn(async () => ({
+        file: null,
+        ok: false,
+        reason: "platform" as const,
+      })),
+      captureHangStack,
+      isContentVisible: () => true,
+      isQuitting: () => false,
+      reloadAppEntry: vi.fn(),
+      window: window as never,
+    });
+
+    webListeners.get("unresponsive")?.();
+
+    await vi.waitFor(() =>
+      expect(webContents.forcefullyCrashRenderer).toHaveBeenCalledOnce()
+    );
+    expect(captureHangStack).toHaveBeenCalledOnce();
+    const stack = records.find(
+      (r) => r.scope === "renderer.failure" && r.msg === "renderer-hang-stack"
+    );
+    expect(stack?.ctx).toMatchObject({
+      frames: [
+        {
+          column: 12,
+          functionName: "walkBlockTree",
+          line: 88,
+          url: "assets/markdown.js",
+        },
+      ],
+      ok: true,
+    });
+    // 栈必须早于 force-crash：进程一杀就再也拿不到 JS 栈。
+    const stackIndex = records.findIndex(
+      (r) => r.scope === "renderer.failure" && r.msg === "renderer-hang-stack"
+    );
+    const crashIndex = records.findIndex(
+      (r) => r.scope === "renderer.failure" && r.msg === "renderer-force-crash"
+    );
+    expect(stackIndex).toBeGreaterThanOrEqual(0);
+    expect(crashIndex).toBeGreaterThan(stackIndex);
+  });
+
   it("correlates unresponsive force-crash with the following process-gone", async () => {
     const { installRendererFailureRecovery } = await import(
       "@main/windows/renderer-failure-recovery.ts"

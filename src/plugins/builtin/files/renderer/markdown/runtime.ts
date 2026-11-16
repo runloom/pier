@@ -395,7 +395,7 @@ export function createMarkdownRuntime(
 
 export const markdownRuntime = createMarkdownRuntime({
   createWorker: () =>
-    new Worker(new URL("./parse.worker.ts", import.meta.url), {
+    new Worker(new URL("./parse/worker.ts", import.meta.url), {
       type: "module",
     }),
 });

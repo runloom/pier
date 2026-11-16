@@ -50,6 +50,7 @@ import {
   installRendererFailureRecovery,
   reportRendererLoadError,
 } from "./renderer-failure-recovery.ts";
+import { disposeRendererHangDebugger } from "./renderer-hang-debugger.ts";
 import { createRendererShowGate } from "./renderer-show-gate.ts";
 
 const WINDOW_ID_REGEX = /^(main|w-\d+)$/;
@@ -373,6 +374,7 @@ class WindowManager {
     });
 
     window.host.on("closed", () => {
+      disposeRendererHangDebugger(window.webContents);
       nativeTerminalProcesses.closeWindow(electronWindowId);
       rendererShowGate.cancel();
       this.rendererShowGates.delete(id);

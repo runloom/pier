@@ -17,6 +17,11 @@ export interface MermaidRendererOptions {
 
 const MAX_SOURCE_LENGTH = 160_000;
 const MAX_CACHE_ENTRIES = 96;
+/**
+ * SVG 是 string（UTF-16），按字符数给缓存设总量上限；只按条目数限流时，
+ * 96 张大图（每张可达数 MB）会把 renderer 常驻内存推高数百 MB。
+ */
+const MAX_CACHE_CHARS = 4_000_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 class RenderTimeoutError extends Error {}
@@ -61,14 +66,25 @@ export function createMermaidRenderer(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const cache = new Map<string, string>();
   const pending = new Map<string, Promise<MermaidRenderResult>>();
+  let cachedChars = 0;
 
   const remember = (key: string, svg: string) => {
+    const previous = cache.get(key);
+    if (previous !== undefined) {
+      cachedChars -= previous.length;
+    }
     cache.delete(key);
     cache.set(key, svg);
-    while (cache.size > MAX_CACHE_ENTRIES) {
+    cachedChars += svg.length;
+    while (
+      cache.size > MAX_CACHE_ENTRIES ||
+      (cachedChars > MAX_CACHE_CHARS && cache.size > 1)
+    ) {
       const oldest = cache.keys().next().value;
       if (oldest === undefined) break;
+      const removed = cache.get(oldest);
       cache.delete(oldest);
+      cachedChars -= removed?.length ?? 0;
     }
   };
 

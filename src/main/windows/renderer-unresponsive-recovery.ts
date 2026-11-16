@@ -1,5 +1,5 @@
 import type { Logger } from "@shared/logger.ts";
-import { app } from "electron";
+import { app, type WebContents } from "electron";
 import { getHangBreadcrumbsForDiagnostics } from "../ipc/renderer-hang-breadcrumb-store.ts";
 import type { AppWindow } from "./app-window.ts";
 import {
@@ -14,6 +14,11 @@ import {
   type RendererHangSampleResult,
   type RendererProcessMetricSnapshot,
 } from "./renderer-hang-capture.ts";
+import {
+  captureRendererHangStack,
+  getRendererHangDebugger,
+  type RendererHangStackCapture,
+} from "./renderer-hang-debugger.ts";
 import type { RendererFailureRecovery } from "./renderer-resource-failure.ts";
 
 /**
@@ -28,6 +33,10 @@ export interface UnresponsiveHandlerDeps {
   captureHangSample?(
     input: CaptureRendererHangSampleInput
   ): Promise<RendererHangSampleResult>;
+  /** Test seam; production pauses the attached hang debugger. */
+  captureHangStack?(
+    webContents: WebContents
+  ): Promise<RendererHangStackCapture>;
   incidents: RendererFailureIncidentTracker;
   isQuitting(): boolean;
   log: Logger;
@@ -49,6 +58,9 @@ export function createUnresponsiveHandler(
 ): UnresponsiveHandler {
   const { incidents, isQuitting, log, recovery, snapshotFor, window } = deps;
   const captureHangSample = deps.captureHangSample ?? captureRendererHangSample;
+  const captureHangStack =
+    deps.captureHangStack ??
+    ((webContents) => captureRendererHangStack(webContents));
 
   /**
    * renderer 当前是否仍处于无响应状态。`responsive` 只证明「某一刻答上了」，
@@ -162,6 +174,27 @@ export function createUnresponsiveHandler(
       });
       return;
     }
+    // 函数级栈：`sample` 只能给 V8 JIT 匿名地址，这里用常驻 DevTools
+    // Debugger 的 `Debugger.pause` 中断 busy 主线程，拿到函数名 + 源码位置。
+    // 只在确定要 force-crash 时暂停，抓完立即 resume。
+    const hangStack: RendererHangStackCapture = await captureHangStack(
+      window.webContents
+    ).catch(() => ({ frames: [], ok: false, reason: "unavailable" }));
+    const memorySample = getRendererHangDebugger(
+      window.webContents
+    )?.getLastMemorySample();
+    log.error("renderer-hang-stack", {
+      incidentId: incident.incidentId,
+      ok: hangStack.ok,
+      ...(hangStack.ok ? { frames: hangStack.frames } : {}),
+      ...(hangStack.ok || hangStack.reason === undefined
+        ? {}
+        : { reason: hangStack.reason }),
+      ...(memorySample === null || memorySample === undefined
+        ? {}
+        : { rendererMemory: memorySample }),
+      windowId: window.id,
+    });
     forceCrashAfterSample(incident, snapshot);
   };
 

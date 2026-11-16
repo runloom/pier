@@ -11,6 +11,7 @@ import {
 } from "@plugins/builtin/files/renderer/markdown/runtime.ts";
 import { FILES_IN_FILE_SEARCH_BAR_CLASSNAME } from "@plugins/builtin/files/renderer/search/bar.tsx";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Activity, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
 
@@ -1732,5 +1733,46 @@ describe("MarkdownPreview", () => {
     localStorage.removeItem("pier.files.markdown.fontScale");
     localStorage.removeItem("pier.files.markdown.measureMode");
     localStorage.removeItem("pier.files.markdown.readingAppearance");
+  });
+
+  it("reuses the parsed document when a hidden panel becomes visible again", async () => {
+    const runtime = immediateRuntime();
+    const parse = vi.mocked(runtime.parse);
+    function Harness() {
+      const [visible, setVisible] = useState(true);
+      return (
+        <div>
+          <button
+            onClick={() => setVisible((current) => !current)}
+            type="button"
+          >
+            toggle
+          </button>
+          <Activity mode={visible ? "visible" : "hidden"}>
+            <MarkdownPreview
+              openExternal={vi.fn()}
+              runtime={runtime}
+              sessionId="markdown-activity"
+              source={source}
+              value={"# Guide\n\nbody"}
+            />
+          </Activity>
+        </div>
+      );
+    }
+
+    render(<Harness />);
+    expect(await screen.findByRole("heading", { name: "Guide" })).toBeTruthy();
+    expect(parse).toHaveBeenCalledTimes(1);
+
+    // Activity hidden → effects unmounted；再次 visible → effects 重跑。
+    // 重跑时必须复用已 ready 的 document，而不是重新 parse 整篇源文。
+    fireEvent.click(screen.getByRole("button", { name: "toggle" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "Guide" })).toBeNull();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "toggle" }));
+    expect(await screen.findByRole("heading", { name: "Guide" })).toBeTruthy();
+    expect(parse).toHaveBeenCalledTimes(1);
   });
 });
