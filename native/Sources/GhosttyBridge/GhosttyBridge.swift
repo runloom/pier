@@ -860,6 +860,11 @@ private struct TerminalScrimColorEntry: Codable {
     let r: Double
 }
 
+private struct TerminalScrimBorderEntry: Codable {
+    let color: TerminalScrimColorEntry
+    let width: Double
+}
+
 private struct TerminalBoxShadowEntry: Codable {
     let blur: Double
     let color: TerminalScrimColorEntry
@@ -875,6 +880,8 @@ private struct TerminalWebOverlayRectEntry: Codable {
     let paints: Bool?
     /// 半透明蒙层色。只在 paints == false 时画进终端洞，不回填。
     let scrim: TerminalScrimColorEntry?
+    /// 蒙层描边。只在 paints == false + scrim 时由 native 在洞里补画。
+    let scrimBorder: TerminalScrimBorderEntry?
     /// 外扩 box-shadow。不参与回填，画在合成层之下。
     let shadows: [TerminalBoxShadowEntry]?
     /// 均匀圆角，content-view px。圆角外的角从回填里挖回洞。
@@ -1320,6 +1327,17 @@ final class GhosttyBridgeImpl {
             scrims: state.webOverlayRects.compactMap { entry in
                 guard entry.paints == false, let scrim = entry.scrim else { return nil }
                 return TerminalScrim.Source(
+                    border: entry.scrimBorder.map {
+                        TerminalScrim.Border(
+                            color: TerminalScrim.WashColor(
+                                a: $0.color.a,
+                                b: $0.color.b,
+                                g: $0.color.g,
+                                r: $0.color.r
+                            ),
+                            width: CGFloat($0.width)
+                        )
+                    },
                     color: TerminalScrim.WashColor(
                         a: scrim.a,
                         b: scrim.b,

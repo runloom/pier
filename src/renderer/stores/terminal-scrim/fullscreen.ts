@@ -1,6 +1,6 @@
-import type { TerminalFrame } from "@shared/contracts/terminal.ts";
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { readTerminalViewportFrame } from "@/panel-kits/terminal/viewport.ts";
+import type { WebOverlayRectInput } from "@/stores/terminal-scrim/web-overlay-registry.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 interface WebOverlayRegistration {
@@ -10,8 +10,7 @@ interface WebOverlayRegistration {
 
 type SetWebOverlayRect = (
   id: string,
-  frame: TerminalFrame | null,
-  paints?: boolean
+  input: WebOverlayRectInput | null
 ) => void;
 
 let setWebOverlayRect: SetWebOverlayRect | null = null;
@@ -21,15 +20,11 @@ export function bindTerminalWebOverlayRect(set: SetWebOverlayRect): void {
   setWebOverlayRect = set;
 }
 
-function overlayRect(
-  id: string,
-  frame: TerminalFrame | null,
-  paints?: boolean
-): void {
+function overlayRect(id: string, input: WebOverlayRectInput | null): void {
   if (!setWebOverlayRect) {
     throw new Error("terminal web overlay rect setter is not bound");
   }
-  setWebOverlayRect(id, frame, paints);
+  setWebOverlayRect(id, input);
 }
 
 export function registerTerminalFullscreenWebOverlay(
@@ -42,7 +37,7 @@ export function registerTerminalFullscreenWebOverlay(
   // 会整块消失（2026-11-09 sash 拖拽复现）。真正绘制的浮层内容
   // （菜单 / popover / toast）各自用 registerTerminalElementWebOverlay 登记。
   const flush = () => {
-    overlayRect(id, readTerminalViewportFrame(), false);
+    overlayRect(id, { frame: readTerminalViewportFrame(), paints: false });
   };
 
   const flushTrailing = () => {

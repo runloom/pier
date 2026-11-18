@@ -1,15 +1,21 @@
 import type {
   TerminalBoxShadow,
   TerminalFrame,
+  TerminalScrimBorder,
   TerminalScrimColor,
 } from "@shared/contracts/terminal.ts";
 import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
-import { readScrimColor } from "@/stores/terminal-scrim/color.ts";
+import {
+  parseCssColor,
+  readScrimColor,
+  sameScrim,
+} from "@/stores/terminal-scrim/color.ts";
 import { readOverlayShadows } from "@/stores/terminal-scrim/shadow.ts";
 
 export interface OverlayAppearance {
   radius: number;
   scrim: TerminalScrimColor | undefined;
+  scrimBorder: TerminalScrimBorder | undefined;
   shadows: TerminalBoxShadow[] | undefined;
 }
 
@@ -22,15 +28,89 @@ export interface OverlayAppearance {
 export function readOverlayAppearance(
   element: HTMLElement,
   windowZoomLevel: number,
-  options: { paints: boolean; scrim: boolean }
+  options: { paints: boolean; scrim: boolean; scrimBorder?: boolean }
 ): OverlayAppearance {
+  const scrim = options.scrim ? readScrimColor(element) : undefined;
   return {
     radius: readOverlayRadiusPx(element, windowZoomLevel),
-    scrim: options.scrim ? readScrimColor(element) : undefined,
+    scrim,
+    // 没有有效蒙层色时不发布边框：native 的 scrim 通道以蒙层条目为入口，
+    // 边框不能脱离 scrim 单独存在（契约与 host snapshot 校验同此约束）。
+    scrimBorder:
+      scrim !== undefined && options.scrimBorder === true
+        ? readScrimBorder(element, windowZoomLevel)
+        : undefined,
     shadows: options.paints
       ? readOverlayShadows(element, windowZoomLevel)
       : undefined,
   };
+}
+
+/**
+ * 采样蒙层边框。只有四边同宽、同色、可见且已绘制时才交给 native；
+ * 任一边缺失 / 不同就整份放弃，避免 native 画出与网页不一致的框。
+ */
+export function readScrimBorder(
+  element: HTMLElement,
+  windowZoomLevel: number
+): TerminalScrimBorder | undefined {
+  const style = getComputedStyle(element);
+  const sides = [
+    [style.borderTopWidth, style.borderTopStyle, style.borderTopColor],
+    [style.borderRightWidth, style.borderRightStyle, style.borderRightColor],
+    [style.borderBottomWidth, style.borderBottomStyle, style.borderBottomColor],
+    [style.borderLeftWidth, style.borderLeftStyle, style.borderLeftColor],
+  ] as const;
+  let width = 0;
+  let color: TerminalScrimColor | undefined;
+  for (const [rawWidth, rawStyle, rawColor] of sides) {
+    if (rawStyle === "none" || rawStyle === "hidden") {
+      return;
+    }
+    const nextWidth = Number.parseFloat(rawWidth);
+    if (!Number.isFinite(nextWidth) || nextWidth <= 0) {
+      return;
+    }
+    const nextColor = parseCssColor(rawColor);
+    if (!nextColor) {
+      return;
+    }
+    if (color === undefined) {
+      width = nextWidth;
+      color = nextColor;
+      continue;
+    }
+    if (Math.abs(nextWidth - width) > 0.01 || !sameScrim(color, nextColor)) {
+      return;
+    }
+  }
+  if (color === undefined || width <= 0) {
+    return;
+  }
+  const opacity = Number(style.opacity);
+  const alpha = color.a * (Number.isFinite(opacity) ? clamp01(opacity) : 1);
+  const scaledWidth = cssRectToContentViewRect(
+    { height: 0, width, x: 0, y: 0 },
+    windowZoomLevel
+  ).width;
+  if (alpha <= 0 || scaledWidth <= 0) {
+    return;
+  }
+  return { color: { ...color, a: alpha }, width: scaledWidth };
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+export function sameScrimBorder(
+  left: TerminalScrimBorder | undefined,
+  right: TerminalScrimBorder | undefined
+): boolean {
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
+  return left.width === right.width && sameScrim(left.color, right.color);
 }
 
 export function readOverlayFrame(

@@ -13,6 +13,7 @@ const MAX_ID_LENGTH = 256;
 // 上限只防畸形 payload，不应让合法大布局整份快照被拒（输入路由与洞遮罩会停更）。
 const MAX_OVERLAY_RECTS = 1024;
 const MAX_TERMINALS = 256;
+const MAX_SCRIM_BORDER_WIDTH = 8;
 
 const HOST_REASONS: Record<TerminalHostReason, true> = {
   "anchor-resize": true,
@@ -105,6 +106,24 @@ function isScrimColor(value: unknown): boolean {
   );
 }
 
+function isScrimBorder(value: unknown): boolean {
+  if (value === undefined) {
+    return true;
+  }
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  const border = value as Record<string, unknown>;
+  return (
+    isScrimColor(border.color) &&
+    border.color !== undefined &&
+    typeof border.width === "number" &&
+    Number.isFinite(border.width) &&
+    border.width > 0 &&
+    border.width <= MAX_SCRIM_BORDER_WIDTH
+  );
+}
+
 function isCornerRadius(value: unknown): boolean {
   return (
     value === undefined ||
@@ -152,6 +171,8 @@ function isOverlayRect(value: unknown): value is TerminalWebOverlayRect {
     isFiniteFrame(rect.frame) &&
     (rect.paints === undefined || typeof rect.paints === "boolean") &&
     isScrimColor(rect.scrim) &&
+    isScrimBorder(rect.scrimBorder) &&
+    (rect.scrimBorder === undefined || rect.scrim !== undefined) &&
     isCornerRadius(rect.radius) &&
     isOverlayShadows(rect.shadows)
   );

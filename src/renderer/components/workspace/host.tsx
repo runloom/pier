@@ -18,6 +18,7 @@ import {
 } from "@/lib/plugins/panel-registry.ts";
 import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
 import { syncActivePanelScope } from "@/lib/workspace/active-panel-scope.ts";
+import { attachWorkspaceDropOverlayWebOverlays } from "@/lib/workspace/drop-overlay-web-overlays.ts";
 import {
   markWorkspaceLayoutPersistenceStarting,
   markWorkspaceLayoutPersistenceUnavailable,
@@ -234,6 +235,11 @@ export function WorkspaceHost() {
       const sashWebOverlayDispose = rootRef.current
         ? attachWorkspaceSashWebOverlays(rootRef.current, event.api)
         : () => undefined;
+      // 拖拽落点必须保留半透明：web anchor 只画非终端表面，native 在洞里
+      // 补画同色 scrim + border；直接回填会把终端换成不透明 backing。
+      const dropOverlayWebOverlayDispose = rootRef.current
+        ? attachWorkspaceDropOverlayWebOverlays(rootRef.current)
+        : () => undefined;
 
       const syncDockviewMaximizedState = (): void => {
         const nextHasMaximizedGroup = event.api.hasMaximizedGroup();
@@ -443,6 +449,7 @@ export function WorkspaceHost() {
         tabDragInputDispose();
         tabStripBehaviorDispose();
         sashWebOverlayDispose();
+        dropOverlayWebOverlayDispose();
         panelTransferDispose();
         window.removeEventListener("beforeunload", handleBeforeUnload);
       };

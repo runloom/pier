@@ -1,4 +1,5 @@
 import { registerTerminalElementWebOverlay } from "@/stores/terminal-input-routing-slice.ts";
+import { createDomOverlayReconciler } from "./overlays/reconciler.ts";
 
 /**
  * dockview chrome（分栏 sash + 浮组）的 web 浮层登记。
@@ -32,11 +33,6 @@ interface LayoutChangeSubscription {
 interface WorkspaceLayoutChangeSource {
   onDidActivePanelChange?(listener: () => void): LayoutChangeSubscription;
   onDidLayoutChange(listener: () => void): LayoutChangeSubscription;
-}
-
-interface OverlayEntry {
-  observer: MutationObserver;
-  registration: ReturnType<typeof registerTerminalElementWebOverlay>;
 }
 
 function overlayIdPrefix(element: HTMLElement): string {
@@ -101,90 +97,48 @@ export function attachWorkspaceSashWebOverlays(
   root: HTMLElement,
   layoutChanges: WorkspaceLayoutChangeSource
 ): () => void {
-  const entries = new Map<HTMLElement, OverlayEntry>();
   let nextSequence = 1;
-  let frameRequest: number | null = null;
-  let disposed = false;
-
-  const register = (element: HTMLElement): OverlayEntry => {
-    const overlayId = `${overlayIdPrefix(element)}:${nextSequence}`;
-    nextSequence += 1;
-    // 位置由 dockview 写 inline style（sash left/top、浮组 left/top/宽高）；
-    // 尺寸不变时 ResizeObserver 不触发，等分 / 键盘改布局也没有 pointerup，
-    // 所以盯 style 属性本身。浮组子元素随容器位移，容器 style 也要盯。
-    const observer = new MutationObserver(scheduleSync);
-    observer.observe(element, {
-      attributeFilter: ["style"],
-      attributes: true,
-    });
-    const container = element.closest<HTMLElement>(FLOATING_CONTAINER_SELECTOR);
-    if (container && container !== element) {
-      observer.observe(container, {
+  const reconciler = createDomOverlayReconciler<HTMLElement>({
+    collect: () => collectOverlayTargets(root),
+    register: (element, schedule) => {
+      const overlayId = `${overlayIdPrefix(element)}:${nextSequence}`;
+      nextSequence += 1;
+      // 位置由 dockview 写 inline style（sash left/top、浮组 left/top/宽高）；
+      // 尺寸不变时 ResizeObserver 不触发，等分 / 键盘改布局也没有 pointerup，
+      // 所以盯 style 属性本身。浮组子元素随容器位移，容器 style 也要盯。
+      const observer = new MutationObserver(schedule);
+      observer.observe(element, {
         attributeFilter: ["style"],
         attributes: true,
       });
-    }
-    return {
-      observer,
-      registration: registerTerminalElementWebOverlay(overlayId, element),
-    };
-  };
-
-  const sync = (): void => {
-    frameRequest = null;
-    if (disposed) {
-      return;
-    }
-    const current = new Set(collectOverlayTargets(root));
-    for (const element of current) {
-      const existing = entries.get(element);
-      if (existing) {
-        existing.registration.flush();
-        continue;
+      const container = element.closest<HTMLElement>(
+        FLOATING_CONTAINER_SELECTOR
+      );
+      if (container && container !== element) {
+        observer.observe(container, {
+          attributeFilter: ["style"],
+          attributes: true,
+        });
       }
-      entries.set(element, register(element));
-    }
-    for (const [element, entry] of entries) {
-      if (current.has(element)) {
-        continue;
-      }
-      entry.observer.disconnect();
-      entry.registration.dispose();
-      entries.delete(element);
-    }
-  };
+      return {
+        observer,
+        registration: registerTerminalElementWebOverlay(overlayId, element),
+      };
+    },
+    root,
+  });
 
-  function scheduleSync(): void {
-    if (disposed || frameRequest !== null) {
-      return;
-    }
-    frameRequest = requestAnimationFrame(sync);
-  }
-
-  const layoutSubscription = layoutChanges.onDidLayoutChange(scheduleSync);
+  const layoutSubscription = layoutChanges.onDidLayoutChange(
+    reconciler.schedule
+  );
   // 切 tab 只改变可见性，不一定改 DOM 结构：active panel 变化必须重算
   // 「content 区是否承载可见终端」。
   const activePanelSubscription =
-    layoutChanges.onDidActivePanelChange?.(scheduleSync) ?? null;
-  // dockview 增删分栏 / 浮组时重建容器；容器也可能被整体替换而不改父结构。
-  const rootObserver = new MutationObserver(scheduleSync);
-  rootObserver.observe(root, { childList: true, subtree: true });
-
-  sync();
+    layoutChanges.onDidActivePanelChange?.(reconciler.schedule) ?? null;
 
   return () => {
-    disposed = true;
-    if (frameRequest !== null) {
-      cancelAnimationFrame(frameRequest);
-      frameRequest = null;
-    }
     layoutSubscription.dispose();
     activePanelSubscription?.dispose();
-    rootObserver.disconnect();
-    for (const entry of entries.values()) {
-      entry.observer.disconnect();
-      entry.registration.dispose();
-    }
-    entries.clear();
+    reconciler.dispose();
   };
 }

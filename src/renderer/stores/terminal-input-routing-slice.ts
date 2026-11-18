@@ -1,11 +1,6 @@
 import type { TerminalOverlayOptions } from "@pier/ui/use-terminal-overlay.tsx";
 import type { TerminalFocusRoutingDebugSnapshot } from "@shared/contracts/terminal/debug.ts";
-import type {
-  TerminalBoxShadow,
-  TerminalFrame,
-  TerminalKeyboardFocusTarget,
-  TerminalScrimColor,
-} from "@shared/contracts/terminal.ts";
+import type { TerminalKeyboardFocusTarget } from "@shared/contracts/terminal.ts";
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import {
   computeEffectiveKeyboardTarget,
@@ -26,13 +21,15 @@ import {
   readOverlayAppearance,
   readOverlayFrame,
 } from "@/stores/terminal-scrim/appearance.ts";
-import {
-  sameScrim,
-  watchDocumentTheme,
-} from "@/stores/terminal-scrim/color.ts";
+import { watchDocumentTheme } from "@/stores/terminal-scrim/color.ts";
 import { bindTerminalWebOverlayRect } from "@/stores/terminal-scrim/fullscreen.ts";
 import { bindScrimFade } from "@/stores/terminal-scrim/motion.ts";
-import { sameOverlayShadows } from "@/stores/terminal-scrim/shadow.ts";
+import {
+  bindWebOverlayRegistryChange,
+  getWebOverlayRects,
+  resetWebOverlayRectsForTests,
+  setWebOverlayRect,
+} from "@/stores/terminal-scrim/web-overlay-registry.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 export { registerTerminalFullscreenWebOverlay } from "@/stores/terminal-scrim/fullscreen.ts";
@@ -70,19 +67,6 @@ export function beginTerminalPanelWebDragCapture(
   };
 }
 
-interface WebOverlayEntry {
-  frame: TerminalFrame;
-  /** false = 仅输入捕获，不参与 native 洞遮罩回填（见契约注释）。 */
-  paints: boolean;
-  /** 均匀圆角，content-view px。0 不写入。 */
-  radius?: number;
-  /** 半透明蒙层色。缺省表示不压暗终端。 */
-  scrim?: TerminalScrimColor;
-  /** 外扩 box-shadow。缺省或空数组不写入。 */
-  shadows?: TerminalBoxShadow[];
-}
-
-const webOverlayRects = new Map<string, WebOverlayEntry>();
 const webRequestIds = new Set<string>();
 /** composer 等 web 输入组件接管的面板：native 不得成 FR；pin focus + 藏绘制光标。 */
 const focusDisabledPanelIds = new Set<string>();
@@ -135,10 +119,6 @@ function reconcileAfterDurableWebFocusRelease(): void {
 // 会收到一对瞬时 window blur→focus（实测 1-5ms）。250ms 覆盖 IPC 往返上限。
 const WEB_FOCUS_HAND_OFF_BLUR_SUPPRESS_MS = 250;
 
-function frameKey(frame: TerminalFrame): string {
-  return `${frame.x},${frame.y},${frame.width},${frame.height}`;
-}
-
 const sortedIds = (ids: Iterable<string>): string[] => Array.from(ids).sort();
 
 function applyTerminalInputRouting(): void {
@@ -176,12 +156,15 @@ function applyTerminalInputRouting(): void {
     {
       basePanel,
       focusDisabledPanelIds: Array.from(focusDisabledPanelIds),
-      webOverlayRects: Array.from(webOverlayRects, ([id, entry]) => ({
+      webOverlayRects: getWebOverlayRects().map(([id, entry]) => ({
         frame: entry.frame,
         id,
         paints: entry.paints,
         ...(entry.radius === undefined ? {} : { radius: entry.radius }),
         ...(entry.scrim === undefined ? {} : { scrim: entry.scrim }),
+        ...(entry.scrimBorder === undefined
+          ? {}
+          : { scrimBorder: entry.scrimBorder }),
         ...(entry.shadows === undefined ? {} : { shadows: entry.shadows }),
       })),
       webRequestCount: webRequestIds.size,
@@ -198,7 +181,7 @@ export function getTerminalFocusRoutingDebugSnapshot(): TerminalFocusRoutingDebu
       .kind,
     events: [...getTerminalFocusTraceEvents()],
     focusDisabledPanelIds: sortedIds(focusDisabledPanelIds),
-    webOverlayIds: sortedIds(webOverlayRects.keys()),
+    webOverlayIds: sortedIds(getWebOverlayRects().map(([id]) => id)),
     webRequestIds: sortedIds(webRequestIds),
   };
 }
@@ -224,46 +207,8 @@ export function setTerminalNativeFocusDisabled(
   applyTerminalInputRouting();
 }
 
-function setWebOverlayRect(
-  id: string,
-  frame: TerminalFrame | null,
-  paints = true,
-  scrim?: TerminalScrimColor,
-  radius = 0,
-  shadows?: TerminalBoxShadow[]
-): void {
-  const previous = webOverlayRects.get(id);
-  if (!frame) {
-    if (!previous) {
-      return;
-    }
-    webOverlayRects.delete(id);
-    applyTerminalInputRouting();
-    return;
-  }
-  const nextRadius = radius > 0 ? radius : undefined;
-  const nextShadows = shadows?.length ? shadows : undefined;
-  if (
-    previous &&
-    previous.paints === paints &&
-    sameScrim(previous.scrim, scrim) &&
-    sameOverlayShadows(previous.shadows, nextShadows) &&
-    previous.radius === nextRadius &&
-    frameKey(previous.frame) === frameKey(frame)
-  ) {
-    return;
-  }
-  webOverlayRects.set(id, {
-    frame,
-    paints,
-    ...(nextRadius === undefined ? {} : { radius: nextRadius }),
-    ...(scrim === undefined ? {} : { scrim }),
-    ...(nextShadows === undefined ? {} : { shadows: nextShadows }),
-  });
-  applyTerminalInputRouting();
-}
-
 bindTerminalWebOverlayRect(setWebOverlayRect);
+bindWebOverlayRegistryChange(applyTerminalInputRouting);
 
 export function setTerminalBasePanel(
   target: TerminalKeyboardFocusTarget
@@ -334,15 +279,42 @@ export function registerTerminalElementWebOverlay(
   options?: TerminalOverlayOptions
 ): WebOverlayRegistration {
   const scrim = options?.scrim === true;
+  const scrimBorder = options?.scrimBorder === true;
   // 蒙层必须留在洞外：整窗回填会把终端换成不透明 backing。
   const paints = scrim ? false : (options?.paints ?? true);
   const zoomLevel = () => useZoomStore.getState().windowZoomLevel;
   let lastAppearance: OverlayAppearance = {
     radius: 0,
     scrim: undefined,
+    scrimBorder: undefined,
     shadows: undefined,
   };
   let frameRequest: number | null = null;
+
+  const publish = (): void => {
+    const frame = readOverlayFrame(element, zoomLevel());
+    setWebOverlayRect(
+      id,
+      frame
+        ? {
+            frame,
+            paints,
+            ...(lastAppearance.radius > 0
+              ? { radius: lastAppearance.radius }
+              : {}),
+            ...(lastAppearance.scrim === undefined
+              ? {}
+              : { scrim: lastAppearance.scrim }),
+            ...(lastAppearance.scrimBorder === undefined
+              ? {}
+              : { scrimBorder: lastAppearance.scrimBorder }),
+            ...(lastAppearance.shadows === undefined
+              ? {}
+              : { shadows: lastAppearance.shadows }),
+          }
+        : null
+    );
+  };
 
   const flush = () => {
     // appearanceElement 声明外观只属于绘制元素；目标缺席按无外观发布。
@@ -350,16 +322,18 @@ export function registerTerminalElementWebOverlay(
       ? options.appearanceElement()
       : element;
     lastAppearance = appearanceTarget
-      ? readOverlayAppearance(appearanceTarget, zoomLevel(), { paints, scrim })
-      : { radius: 0, scrim: undefined, shadows: undefined };
-    setWebOverlayRect(
-      id,
-      readOverlayFrame(element, zoomLevel()),
-      paints,
-      lastAppearance.scrim,
-      lastAppearance.radius,
-      lastAppearance.shadows
-    );
+      ? readOverlayAppearance(appearanceTarget, zoomLevel(), {
+          paints,
+          scrim,
+          scrimBorder,
+        })
+      : {
+          radius: 0,
+          scrim: undefined,
+          scrimBorder: undefined,
+          shadows: undefined,
+        };
+    publish();
   };
 
   const flushTrailing = () => {
@@ -391,14 +365,7 @@ export function registerTerminalElementWebOverlay(
     if (event.target !== element) {
       return;
     }
-    setWebOverlayRect(
-      id,
-      readOverlayFrame(element, zoomLevel()),
-      paints,
-      lastAppearance.scrim,
-      lastAppearance.radius,
-      lastAppearance.shadows
-    );
+    publish();
   };
   element.addEventListener("animationend", onMotionEnd);
   element.addEventListener("transitionend", onMotionEnd);
@@ -489,7 +456,7 @@ export function installTerminalInputRoutingPointerDownListener(): void {
 }
 
 export function resetTerminalInputRoutingForTests(): void {
-  webOverlayRects.clear();
+  resetWebOverlayRectsForTests();
   webRequestIds.clear();
   focusDisabledPanelIds.clear();
   basePanel = { kind: "web" };
