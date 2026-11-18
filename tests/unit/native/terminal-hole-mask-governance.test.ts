@@ -11,9 +11,13 @@ const BRIDGE = "native/Sources/GhosttyBridge/GhosttyBridge.swift";
 const NATIVE_TESTS =
   "native/Tests/GhosttyBridgeTests/TerminalHoleMaskTests.swift";
 const SASH_OVERLAYS = "src/renderer/lib/workspace/sash-web-overlays.ts";
+const DROP_OVERLAYS = "src/renderer/lib/workspace/drop-overlay-web-overlays.ts";
+const OVERLAY_RECONCILER = "src/renderer/lib/workspace/overlays/reconciler.ts";
 const WORKSPACE_HOST = "src/renderer/components/workspace/host.tsx";
 const SASH_OVERLAY_TESTS =
   "tests/unit/renderer/lib/workspace/sash-web-overlays.test.ts";
+const DROP_OVERLAY_TESTS =
+  "tests/unit/renderer/lib/workspace/drop-overlay-web-overlays.test.ts";
 const WINDOW_FACTORY = "src/main/windows/factory.ts";
 const WINDOW_MANAGER = "src/main/windows/manager.ts";
 const NATIVE_CHROME = "src/main/windows/native-chrome.ts";
@@ -61,7 +65,9 @@ describe("terminal hole mask governance (transparent web over Ghostty)", () => {
     // 浮组内含可见终端时不得整块回填，否则会抹掉终端自己的洞。
     expect(source).toContain("holdsVisibleTerminal");
     expect(source).toContain("dv-floating-titlebar");
-    expect(source).toContain("entry.registration.dispose()");
+    expect(source).toContain("createDomOverlayReconciler");
+    expect(source).toContain("reconciler.dispose()");
+    expect(read(OVERLAY_RECONCILER)).toContain("entry.registration.dispose()");
 
     const host = read(WORKSPACE_HOST);
     expect(host).toContain("attachWorkspaceSashWebOverlays");
@@ -141,7 +147,7 @@ describe("terminal hole mask governance (transparent web over Ghostty)", () => {
     // 不透明 backing 下终端整块消失（2026-11-09 sash 拖拽复现）。
     const slice = read("src/renderer/stores/terminal-input-routing-slice.ts");
     expect(read("src/renderer/stores/terminal-scrim/fullscreen.ts")).toContain(
-      "overlayRect(id, readTerminalViewportFrame(), false)"
+      "overlayRect(id, { frame: readTerminalViewportFrame(), paints: false })"
     );
     expect(slice).toContain("paints: entry.paints");
 
@@ -163,6 +169,22 @@ describe("terminal hole mask governance (transparent web over Ghostty)", () => {
       "readOverlayShadows"
     );
 
+    // 落点层必须半透明：不能走 paints:true 回填，否则终端被不透明 backing
+    // 替换。scrim 填色 + scrimBorder 描边都在 native 洞里画。
+    expect(read(DROP_OVERLAYS)).toContain(".dv-drop-target-anchor");
+    expect(read(DROP_OVERLAYS)).toContain("scrim: true, scrimBorder: true");
+    expect(read(DROP_OVERLAYS)).not.toContain("paints: true");
+    expect(read(DROP_OVERLAYS)).toContain("transitionProperty");
+    expect(read(WORKSPACE_HOST)).toContain(
+      "attachWorkspaceDropOverlayWebOverlays"
+    );
+    expect(read(DROP_OVERLAY_TESTS)).toContain("scrimBorder");
+    expect(contract).toContain("scrimBorder?: TerminalScrimBorder");
+    expect(validation).toContain("isScrimBorder(rect.scrimBorder)");
+    expect(read("src/renderer/stores/terminal-scrim/appearance.ts")).toContain(
+      "readScrimBorder"
+    );
+
     const bridge = read(BRIDGE);
     expect(bridge).toContain("let paints: Bool?");
     expect(bridge).toContain("$0.paints != false");
@@ -171,6 +193,11 @@ describe("terminal hole mask governance (transparent web over Ghostty)", () => {
     expect(read("native/Sources/GhosttyBridge/TerminalScrim.swift")).toContain(
       "contentView.addSubview(view, positioned: .below, relativeTo: compositor)"
     );
+    expect(read("native/Sources/GhosttyBridge/TerminalScrim.swift")).toContain(
+      "struct Border"
+    );
+    expect(bridge).toContain("scrimBorder");
+    expect(read(NATIVE_TESTS)).toContain("scrimBorder");
 
     expect(read("AGENTS.md")).toContain("paints: false");
     expect(read("AGENTS.md")).toContain("TerminalScrim");

@@ -12,7 +12,10 @@ import {
   registerTerminalElementWebOverlay,
   resetTerminalInputRoutingForTests,
 } from "@/stores/terminal-input-routing-slice.ts";
-import { readOverlayRadiusPx } from "@/stores/terminal-scrim/appearance.ts";
+import {
+  readOverlayRadiusPx,
+  readScrimBorder,
+} from "@/stores/terminal-scrim/appearance.ts";
 import {
   parseCssColor,
   readScrimColor,
@@ -109,6 +112,37 @@ describe("parseCssColor", () => {
     expect(readScrimColor(el)?.r).toBeCloseTo(1);
 
     el.remove();
+  });
+
+  it("samples a uniform semi-transparent scrim border", () => {
+    // 拖拽落点要求半透明覆盖：web 边框在终端洞里会被硬裁，
+    // 必须把 computed border 交给 native，在洞内补画同色描边。
+    const el = document.createElement("div");
+    el.style.border = "1px solid rgba(255, 255, 255, 0.5)";
+    el.style.opacity = "0.5";
+    document.body.append(el);
+
+    expect(readScrimBorder(el, 0)).toEqual({
+      color: { a: 0.25, b: 1, g: 1, r: 1 },
+      width: 1,
+    });
+
+    el.remove();
+  });
+
+  it("drops a scrim border when sides differ or no border is drawn", () => {
+    const mixed = document.createElement("div");
+    mixed.style.borderTop = "1px solid rgba(255, 255, 255, 0.5)";
+    mixed.style.borderBottom = "2px solid rgba(255, 255, 255, 0.5)";
+    document.body.append(mixed);
+    expect(readScrimBorder(mixed, 0)).toBeUndefined();
+
+    const none = document.createElement("div");
+    document.body.append(none);
+    expect(readScrimBorder(none, 0)).toBeUndefined();
+
+    mixed.remove();
+    none.remove();
   });
 
   it("accepts the computed-style grammar Chromium actually emits", () => {
@@ -264,6 +298,32 @@ describe("useTerminalOverlay", () => {
       expect.objectContaining({
         paints: false,
         scrim: { a: 0.1, b: 1, g: 1, r: 1 },
+      }),
+    ]);
+
+    el.remove();
+  });
+
+  it("publishes a scrim border for translucent drop overlays", () => {
+    const { result } = renderHook(
+      () => useTerminalOverlay({ scrim: true, scrimBorder: true }),
+      { wrapper }
+    );
+    const el = makeSizedElement();
+    el.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+    el.style.border = "1px solid rgba(255, 255, 255, 0.55)";
+    document.body.append(el);
+
+    result.current(el);
+
+    expect(snapshot()?.webOverlayRects).toEqual([
+      expect.objectContaining({
+        paints: false,
+        scrim: { a: 0.1, b: 1, g: 1, r: 1 },
+        scrimBorder: {
+          color: { a: 0.55, b: 1, g: 1, r: 1 },
+          width: 1,
+        },
       }),
     ]);
 

@@ -2196,6 +2196,18 @@ body {
   height: 16px !important;
   margin: 0 !important;
   flex-shrink: 0 !important;
+  /* 加载图标是 18px，大于 16px 槽位；Sonner 默认 flex-start 会把它推向右。 */
+  justify-content: center !important;
+}
+
+/*
+ * Sonner 在 LTR 给 [data-icon] 内的 svg 留了 -1px 左边距（RTL 为右边距），
+ * 为它默认图标定位。Pier 的 StatusIcon 在 16px 盒内已经 flex 居中；负 margin
+ * 会让对勾 / 信息 / 错误 / 加载图标整体偏移 0.5px（2x 下 1 个设备像素）。
+ * 清零，LTR / RTL 都保持盒内居中。
+ */
+[data-sonner-toast].pier-toast:not(.pier-msg-toast) [data-icon] svg {
+  margin: 0 !important;
 }
 
 [data-sonner-toast].pier-toast:not(.pier-msg-toast) [data-button] {

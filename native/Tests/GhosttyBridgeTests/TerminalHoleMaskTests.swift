@@ -318,6 +318,62 @@ final class TerminalHoleMaskTests: XCTestCase {
         XCTAssertLessThan(scrimIndex, compositorIndex)
     }
 
+    func testScrimBorderDrawsInTheTerminalHoleWithoutFillingIt() throws {
+        // 拖拽落点必须保留半透明：scrim 填色之外再补一圈描边，
+        // 不能用 paints:true 回填（那会把终端换成不透明 backing）。
+        let window = makeWindow(browserWindowId: 5110)
+        defer { impl.detachWindow(parent: window) }
+        insertWebCompositorStandIn(in: window)
+        createTerminal("terminal-a", in: window)
+
+        let terminals = """
+        [
+          { "focused": true, "frame": { "height": 200, "width": 300, "x": 10, "y": 20 }, "panelId": "terminal-a", "visible": true }
+        ]
+        """
+        let overlays = """
+        [
+          { "frame": { "height": 200, "width": 300, "x": 10, "y": 20 }, "id": "drop-overlay", "paints": false, "scrim": { "a": 0.1, "b": 0.8, "g": 0.6, "r": 0.2 }, "scrimBorder": { "color": { "a": 0.55, "b": 0.8, "g": 0.6, "r": 0.2 }, "width": 1 } }
+        ]
+        """
+        XCTAssertEqual(
+            impl.applyWindowState(
+                parent: window,
+                json: stateJSON(sequence: 1, terminals: terminals, overlays: overlays)
+            ),
+            .applied
+        )
+
+        // 没有 paints:true，终端洞仍然完整；蒙层与描边都在洞内合成。
+        let hole = try holeMaskPayload(window)
+        XCTAssertEqual(hole["cutRectCount"] as? Int, 1)
+
+        let scrim = try scrimPayload(window)
+        XCTAssertEqual(scrim["active"] as? Bool, true)
+        let borders = try XCTUnwrap(scrim["borders"] as? [[String: Double]])
+        XCTAssertEqual(borders.count, 1)
+        XCTAssertEqual(borders[0]["borderWidth"], 1)
+        XCTAssertEqual(borders[0]["a"], 0.55)
+        XCTAssertEqual(borders[0]["r"], 0.2)
+
+        let scrimView = try XCTUnwrap(
+            window.contentView?.subviews.first {
+                String(describing: type(of: $0)).contains("TerminalScrim")
+            }
+        )
+        let stroke = try XCTUnwrap(
+            scrimView.layer?.sublayers?.last as? CAShapeLayer
+        )
+        XCTAssertEqual(stroke.lineWidth, 1)
+        XCTAssertNil(stroke.fillColor)
+        XCTAssertEqual(
+            Double(stroke.strokeColor?.alpha ?? -1),
+            0.55,
+            accuracy: 0.001
+        )
+        XCTAssertNotNil(stroke.path)
+    }
+
     func testOutsetShadowPaintsOnTheTerminalWithoutFillingTheHole() throws {
         // 阴影在 border box 外。扩回填矩形会把半透明像素铺到不透明 backing 上；
         // 洞面积必须仍是「终端 − 卡片」，投影单独画在合成层下面。

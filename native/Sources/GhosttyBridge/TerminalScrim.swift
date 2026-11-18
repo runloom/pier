@@ -4,6 +4,10 @@
 // 会把终端换成兜底色。这里在 web 合成层之下、终端之上，按蒙层色画一层
 // 半透明，只覆盖蒙层矩形与终端 viewport 的交集。点击仍由既有 overlay
 // 路由处理，这层不命中。
+//
+// 拖拽落点等产品浮层既要求半透明，又需要完整边框：web 边框在终端洞里同
+// 样会被 hard mask 裁掉。这里用同一个 scrim 通道补画描边，颜色 / 宽度由
+// renderer 从 computed border 采样，终端内容仍从半透明描边下透出来。
 
 import AppKit
 import QuartzCore
@@ -37,7 +41,17 @@ enum TerminalScrim {
         }
     }
 
+    struct Border {
+        var color: WashColor
+        var width: CGFloat
+
+        var isVisible: Bool {
+            color.isVisible && width > 0
+        }
+    }
+
     struct Source {
+        var border: Border?
         var color: WashColor
         var frame: NSRect
     }
@@ -47,10 +61,17 @@ enum TerminalScrim {
         var frame: NSRect
     }
 
+    private struct Stroke {
+        var color: WashColor
+        var frame: NSRect
+        var width: CGFloat
+    }
+
     private struct Entry {
         weak var contentView: NSView?
         let view: TerminalScrimView
         var washes: [Wash]
+        var strokes: [Stroke]
     }
 
     private static var entries: [ObjectIdentifier: Entry] = [:]
@@ -69,9 +90,29 @@ enum TerminalScrim {
         return result
     }
 
+    /// 描边画在完整 scrim 矩形上；洞外的部分被不透明 web backing 盖住，
+    /// 实际只有与终端相交的线段可见。不与任何终端相交就不必建层。
+    private static func borderedSources(
+        terminals: [NSRect],
+        scrims: [Source]
+    ) -> [Stroke] {
+        scrims.compactMap { scrim -> Stroke? in
+            guard let border = scrim.border, border.isVisible,
+                  scrim.frame.width > 0, scrim.frame.height > 0,
+                  terminals.contains(where: {
+                      $0.width > 0 && $0.height > 0 && $0.intersects(scrim.frame)
+                  })
+            else { return nil }
+            return Stroke(color: border.color, frame: scrim.frame, width: border.width)
+        }
+    }
+
     static func apply(contentView: NSView, terminals: [NSRect], scrims: [Source]) {
         let washes = coveredRects(terminals: terminals, scrims: scrims)
-        guard !washes.isEmpty, let compositor = findCompositor(in: contentView) else {
+        let strokes = borderedSources(terminals: terminals, scrims: scrims)
+        guard !washes.isEmpty || !strokes.isEmpty,
+              let compositor = findCompositor(in: contentView)
+        else {
             clear(contentView: contentView)
             return
         }
@@ -107,8 +148,29 @@ enum TerminalScrim {
             )
             view.layer?.addSublayer(layer)
         }
+        for stroke in strokes {
+            let rect = TerminalHoleMask.layerRect(
+                stroke.frame,
+                contentView: contentView,
+                compositor: view
+            ).insetBy(dx: stroke.width / 2, dy: stroke.width / 2)
+            guard rect.width > 0, rect.height > 0 else { continue }
+            let layer = CAShapeLayer()
+            layer.contentsScale = contentView.window?.backingScaleFactor ?? 2
+            layer.fillColor = nil
+            layer.frame = view.bounds
+            layer.lineWidth = stroke.width
+            layer.path = CGPath(rect: rect, transform: nil)
+            layer.strokeColor = stroke.color.cgColor
+            view.layer?.addSublayer(layer)
+        }
         CATransaction.commit()
-        entries[key] = Entry(contentView: contentView, view: view, washes: washes)
+        entries[key] = Entry(
+            contentView: contentView,
+            view: view,
+            washes: washes,
+            strokes: strokes
+        )
     }
 
     static func clear(contentView: NSView) {
@@ -119,9 +181,24 @@ enum TerminalScrim {
     }
 
     static func debugPayload(contentView: NSView) -> [String: Any] {
-        let washes = entries[ObjectIdentifier(contentView)]?.washes ?? []
+        let entry = entries[ObjectIdentifier(contentView)]
+        let washes = entry?.washes ?? []
+        let strokes = entry?.strokes ?? []
         return [
-            "active": !washes.isEmpty,
+            "active": !washes.isEmpty || !strokes.isEmpty,
+            "borders": strokes.map {
+                [
+                    "a": $0.color.a,
+                    "b": $0.color.b,
+                    "g": $0.color.g,
+                    "height": Double($0.frame.height),
+                    "r": $0.color.r,
+                    "width": Double($0.frame.width),
+                    "x": Double($0.frame.minX),
+                    "y": Double($0.frame.minY),
+                    "borderWidth": Double($0.width),
+                ]
+            },
             "rects": washes.map {
                 [
                     "a": $0.color.a,

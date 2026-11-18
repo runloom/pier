@@ -7,7 +7,7 @@
 
 相关：[`2026-09-01-panel-tear-off-gold-standard.md`](./2026-09-01-panel-tear-off-gold-standard.md)。跨窗口 claim 仍是双通道（HTML5 `drop` + Path B `finishDrag`）；本文件只管落点层何时可以画、何时必须灭。
 
-检查点：`tests/unit/renderer/workspace/panel-drop-overlay-lifecycle-governance.test.ts`、`tests/unit/main/panel/transfer-overlay-preview.test.ts`、`tests/unit/renderer/workspace/panel-transfer-overlay-preview.test.ts`、`tests/unit/renderer/workspace/panel-transfer-attach.test.ts`、`tests/unit/main/panel/transfer-service.test.ts`。
+检查点：`tests/unit/renderer/workspace/panel-drop-overlay-lifecycle-governance.test.ts`、`tests/unit/main/panel/transfer-overlay-preview.test.ts`、`tests/unit/renderer/workspace/panel-transfer-overlay-preview.test.ts`、`tests/unit/renderer/workspace/panel-transfer-attach.test.ts`、`tests/unit/main/panel/transfer-service.test.ts`、`tests/unit/renderer/lib/workspace/drop-overlay-web-overlays.test.ts`。
 
 ---
 
@@ -21,7 +21,7 @@
 
 1. **寿命主人（单一主人）**：renderer `createPanelTransferOverlayPreviewSession`。状态按 `transferId` 记，不是整窗一个 `closed` 布尔。`end(id)` 在没有 live B 时必须 `idle()`（`liveId === null` 也要拆残留命中区）；只有 `liveId === B` 时 `end(A)` 才跳过。
 2. **广播主人**：main overlay preview controller 只在未封账时 `start`；任一结束出口先 `seal(transferId)`，再做 claim / 等 offer。`seal` = 发 `clear` + 该 id 进入 sealed，之后 `start` 同 id 是 no-op。controller 只有 `seal` / `start`，没有未封账的 `stop`。`start(B)` 先 `seal(A)`。tick 见过 `isLeftMouseButtonDown() === true` 后再读到 button-up，必须 `seal`（`finishDrag` 漏掉时的 fail-closed；未 armed 不得因「按钮本来就抬着」误拆，测试与 addon 缺失走这条）。
-3. **画笔**：dockview `showOverlay` / HTML5 绝对层。`dockview-core` document-`dragleave` / document-`dragend`（`onDocumentDragEnd`）补丁只做 fail-closed 拆视觉，**不拥有**寿命，也不许在捕获阶段清 Droptarget `_state`（否则同窗 sticky 提交会坏）。拆视觉不等于释放 `registerTerminalFullscreenWebOverlay`。
+3. **画笔**：dockview `showOverlay` / HTML5 绝对层。终端表面必须保持半透明：`drop-overlay-web-overlays.ts` 把 `.dv-drop-target-anchor` 以 `scrim + scrimBorder` 交给 native，在洞里画同色填充与描边；**禁止改成 `paints: true` 回填**——那会用不透明 backing 替换终端。`dockview-core` document-`dragleave` / document-`dragend`（`onDocumentDragEnd`）补丁只做 fail-closed 拆视觉，**不拥有**寿命，也不许在捕获阶段清 Droptarget `_state`（否则同窗 sticky 提交会坏）。拆视觉不等于释放 `registerTerminalFullscreenWebOverlay`。
 4. **禁止**：业务代码再手写一套「该不该显示」；不夺 Esc（禁止用智能体 `Esc` 关浮层）。
 
 `source` 只约束**进行中**：源窗交给 HTML5，不要用 Path B `showOverlay` 去抢。`ended` / `seal` 之后源窗也必须 `idle()`。

@@ -74,6 +74,26 @@ describe("isTerminalHostSnapshot", () => {
     expect(isTerminalHostSnapshot(terminalSnapshot())).toBe(true);
   });
 
+  it("accepts a translucent scrim with a native border", () => {
+    expect(
+      isTerminalHostSnapshot({
+        ...terminalSnapshot(),
+        webOverlayRects: [
+          {
+            frame: { height: 40, width: 80, x: 10, y: 20 },
+            id: "drop-overlay",
+            paints: false,
+            scrim: { a: 0.1, b: 1, g: 1, r: 1 },
+            scrimBorder: {
+              color: { a: 0.55, b: 1, g: 1, r: 1 },
+              width: 1,
+            },
+          },
+        ],
+      })
+    ).toBe(true);
+  });
+
   it.each([
     ["negative web request count", { webRequestCount: -1 }],
     [
@@ -105,6 +125,39 @@ describe("isTerminalHostSnapshot", () => {
     [
       "non-array focus-disabled ids",
       { focusDisabledPanelIds: "terminal-1" as unknown as string[] },
+    ],
+    [
+      "scrim border without scrim",
+      {
+        webOverlayRects: [
+          {
+            frame: { height: 40, width: 80, x: 10, y: 20 },
+            id: "drop-overlay",
+            paints: false,
+            scrimBorder: {
+              color: { a: 0.55, b: 1, g: 1, r: 1 },
+              width: 1,
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "zero-width scrim border",
+      {
+        webOverlayRects: [
+          {
+            frame: { height: 40, width: 80, x: 10, y: 20 },
+            id: "drop-overlay",
+            paints: false,
+            scrim: { a: 0.1, b: 1, g: 1, r: 1 },
+            scrimBorder: {
+              color: { a: 0.55, b: 1, g: 1, r: 1 },
+              width: 0,
+            },
+          },
+        ],
+      },
     ],
   ])("rejects %s", (_name, overrides) => {
     expect(

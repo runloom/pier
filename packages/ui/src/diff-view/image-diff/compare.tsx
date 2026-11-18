@@ -37,6 +37,10 @@ export function SwipeImageDiff({
   beforeUrl,
   labels,
   locale,
+  onAfterImageError,
+  onAfterImageLoad,
+  onBeforeImageError,
+  onBeforeImageLoad,
   stage,
 }: {
   readonly after: PierImageDiffSide;
@@ -45,6 +49,10 @@ export function SwipeImageDiff({
   readonly beforeUrl: string | null;
   readonly labels: PierImageDiffLabels;
   readonly locale: string;
+  readonly onAfterImageError?: (() => void) | undefined;
+  readonly onAfterImageLoad?: (() => void) | undefined;
+  readonly onBeforeImageError?: (() => void) | undefined;
+  readonly onBeforeImageLoad?: (() => void) | undefined;
   readonly stage: ImageDiffStage | null;
 }): React.JSX.Element {
   const lastTapRef = useRef<{ at: number; x: number } | null>(null);
@@ -125,6 +133,8 @@ export function SwipeImageDiff({
               <StagedImage
                 box={stage?.after ?? null}
                 labels={labels}
+                onImageError={onAfterImageError}
+                onImageLoad={onAfterImageLoad}
                 pixelated={stage?.pixelated ?? false}
                 stage={stage}
                 url={afterUrl}
@@ -141,6 +151,8 @@ export function SwipeImageDiff({
               <StagedImage
                 box={stage?.before ?? null}
                 labels={labels}
+                onImageError={onBeforeImageError}
+                onImageLoad={onBeforeImageLoad}
                 pixelated={stage?.pixelated ?? false}
                 stage={stage}
                 url={beforeUrl}
@@ -159,6 +171,10 @@ export function OnionImageDiff({
   afterUrl,
   beforeUrl,
   labels,
+  onAfterImageError,
+  onAfterImageLoad,
+  onBeforeImageError,
+  onBeforeImageLoad,
   stage,
 }: {
   readonly after: PierImageDiffSide;
@@ -167,6 +183,10 @@ export function OnionImageDiff({
   readonly beforeUrl: string | null;
   readonly labels: PierImageDiffLabels;
   readonly locale: string;
+  readonly onAfterImageError?: (() => void) | undefined;
+  readonly onAfterImageLoad?: (() => void) | undefined;
+  readonly onBeforeImageError?: (() => void) | undefined;
+  readonly onBeforeImageLoad?: (() => void) | undefined;
   readonly stage: ImageDiffStage | null;
 }): React.JSX.Element {
   const [percent, setPercent] = useState(50);
@@ -185,6 +205,8 @@ export function OnionImageDiff({
           <StagedImage
             box={stage?.before ?? null}
             labels={labels}
+            onImageError={onBeforeImageError}
+            onImageLoad={onBeforeImageLoad}
             pixelated={stage?.pixelated ?? false}
             stage={stage}
             url={beforeUrl}
@@ -197,6 +219,8 @@ export function OnionImageDiff({
           <StagedImage
             box={stage?.after ?? null}
             labels={labels}
+            onImageError={onAfterImageError}
+            onImageLoad={onAfterImageLoad}
             pixelated={stage?.pixelated ?? false}
             stage={stage}
             url={afterUrl}

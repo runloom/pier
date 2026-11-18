@@ -43,6 +43,11 @@ export interface TerminalOverlayOptions {
    * 在与终端相交处画同色。纯输入捕获不要设。
    */
   scrim?: boolean;
+  /**
+   * 与 `scrim` 联用：把元素 computed border 交给 native，在终端洞里补画同色
+   * 描边。用于拖拽落点等必须保持半透明、又需要完整边框的产品浮层。
+   */
+  scrimBorder?: boolean;
 }
 
 export interface TerminalOverlayRegistry {
@@ -98,6 +103,7 @@ export function useTerminalOverlayRegistration(
   const registrationRef = useRef<TerminalOverlayRegistration | null>(null);
   const paints = options?.paints;
   const scrim = options?.scrim === true;
+  const scrimBorder = options?.scrimBorder === true;
   const appearanceElement = options?.appearanceElement;
   const ref = useCallback(
     (el: HTMLElement | null) => {
@@ -111,6 +117,7 @@ export function useTerminalOverlayRegistration(
         registrationRef.current = registry.registerElement(overlayId, el, {
           paints: false,
           scrim: true,
+          ...(scrimBorder ? { scrimBorder: true } : {}),
           ...(appearanceElement === undefined ? {} : { appearanceElement }),
         });
         return;
@@ -124,7 +131,7 @@ export function useTerminalOverlayRegistration(
         ...(appearanceElement === undefined ? {} : { appearanceElement }),
       });
     },
-    [appearanceElement, explicitId, id, paints, registry, scrim]
+    [appearanceElement, explicitId, id, paints, registry, scrim, scrimBorder]
   );
   const flush = useCallback(() => registrationRef.current?.flush(), []);
   return useMemo(() => ({ flush, ref }), [flush, ref]);

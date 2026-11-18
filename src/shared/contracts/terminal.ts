@@ -66,6 +66,15 @@ export interface TerminalScrimColor {
 }
 
 /**
+ * 蒙层边框，content-view px。web 边框在终端洞里会被 hard mask 硬裁；
+ * 需要边框完整覆盖终端时由 renderer 采样 computed border，native 在洞里补画同色描边。
+ */
+export interface TerminalScrimBorder {
+  color: TerminalScrimColor;
+  width: number;
+}
+
+/**
  * 外扩 box-shadow，content-view px。洞只回填 border box，盒外阴影会被硬裁；
  * 这些值交给 native 画在合成层之下。inset 不在这里（盒内 web 自己画）。
  * `blur` 是 CSS blur，不是 CoreGraphics sigma。
@@ -100,6 +109,12 @@ export interface TerminalWebOverlayRect {
    * 纯输入捕获（菜单 / sash）不要带。
    */
   scrim?: TerminalScrimColor;
+  /**
+   * 蒙层边框。只在 `paints: false` + `scrim` 时生效：native 在洞内画同色
+   * 描边，终端内容仍从半透明边框下透出来。用于拖拽落点等必须保留透明度的
+   * 产品浮层；普通弹窗蒙层不要带。
+   */
+  scrimBorder?: TerminalScrimBorder;
   /**
    * 外扩 box-shadow。只对会回填的浮层有意义：不要为了阴影去加大回填矩形，
    * 透明像素会露出不透明 backing。缺省表示没有需要 native 补的投影。
