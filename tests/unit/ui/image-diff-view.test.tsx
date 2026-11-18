@@ -203,6 +203,42 @@ describe("ImageDiffView", () => {
     ).toBeTruthy();
   });
 
+  it("forwards swipe-pane image errors to the host retry callbacks", () => {
+    let afterErrors = 0;
+    let beforeErrors = 0;
+    const { container } = render(
+      <ImageDiffView
+        after={side("after")}
+        afterUrl="pier-file-preview://file/after"
+        before={side("before")}
+        beforeUrl="pier-file-preview://file/before"
+        labels={labels}
+        locale="en"
+        mode="swipe"
+        onAfterImageError={() => {
+          afterErrors += 1;
+        }}
+        onBeforeImageError={() => {
+          beforeErrors += 1;
+        }}
+        onModeChange={() => undefined}
+      />
+    );
+    const images = [...container.querySelectorAll("img")];
+    expect(images).toHaveLength(2);
+    const afterImage = images[0];
+    const beforeImage = images[1];
+    expect(afterImage).toBeDefined();
+    expect(beforeImage).toBeDefined();
+    if (afterImage && beforeImage) {
+      fireEvent.error(afterImage);
+      expect(afterErrors).toBe(1);
+      expect(beforeErrors).toBe(0);
+      fireEvent.error(beforeImage);
+      expect(beforeErrors).toBe(1);
+    }
+  });
+
   it("hides comparison modes when only the added side exists", () => {
     render(
       <ImageDiffView

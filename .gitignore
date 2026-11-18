@@ -129,3 +129,6 @@ playwright-report/
 .pier/types/applets.d.ts
 
 .commandcode/taste
+
+# Local review artifacts (not part of the product source tree).
+/outputs/

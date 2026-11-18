@@ -18,6 +18,10 @@ export function ImageDiffView({
   labels,
   locale,
   mode,
+  onAfterImageError,
+  onAfterImageLoad,
+  onBeforeImageError,
+  onBeforeImageLoad,
   onModeChange,
 }: {
   readonly after: PierImageDiffSide | null;
@@ -27,6 +31,10 @@ export function ImageDiffView({
   readonly labels: PierImageDiffLabels;
   readonly locale: string;
   readonly mode: PierImageDiffMode;
+  readonly onAfterImageError?: (() => void) | undefined;
+  readonly onAfterImageLoad?: (() => void) | undefined;
+  readonly onBeforeImageError?: (() => void) | undefined;
+  readonly onBeforeImageLoad?: (() => void) | undefined;
   readonly onModeChange: (mode: PierImageDiffMode) => void;
 }): React.JSX.Element {
   const comparable = before !== null && after !== null;
@@ -46,6 +54,10 @@ export function ImageDiffView({
             beforeUrl={beforeUrl}
             labels={labels}
             locale={locale}
+            onAfterImageError={onAfterImageError}
+            onAfterImageLoad={onAfterImageLoad}
+            onBeforeImageError={onBeforeImageError}
+            onBeforeImageLoad={onBeforeImageLoad}
             stage={stage}
           />
         ) : null}
@@ -57,6 +69,10 @@ export function ImageDiffView({
             beforeUrl={beforeUrl}
             labels={labels}
             locale={locale}
+            onAfterImageError={onAfterImageError}
+            onAfterImageLoad={onAfterImageLoad}
+            onBeforeImageError={onBeforeImageError}
+            onBeforeImageLoad={onBeforeImageLoad}
             stage={stage}
           />
         ) : null}
@@ -69,6 +85,8 @@ export function ImageDiffView({
                   caption={labels.deleted}
                   labels={labels}
                   locale={locale}
+                  onImageError={onBeforeImageError}
+                  onImageLoad={onBeforeImageLoad}
                   side={before}
                   stage={stage}
                   url={beforeUrl}
@@ -82,6 +100,8 @@ export function ImageDiffView({
                   caption={labels.added}
                   labels={labels}
                   locale={locale}
+                  onImageError={onAfterImageError}
+                  onImageLoad={onAfterImageLoad}
                   side={after}
                   stage={stage}
                   url={afterUrl}

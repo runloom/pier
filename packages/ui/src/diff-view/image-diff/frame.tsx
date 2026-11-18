@@ -23,6 +23,8 @@ export function ImagePane({
   caption,
   labels,
   locale,
+  onImageError,
+  onImageLoad,
   side,
   stage,
   url,
@@ -31,6 +33,8 @@ export function ImagePane({
   readonly caption: string;
   readonly labels: PierImageDiffLabels;
   readonly locale: string;
+  readonly onImageError?: (() => void) | undefined;
+  readonly onImageLoad?: (() => void) | undefined;
   readonly side: PierImageDiffSide;
   readonly stage: ImageDiffStage | null;
   readonly url: string | null;
@@ -45,6 +49,8 @@ export function ImagePane({
         accent={accent}
         box={box ?? null}
         labels={labels}
+        onImageError={onImageError}
+        onImageLoad={onImageLoad}
         pixelated={stage?.pixelated ?? false}
         url={url}
       />
@@ -76,12 +82,16 @@ export function ImageFrame({
   accent,
   box,
   labels,
+  onImageError,
+  onImageLoad,
   pixelated,
   url,
 }: {
   readonly accent: "addition" | "deletion";
   readonly box: ImageDiffBox | null;
   readonly labels: PierImageDiffLabels;
+  readonly onImageError?: (() => void) | undefined;
+  readonly onImageLoad?: (() => void) | undefined;
   readonly pixelated: boolean;
   readonly url: string | null;
 }): React.JSX.Element {
@@ -99,6 +109,8 @@ export function ImageFrame({
       <PreviewImage
         height={box?.height ?? null}
         labels={labels}
+        onImageError={onImageError}
+        onImageLoad={onImageLoad}
         pixelated={pixelated}
         url={url}
         width={box?.width ?? null}
@@ -110,18 +122,26 @@ export function ImageFrame({
 export function StagedImage({
   box,
   labels,
+  onImageError,
+  onImageLoad,
   pixelated,
   stage,
   url,
 }: {
   readonly box: ImageDiffBox | null;
   readonly labels: PierImageDiffLabels;
+  readonly onImageError?: (() => void) | undefined;
+  readonly onImageLoad?: (() => void) | undefined;
   readonly pixelated: boolean;
   readonly stage: ImageDiffStage | null;
   readonly url: string | null;
 }): React.JSX.Element {
   const placed = box !== null && stage !== null;
   const load = usePreviewImageLoad(url);
+  const handleError = () => {
+    load.onError();
+    onImageError?.();
+  };
   if (load.url === null) {
     return (
       <PreviewImage
@@ -155,7 +175,8 @@ export function StagedImage({
       }
       decoding="async"
       height={box?.height ?? undefined}
-      onError={load.onError}
+      onError={handleError}
+      onLoad={onImageLoad}
       src={load.url}
       style={{
         ...(pixelated ? { imageRendering: "pixelated" } : {}),
@@ -199,12 +220,16 @@ export function accentBorder(accent: "addition" | "deletion"): CSSProperties {
 function PreviewImage({
   height,
   labels,
+  onImageError,
+  onImageLoad,
   pixelated,
   url,
   width,
 }: {
   readonly height: number | null;
   readonly labels: PierImageDiffLabels;
+  readonly onImageError?: (() => void) | undefined;
+  readonly onImageLoad?: (() => void) | undefined;
   readonly pixelated: boolean;
   readonly url: string | null;
   readonly width: number | null;
@@ -227,7 +252,11 @@ function PreviewImage({
       className="block h-auto max-h-96 w-full max-w-full"
       decoding="async"
       height={height ?? undefined}
-      onError={load.onError}
+      onError={() => {
+        load.onError();
+        onImageError?.();
+      }}
+      onLoad={onImageLoad}
       src={load.url}
       style={pixelated ? { imageRendering: "pixelated" } : undefined}
       width={width ?? undefined}
