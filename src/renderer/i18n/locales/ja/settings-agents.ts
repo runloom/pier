@@ -156,6 +156,8 @@ export const settingsAgents = {
     envDesc: "このエージェント起動時に足す変数",
     latestCheckFailed:
       "新しいバージョンを確認できませんでした。一覧右上の更新を押して再試行してください。",
+    statusHooksDisabledByConfig:
+      "Pi の現在の設定では Pier に実行状態が表示されません。pi config で再び有効にすると復元されます。",
   },
   sessionTitleRefine: {
     label: "セッション名を自動で付ける",

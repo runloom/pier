@@ -1,4 +1,8 @@
-import type { AgentLifecycleProbe } from "@shared/contracts/agent/lifecycle.ts";
+import {
+  type AgentLifecycleProbe,
+  agentLifecycleProbeSchema,
+} from "@shared/contracts/agent/lifecycle.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import { emptyDomainSnapshot } from "@shared/contracts/host-catalog/runtime.ts";
 import { describe, expect, it } from "vitest";
 import { createAgentCliCatalogProvider } from "../../../../src/main/services/host-catalog/providers/agent-cli.ts";
@@ -198,5 +202,132 @@ describe("createAgentCliCatalogProvider", () => {
     }
     await provider.probeRemote({ env: {}, force: true, now: 30 });
     expect(seen).toEqual([{ checkLatest: true, force: true }]);
+  });
+
+  it("surfaces status-hook config diagnostics from the production remote probe", async () => {
+    const seenEnv: NodeJS.ProcessEnv[] = [];
+    const provider = createAgentCliCatalogProvider({
+      detect: async () => ({ detectedIds: ["pi", "claude"] }),
+      persist: {
+        flush: async () => undefined,
+        read: async () => emptyDomainSnapshot("agent-cli"),
+        write: async () => undefined,
+      },
+      probe: async () => [
+        probe({ agentId: "pi" }),
+        probe({ agentId: "claude" }),
+      ],
+      readStatusHooksDisabledAgents: async (env) => {
+        seenEnv.push(env);
+        return new Set(["pi"]);
+      },
+    });
+    if (!provider.probeRemote) {
+      throw new Error("expected probeRemote");
+    }
+
+    const snapshot = await provider.probeRemote({
+      env: { HOME: "/tmp/pier-home" },
+      now: 31,
+    });
+    const piDetails = snapshot.items.find((item) => item.id === "pi")?.details;
+    expect(piDetails).toMatchObject({ statusHooksDisabledByConfig: true });
+    // The renderer mirrors probes through the shared schema; the diagnostic
+    // must survive parsing or the detail line never renders.
+    expect(
+      agentLifecycleProbeSchema.parse(piDetails).statusHooksDisabledByConfig
+    ).toBe(true);
+    expect(
+      snapshot.items.find((item) => item.id === "claude")?.details
+    ).not.toHaveProperty("statusHooksDisabledByConfig");
+    expect(seenEnv).toEqual([{ HOME: "/tmp/pier-home" }]);
+  });
+
+  it("re-reads the config diagnostic on local probes and clears stale flags", async () => {
+    let disabled = new Set<AgentKind>();
+    const createProvider = () =>
+      createAgentCliCatalogProvider({
+        detect: async () => ({ detectedIds: ["pi"] }),
+        persist: {
+          flush: async () => undefined,
+          read: async () => ({
+            ...emptyDomainSnapshot("agent-cli"),
+            items: [
+              {
+                details: probe({
+                  agentId: "pi",
+                  statusHooksDisabledByConfig: true,
+                }),
+                domain: "agent-cli",
+                id: "pi",
+                label: "Pi",
+                localVersion: "1.2.3",
+                presence: "present",
+                remoteVersion: null,
+                updateOffered: false,
+              },
+            ],
+          }),
+          write: async () => undefined,
+        },
+        probe: async () => [],
+        readStatusHooksDisabledAgents: async () => disabled,
+      });
+
+    // 用户已重新开启：旧的 true 必须被清掉，而不是跟着快照复活。
+    const cleared = await createProvider().probeLocal({
+      env: { PATH: "/opt/bin" },
+      now: 32,
+    });
+    expect(
+      cleared.items.find((item) => item.id === "pi")?.details
+    ).not.toHaveProperty("statusHooksDisabledByConfig");
+
+    disabled = new Set(["pi"]);
+    const flagged = await createProvider().probeLocal({
+      env: { PATH: "/opt/bin" },
+      now: 33,
+    });
+    expect(
+      flagged.items.find((item) => item.id === "pi")?.details
+    ).toMatchObject({ statusHooksDisabledByConfig: true });
+  });
+
+  it("drops the config diagnostic when the agent is missing", async () => {
+    const provider = createAgentCliCatalogProvider({
+      detect: async () => ({ detectedIds: [] }),
+      persist: {
+        flush: async () => undefined,
+        read: async () => ({
+          ...emptyDomainSnapshot("agent-cli"),
+          items: [
+            {
+              details: probe({
+                agentId: "pi",
+                statusHooksDisabledByConfig: true,
+              }),
+              domain: "agent-cli",
+              id: "pi",
+              label: "Pi",
+              localVersion: "1.2.3",
+              presence: "present",
+              remoteVersion: null,
+              updateOffered: false,
+            },
+          ],
+        }),
+        write: async () => undefined,
+      },
+      probe: async () => [],
+      readStatusHooksDisabledAgents: async () => new Set(["pi"]),
+    });
+
+    const snapshot = await provider.probeLocal({
+      env: { PATH: "/opt/bin" },
+      now: 34,
+    });
+    expect(
+      snapshot.items.find((item) => item.id === "pi")?.details
+    ).not.toHaveProperty("statusHooksDisabledByConfig");
   });
 });

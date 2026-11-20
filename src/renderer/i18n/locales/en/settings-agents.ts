@@ -156,6 +156,8 @@ export const settingsAgents = {
     envDesc: "Variables added when launching this agent",
     latestCheckFailed:
       "Couldn’t check for a newer version. Refresh the list and try again.",
+    statusHooksDisabledByConfig:
+      "Pi’s current settings hide its status from Pier. Run pi config to turn it back on.",
   },
   sessionTitleRefine: {
     label: "Name sessions automatically",

@@ -36,6 +36,7 @@ import {
 } from "@/stores/agent-lifecycle.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { useHostCatalogStore } from "@/stores/host-catalog/store.ts";
 
 const PERMISSION_MODE_OPTIONS: Array<{
   value: "yolo" | "manual";
@@ -336,6 +337,20 @@ export function AgentsSection() {
   useEffect(() => {
     const openTask = (async () => {
       try {
+        // 只在已经亮出「配置关掉了状态」时复核：警告是当前事实，
+        // 用户刚改完 pi 设置就应立刻消失；没有警告时保持轻量刷新。
+        const probes = useAgentLifecycleStore.getState().probesById;
+        const needsConfigCheck = Object.values(probes).some(
+          (probe) => probe?.statusHooksDisabledByConfig === true
+        );
+        if (needsConfigCheck) {
+          await useHostCatalogStore.getState().ensureFresh({
+            class: "local",
+            domain: "agent-cli",
+            force: true,
+          });
+          return;
+        }
         await softRevalidate();
       } catch {
         // Best-effort: catalog + last probes still render.

@@ -150,6 +150,8 @@ export const settingsAgents = {
     envDesc: "이 에이전트를 시작할 때 더하는 변수",
     latestCheckFailed:
       "최신 버전을 확인하지 못했습니다. 목록 오른쪽 위 새로고침 후 다시 시도하세요.",
+    statusHooksDisabledByConfig:
+      "현재 Pi 설정에서는 Pier에 Pi의 실행 상태가 표시되지 않습니다. pi config에서 다시 켜면 복구됩니다.",
   },
   sessionTitleRefine: {
     label: "세션 이름을 자동으로 지정",

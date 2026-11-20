@@ -2,6 +2,7 @@ import type { AgentLifecycleProbe } from "@shared/contracts/agent/lifecycle.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/plugin/managed.ts";
+import { readDisabledStatusHooks } from "../services/agents/integrations/registry.ts";
 import type {
   AppUpdateRuntimeMode,
   AppUpdateService,
@@ -46,6 +47,7 @@ export function createBootedHostCatalogRuntime(options: {
         "agent-cli"
       ),
       probe: options.probe,
+      readStatusHooksDisabledAgents: (env) => readDisabledStatusHooks(env),
     })
   );
   if (options.listPlugins && options.refreshPluginIndex) {

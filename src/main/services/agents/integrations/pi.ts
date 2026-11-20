@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join, relative } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { Minimatch } from "minimatch";
 import {
   isPierManagedPluginContent,
   pierManagedPluginMarker,
@@ -66,6 +67,122 @@ export function piHome(): string {
 
 export function piExtensionPath(): string {
   return join(piHome(), "extensions", EXTENSION_FILE_NAME);
+}
+
+function toPosixPath(value: string): string {
+  return value.replaceAll("\\", "/");
+}
+
+/**
+ * pi 的 `extensions` 覆盖语序（dist/core/package-manager.js
+ * `isEnabledByOverrides`）：默认启用 → `!glob` 排除 → `+path` 强制启用 →
+ * `-path` 强制排除。`+` / `-` 只做精确路径匹配，`!` 才走 glob；
+ * 匹配前与 pi 一样做路径归一化（`file://`、`~`、`./`、反斜杠）。
+ *
+ * 只看全局 `settings.json`：项目级覆盖需要项目上下文，设置页没有，
+ * 宁可少提示也不误报（fail-open）。
+ */
+export function isStatusExtensionEnabled(
+  patterns: readonly string[] | undefined,
+  extensionPath: string,
+  agentDir: string,
+  home: string = homedir()
+): boolean {
+  if (!patterns || patterns.length === 0) {
+    return true;
+  }
+  const overrides = patterns.filter(
+    (pattern) =>
+      pattern.startsWith("!") ||
+      pattern.startsWith("+") ||
+      pattern.startsWith("-")
+  );
+  const excludes = overrides
+    .filter((pattern) => pattern.startsWith("!"))
+    .map((pattern) => pattern.slice(1));
+  const forceIncludes = overrides
+    .filter((pattern) => pattern.startsWith("+"))
+    .map((pattern) => pattern.slice(1));
+  const forceExcludes = overrides
+    .filter((pattern) => pattern.startsWith("-"))
+    .map((pattern) => pattern.slice(1));
+
+  const rel = toPosixPath(relative(agentDir, extensionPath));
+  const name = basename(extensionPath);
+  const absolute = toPosixPath(extensionPath);
+  const normalizePattern = (pattern: string): string => {
+    let value = pattern;
+    if (value.startsWith("file://")) {
+      value = value.slice("file://".length);
+    }
+    if (value === "~") {
+      value = home;
+    } else if (value.startsWith("~/")) {
+      value = join(home, value.slice(2));
+    }
+    return toPosixPath(value);
+  };
+  const matchesGlob = (pattern: string): boolean => {
+    const matcher = new Minimatch(normalizePattern(pattern));
+    return matcher.match(rel) || matcher.match(name) || matcher.match(absolute);
+  };
+  const matchesExact = (pattern: string): boolean => {
+    const normalized = normalizePattern(pattern);
+    const stripped = normalized.startsWith("./")
+      ? normalized.slice(2)
+      : normalized;
+    return stripped === rel || stripped === absolute;
+  };
+
+  let enabled = true;
+  if (excludes.some((pattern) => matchesGlob(pattern))) {
+    enabled = false;
+  }
+  if (forceIncludes.some((pattern) => matchesExact(pattern))) {
+    enabled = true;
+  }
+  if (forceExcludes.some((pattern) => matchesExact(pattern))) {
+    enabled = false;
+  }
+  return enabled;
+}
+
+/**
+ * Pier 写入的 pi 状态扩展是否被用户自己的 pi 设置禁用。设置文件缺失或
+ * 损坏时不报警（安装流程负责重建扩展），只在可解析且确实排除时返回 true；
+ * 读取失败留给日志，避免把「文件坏了」伪装成「配置已开启」。
+ */
+export async function readStatusHooksDisabledByConfig(
+  env: NodeJS.ProcessEnv = process.env
+): Promise<boolean> {
+  const agentDir = resolvePiHome(env);
+  const extensionPath = join(agentDir, "extensions", EXTENSION_FILE_NAME);
+  const home = env.HOME ?? homedir();
+  try {
+    const source = await readFile(extensionPath, "utf8");
+    // Only claim a missing status feed for an extension Pier actually wrote.
+    if (!isPierManagedPluginContent(source)) {
+      return false;
+    }
+    const text = await readFile(join(agentDir, "settings.json"), "utf8");
+    const parsed: unknown = JSON.parse(text);
+    const raw =
+      typeof parsed === "object" && parsed !== null && "extensions" in parsed
+        ? (parsed as { extensions?: unknown }).extensions
+        : undefined;
+    const patterns = Array.isArray(raw)
+      ? raw.filter((value): value is string => typeof value === "string")
+      : [];
+    return !isStatusExtensionEnabled(patterns, extensionPath, agentDir, home);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn(
+        "[agent-hooks:pi] failed to read status extension settings:",
+        error
+      );
+    }
+    return false;
+  }
 }
 
 export function piDetect(): boolean {

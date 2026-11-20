@@ -91,6 +91,12 @@ export const agentLifecycleProbeSchema = z.object({
   installs: z.array(agentInstallInfoSchema),
   isConflict: z.boolean(),
   /**
+   * True when the agent's own settings disable Pier's status integration
+   * (currently the pi `extensions` overrides). Diagnostic only: the agent row
+   * details explain how to turn it back on.
+   */
+  statusHooksDisabledByConfig: z.boolean().optional(),
+  /**
    * True when checkLatest ran for a versioned agent but remote latest could
    * not be resolved (distinct from “already up to date”).
    */

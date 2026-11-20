@@ -38,7 +38,7 @@ import { mistralVibeIntegration } from "./mistral-vibe.ts";
 import { ompIntegration } from "./omp.ts";
 import { openclaudeIntegration } from "./openclaude.ts";
 import { opencodeIntegration } from "./opencode.ts";
-import { piIntegration } from "./pi.ts";
+import { piIntegration, readStatusHooksDisabledByConfig } from "./pi.ts";
 import { qodercliIntegration } from "./qodercli.ts";
 import { qwenCodeIntegration } from "./qwen-code.ts";
 import type {
@@ -202,4 +202,19 @@ export async function applyAgentStatusHooksPreference(
 ): Promise<void> {
   setAgentStatusHooksIngestEnabled(enabled);
   await (enabled ? installAgentHooksStack() : uninstallAllAgentHooks());
+}
+
+/**
+ * 智能体自己的配置是否关掉了 Pier 的状态集成，供设置页做诊断。
+ * 目前只有 pi 的 `extensions` 覆盖会排除托管扩展；分派留在这里，
+ * host-catalog provider 保持与具体 agent 无关。
+ */
+export async function readDisabledStatusHooks(
+  env: NodeJS.ProcessEnv = process.env
+): Promise<ReadonlySet<AgentKind>> {
+  const disabled = new Set<AgentKind>();
+  if (await readStatusHooksDisabledByConfig(env)) {
+    disabled.add("pi");
+  }
+  return disabled;
 }
