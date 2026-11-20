@@ -122,9 +122,10 @@ export interface PanelTransferTerminalPort {
     transferId: string;
   }): Promise<void>;
   /**
-   * Canonical current lifecycle for a terminal panel (task run id; shells
-   * return ""). Main fills the transfer snapshot from here — renderers never
-   * forge lifecycle identity.
+   * Canonical current lifecycle for a live terminal panel: task run id, agent
+   * spawn generation, or `shell:<n>` for shells. Empty when main has no live
+   * surface for the panel (e.g. a restored exited-agent card). Main fills the
+   * transfer snapshot from here — renderers never forge lifecycle identity.
    */
   getCurrentLifecycleId(input: {
     panelId: string;

@@ -267,9 +267,15 @@ export async function patchTerminalPanelAgentStatus(
     if (!(windowState && current?.agent)) {
       return state;
     }
+    // Legacy rows from builds that predate spawn generations have no identity
+    // to compare against. Dropping their exit would leave `running` forever, so
+    // accept it: creation records the new generation before native callbacks
+    // run, so an absent generation cannot belong to a live surface. A declared,
+    // different generation is a stale exit event and must be dropped.
     if (
       patch.spawnGeneration !== undefined &&
-      current.agent.restore?.spawnGeneration !== patch.spawnGeneration
+      current.agent.restore?.spawnGeneration !== undefined &&
+      current.agent.restore.spawnGeneration !== patch.spawnGeneration
     )
       return state;
     const canPatchExited =

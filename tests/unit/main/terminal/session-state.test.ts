@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type * as TerminalSessionIdentityModule from "@main/state/terminal-session-identity.ts";
 import type * as TerminalSessionStateModule from "@main/state/terminal-session-state.ts";
 import type * as TerminalSessionTitleModule from "@main/state/terminal-session-title.ts";
 import type * as TerminalSessionTransferModule from "@main/state/terminal-session-transfer.ts";
@@ -40,13 +41,15 @@ function context(root: string, updatedAt = 1_772_000_000_000): PanelContext {
 async function loadTerminalSessionState(): Promise<
   typeof TerminalSessionStateModule &
     typeof TerminalSessionTitleModule &
-    typeof TerminalSessionTransferModule
+    typeof TerminalSessionTransferModule &
+    typeof TerminalSessionIdentityModule
 > {
   // Dynamic import is required because each test resets modules and mocks electron app.getPath before this state module resolves userData.
   const state = await import("@main/state/terminal-session-state.ts");
   const title = await import("@main/state/terminal-session-title.ts");
   const transfer = await import("@main/state/terminal-session-transfer.ts");
-  return { ...state, ...title, ...transfer };
+  const identity = await import("@main/state/terminal-session-identity.ts");
+  return { ...state, ...title, ...transfer, ...identity };
 }
 
 describe("terminal session state", () => {
@@ -915,6 +918,73 @@ describe("terminal session state", () => {
     });
   });
 
+  it("records an exit for a legacy agent row without a recorded generation", async () => {
+    const {
+      patchTerminalPanelAgentStatus,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+    } = await loadTerminalSessionState();
+    await updateTerminalPanelAgent("main", "terminal-legacy", {
+      agentId: "claude",
+      launch: {
+        agentId: "claude",
+        command: "claude",
+        cwd: "/repo",
+      },
+      startedAt: 1_772_000_000_000,
+      status: "running",
+    });
+
+    await expect(
+      patchTerminalPanelAgentStatus("main", "terminal-legacy", {
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        spawnGeneration: 3,
+        status: "exited",
+      })
+    ).resolves.toBe(true);
+    await expect(
+      readTerminalPanelSession("main", "terminal-legacy")
+    ).resolves.toMatchObject({
+      agent: {
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        status: "exited",
+      },
+    });
+  });
+
+  it("drops an exit event from a superseded generation", async () => {
+    const {
+      patchTerminalPanelAgentStatus,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+    } = await loadTerminalSessionState();
+    await updateTerminalPanelAgent("main", "terminal-1", {
+      agentId: "claude",
+      launch: {
+        agentId: "claude",
+        command: "claude",
+        cwd: "/repo",
+      },
+      restore: { spawnGeneration: 2 },
+      startedAt: 1_772_000_000_000,
+      status: "running",
+    });
+
+    await expect(
+      patchTerminalPanelAgentStatus("main", "terminal-1", {
+        exitCode: 1,
+        finishedAt: 1_772_000_001_000,
+        spawnGeneration: 1,
+        status: "exited",
+      })
+    ).resolves.toBe(false);
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({ agent: { status: "running" } });
+  });
+
   it("migrates legacy agent success tabs on disk", async () => {
     const {
       migrateLegacyAgentSuccessTabs,
@@ -1549,6 +1619,81 @@ describe("terminal session state", () => {
     await expect(
       readTerminalPanelSession("target-record", "shell-1")
     ).resolves.toMatchObject({ context: pier });
+  });
+
+  it("keys ownership transfer identity on agent spawn generation", async () => {
+    const {
+      getTransferSession,
+      readTerminalPanelSession,
+      rollbackTransferPanelOwnership,
+      terminalSessionLifecycleId,
+      transferPanelOwnership,
+      updateTerminalPanelAgent,
+      updateTerminalPanelContext,
+    } = await loadTerminalSessionState();
+
+    const pier = context("/Users/dev/ABC/pier");
+    await updateTerminalPanelContext("source-record", "agent-1", pier);
+    await updateTerminalPanelAgent("source-record", "agent-1", {
+      agentId: "claude",
+      launch: { agentId: "claude", command: "claude", cwd: "/repo" },
+      restore: { spawnGeneration: 2 },
+      startedAt: 1_772_000_000_000,
+      status: "running",
+    });
+
+    const view = await getTransferSession("source-record", "agent-1");
+    expect(view).toMatchObject({ lifecycleId: "2" });
+    expect(view && terminalSessionLifecycleId(view.session)).toBe("2");
+
+    await expect(
+      transferPanelOwnership({
+        expectedLifecycleId: "1",
+        panelId: "agent-1",
+        sourceRecordId: "source-record",
+        targetRecordId: "target-record",
+      })
+    ).rejects.toMatchObject({ code: "lifecycle_mismatch" });
+
+    const token = await transferPanelOwnership({
+      expectedLifecycleId: "2",
+      panelId: "agent-1",
+      sourceRecordId: "source-record",
+      targetRecordId: "target-record",
+    });
+    await expect(
+      readTerminalPanelSession("target-record", "agent-1")
+    ).resolves.toMatchObject({ agent: { restore: { spawnGeneration: 2 } } });
+
+    await rollbackTransferPanelOwnership(token);
+    await expect(
+      readTerminalPanelSession("source-record", "agent-1")
+    ).resolves.toMatchObject({ agent: { restore: { spawnGeneration: 2 } } });
+  });
+
+  it("keeps legacy agent sessions without a generation transferable", async () => {
+    const {
+      getTransferSession,
+      terminalSessionLifecycleId,
+      updateTerminalPanelAgent,
+      updateTerminalPanelContext,
+    } = await loadTerminalSessionState();
+
+    await updateTerminalPanelContext(
+      "source-record",
+      "agent-legacy",
+      context("/Users/dev/ABC/pier")
+    );
+    await updateTerminalPanelAgent("source-record", "agent-legacy", {
+      agentId: "grok",
+      launch: { agentId: "grok", command: "grok", cwd: "/repo" },
+      startedAt: 1_772_000_000_000,
+      status: "running",
+    });
+
+    const view = await getTransferSession("source-record", "agent-legacy");
+    expect(view?.lifecycleId).toBe("");
+    expect(view && terminalSessionLifecycleId(view.session)).toBe("");
   });
 
   it("ensureTerminalPanelSession materializes an entry without clobbering metadata", async () => {

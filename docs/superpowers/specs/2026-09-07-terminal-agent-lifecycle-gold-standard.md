@@ -33,7 +33,7 @@
 - **输入策略**沿用 `shared/agent-catalog.ts`，能力字段定义于 `shared/agent-surfaces/initial-prompts.ts`，解析及验证在 `services/agents/initial-prompt.ts`。最终执行核验过的绝对路径；任务文本在解析基础命令之后按单个字面参数附加。逻辑恢复命令不携带首条任务。
 - **草稿**唯一写入方是 `main/state/terminal-drafts/`，文件为 userData 下的 `terminal-unsent-drafts.json`。按窗口记录 UUID 与面板 ID 索引，原子写入、0600 权限、修订号 CAS。保存文本、编辑器快照和附件引用/必要元数据，不保存模型输出或对话台账。
 - **renderer**镜像 main 草稿。内容比较使用 `terminalDraftCompositionKey`，避免 IPC 字段顺序变化引发重复保存。附件操作在打开选择器/开始粘贴时登记完整 Promise；包括多图片和末尾文本。转移/退出的 flush 即使命中正在保存的请求，也重新越过附件等待屏障。
-- **转移**使用现有 `panel-transfer` 服务：原生终端、进程记录、任务回调和输出所有权在第一个异步边界前同步迁移，随后原子迁移会话与草稿；回滚使用对应补偿。没有增加转移数据库。
+- **转移**使用现有 `panel-transfer` 服务：原生终端、进程记录、任务回调和输出所有权在第一个异步边界前同步迁移，随后原子迁移会话与草稿；回滚使用对应补偿。没有增加转移数据库。会话生命周期身份由 `state/terminal-session-identity.ts` 单一提供（任务 `runId`，智能体 `restore.spawnGeneration`，shell 空串），与 `resolveAgentSpawnLifecycle`、原生进程注册表同一映射；`tests/unit/main/terminal/lifecycle/transfer-identity-governance.test.ts` 锁定三者。租约要求实时身份与会话已记录身份一致；没有原生 surface（未创建的恢复卡片）时不比对，但存在原生进程而实时身份为空时拒绝（不能把存活 PTY 当静态卡片）。提交开始前再校验一次租约身份：目标暂存可能跨过重启，身份已变化时不做任何子步骤直接失败，避免补偿把被取代的代际写回源窗口。提交 CAS 始终执行，身份取租约捕获的会话值（物化条目为空串）。智能体退出补丁只丢弃「会话与补丁都已声明且不一致」的代际；未记录代际的历史行接受退出——新创建在原生回调前写入代际，缺失代际不属于存活 surface。
 
 ## 35 个智能体覆盖矩阵
 

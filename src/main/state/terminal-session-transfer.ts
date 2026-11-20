@@ -5,6 +5,7 @@ import {
   rekeyPendingAgentResume,
   updateTerminalPanelAgentResume,
 } from "./terminal-session-agent-resume.ts";
+import { terminalSessionLifecycleId } from "./terminal-session-identity.ts";
 import { readTerminalPanelSession } from "./terminal-session-state.ts";
 import type { TerminalPanelSession } from "./terminal-session-state-schemas.ts";
 import {
@@ -14,7 +15,11 @@ import {
 
 /** Narrow view for transfer identity checks — never invents ownerWindowId. */
 export interface TerminalTransferSessionView {
-  /** Task run id when present; shells/agents without a task use empty string. */
+  /**
+   * Session-side lifecycle identity, mirroring the live panel lifecycle:
+   * task run id, else agent spawn generation, else "" (shell / legacy agent
+   * metadata without a recorded generation).
+   */
   lifecycleId: string;
   panelId: string;
   recordId: string;
@@ -30,7 +35,7 @@ export async function getTransferSession(
     return null;
   }
   return {
-    lifecycleId: session.task?.runId ?? "",
+    lifecycleId: terminalSessionLifecycleId(session),
     panelId,
     recordId,
     session,
@@ -59,7 +64,8 @@ export class TerminalPanelOwnershipConflictError extends Error {
 
 /**
  * CAS-move `windows[sourceRecordId].panels[panelId]` → `windows[targetRecordId]`
- * and flush. Optional expectedLifecycleId must match task.runId (shells: "").
+ * and flush. Optional expectedLifecycleId must match the panel's transfer
+ * lifecycle identity (task run id / agent spawn generation; shells: "").
  */
 export async function transferPanelOwnership(input: {
   expectedLifecycleId?: string | undefined;
@@ -94,7 +100,7 @@ export async function transferPanelOwnership(input: {
     );
   }
   if (input.expectedLifecycleId !== undefined) {
-    const actual = panel.task?.runId ?? "";
+    const actual = terminalSessionLifecycleId(panel);
     if (actual !== input.expectedLifecycleId) {
       throw new TerminalPanelOwnershipConflictError(
         `lifecycle mismatch: expected ${input.expectedLifecycleId}, got ${actual}`,
