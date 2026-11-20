@@ -39,6 +39,12 @@ export interface StagedTransfer {
   lifecycleId: string;
   panelId: string;
   phase: TerminalPanelTransferPhase;
+  /**
+   * Session-side identity captured at lease for the commit CAS. Always a
+   * string: "" for legacy rows or entries materialized during the lease, so
+   * the CAS still checks that the panel is present at commit time.
+   */
+  sessionIdentity: string;
   sessionToken: TerminalPanelOwnershipRollbackToken | null;
   sourceElectronWindowId: string;
   sourcePresentationId: number | null;

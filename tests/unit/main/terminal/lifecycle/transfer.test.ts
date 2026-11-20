@@ -71,6 +71,7 @@ describe("terminal transfer compensation", () => {
       panelId: "xfer-panel",
       phase: "moving",
       sessionToken: null,
+      sessionIdentity: "life-1",
       sourceElectronWindowId: "11",
       sourcePresentationId: 1,
       sourceRecordId: "source-record",

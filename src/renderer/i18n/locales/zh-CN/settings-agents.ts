@@ -146,6 +146,8 @@ export const settingsAgents = {
     env: "附加环境变量",
     envDesc: "启动此智能体时一并注入",
     latestCheckFailed: "最新版本检查失败。可点列表右上角刷新后重试。",
+    statusHooksDisabledByConfig:
+      "Pi 现在的设置让 Pier 看不到它的运行状态。运行 pi config 重新开启即可恢复。",
   },
   sessionTitleRefine: {
     label: "自动命名会话",

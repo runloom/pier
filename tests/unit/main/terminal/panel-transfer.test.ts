@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveTerminalTransferCreateAction } from "../../../../src/main/ipc/terminal/create-transfer-guard.ts";
+import { toNativePanelKey } from "../../../../src/main/ipc/terminal/panel-id.ts";
 import type { AppWindow } from "../../../../src/main/windows/app-window.ts";
 
 function fakeWin(id: number): AppWindow {
@@ -87,7 +88,7 @@ describe("TerminalPanelTransfer", () => {
     moveTerminal?: ReturnType<typeof vi.fn>;
     sourceWin: AppWindow;
     targetWin: AppWindow;
-    lifecycleId?: string;
+    lifecycleId?: string | (() => string);
   }) {
     const moveTerminal =
       args.moveTerminal ?? vi.fn((..._args: unknown[]) => true);
@@ -99,7 +100,7 @@ describe("TerminalPanelTransfer", () => {
     const surfaceWillClose = vi.fn();
     const surfaceCreated = vi.fn();
     const replayMovedSession = vi.fn();
-    const lifecycleId = args.lifecycleId ?? "";
+    const readLifecycleId = args.lifecycleId ?? "";
     const transfer = args.createTerminalPanelTransfer({
       focusCoordinator: { surfaceCreated, surfaceWillClose } as never,
       foreground: {
@@ -109,7 +110,10 @@ describe("TerminalPanelTransfer", () => {
       getAddon: () => ({ moveTerminal, requestTerminalPresentation }) as never,
       getTaskLifecycle: () =>
         ({
-          getCurrentLifecycleId: () => lifecycleId,
+          getCurrentLifecycleId: () =>
+            typeof readLifecycleId === "function"
+              ? readLifecycleId()
+              : readLifecycleId,
           moveOwner,
         }) as never,
       getTaskOutputBindings: () => ({ moveNativeKey }) as never,
@@ -144,6 +148,19 @@ describe("TerminalPanelTransfer", () => {
     const { createTerminalPanelTransfer, resolveOwner } = await load();
     const sourceWin = fakeWin(11);
     const targetWin = fakeWin(22);
+    getTransferSession.mockImplementation(async (recordId: unknown) =>
+      recordId === "source-record"
+        ? {
+            lifecycleId: "run-1",
+            panelId: "panel-1",
+            recordId,
+            session: {
+              task: { runId: "run-1", status: "running" },
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          }
+        : null
+    );
     const {
       moveOwner,
       moveTaskOwner,
@@ -212,6 +229,321 @@ describe("TerminalPanelTransfer", () => {
     });
     expect(surfaceWillClose).toHaveBeenCalledWith(sourceWin, "panel-1");
     expect(surfaceCreated).toHaveBeenCalledWith(targetWin, "panel-1");
+  });
+
+  it("leases and commits agent panels by spawn generation, not task run id", async () => {
+    const { createTerminalPanelTransfer } = await load();
+    const { moveOwner, transfer } = baseDeps({
+      createTerminalPanelTransfer,
+      lifecycleId: "2",
+      sourceWin: fakeWin(3),
+      targetWin: fakeWin(4),
+    });
+    getTransferSession.mockImplementation(async (recordId: unknown) =>
+      recordId === "source-record"
+        ? {
+            lifecycleId: "2",
+            panelId: "panel-1",
+            recordId,
+            session: {
+              agent: {
+                agentId: "claude",
+                restore: { spawnGeneration: 2 },
+                status: "running",
+              },
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          }
+        : null
+    );
+
+    await transfer.stageLease({
+      lifecycleId: "2",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-agent",
+    });
+    await transfer.commitMove({
+      lifecycleId: "2",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-agent",
+    });
+
+    expect(moveOwner).toHaveBeenCalledWith({
+      lifecycleId: "2",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+    });
+    expect(transferSession).toHaveBeenCalledWith({
+      expectedLifecycleId: "2",
+      panelId: "panel-1",
+      sourceRecordId: "source-record",
+      targetRecordId: "target-record",
+    });
+  });
+
+  it("passes the empty identity for agent panels whose session has no generation yet", async () => {
+    const { createTerminalPanelTransfer } = await load();
+    const { transfer } = baseDeps({
+      createTerminalPanelTransfer,
+      lifecycleId: "3",
+      sourceWin: fakeWin(5),
+      targetWin: fakeWin(6),
+    });
+    getTransferSession.mockImplementation(async (recordId: unknown) =>
+      recordId === "source-record"
+        ? {
+            lifecycleId: "",
+            panelId: "panel-1",
+            recordId,
+            session: {
+              agent: { agentId: "claude", status: "running" },
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          }
+        : null
+    );
+
+    await transfer.stageLease({
+      lifecycleId: "3",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-agent-legacy",
+    });
+    await transfer.commitMove({
+      lifecycleId: "3",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-agent-legacy",
+    });
+
+    expect(transferSession).toHaveBeenCalledWith({
+      expectedLifecycleId: "",
+      panelId: "panel-1",
+      sourceRecordId: "source-record",
+      targetRecordId: "target-record",
+    });
+  });
+
+  it("rejects a lease when session identity no longer matches the live generation", async () => {
+    const { createTerminalPanelTransfer } = await load();
+    const { transfer } = baseDeps({
+      createTerminalPanelTransfer,
+      lifecycleId: "2",
+      sourceWin: fakeWin(7),
+      targetWin: fakeWin(8),
+    });
+    getTransferSession.mockImplementation(async (recordId: unknown) =>
+      recordId === "source-record"
+        ? {
+            lifecycleId: "1",
+            panelId: "panel-1",
+            recordId,
+            session: {
+              agent: {
+                agentId: "claude",
+                restore: { spawnGeneration: 1 },
+                status: "running",
+              },
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          }
+        : null
+    );
+
+    await expect(
+      transfer.stageLease({
+        lifecycleId: "2",
+        panelId: "panel-1",
+        sourceWindowId: "source",
+        targetWindowId: "target",
+        transferId: "t-agent-stale",
+      })
+    ).rejects.toThrow("session lifecycle mismatch: expected 2, got 1");
+  });
+
+  it("rejects a lease when a live PTY has lost its lifecycle identity", async () => {
+    const { createTerminalPanelTransfer } = await load();
+    const { nativeTerminalProcesses: registry } = await import(
+      "../../../../src/main/ipc/terminal/process/registry.ts"
+    );
+    const sourceWin = fakeWin(97);
+    const targetWin = fakeWin(98);
+    registry.begin(toNativePanelKey(sourceWin, "panel-1"), {
+      lifecycleId: "shell:1",
+      savedGeneration: 0,
+    });
+    const { transfer } = baseDeps({
+      createTerminalPanelTransfer,
+      sourceWin,
+      targetWin,
+    });
+    getTransferSession.mockImplementation(async (recordId: unknown) =>
+      recordId === "source-record"
+        ? {
+            lifecycleId: "2",
+            panelId: "panel-1",
+            recordId,
+            session: {
+              agent: {
+                agentId: "claude",
+                restore: { spawnGeneration: 2 },
+                status: "running",
+              },
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          }
+        : null
+    );
+
+    await expect(
+      transfer.stageLease({
+        lifecycleId: "",
+        panelId: "panel-1",
+        sourceWindowId: "source",
+        targetWindowId: "target",
+        transferId: "t-live-identity-missing",
+      })
+    ).rejects.toThrow("session lifecycle mismatch: expected , got 2");
+    registry.closeWindow(97);
+  });
+
+  it("rejects a commit whose live lifecycle changed after the lease", async () => {
+    const { createTerminalPanelTransfer } = await load();
+    let liveLifecycleId = "2";
+    const { moveTerminal, transfer } = baseDeps({
+      createTerminalPanelTransfer,
+      lifecycleId: () => liveLifecycleId,
+      sourceWin: fakeWin(12),
+      targetWin: fakeWin(13),
+    });
+    getTransferSession.mockImplementation(async (recordId: unknown) =>
+      recordId === "source-record"
+        ? {
+            lifecycleId: "2",
+            panelId: "panel-1",
+            recordId,
+            session: {
+              agent: {
+                agentId: "claude",
+                restore: { spawnGeneration: 2 },
+                status: "running",
+              },
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          }
+        : null
+    );
+
+    await transfer.stageLease({
+      lifecycleId: "2",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-respawned",
+    });
+    liveLifecycleId = "3";
+
+    await expect(
+      transfer.commitMove({
+        lifecycleId: "2",
+        panelId: "panel-1",
+        sourceWindowId: "source",
+        targetWindowId: "target",
+        transferId: "t-respawned",
+      })
+    ).rejects.toThrow("lifecycle mismatch: expected 2, got 3");
+
+    expect(moveTerminal).not.toHaveBeenCalled();
+    expect(transferSession).not.toHaveBeenCalled();
+  });
+
+  it("runs the session CAS for an entry materialized during the lease", async () => {
+    const { createTerminalPanelTransfer } = await load();
+    const { transfer } = baseDeps({
+      createTerminalPanelTransfer,
+      lifecycleId: "2",
+      sourceWin: fakeWin(31),
+      targetWin: fakeWin(32),
+    });
+
+    await transfer.stageLease({
+      lifecycleId: "2",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-materialized",
+    });
+    expect(ensureSession).toHaveBeenCalledWith("source-record", "panel-1");
+
+    await transfer.commitMove({
+      lifecycleId: "2",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-materialized",
+    });
+
+    expect(transferSession).toHaveBeenCalledWith({
+      expectedLifecycleId: "",
+      panelId: "panel-1",
+      sourceRecordId: "source-record",
+      targetRecordId: "target-record",
+    });
+  });
+
+  it("moves a restored exited-agent card that has no live surface", async () => {
+    const { createTerminalPanelTransfer } = await load();
+    const { transfer } = baseDeps({
+      createTerminalPanelTransfer,
+      sourceWin: fakeWin(9),
+      targetWin: fakeWin(10),
+    });
+    getTransferSession.mockImplementation(async (recordId: unknown) =>
+      recordId === "source-record"
+        ? {
+            lifecycleId: "3",
+            panelId: "panel-1",
+            recordId,
+            session: {
+              agent: {
+                agentId: "claude",
+                restore: { spawnGeneration: 3 },
+                status: "exited",
+              },
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          }
+        : null
+    );
+
+    await transfer.stageLease({
+      lifecycleId: "",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-agent-exited",
+    });
+    await transfer.commitMove({
+      lifecycleId: "",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-agent-exited",
+    });
+
+    expect(transferSession).toHaveBeenCalledWith({
+      expectedLifecycleId: "3",
+      panelId: "panel-1",
+      sourceRecordId: "source-record",
+      targetRecordId: "target-record",
+    });
   });
 
   it("source close lease is idempotent and target adopts without recreate", async () => {

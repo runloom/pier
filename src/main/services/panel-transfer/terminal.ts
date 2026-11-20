@@ -8,6 +8,7 @@ import { terminalDraftStore } from "../../state/terminal-drafts/index.ts";
 
 import { toNativePanelKey } from "../../ipc/terminal/panel-id.ts";
 import { nativeTerminalProcesses } from "../../ipc/terminal/process/registry.ts";
+import { sessionIdentityForLiveLifecycle } from "../../state/terminal-session-identity.ts";
 import { ensureTerminalPanelSession } from "../../state/terminal-session-state.ts";
 import {
   getTransferSession,
@@ -22,6 +23,7 @@ import {
   type StagedTransfer,
 } from "./terminal-compensation.ts";
 import { activateAlias } from "./terminal-hook-owner-routing.ts";
+import { assertLeaseSessionIdentity } from "./terminal-identity.ts";
 
 export type {
   TerminalPanelTransfer,
@@ -137,15 +139,16 @@ export function createTerminalPanelTransfer(
         source.recordId,
         input.panelId
       );
-      if (
-        sourceSession &&
-        sourceSession.lifecycleId !==
-          (input.lifecycleId.startsWith("shell:") ? "" : input.lifecycleId)
-      ) {
-        throw new Error(
-          `session lifecycle mismatch: expected ${input.lifecycleId}, got ${sourceSession.lifecycleId}`
-        );
-      }
+      const hasLiveSurface =
+        sessionIdentityForLiveLifecycle(input.lifecycleId) !== "" ||
+        nativeTerminalProcesses.get(
+          toNativePanelKey(source.win, input.panelId)
+        ) !== undefined;
+      assertLeaseSessionIdentity({
+        hasLiveSurface,
+        lifecycleId: input.lifecycleId,
+        sessionIdentity: sourceSession?.lifecycleId,
+      });
       if (!sourceSession) {
         // Metadata-less legacy terminal (created before the ensure-on-create
         // invariant). Materialize the entry so commit CAS has something to
@@ -158,6 +161,7 @@ export function createTerminalPanelTransfer(
         lifecycleId: input.lifecycleId,
         panelId: input.panelId,
         phase: "leased",
+        sessionIdentity: sourceSession?.lifecycleId ?? "",
         sessionToken: null,
         sourceElectronWindowId: String(source.win.id),
         sourcePresentationId: null,
@@ -187,6 +191,21 @@ export function createTerminalPanelTransfer(
       }
       if (staged.phase === "moved") {
         return;
+      }
+      // Re-validate before the first substep: target staging can outlive the
+      // lease, and moving a respawned surface would let compensation write the
+      // superseded identity back over the live one.
+      const liveIdentity = api.resolveTransferIdentity({
+        expectedLifecycleId: staged.lifecycleId,
+        panelId: staged.panelId,
+        recordId: staged.sourceRecordId,
+        runtimeWindowId: staged.sourceRuntimeWindowId,
+      });
+      if (!liveIdentity.ok) {
+        staged.phase = "rolled-back";
+        clearLeaseIndexes(staged);
+        transfers.delete(input.transferId);
+        throw new Error(liveIdentity.reason ?? "transfer identity mismatch");
       }
       staged.phase = "moving";
 
@@ -256,9 +275,10 @@ export function createTerminalPanelTransfer(
         });
 
         staged.sessionToken = await transferSessionPanelOwnership({
-          expectedLifecycleId: staged.lifecycleId.startsWith("shell:")
-            ? ""
-            : staged.lifecycleId,
+          // CAS against the identity captured at lease time. The captured value
+          // is always a string ("" for legacy rows or entries materialized
+          // during the lease), so the existence check always runs.
+          expectedLifecycleId: staged.sessionIdentity,
           panelId: staged.panelId,
           sourceRecordId: staged.sourceRecordId,
           targetRecordId: staged.targetRecordId,
@@ -446,12 +466,14 @@ export function createTerminalPanelTransfer(
     },
 
     resolveTransferIdentity(input) {
-      const current =
+      const current = sessionIdentityForLiveLifecycle(
         deps
           .getTaskLifecycle()
-          ?.getCurrentLifecycleId(input.panelId, input.runtimeWindowId) ?? "";
-      const expected = input.expectedLifecycleId;
-      // Shells may carry empty lifecycleId on both sides.
+          ?.getCurrentLifecycleId(input.panelId, input.runtimeWindowId) ?? ""
+      );
+      const expected = sessionIdentityForLiveLifecycle(
+        input.expectedLifecycleId
+      );
       if (expected !== current) {
         return {
           lifecycleId: current,

@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
 import { Separator } from "@pier/ui/separator.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import {
@@ -101,6 +102,13 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
         <div className="text-muted-foreground">
           {t("settings.agents.row.latestCheckFailed")}
         </div>
+      ) : null}
+      {probe?.statusHooksDisabledByConfig === true ? (
+        <Alert variant="warning">
+          <AlertDescription>
+            {t("settings.agents.row.statusHooksDisabledByConfig")}
+          </AlertDescription>
+        </Alert>
       ) : null}
       <div className="grid gap-2 sm:grid-cols-3">
         <div className="min-w-0">

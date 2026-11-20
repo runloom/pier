@@ -21,6 +21,14 @@ export interface AgentCliCatalogProviderOptions {
     checkLatest: boolean;
     force?: boolean;
   }) => Promise<readonly AgentLifecycleProbe[]>;
+  /**
+   * Agent ids whose own config disables Pier's status integration
+   * (e.g. pi `extensions` overrides). Optional so tests and non-desktop
+   * hosts never read user config.
+   */
+  readStatusHooksDisabledAgents?: (
+    env: NodeJS.ProcessEnv
+  ) => Promise<ReadonlySet<AgentKind>>;
 }
 
 function presenceOf(probe: AgentLifecycleProbe): CatalogItem["presence"] {
@@ -30,12 +38,41 @@ function presenceOf(probe: AgentLifecycleProbe): CatalogItem["presence"] {
   return probe.detected ? "present" : "missing";
 }
 
-function itemFromProbe(probe: AgentLifecycleProbe): CatalogItem {
+function withoutStatusHooksFlag(details: unknown): unknown {
+  if (!(details && typeof details === "object")) {
+    return details;
+  }
+  const { statusHooksDisabledByConfig: _stale, ...rest } = details as Record<
+    string,
+    unknown
+  >;
+  return rest;
+}
+
+/**
+ * 配置诊断是当前事实，不是历史：持久化快照里的旧值必须先剥掉，
+ * 再按本次读取结果决定是否重新挂上，否则用户改完 pi 设置后仍显示旧警告。
+ */
+function withStatusHooksFlag(details: unknown, disabled: boolean): unknown {
+  const clean = withoutStatusHooksFlag(details);
+  if (!(disabled && clean && typeof clean === "object")) {
+    return clean;
+  }
+  return {
+    ...(clean as Record<string, unknown>),
+    statusHooksDisabledByConfig: true,
+  };
+}
+
+function itemFromProbe(
+  probe: AgentLifecycleProbe,
+  statusHooksDisabled: boolean
+): CatalogItem {
   const entry = AGENT_CATALOG.find(
     (candidate) => candidate.id === probe.agentId
   );
   return {
-    details: probe,
+    details: withStatusHooksFlag(probe, statusHooksDisabled),
     domain: "agent-cli",
     id: probe.agentId,
     label: entry?.label ?? probe.agentId,
@@ -46,6 +83,33 @@ function itemFromProbe(probe: AgentLifecycleProbe): CatalogItem {
   };
 }
 
+async function readDisabledStatusHooks(
+  options: AgentCliCatalogProviderOptions,
+  env: NodeJS.ProcessEnv
+): Promise<ReadonlySet<AgentKind>> {
+  const reader = options.readStatusHooksDisabledAgents;
+  if (!reader) {
+    return new Set();
+  }
+  try {
+    return await reader(env);
+  } catch (error) {
+    console.warn("[host-catalog] status-hook diagnostics failed:", error);
+    return new Set();
+  }
+}
+
+function snapshotFromProbes(
+  probes: readonly AgentLifecycleProbe[],
+  disabled: ReadonlySet<AgentKind>,
+  fingerprint: string | null
+): CatalogDomainSnapshot {
+  return snapshotFromItems(
+    probes.map((probe) => itemFromProbe(probe, disabled.has(probe.agentId))),
+    fingerprint
+  );
+}
+
 function detailsForMissing(
   previous: CatalogItem | undefined
 ): AgentLifecycleProbe | null {
@@ -53,8 +117,9 @@ function detailsForMissing(
   if (!parsed.success) {
     return null;
   }
+  const { statusHooksDisabledByConfig: _stale, ...details } = parsed.data;
   return {
-    ...parsed.data,
+    ...details,
     canUninstall: false,
     detected: false,
     installedButBroken: false,
@@ -73,7 +138,8 @@ function detailsForMissing(
 function itemFromDetection(
   agentId: AgentKind,
   detected: ReadonlySet<AgentKind>,
-  previous: CatalogItem | undefined
+  previous: CatalogItem | undefined,
+  statusHooksDisabled: boolean
 ): CatalogItem {
   const entry = AGENT_CATALOG.find((candidate) => candidate.id === agentId);
   const present = detected.has(agentId);
@@ -83,12 +149,12 @@ function itemFromDetection(
       return detailsForMissing(previous);
     }
     if (parsed.success) {
-      return {
-        ...parsed.data,
-        updateOffered: isAgentUpdateOffered(parsed.data),
-      };
+      return withStatusHooksFlag(
+        { ...parsed.data, updateOffered: isAgentUpdateOffered(parsed.data) },
+        statusHooksDisabled
+      );
     }
-    return previous?.details ?? null;
+    return withoutStatusHooksFlag(previous?.details ?? null);
   })();
   return {
     details,
@@ -128,15 +194,22 @@ export function createAgentCliCatalogProvider(
       );
       const { detectedIds } = await options.detect();
       const detected = new Set(detectedIds);
+      const disabled = await readDisabledStatusHooks(options, env.env);
       const items = AGENT_CATALOG.map((entry) =>
-        itemFromDetection(entry.id, detected, previousById.get(entry.id))
+        itemFromDetection(
+          entry.id,
+          detected,
+          previousById.get(entry.id),
+          disabled.has(entry.id)
+        )
       );
       return snapshotFromItems(items, fingerprintPath(env.env.PATH));
     },
-    async probeDerived() {
+    async probeDerived(env) {
       const previous = await options.persist.read();
       const probes = await options.probe({ checkLatest: false });
-      return snapshotFromItems(probes.map(itemFromProbe), previous.fingerprint);
+      const disabled = await readDisabledStatusHooks(options, env.env);
+      return snapshotFromProbes(probes, disabled, previous.fingerprint);
     },
     async probeRemote(env) {
       const previous = await options.persist.read();
@@ -144,7 +217,8 @@ export function createAgentCliCatalogProvider(
         checkLatest: true,
         ...(env.force === true ? { force: true } : {}),
       });
-      return snapshotFromItems(probes.map(itemFromProbe), previous.fingerprint);
+      const disabled = await readDisabledStatusHooks(options, env.env);
+      return snapshotFromProbes(probes, disabled, previous.fingerprint);
     },
     readPersisted: () => options.persist.read(),
   };
