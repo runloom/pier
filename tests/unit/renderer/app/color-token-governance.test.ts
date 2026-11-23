@@ -555,8 +555,8 @@ describe("color token governance", () => {
       '"--normal-text": "var(--popover-foreground)"'
     );
     expect(showNotification).toContain('"--normal-border": "var(--border)"');
-    expect(showNotification).toContain(
-      '"--width": "min(360px, calc(100vw - 32px))"'
+    expect(showNotification).toMatch(
+      /`min\(\$\{TOAST_MESSAGE_MAX_WIDTH_PX\}px, calc\(100vw - 32px\)\)`/
     );
     // 形态 B 不用 !important 覆盖 sonner 默认卡片几何（padding 微调除外）
     const formBBlock = globals

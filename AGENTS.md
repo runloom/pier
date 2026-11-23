@@ -75,7 +75,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 权威规格：[`docs/superpowers/specs/2026-09-09-notification-center-gold-standard.md`](docs/superpowers/specs/2026-09-09-notification-center-gold-standard.md)（toast 双形态、路由与聚焦互斥、去重下沉、agent 通知同构、入口与 popover 四条例、设置三卡）。
 
-- main 侧 NCS 是唯一写入方；toast 双形态：确认型 = 触发窗胶囊（`position="top-center"`），消息型 = main 单投标准卡片（`position: "top-right"`，必备详情、无前置状态图标）；inbox 卡片唯一实现 `NotificationCard`（仅 Popover 列表，无 dockview panel）。
+- main 侧 NCS 是唯一写入方；toast 双形态：确认型 = 触发窗胶囊（`position="top-center"`），消息型 = main 单投标准卡片（`position: "top-right"`，必备详情、无前置状态图标）；inbox 卡片唯一实现 `NotificationCard`（仅 Popover 列表，无 dockview panel）。同一 Toaster 用 sonner 原生折叠（每列深度 3 / 间距 10，最新在前）；禁止 `expand` / `expandByDefault` 或 CSS 强制展开；胶囊固定 28px；折叠时每列只有前条进 Tab 序、也才登记终端洞；窗口 < 1220px 消息型整列下移。
 - 投递判定唯一实现 `resolveDeliveryPlan`（inbox / toast / OS 互斥）；**OS 发送权唯一在 NCS**；同 `dedupeKey` 窗口内由 NCS 合并，调用方不做记录级去重。
 - 入口 = 标题栏铃铛 + Popover 全量列表（无筛选 / 搜索）；popover 叠终端的四条例见规格。
 - 检查点在 `tests/unit/renderer/notifications/notification-center-governance.test.ts`。

@@ -16,6 +16,7 @@ import {
   isNotificationActionAvailable,
   runNotificationAction,
 } from "@/lib/notifications/actions.ts";
+import { TOAST_MESSAGE_MAX_WIDTH_PX } from "@/lib/notifications/toast-metrics.ts";
 import { useAgentRuntimeIndexStore } from "@/stores/agent-runtime-index.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 
@@ -98,7 +99,7 @@ export function showNotificationToast(notification: AppNotification): void {
       "--normal-text": "var(--popover-foreground)",
       "--normal-border": "var(--border)",
       "--border-radius": "16px",
-      "--width": "min(360px, calc(100vw - 32px))",
+      "--width": `min(${TOAST_MESSAGE_MAX_WIDTH_PX}px, calc(100vw - 32px))`,
     } as CSSProperties,
   });
 }
