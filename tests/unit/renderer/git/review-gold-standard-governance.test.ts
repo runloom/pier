@@ -230,6 +230,14 @@ describe("git review gold-standard governance", () => {
     expect(navTry).toContain('TREE_NAV_SCROLL_BEHAVIOR = "instant"');
     expect(navTry).toContain("不挂 loader.settled");
     expect(navTry).toContain("isReviewEstimateCacheKey");
+    expect(navTry).toContain("planReviewReveal");
+    expect(
+      read("src/plugins/builtin/git/renderer/hooks/use-navigation.ts")
+    ).toContain("revealProgressRef");
+    expect(
+      read("src/plugins/builtin/git/renderer/review/navigation.ts")
+    ).toContain("MAX_REVIEW_REVEAL_SCROLLS");
+    expect(navTry).not.toContain("lastScrolledCacheKeyRef");
     expect(targets).toContain("pending_scroll");
     expect(view).toContain('data-git-review-navigation-gate="false"');
     expect(view).toContain("data-git-review-body-hydrate-timeout-ms");

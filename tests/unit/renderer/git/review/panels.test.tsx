@@ -85,6 +85,7 @@ const captureTopAnchor = vi.hoisted(() =>
   vi.fn<() => PierDiffViewAnchor | null>(() => null)
 );
 const restoreAnchor = vi.hoisted(() => vi.fn(() => true));
+const viewportOffset = vi.hoisted(() => vi.fn<(id: string) => number>(() => 0));
 const isItemVisible = vi.hoisted(() => vi.fn(() => true));
 const diffViewRuntime = vi.hoisted(() => ({
   error: null as Error | null,
@@ -169,6 +170,7 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
         getSelectedText: () => "",
         getViewportLayoutKey: (targetItemId?: string) =>
           `layout:${targetItemId ?? "none"}`,
+        getViewportOffsetForItem: (id: string) => viewportOffset(id),
         isItemVisible,
         isViewportReady: () => true,
         requestViewportLayoutSettled: (
@@ -802,6 +804,8 @@ async function selectUncommittedTab(
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
+  viewportOffset.mockReset();
+  viewportOffset.mockReturnValue(0);
 });
 
 afterEach(() => {
@@ -3018,6 +3022,277 @@ describe("Git review panel", () => {
     expect(scrollsAfterLoad).toBeGreaterThanOrEqual(scrollsBeforeLoad);
     expect(scrollsAfterLoad).toBeLessThanOrEqual(2);
     expect(diffViewRuntime.unmounts).toBe(unmountsBefore);
+  });
+
+  it("揭示事务：目标上方槽位长高后只做一次几何修正", async () => {
+    const entries = [0, 1, 2, 3].map((index) => entry(index));
+    const context = pluginContext({
+      getReviewFileDocument: vi.fn(async (request) => {
+        const match = request.source.path.match(/file-(\d+)\.ts$/u);
+        return documentResult(Number(match?.[1] ?? 0));
+      }),
+      getReviewIndex: vi.fn(async () => indexResult(entries)),
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveAttribute(
+        "data-item-count",
+        "4"
+      )
+    );
+    scrollToItem.mockClear();
+    // 首次定位后，目标上方槽位长高 180px；修正一次后布局稳定。
+    viewportOffset.mockImplementation((id) =>
+      id === "section:3" &&
+      scrollToItem.mock.calls.filter(([callId]) => callId === "section:3")
+        .length < 2
+        ? 180
+        : 0
+    );
+
+    fireEvent.click(findTreeItem(view.container, "file-3.ts"));
+    await waitFor(() =>
+      expect(
+        scrollToItem.mock.calls.filter(([id]) => id === "section:3")
+      ).toHaveLength(2)
+    );
+    await waitForRefreshWindow();
+    // intent + 一次几何修正，预算内收敛后不得再滚。
+    expect(
+      scrollToItem.mock.calls.filter(([id]) => id === "section:3")
+    ).toHaveLength(2);
+    expect(findTreeItem(view.container, "file-3.ts")).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+
+  it("揭示事务：滚动预算耗尽后不再发起修正，选中保留", async () => {
+    const entries = [
+      ...Array.from({ length: 40 }, (_, index) => entry(index)),
+      entry(79, "src/aaa-far.ts"),
+    ];
+    const farPending = deferred<GitReviewFileDocumentResult>();
+    const getReviewFileDocument = vi.fn(async (request) => {
+      if (request.source.path === "src/aaa-far.ts") {
+        return farPending.promise;
+      }
+      const match = request.source.path.match(/file-(\d+)\.ts$/u);
+      return documentResult(Number(match?.[1] ?? 0));
+    });
+    const context = pluginContext({
+      getReviewFileDocument,
+      getReviewIndex: vi.fn(async () => indexResult(entries)),
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await waitFor(() =>
+      expect(
+        view.getByTestId("pierre-diff").getAttribute("data-item-ids")
+      ).toContain("section:79")
+    );
+    scrollToItem.mockClear();
+    // 首次定位后上方槽位持续长高：每次 settle 都偏离目标 180px。
+    viewportOffset.mockReturnValue(180);
+    fireEvent.click(findTreeItem(view.container, "aaa-far.ts"));
+    await waitFor(() =>
+      expect(
+        scrollToItem.mock.calls.filter(([id]) => id === "section:79")
+      ).toHaveLength(1)
+    );
+
+    act(() => farPending.resolve(documentResult(79)));
+    await waitFor(() =>
+      expect(
+        view.getByTestId("pierre-diff").getAttribute("data-cache-keys")
+      ).toMatch(/git-review-section:section:79/)
+    );
+    await waitFor(() =>
+      expect(
+        scrollToItem.mock.calls.filter(([id]) => id === "section:79")
+      ).toHaveLength(4)
+    );
+    await waitForRefreshWindow();
+    // intent + content + 两次几何修正 = 4；预算耗尽后只能 settle。
+    expect(
+      scrollToItem.mock.calls.filter(([id]) => id === "section:79")
+    ).toHaveLength(4);
+    expect(findTreeItem(view.container, "aaa-far.ts")).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+
+  it("揭示事务：用户滚动接管后不再自动拉回目标", async () => {
+    const entries = [
+      ...Array.from({ length: 40 }, (_, index) => entry(index)),
+      entry(79, "src/aaa-far.ts"),
+    ];
+    const farPending = deferred<GitReviewFileDocumentResult>();
+    const getReviewFileDocument = vi.fn(async (request) => {
+      if (request.source.path === "src/aaa-far.ts") {
+        return farPending.promise;
+      }
+      const match = request.source.path.match(/file-(\d+)\.ts$/u);
+      return documentResult(Number(match?.[1] ?? 0));
+    });
+    const context = pluginContext({
+      getReviewFileDocument,
+      getReviewIndex: vi.fn(async () => indexResult(entries)),
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await waitFor(() =>
+      expect(
+        view.getByTestId("pierre-diff").getAttribute("data-item-ids")
+      ).toContain("section:79")
+    );
+    scrollToItem.mockClear();
+    fireEvent.click(findTreeItem(view.container, "aaa-far.ts"));
+    await waitFor(() =>
+      expect(
+        scrollToItem.mock.calls.filter(([id]) => id === "section:79")
+      ).toHaveLength(1)
+    );
+
+    // 正文仍在读取时用户开始滚动：揭示事务立即取消，迟到正文不得拉回。
+    act(() => diffViewRuntime.onScroll?.());
+    act(() => farPending.resolve(documentResult(79)));
+    await waitFor(() =>
+      expect(
+        view.getByTestId("pierre-diff").getAttribute("data-cache-keys")
+      ).toMatch(/git-review-section:section:79/)
+    );
+    await waitForRefreshWindow();
+    expect(
+      scrollToItem.mock.calls.filter(([id]) => id === "section:79")
+    ).toHaveLength(1);
+  });
+
+  it("揭示事务：estimate 目标只提交一次意图滚动，不等前序布局反复滚", async () => {
+    const entries = [
+      ...Array.from({ length: 40 }, (_, index) => entry(index)),
+      entry(79, "src/aaa-far.ts"),
+    ];
+    const farPending = deferred<GitReviewFileDocumentResult>();
+    const getReviewFileDocument = vi.fn(async (request) => {
+      if (request.source.path === "src/aaa-far.ts") {
+        return farPending.promise;
+      }
+      const match = request.source.path.match(/file-(\d+)\.ts$/u);
+      return documentResult(Number(match?.[1] ?? 0));
+    });
+    const context = pluginContext({
+      getReviewFileDocument,
+      getReviewIndex: vi.fn(async () => indexResult(entries)),
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await waitFor(() =>
+      expect(
+        view.getByTestId("pierre-diff").getAttribute("data-item-ids")
+      ).toContain("section:79")
+    );
+    scrollToItem.mockClear();
+    // 前序槽位波动不影响 estimate：骨架头可见不代表正文可提交。
+    viewportOffset.mockReturnValue(180);
+    fireEvent.click(findTreeItem(view.container, "aaa-far.ts"));
+    await waitFor(() =>
+      expect(
+        scrollToItem.mock.calls.filter(([id]) => id === "section:79")
+      ).toHaveLength(1)
+    );
+    await waitForRefreshWindow();
+    expect(
+      scrollToItem.mock.calls.filter(([id]) => id === "section:79")
+    ).toHaveLength(1);
+    expect(
+      view.getByTestId("pierre-diff").getAttribute("data-cache-keys")
+    ).toContain("estimate:section:79");
+  });
+
+  it("揭示事务：第二次点击同一文件不再发起语义滚动", async () => {
+    const entries = [0, 1, 2, 3].map((index) => entry(index));
+    const context = pluginContext({
+      getReviewFileDocument: vi.fn(async (request) => {
+        const match = request.source.path.match(/file-(\d+)\.ts$/u);
+        return documentResult(Number(match?.[1] ?? 0));
+      }),
+      getReviewIndex: vi.fn(async () => indexResult(entries)),
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveAttribute(
+        "data-item-count",
+        "4"
+      )
+    );
+    const row = findTreeItem(view.container, "file-3.ts");
+    scrollToItem.mockClear();
+    fireEvent.click(row);
+    await waitFor(() =>
+      expect(
+        scrollToItem.mock.calls.filter(([id]) => id === "section:3")
+      ).toHaveLength(1)
+    );
+    await waitForRefreshWindow();
+    const settledScrolls = scrollToItem.mock.calls.filter(
+      ([id]) => id === "section:3"
+    ).length;
+
+    fireEvent.click(row);
+    await waitForRefreshWindow();
+    expect(
+      scrollToItem.mock.calls.filter(([id]) => id === "section:3")
+    ).toHaveLength(settledScrolls);
+  });
+
+  it("揭示事务：scrollToItem 同步失败后保留 pending 并重试", async () => {
+    const entries = [0, 1, 2, 3].map((index) => entry(index));
+    const context = pluginContext({
+      getReviewFileDocument: vi.fn(async (request) => {
+        const match = request.source.path.match(/file-(\d+)\.ts$/u);
+        return documentResult(Number(match?.[1] ?? 0));
+      }),
+      getReviewIndex: vi.fn(async () => indexResult(entries)),
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveAttribute(
+        "data-item-count",
+        "4"
+      )
+    );
+    scrollToItem.mockClear();
+    scrollToItem.mockReturnValueOnce(false);
+    fireEvent.click(findTreeItem(view.container, "file-3.ts"));
+    await waitFor(() =>
+      expect(
+        scrollToItem.mock.calls.filter(([id]) => id === "section:3").length
+      ).toBeGreaterThanOrEqual(1)
+    );
+
+    // 第一次同步定位失败后不得静默停摆；下一个布局信号仍应继续同一目标。
+    await waitFor(
+      () =>
+        expect(
+          scrollToItem.mock.calls.filter(([id]) => id === "section:3").length
+        ).toBeGreaterThan(1),
+      { timeout: 3000 }
+    );
+    expect(findTreeItem(view.container, "file-3.ts")).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
   });
 
   it("跨阅读面点击：目标面立即切换，正文水合后保持定位", async () => {

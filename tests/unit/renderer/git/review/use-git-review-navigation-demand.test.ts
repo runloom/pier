@@ -47,6 +47,7 @@ function setup(options?: {
       current: {
         getViewportLayoutKey:
           options?.getViewportLayoutKey ?? (() => "layout:stable"),
+        getViewportOffsetForItem: () => 0,
         isItemVisible: options?.isItemVisible ?? (() => true),
         isViewportReady: options?.isViewportReady ?? (() => true),
         requestViewportLayoutSettled: (
@@ -535,6 +536,7 @@ describe("useGitReviewNavigation demand sync", () => {
         current: {
           getViewportLayoutKey: (targetItemId?: string) =>
             `layout:${targetItemId ?? "none"}`,
+          getViewportOffsetForItem: () => 0,
           isItemVisible: () => true,
           isViewportReady: () => true,
           requestViewportLayoutSettled: (

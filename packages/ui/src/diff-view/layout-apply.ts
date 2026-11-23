@@ -16,6 +16,11 @@ import {
   slotVirtualHeight,
   totalScrollHeight,
 } from "./geometry.ts";
+import {
+  captureDiffVirtualLayoutAnchor,
+  type DiffVirtualLayoutAnchor,
+  seedPendingDiffLayoutAnchor,
+} from "./item-anchor.ts";
 
 const PATCHED = new WeakSet<object>();
 /** Pierre CodeView `SCROLL_REBASE_CONTAINER_HEIGHT` / `THRESHOLD`。 */
@@ -50,6 +55,7 @@ interface CodeViewLike {
     paddingTop?: number;
   };
   getPagedScrollHeight?: () => number;
+  getScrollTop?: () => number;
   items?: CodeViewLayoutItem[];
   layoutDirtyIndex?: number | undefined;
   pendingLayoutReset?: unknown;
@@ -228,6 +234,24 @@ export function applyDiffVirtualHeights(
   return changed;
 }
 
+/**
+ * 高度事务保持顶部锚点：捕获 → 原 apply → changed 时只播种 pendingLayoutAnchor。
+ * 布局层永不直接写 scrollTop。
+ */
+export function applyDiffVirtualHeightsPreservingAnchor(
+  codeView: unknown,
+  options: DiffVirtualHeightOptions,
+  anchor: DiffVirtualLayoutAnchor | null = captureDiffVirtualLayoutAnchor(
+    codeView
+  )
+): boolean {
+  const changed = applyDiffVirtualHeights(codeView, options);
+  if (changed && anchor) {
+    seedPendingDiffLayoutAnchor(codeView, anchor);
+  }
+  return changed;
+}
+
 export function reconcileDiffVirtualHeights(
   codeView: unknown,
   options: DiffVirtualHeightOptions
@@ -235,6 +259,7 @@ export function reconcileDiffVirtualHeights(
   if (!isCodeViewLike(codeView)) {
     return false;
   }
+  const anchor = captureDiffVirtualLayoutAnchor(codeView);
   // 清掉排队中的脏区间，避免随后 rAF 只从中间 index 重算、前面虚高残留
   codeView.layoutDirtyIndex = undefined;
   codeView.pendingLayoutReset = undefined;
@@ -254,7 +279,7 @@ export function reconcileDiffVirtualHeights(
   codeView.layoutDirtyIndex = undefined;
   codeView.pendingLayoutReset = undefined;
 
-  applyDiffVirtualHeights(codeView, options);
+  applyDiffVirtualHeightsPreservingAnchor(codeView, options, anchor);
   pinCodeViewScrollHeight(codeView, options.metrics.gap);
 
   if (typeof codeView.render === "function") {
@@ -266,6 +291,8 @@ export function reconcileDiffVirtualHeights(
     }
     codeView.layoutDirtyIndex = undefined;
     codeView.pendingLayoutReset = undefined;
+    // render 可能消费 / 清掉第一轮 pendingLayoutAnchor；这里只重算高度，
+    // 不再用改写前的旧 offset 二次播种，否则会把已被引擎校正的视口拉回。
     applyDiffVirtualHeights(codeView, options);
     pinCodeViewScrollHeight(codeView, options.metrics.gap);
   }
@@ -340,8 +367,13 @@ export function installDiffVirtualHeightReconciler(
   if (typeof codeView.recomputeLayout === "function") {
     const originalRecompute = codeView.recomputeLayout.bind(codeView);
     codeView.recomputeLayout = (startIndex?: number, reset?: unknown) => {
+      const anchor = captureDiffVirtualLayoutAnchor(codeView);
       originalRecompute(startIndex, reset);
-      applyDiffVirtualHeights(codeView, optionsRef.current);
+      applyDiffVirtualHeightsPreservingAnchor(
+        codeView,
+        optionsRef.current,
+        anchor
+      );
     };
   }
 
@@ -356,11 +388,15 @@ export function installDiffVirtualHeightReconciler(
   if (typeof codeView.computeRenderRangeAndEmit === "function") {
     const originalEmit = codeView.computeRenderRangeAndEmit.bind(codeView);
     codeView.computeRenderRangeAndEmit = (timestamp?: number) => {
+      const collapseAll = optionsRef.current.isCollapseAllIntent?.() === true;
+      const anchor = collapseAll
+        ? captureDiffVirtualLayoutAnchor(codeView)
+        : null;
       originalEmit(timestamp);
       const options = optionsRef.current;
-      if (options.isCollapseAllIntent?.() === true) {
+      if (collapseAll) {
         // 折叠全部：每帧全表钉高，盖住 Pierre 对可见窗的局部重算。
-        applyDiffVirtualHeights(codeView, options);
+        applyDiffVirtualHeightsPreservingAnchor(codeView, options, anchor);
         pinCodeViewScrollHeight(codeView, options.metrics.gap);
         return;
       }

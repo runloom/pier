@@ -62,6 +62,11 @@ export interface PierDiffViewHandle {
    * 总高度不变时把已经移动的目标误判为稳定。
    */
   getViewportLayoutKey(targetItemId?: string): string | null;
+  /**
+   * 目标 item 相对滚动视口顶部的偏移（CSS px）。
+   * 未渲染 / 无实例时 null。只用于揭示事务判定，不得据此硬写 scrollTop。
+   */
+  getViewportOffsetForItem(id: string): number | null;
   isItemVisible(id: string, cacheKey?: string): boolean;
   /**
    * CodeView 已进入可测量布局，导航才可提交 scrollTo。

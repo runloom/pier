@@ -3,6 +3,12 @@ import {
   findReviewNavigationTarget,
   isReviewNavigationContentReady,
   isReviewNavigationTerminal,
+  MAX_REVIEW_REVEAL_CONTENT_COMMITS,
+  MAX_REVIEW_REVEAL_GEOMETRY_CORRECTIONS,
+  MAX_REVIEW_REVEAL_SCROLLS,
+  planReviewReveal,
+  REVIEW_REVEAL_OFFSET_TOLERANCE_PX,
+  readReviewRevealProbe,
   resolveReviewSectionKey,
 } from "@plugins/builtin/git/renderer/review/navigation.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -204,5 +210,194 @@ describe("Review navigation content readiness", () => {
         kind: "loaded",
       } as never)
     ).toBe(true);
+  });
+});
+
+describe("planReviewReveal", () => {
+  const target = { cacheKey: "cache:1", sectionId: "section:1" };
+  const progress = {
+    cacheKey: "cache:1",
+    contentCommits: 0,
+    geometryCorrections: 0,
+    projectionRevision: 0,
+    scrollCount: 1,
+    sectionId: "section:1",
+  };
+  const base = {
+    expectedViewportOffset: 0,
+    isEstimate: false,
+    progress,
+    projectionRevision: 1,
+    target,
+    targetVisible: true,
+    viewportOffset: 0,
+    viewportReady: true,
+    viewportSettled: true,
+    windowAcknowledged: true,
+  };
+
+  it("exposes the bounded reveal budgets", () => {
+    expect(MAX_REVIEW_REVEAL_SCROLLS).toBe(4);
+    expect(MAX_REVIEW_REVEAL_CONTENT_COMMITS).toBe(1);
+    expect(MAX_REVIEW_REVEAL_GEOMETRY_CORRECTIONS).toBe(2);
+    expect(REVIEW_REVEAL_OFFSET_TOLERANCE_PX).toBe(1);
+  });
+
+  it("waits for a ready viewport and a target", () => {
+    expect(planReviewReveal({ ...base, viewportReady: false })).toEqual({
+      kind: "wait",
+    });
+    expect(planReviewReveal({ ...base, target: null })).toEqual({
+      kind: "wait",
+    });
+  });
+
+  it("commits the first intent", () => {
+    expect(planReviewReveal({ ...base, progress: null })).toEqual({
+      kind: "scroll-intent",
+    });
+  });
+
+  it("waits when the target is still an estimate", () => {
+    expect(planReviewReveal({ ...base, isEstimate: true })).toEqual({
+      kind: "wait",
+    });
+  });
+
+  it("commits one content scroll when the cache key changes", () => {
+    expect(
+      planReviewReveal({ ...base, target: { ...target, cacheKey: "cache:2" } })
+    ).toEqual({
+      kind: "scroll-content",
+      progress: {
+        ...progress,
+        cacheKey: "cache:2",
+        contentCommits: 1,
+        projectionRevision: 1,
+        scrollCount: 2,
+      },
+    });
+  });
+
+  it("does not commit content twice across cache key changes", () => {
+    expect(
+      planReviewReveal({
+        ...base,
+        progress: { ...progress, cacheKey: "cache:2", contentCommits: 1 },
+        target: { ...target, cacheKey: "cache:3" },
+      })
+    ).toEqual({ kind: "settle" });
+  });
+
+  it("reads probes from one reveal progress record", () => {
+    expect(readReviewRevealProbe(null)).toEqual({
+      contentCommitCount: 0,
+      geometryCorrectionCount: 0,
+      scrollIntentCount: 0,
+      scrollToCount: 0,
+    });
+    expect(
+      readReviewRevealProbe({
+        ...progress,
+        contentCommits: 1,
+        geometryCorrections: 2,
+        scrollCount: 4,
+      })
+    ).toEqual({
+      contentCommitCount: 1,
+      geometryCorrectionCount: 2,
+      scrollIntentCount: 1,
+      scrollToCount: 4,
+    });
+  });
+
+  it("does not commit content twice for the same cache key", () => {
+    expect(
+      planReviewReveal({
+        ...base,
+        progress: { ...progress, cacheKey: "cache:2", scrollCount: 2 },
+        target: { ...target, cacheKey: "cache:2" },
+      })
+    ).toEqual({ kind: "settle" });
+  });
+
+  it("allows at most two geometry corrections", () => {
+    const drifted = { ...base, viewportOffset: 120 };
+    expect(planReviewReveal(drifted).kind).toBe("scroll-geometry");
+    const once = {
+      ...progress,
+      geometryCorrections: 1,
+      scrollCount: 2,
+    };
+    expect(
+      planReviewReveal({
+        ...drifted,
+        progress: once,
+      }).kind
+    ).toBe("scroll-geometry");
+    expect(
+      planReviewReveal({
+        ...drifted,
+        progress: { ...once, geometryCorrections: 2, scrollCount: 3 },
+      }).kind
+    ).toBe("settle");
+  });
+
+  it("waits for layout to settle before geometry correction", () => {
+    expect(
+      planReviewReveal({ ...base, viewportOffset: 120, viewportSettled: false })
+    ).toEqual({ kind: "wait" });
+  });
+
+  it("respects the total scroll budget", () => {
+    expect(
+      planReviewReveal({
+        ...base,
+        viewportOffset: 120,
+        progress: { ...progress, scrollCount: 4 },
+      }).kind
+    ).toBe("settle");
+  });
+
+  it("settles instead of chasing a new cache key after the scroll budget", () => {
+    expect(
+      planReviewReveal({
+        ...base,
+        progress: { ...progress, scrollCount: 4 },
+        target: { ...target, cacheKey: "cache:2" },
+      })
+    ).toEqual({ kind: "settle" });
+    expect(
+      planReviewReveal({
+        ...base,
+        progress: { ...progress, scrollCount: 4 },
+        target: { ...target, cacheKey: "cache:2" },
+        viewportSettled: false,
+      })
+    ).toEqual({ kind: "wait" });
+  });
+
+  it("settles when the target is visible and acknowledged", () => {
+    expect(planReviewReveal(base)).toEqual({ kind: "settle" });
+  });
+
+  it("does not correct a non-zero anchor offset that matches the viewport", () => {
+    expect(
+      planReviewReveal({
+        ...base,
+        expectedViewportOffset: 48,
+        viewportOffset: 48,
+      })
+    ).toEqual({ kind: "settle" });
+  });
+
+  it("treats offsets within the tolerance as aligned", () => {
+    expect(
+      planReviewReveal({
+        ...base,
+        expectedViewportOffset: 48,
+        viewportOffset: 48 + REVIEW_REVEAL_OFFSET_TOLERANCE_PX,
+      })
+    ).toEqual({ kind: "settle" });
   });
 });

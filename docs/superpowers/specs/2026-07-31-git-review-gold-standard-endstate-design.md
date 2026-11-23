@@ -2,6 +2,7 @@
 
 日期：2026-07-31  
 状态：**产品已确认（2026-07-31）** — **SCM Review 终态唯一权威**。  
+**滚动 / 揭示 / 布局锚点修订** 以 [`2026-11-23-git-review-reveal-anchor-gold-standard.md`](2026-11-23-git-review-reveal-anchor-gold-standard.md) 为准：有界揭示事务 + 布局锚点保持。  
 **树跳转 Commit 条件** 以 [`../../archive/superpowers/specs/2026-08-14-git-review-tree-nav-pin-design.md`](../../archive/superpowers/specs/2026-08-14-git-review-tree-nav-pin-design.md) 为准：estimate 头可见 ≠ 导航成功。  
 体感、加载、渲染、导航、失败态、骨架 UI、验收一体定义；**禁止**症状补丁或「先合半套」当结案。
 

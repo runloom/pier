@@ -6,9 +6,11 @@ import {
   isReviewEstimateCacheKey,
   isReviewNavigationTerminal,
   type PendingReviewNavigation,
+  planReviewReveal,
+  type ReviewRevealProgress,
 } from "../review/navigation.ts";
 
-/** 树导航只提交一次定位意图；正文 ready 后同步定位，不做动画后纠正。 */
+/** 树导航提交定位意图；正文 ready 后提交内容定位，布局结算后允许有界几何修正。 */
 export const TREE_NAV_SCROLL_BEHAVIOR = "instant" as const;
 export function tryGitReviewPendingNavigation(options: {
   readonly currentLoadedTarget: (
@@ -20,15 +22,12 @@ export function tryGitReviewPendingNavigation(options: {
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
   readonly finishTerminal: () => void;
   readonly acknowledgedTargetWindowRevisionRef: RefObject<number>;
-  readonly lastScrolledCacheKeyRef: RefObject<string | null>;
-  readonly lastScrolledLayoutKeyRef: RefObject<string | null>;
-  readonly lastScrolledProjectionRevisionRef: RefObject<number>;
-  readonly lastScrolledSectionRef: RefObject<string | null>;
   readonly loaderRef: RefObject<GitReviewDocumentLoader | null>;
   readonly navigationMemberReasonRef: RefObject<ReviewNavigationMemberReason | null>;
   readonly pendingNavigationRef: RefObject<PendingReviewNavigation | null>;
   readonly projectionRevisionRef: RefObject<number>;
   readonly requiredRenderWindowRevisionRef: RefObject<number>;
+  readonly revealProgressRef: RefObject<ReviewRevealProgress | null>;
   readonly scheduleVerification: () => void;
   readonly viewportLayoutSettledRef: RefObject<boolean>;
 }): void {
@@ -38,15 +37,12 @@ export function tryGitReviewPendingNavigation(options: {
     currentScrollTarget,
     diffHandleRef,
     finishTerminal,
-    lastScrolledCacheKeyRef,
-    lastScrolledLayoutKeyRef,
-    lastScrolledProjectionRevisionRef,
-    lastScrolledSectionRef,
     loaderRef,
     navigationMemberReasonRef,
     pendingNavigationRef,
     projectionRevisionRef,
     requiredRenderWindowRevisionRef,
+    revealProgressRef,
     scheduleVerification,
     viewportLayoutSettledRef,
   } = options;
@@ -74,48 +70,59 @@ export function tryGitReviewPendingNavigation(options: {
   // Dockview 会保留隐藏标签页中的 CodeView 实例，但其容器此时为 0×0。
   // 必须等待真实布局恢复后再提交 scrollTo；否则 Pierre 会接受定位意图，
   // 随后的可见布局却按旧虚拟窗口重排，造成“切回后选中项跳走”。
-  if (diffHandleRef.current?.isViewportReady() === false) {
+  const viewportReady = diffHandleRef.current?.isViewportReady() === true;
+  if (!viewportReady) {
     scheduleVerification();
     return;
   }
 
-  const alreadyScrolledTarget =
-    lastScrolledSectionRef.current === target.sectionId &&
-    lastScrolledCacheKeyRef.current === target.cacheKey;
+  const targetVisible =
+    diffHandleRef.current?.isItemVisible(target.sectionId, target.cacheKey) ===
+    true;
+  const viewportOffset =
+    diffHandleRef.current?.getViewportOffsetForItem(target.sectionId) ?? null;
+  const plan = planReviewReveal({
+    expectedViewportOffset: navigation.anchorOffset ?? 0,
+    isEstimate: isReviewEstimateCacheKey(target.cacheKey),
+    progress: revealProgressRef.current,
+    projectionRevision: projectionRevisionRef.current,
+    target,
+    targetVisible,
+    viewportOffset,
+    viewportReady,
+    viewportSettled: viewportLayoutSettledRef.current,
+    windowAcknowledged:
+      acknowledgedTargetWindowRevisionRef.current >=
+      requiredRenderWindowRevisionRef.current,
+  });
 
-  // 每个内容版本只提交一次定位。Pierre 会让 pendingScrollTarget 跟随
-  // 后续测量修正；每帧重复 scrollTo 反而会持续重置它的收敛过程。
-  if (alreadyScrolledTarget) {
+  if (plan.kind === "wait") {
     // Intent 可以打在 estimate 上；Commit 必须等目标离开骨架。
     // 不挂 loader.settled 大门闩，但骨架头可见 ≠ 导航成功。
-    if (isReviewEstimateCacheKey(target.cacheKey)) {
-      return;
-    }
-    const targetVisible =
-      diffHandleRef.current?.isItemVisible(
-        target.sectionId,
-        target.cacheKey
-      ) === true;
-    if (targetVisible && viewportLayoutSettledRef.current) {
-      const windowAcknowledged =
-        acknowledgedTargetWindowRevisionRef.current >=
-        requiredRenderWindowRevisionRef.current;
-      if (windowAcknowledged) {
-        finishTerminal();
-        return;
-      }
-    }
+    // scheduleVerification 在已 settle 时是 no-op；真正需要新布局信号时
+    // （刚提交定位 / 隐藏标签页恢复）才重新挂 waiter，避免 estimate 上忙轮询。
+    scheduleVerification();
+    return;
+  }
+  if (plan.kind === "settle") {
+    finishTerminal();
     return;
   }
 
   // 先记录意图再调用外部 handle：测试适配器和 Pierre 都可能在
   // scrollTo 内同步回报 render window，必须避免重入时重复提交。
   viewportLayoutSettledRef.current = false;
-  lastScrolledSectionRef.current = target.sectionId;
-  lastScrolledCacheKeyRef.current = target.cacheKey;
-  lastScrolledProjectionRevisionRef.current = projectionRevisionRef.current;
-  lastScrolledLayoutKeyRef.current =
-    diffHandleRef.current?.getViewportLayoutKey(target.sectionId) ?? null;
+  revealProgressRef.current =
+    plan.kind === "scroll-intent"
+      ? {
+          cacheKey: target.cacheKey,
+          contentCommits: 0,
+          geometryCorrections: 0,
+          projectionRevision: projectionRevisionRef.current,
+          scrollCount: 1,
+          sectionId: target.sectionId,
+        }
+      : plan.progress;
   const scrolled =
     diffHandleRef.current?.scrollToItem(target.sectionId, {
       behavior: TREE_NAV_SCROLL_BEHAVIOR,
@@ -127,10 +134,10 @@ export function tryGitReviewPendingNavigation(options: {
         : { offset: navigation.anchorOffset }),
     }) === true;
   if (!scrolled) {
-    lastScrolledSectionRef.current = null;
-    lastScrolledCacheKeyRef.current = null;
-    lastScrolledProjectionRevisionRef.current = -1;
-    lastScrolledLayoutKeyRef.current = null;
+    revealProgressRef.current = null;
+    // 同步失败不是终态：重新挂稳定帧等待下一次布局 / 窗口信号，
+    // 否则 pending 会停在既无滚动、也无 waiter 的空窗。
+    scheduleVerification();
     return;
   }
 

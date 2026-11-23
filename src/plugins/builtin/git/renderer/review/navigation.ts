@@ -132,3 +132,137 @@ export function isReviewNavigationTerminal(
   }
   return false;
 }
+
+export interface ReviewRevealProgress {
+  readonly cacheKey: string;
+  readonly contentCommits: number;
+  readonly geometryCorrections: number;
+  readonly projectionRevision: number;
+  readonly scrollCount: number;
+  readonly sectionId: string;
+}
+
+export type ReviewRevealPlan =
+  | { readonly kind: "scroll-intent" }
+  | {
+      readonly kind: "scroll-content";
+      readonly progress: ReviewRevealProgress;
+    }
+  | {
+      readonly kind: "scroll-geometry";
+      readonly progress: ReviewRevealProgress;
+    }
+  | { readonly kind: "settle" }
+  | { readonly kind: "wait" };
+
+export interface ReviewRevealInput {
+  readonly expectedViewportOffset: number;
+  readonly isEstimate: boolean;
+  readonly progress: ReviewRevealProgress | null;
+  readonly projectionRevision: number;
+  readonly target: {
+    readonly cacheKey: string;
+    readonly sectionId: string;
+  } | null;
+  readonly targetVisible: boolean;
+  readonly viewportOffset: number | null;
+  readonly viewportReady: boolean;
+  readonly viewportSettled: boolean;
+  readonly windowAcknowledged: boolean;
+}
+
+export const MAX_REVIEW_REVEAL_SCROLLS = 4;
+export const MAX_REVIEW_REVEAL_GEOMETRY_CORRECTIONS = 2;
+export const MAX_REVIEW_REVEAL_CONTENT_COMMITS = 1;
+export const REVIEW_REVEAL_OFFSET_TOLERANCE_PX = 1;
+
+/** 只读探针：测试 / E2E 读，不参与导航决策、不产生产品 UI。 */
+export interface ReviewRevealProbe {
+  readonly contentCommitCount: number;
+  readonly geometryCorrectionCount: number;
+  readonly scrollIntentCount: number;
+  readonly scrollToCount: number;
+}
+
+export function readReviewRevealProbe(
+  progress: ReviewRevealProgress | null
+): ReviewRevealProbe {
+  return {
+    contentCommitCount: progress?.contentCommits ?? 0,
+    geometryCorrectionCount: progress?.geometryCorrections ?? 0,
+    scrollIntentCount: progress === null ? 0 : 1,
+    scrollToCount: progress?.scrollCount ?? 0,
+  };
+}
+
+function hasRevealScrollBudget(progress: ReviewRevealProgress): boolean {
+  return (
+    progress.scrollCount < MAX_REVIEW_REVEAL_SCROLLS &&
+    progress.geometryCorrections < MAX_REVIEW_REVEAL_GEOMETRY_CORRECTIONS
+  );
+}
+
+export function planReviewReveal(input: ReviewRevealInput): ReviewRevealPlan {
+  if (!(input.viewportReady && input.target !== null)) {
+    return { kind: "wait" };
+  }
+  const { progress, target } = input;
+  if (progress === null || progress.sectionId !== target.sectionId) {
+    return { kind: "scroll-intent" };
+  }
+  if (progress.cacheKey !== target.cacheKey) {
+    if (input.isEstimate) {
+      return { kind: "wait" };
+    }
+    // 同一导航代次只允许一次正文提交；再次换 cacheKey 时必须等布局
+    // 自己稳定，不能把正文提交变成无限重试。
+    if (progress.contentCommits >= MAX_REVIEW_REVEAL_CONTENT_COMMITS) {
+      return input.viewportSettled ? { kind: "settle" } : { kind: "wait" };
+    }
+    if (progress.scrollCount >= MAX_REVIEW_REVEAL_SCROLLS) {
+      return input.viewportSettled ? { kind: "settle" } : { kind: "wait" };
+    }
+    return {
+      kind: "scroll-content",
+      progress: {
+        ...progress,
+        cacheKey: target.cacheKey,
+        contentCommits: progress.contentCommits + 1,
+        projectionRevision: input.projectionRevision,
+        scrollCount: progress.scrollCount + 1,
+      },
+    };
+  }
+  if (input.isEstimate) {
+    return { kind: "wait" };
+  }
+  if (!input.viewportSettled) {
+    return { kind: "wait" };
+  }
+  const drift =
+    input.viewportOffset === null
+      ? !input.targetVisible
+      : Math.abs(input.viewportOffset - input.expectedViewportOffset) >
+        REVIEW_REVEAL_OFFSET_TOLERANCE_PX;
+  if (drift && hasRevealScrollBudget(progress)) {
+    return {
+      kind: "scroll-geometry",
+      progress: {
+        ...progress,
+        geometryCorrections: progress.geometryCorrections + 1,
+        projectionRevision: input.projectionRevision,
+        scrollCount: progress.scrollCount + 1,
+      },
+    };
+  }
+  if (input.targetVisible && input.windowAcknowledged) {
+    return { kind: "settle" };
+  }
+  if (
+    progress.geometryCorrections >= MAX_REVIEW_REVEAL_GEOMETRY_CORRECTIONS ||
+    progress.scrollCount >= MAX_REVIEW_REVEAL_SCROLLS
+  ) {
+    return { kind: "settle" };
+  }
+  return { kind: "wait" };
+}
