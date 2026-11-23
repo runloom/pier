@@ -1,15 +1,20 @@
-import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
+  useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
 import type { GitGutterKind } from "../../editor/git-markers.ts";
 import { useFileChangeSurface } from "../../git-changes/context.ts";
+import {
+  GutterHoverTooltip,
+  type GutterTooltipPointer,
+  useGutterHoverTooltip,
+} from "../../git-changes/hover-tooltip.tsx";
 import { EMPTY_FILE_CHANGES } from "../../git-changes/types.ts";
 import { createFilesTranslate, useFilesPluginLanguage } from "../../i18n.ts";
 import {
@@ -31,8 +36,12 @@ export interface MarkdownPreviewGitBarLabels {
   readonly added: string;
   readonly deleted: string;
   readonly modified: string;
+  readonly show: string;
   readonly track: string;
 }
+
+const MARKDOWN_GIT_BAR_TARGET_SELECTOR = "[data-git-change-id]";
+const TOOLTIP_ANCHOR_HEIGHT_PX = 16;
 
 function withLineToken(template: string, line: string): string {
   return template.replaceAll("{{line}}", line);
@@ -72,6 +81,7 @@ function useGitBarLabels(
       "filePanel.markdown.gitBars.modified",
       "View edited change at line {{line}}"
     ),
+    show: t("filePanel.changes.show", "View changes"),
     track: t("filePanel.markdown.gitBars.track", "Uncommitted changes"),
   };
 }
@@ -156,37 +166,67 @@ export function MarkdownPreviewGitBars({
     [boxes, model.ranges, scrollRoot]
   );
 
+  const getTooltipRoot = useCallback(() => scrollRoot, [scrollRoot]);
+  const resolveTooltipAnchor = useCallback(
+    (target: Element, { pointerY, root }: GutterTooltipPointer) => {
+      const bar = target.getBoundingClientRect();
+      const bounds = root.getBoundingClientRect();
+      const center = Math.min(Math.max(pointerY, bar.top), bar.bottom);
+      return {
+        top:
+          center - bounds.top + root.scrollTop - TOOLTIP_ANCHOR_HEIGHT_PX / 2,
+        left: bar.left - bounds.left + root.scrollLeft,
+        height: TOOLTIP_ANCHOR_HEIGHT_PX,
+        width: MARKDOWN_GIT_BAR_SLOT_PX,
+      };
+    },
+    []
+  );
+  const tooltipAnchor = useGutterHoverTooltip({
+    enabled: segments.length > 0,
+    getRoot: getTooltipRoot,
+    resolveAnchor: resolveTooltipAnchor,
+    selector: MARKDOWN_GIT_BAR_TARGET_SELECTOR,
+  });
+
   if (segments.length === 0) {
     return null;
   }
 
   return (
-    <nav
-      aria-label={labels.track}
-      className="pointer-events-none absolute top-0 left-0 z-10 overflow-visible"
-      data-slot="markdown-preview-git-bars"
-      style={{
-        height: 0,
-        width: MARKDOWN_GIT_BAR_SLOT_PX,
-      }}
-    >
-      {segments.map((segment) => (
-        <GitBarMark
-          height={segment.height}
-          id={segment.id}
-          key={segment.id}
-          kind={segment.kind}
-          label={kindLabel(
-            segment.kind,
-            labels,
-            segment.newLineFrom,
-            segment.newLineTo
-          )}
-          onClick={() => surface?.openRange(segment.id)}
-          top={segment.top}
-        />
-      ))}
-    </nav>
+    <>
+      <nav
+        aria-label={labels.track}
+        className="pointer-events-none absolute top-0 left-0 z-10 overflow-visible"
+        data-slot="markdown-preview-git-bars"
+        style={{
+          height: 0,
+          width: MARKDOWN_GIT_BAR_SLOT_PX,
+        }}
+      >
+        {segments.map((segment) => (
+          <GitBarMark
+            height={segment.height}
+            id={segment.id}
+            key={segment.id}
+            kind={segment.kind}
+            label={kindLabel(
+              segment.kind,
+              labels,
+              segment.newLineFrom,
+              segment.newLineTo
+            )}
+            onClick={() => surface?.openRange(segment.id)}
+            top={segment.top}
+          />
+        ))}
+      </nav>
+      <GutterHoverTooltip
+        anchor={tooltipAnchor}
+        collisionBoundary={scrollRoot}
+        label={labels.show}
+      />
+    </>
   );
 }
 
@@ -210,36 +250,31 @@ function GitBarMark({
     top,
   };
   return (
-    <Tooltip delayDuration={400}>
-      <TooltipTrigger asChild>
-        <button
-          aria-label={label}
-          className={cn(
-            "group/git-bar pointer-events-auto absolute inset-x-0 cursor-pointer overflow-hidden",
-            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 focus-visible:ring-inset"
-          )}
-          data-git-bar-kind={kind}
-          data-git-change-id={id}
-          onClick={onClick}
-          style={style}
-          tabIndex={-1}
-          type="button"
-        >
-          <span
-            aria-hidden
-            className="mx-auto block h-full w-[var(--markdown-git-bar-w)] rounded-full transition-[width] duration-75 group-hover/git-bar:w-[var(--markdown-git-bar-hover-w)]"
-            style={{
-              ...(kind === "deleted"
-                ? { height: 3, width: 8, borderRadius: 0 }
-                : {}),
-              backgroundColor: `var(${MARKDOWN_GIT_BAR_COLOR_VARS[kind]})`,
-              ["--markdown-git-bar-hover-w" as string]: `${MARKDOWN_GIT_BAR_HOVER_WIDTH_PX}px`,
-              ["--markdown-git-bar-w" as string]: `${MARKDOWN_GIT_BAR_WIDTH_PX}px`,
-            }}
-          />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
-    </Tooltip>
+    <button
+      aria-label={label}
+      className={cn(
+        "group/git-bar pointer-events-auto absolute inset-x-0 cursor-pointer overflow-hidden",
+        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 focus-visible:ring-inset"
+      )}
+      data-git-bar-kind={kind}
+      data-git-change-id={id}
+      onClick={onClick}
+      style={style}
+      tabIndex={-1}
+      type="button"
+    >
+      <span
+        aria-hidden
+        className="mx-auto block h-full w-[var(--markdown-git-bar-w)] rounded-full transition-[width] duration-75 group-hover/git-bar:w-[var(--markdown-git-bar-hover-w)]"
+        style={{
+          ...(kind === "deleted"
+            ? { height: 3, width: 8, borderRadius: 0 }
+            : {}),
+          backgroundColor: `var(${MARKDOWN_GIT_BAR_COLOR_VARS[kind]})`,
+          ["--markdown-git-bar-hover-w" as string]: `${MARKDOWN_GIT_BAR_HOVER_WIDTH_PX}px`,
+          ["--markdown-git-bar-w" as string]: `${MARKDOWN_GIT_BAR_WIDTH_PX}px`,
+        }}
+      />
+    </button>
   );
 }
