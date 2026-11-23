@@ -15,6 +15,10 @@ import {
   USER_SCROLL_KEYS,
 } from "./header-events.ts";
 import type { DiffViewInputStore } from "./input-store.ts";
+import {
+  captureDiffVirtualLayoutAnchor,
+  seedPendingDiffLayoutAnchor,
+} from "./item-anchor.ts";
 import type { ParsedItemCacheEntry, PierDiffCodeViewItem } from "./items.ts";
 import {
   applyDiffVirtualHeights,
@@ -153,6 +157,11 @@ export function useDiffViewHeaders(options: {
         collapsed,
         version: parsedItem.version + nextRevision,
       };
+      // shouldAnchor 时由现有 scrollTo 独占滚动；否则高度改写只播布局锚点。
+      const layoutAnchor =
+        preserveTopAnchor && !shouldAnchor
+          ? captureDiffVirtualLayoutAnchor(viewer)
+          : null;
       if (!handle.updateItem(nextItem)) {
         return false;
       }
@@ -179,7 +188,10 @@ export function useDiffViewHeaders(options: {
           isUserCollapsed,
           metrics,
         };
-        applyDiffVirtualHeights(viewer, heightOptions);
+        const changed = applyDiffVirtualHeights(viewer, heightOptions);
+        if (changed && layoutAnchor) {
+          seedPendingDiffLayoutAnchor(viewer, layoutAnchor);
+        }
         pinCodeViewScrollHeight(viewer, metrics.gap);
       }
       if (shouldAnchor) {

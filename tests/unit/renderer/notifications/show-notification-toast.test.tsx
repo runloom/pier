@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { showNotificationToast } from "@/lib/notifications/show-notification-toast.tsx";
+import { TOAST_MESSAGE_MAX_WIDTH_PX } from "@/lib/notifications/toast-metrics.ts";
 
 vi.mock("sonner", () => ({
   toast: Object.assign(
@@ -64,7 +65,7 @@ describe("showNotificationToast（形态 B）", () => {
         "--normal-text": "var(--popover-foreground)",
         "--normal-border": "var(--border)",
         "--border-radius": "16px",
-        "--width": "min(360px, calc(100vw - 32px))",
+        "--width": `min(${TOAST_MESSAGE_MAX_WIDTH_PX}px, calc(100vw - 32px))`,
       },
     });
     expect(options).not.toHaveProperty("icon");

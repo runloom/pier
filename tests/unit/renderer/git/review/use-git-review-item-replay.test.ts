@@ -23,6 +23,7 @@ function diffHandle(
     getSelectedLines: () => null,
     getSelectedText: () => "",
     getViewportLayoutKey: () => "layout:stable",
+    getViewportOffsetForItem: () => 0,
     isItemVisible: () => true,
     isViewportReady: () => true,
     requestViewportLayoutSettled: (_targetItemId, _stableFrames, callback) => {

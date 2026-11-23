@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReviewNavigationMemberReason } from "../review/document/demand.ts";
 import {
   type PendingReviewNavigation,
+  type ReviewRevealProgress,
   resolveReviewSectionKey,
 } from "../review/navigation.ts";
 import {
@@ -82,12 +83,8 @@ export function useGitReviewNavigation({
   const [navigationError, setNavigationError] = useState<Error | null>(null);
   const [navigationEpoch, setNavigationEpoch] = useState(0);
   const [navigationPending, setNavigationPending] = useState(false);
-  /** 本轮 pending 已对哪个 sectionId 提交过一次定位。 */
-  const lastScrolledSectionRef = useRef<string | null>(null);
-  /** 同一 section 的 estimate→loaded 只各提交一次定位。 */
-  const lastScrolledCacheKeyRef = useRef<string | null>(null);
-  const lastScrolledLayoutKeyRef = useRef<string | null>(null);
-  const lastScrolledProjectionRevisionRef = useRef(-1);
+  /** 本轮揭示事务：定位意图、内容提交与几何修正共用一个进度。 */
+  const revealProgressRef = useRef<ReviewRevealProgress | null>(null);
   /** 被动恢复预算：换目标或换文档代次自动重置。 */
   const restoreAttemptsRef = useRef<RestoreNavigationBudget>(
     EMPTY_RESTORE_NAVIGATION_BUDGET
@@ -101,6 +98,10 @@ export function useGitReviewNavigation({
   }, []);
   const scheduleVerification = useCallback(() => {
     if (verificationCancelRef.current !== null) {
+      return;
+    }
+    // 已 settle 的布局不需要再等一轮稳定帧；外部布局/投影信号会重新进入。
+    if (viewportLayoutSettledRef.current) {
       return;
     }
     const finish = (): void => {
@@ -145,6 +146,7 @@ export function useGitReviewNavigation({
     pendingNavigationRef.current = null;
     navigationMemberReasonRef.current = null;
     failedNavigationKeyRef.current = null;
+    revealProgressRef.current = null;
     viewportLayoutSettledRef.current = false;
     setNavigationError(null);
     setNavigationPending(false);
@@ -185,15 +187,12 @@ export function useGitReviewNavigation({
       diffHandleRef,
       finishTerminal,
       acknowledgedTargetWindowRevisionRef,
-      lastScrolledCacheKeyRef,
-      lastScrolledLayoutKeyRef,
-      lastScrolledProjectionRevisionRef,
-      lastScrolledSectionRef,
       loaderRef,
       navigationMemberReasonRef,
       pendingNavigationRef,
       projectionRevisionRef,
       requiredRenderWindowRevisionRef,
+      revealProgressRef,
       scheduleVerification,
       viewportLayoutSettledRef,
     });
@@ -217,10 +216,7 @@ export function useGitReviewNavigation({
       reason: ReviewNavigationMemberReason
     ) => {
       cancelVerification();
-      lastScrolledSectionRef.current = null;
-      lastScrolledCacheKeyRef.current = null;
-      lastScrolledLayoutKeyRef.current = null;
-      lastScrolledProjectionRevisionRef.current = -1;
+      revealProgressRef.current = null;
       acknowledgedTargetWindowRevisionRef.current = 0;
       requiredRenderWindowRevisionRef.current =
         renderWindowRevisionRef.current + 1;
@@ -304,10 +300,7 @@ export function useGitReviewNavigation({
             options?.restoreSelection === true ? "restore" : navigationReason;
           setNavigationPending(true);
           setNavigationEpoch((value) => value + 1);
-          lastScrolledSectionRef.current = null;
-          lastScrolledCacheKeyRef.current = null;
-          lastScrolledLayoutKeyRef.current = null;
-          lastScrolledProjectionRevisionRef.current = -1;
+          revealProgressRef.current = null;
           acknowledgedTargetWindowRevisionRef.current = 0;
           requiredRenderWindowRevisionRef.current =
             renderWindowRevisionRef.current + 1;
@@ -361,6 +354,7 @@ export function useGitReviewNavigation({
     pendingNavigationRef.current = null;
     navigationMemberReasonRef.current = null;
     failedNavigationKeyRef.current = null;
+    revealProgressRef.current = null;
     viewportLayoutSettledRef.current = false;
     loaderRef.current?.setProtectedEntryKey(null);
     setNavigationError(null);

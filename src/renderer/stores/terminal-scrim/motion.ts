@@ -1,8 +1,8 @@
 /**
- * 蒙层淡入淡出期间按帧重读 opacity。挂载读一次会把 native 蒙层钉在
- * 动画起点（通常是 0 或终值），底部状态栏在洞外却在逐帧变，两边错拍。
- * 只认 opacity 相关的运行中动画：卡片上若挂无限动画（pulse / spin），
- * 逐帧 flush 会把 IPC 快照链无限续命，必须让它到点停。
+ * 蒙层淡入淡出、toast 堆叠位移/高度变化期间按帧重读几何。挂载读一次会把
+ * native 蒙层 / 终端洞钉在动画起点，底部状态栏在洞外却在逐帧变，两边错拍。
+ * 只认运行中的 opacity / transform / height 动画：卡片上若挂无限动画
+ * （pulse / spin），逐帧 flush 会把 IPC 快照链无限续命，必须让它到点停。
  */
 export function bindScrimFade(
   element: HTMLElement,
@@ -21,7 +21,7 @@ export function bindScrimFade(
     frame = null;
     // 先确认动画仍在跑再读色：fill-mode none 的淡出结束后 computed opacity
     // 会回弹到 1，再读一次会把阴影/蒙层按全强度重发一帧（终端上闪一下）。
-    if (!isFading(element)) {
+    if (!isMotionRunning(element)) {
       return;
     }
     flush();
@@ -50,22 +50,26 @@ export function bindScrimFade(
     }
     flush();
   };
-  // transition 不会回弹到起点；opacity / all 结束时补读终值。
+  // transition 不会回弹到起点；opacity / transform / height 结束时补读终值。
   const onTransitionEnd = (event: Event) => {
     if (event.target !== element) {
       return;
     }
     const property = "propertyName" in event ? event.propertyName : "";
-    if (property === "opacity" || property === "all") {
+    if (typeof property === "string" && isFollowedTransition(property)) {
       flush();
     }
   };
+
+  // 打断的 transition 没有终态，但下一帧仍是当前视觉位置，补读一次。
+  const onTransitionCancel = onTransitionEnd;
 
   element.addEventListener("animationstart", onStart);
   element.addEventListener("transitionstart", onStart);
   element.addEventListener("animationend", onAnimationEnd);
   element.addEventListener("transitionend", onTransitionEnd);
-  if (isFading(element)) {
+  element.addEventListener("transitioncancel", onTransitionCancel);
+  if (isMotionRunning(element)) {
     start();
   }
 
@@ -75,6 +79,7 @@ export function bindScrimFade(
     element.removeEventListener("transitionstart", onStart);
     element.removeEventListener("animationend", onAnimationEnd);
     element.removeEventListener("transitionend", onTransitionEnd);
+    element.removeEventListener("transitioncancel", onTransitionCancel);
   };
 }
 
@@ -83,9 +88,18 @@ function isExitAnimation(event: Event): boolean {
   return typeof name === "string" && /exit|out/i.test(name);
 }
 
-function isFading(element: HTMLElement): boolean {
+function isMotionRunning(element: HTMLElement): boolean {
   const animations = element.getAnimations?.() ?? [];
-  return animations.some((animation) => isOpacityAnimation(animation));
+  return animations.some((animation) => isFollowedAnimation(animation));
+}
+
+function isFollowedTransition(property: string): boolean {
+  return (
+    property === "opacity" ||
+    property === "transform" ||
+    property === "height" ||
+    property === "all"
+  );
 }
 
 interface KeyframeEffectLike {
@@ -94,24 +108,32 @@ interface KeyframeEffectLike {
 }
 
 /**
- * 只跟 opacity：transition 的属性是 opacity，或 keyframes 真的在动画 opacity。
- * tw-animate 的 `enter` / `exit` 名字不含 fade，opacity 由 --tw-enter-opacity /
- * --tw-exit-opacity 驱动；按名字匹配会把 Radix 弹层钉在挂载时的 opacity=0。
+ * 只跟会改变原生洞几何的属性：transition 的 opacity / transform / height，
+ * 或 keyframes 真的动画这三者。tw-animate 的 `enter` / `exit` 名字不含 fade，
+ * opacity 由 --tw-enter-opacity / --tw-exit-opacity 驱动；按名字匹配会把
+ * Radix 弹层钉在挂载时的 opacity=0。
  */
-function isOpacityAnimation(animation: Animation): boolean {
+function isFollowedAnimation(animation: Animation): boolean {
   if (animation.playState !== "running") {
     return false;
   }
   if ("transitionProperty" in animation) {
     const property = animation.transitionProperty;
-    return property === "opacity" || property === "all";
+    return typeof property === "string" && isFollowedTransition(property);
   }
   const effect = animation.effect as unknown as KeyframeEffectLike | null;
   // pulse / spin 这类无限动画不能把逐帧 flush 链无限续命。
   if (effect?.getComputedTiming?.().iterations === Number.POSITIVE_INFINITY) {
     return false;
   }
-  if (effect?.getKeyframes?.().some((frame) => "opacity" in frame)) {
+  if (
+    effect
+      ?.getKeyframes?.()
+      .some(
+        (frame) =>
+          "opacity" in frame || "transform" in frame || "height" in frame
+      )
+  ) {
     return true;
   }
   const name = "animationName" in animation ? animation.animationName : "";

@@ -3,7 +3,15 @@
 import { StatusIcon } from "@pier/ui/status-icon.tsx";
 import { Loader2Icon } from "lucide-react";
 import { type CSSProperties, useEffect } from "react";
-import { Toaster as Sonner, type ToasterProps } from "sonner";
+import { Toaster as Sonner } from "sonner";
+import {
+  TOAST_CAPSULE_HEIGHT_PX,
+  TOAST_CENTER_MAX_WIDTH_PX,
+  TOAST_EDGE_INSET_PX,
+  TOAST_GAP_PX,
+  TOAST_LANE_CLEARANCE_PX,
+  TOAST_STACK_DEPTH,
+} from "@/lib/notifications/toast-metrics.ts";
 import { registerTerminalElementWebOverlay } from "@/stores/terminal-input-routing-slice.ts";
 import { useThemeStore } from "@/stores/theme.store.ts";
 
@@ -20,7 +28,7 @@ function SonnerToasterTerminalOverlayBridge(): null {
       ReturnType<typeof registerTerminalElementWebOverlay>
     >();
     const elementIds = new WeakMap<HTMLElement, string>();
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let syncFrame: number | null = null;
 
     const idFor = (element: HTMLElement): string => {
       let id = elementIds.get(element);
@@ -29,6 +37,21 @@ function SonnerToasterTerminalOverlayBridge(): null {
         elementIds.set(element, id);
       }
       return id;
+    };
+
+    const setToastInteractivity = (
+      element: HTMLElement,
+      interactive: boolean
+    ) => {
+      const tabIndex = interactive ? "0" : "-1";
+      if (element.getAttribute("tabindex") !== tabIndex) {
+        element.setAttribute("tabindex", tabIndex);
+      }
+      if (interactive) {
+        element.removeAttribute("inert");
+      } else {
+        element.setAttribute("inert", "");
+      }
     };
 
     const sync = () => {
@@ -40,6 +63,33 @@ function SonnerToasterTerminalOverlayBridge(): null {
       const nextIds = new Set<string>();
 
       for (const element of new Set(toastEls)) {
+        const visible = element.dataset.visible !== "false";
+        const interactive =
+          visible &&
+          (element.dataset.expanded === "true" ||
+            element.dataset.front === "true");
+
+        // 折叠 / 隐藏前先把焦点移到可见前条：inert 会让焦点掉到 body。
+        if (!interactive) {
+          const active = document.activeElement;
+          if (active instanceof HTMLElement && element.contains(active)) {
+            const front = element.parentElement?.querySelector<HTMLElement>(
+              '[data-sonner-toast][data-front="true"]'
+            );
+            if (front && front !== element) {
+              setToastInteractivity(front, true);
+              front.focus({ preventScroll: true });
+            }
+          }
+        }
+
+        setToastInteractivity(element, interactive);
+
+        // 隐藏条不登记终端洞：否则终端上会留下一块不可见的命中区。
+        if (!visible) {
+          continue;
+        }
+
         const overlayId = `sonner-toast:${idFor(element)}`;
         nextIds.add(overlayId);
         const existing = registrations.get(overlayId);
@@ -63,53 +113,69 @@ function SonnerToasterTerminalOverlayBridge(): null {
     };
 
     const scheduleSync = () => {
-      if (debounceTimer !== null) {
-        clearTimeout(debounceTimer);
+      if (syncFrame !== null) {
+        return;
       }
-      debounceTimer = setTimeout(() => {
-        debounceTimer = null;
+      syncFrame = requestAnimationFrame(() => {
+        syncFrame = null;
         sync();
-      }, 32);
+      });
     };
 
-    // toast 清空时 Sonner 会卸载 ol，下次再挂新节点——每次 rebind 都 disconnect 后只观察当前集合。
-    const toasterObserver = new MutationObserver(scheduleSync);
+    const isToastNode = (node: Node): boolean =>
+      node instanceof Element &&
+      (node.matches("[data-sonner-toaster], [data-sonner-toast]") ||
+        node.querySelector("[data-sonner-toaster], [data-sonner-toast]") !==
+          null);
 
-    const rebindToasterObservers = () => {
-      // MutationObserver 无 unobserve；disconnect 后只 observe 当前仍挂在文档上的 toaster。
-      toasterObserver.disconnect();
-      for (const toaster of document.querySelectorAll(
-        "[data-sonner-toaster]"
-      )) {
-        toasterObserver.observe(toaster, {
-          attributeFilter: [
-            "data-expanded",
-            "data-mounted",
-            "data-removed",
-            "data-styled",
-          ],
-          attributes: true,
-          childList: true,
-          subtree: true,
-        });
+    const isToastMutation = (record: MutationRecord): boolean => {
+      if (record.type === "attributes") {
+        return (
+          record.target instanceof Element &&
+          record.target.closest("[data-sonner-toaster]") !== null
+        );
       }
+      if (record.type !== "childList") {
+        return false;
+      }
+      if (
+        record.target instanceof Element &&
+        record.target.closest("[data-sonner-toaster]") !== null
+      ) {
+        return true;
+      }
+      return [...record.addedNodes, ...record.removedNodes].some(isToastNode);
     };
 
-    // toaster 可能晚于 bridge 挂载；body 只负责发现 toaster，属性变更收窄到 toaster 子树。
-    const bodyObserver = new MutationObserver(() => {
-      rebindToasterObservers();
-      scheduleSync();
+    // 单一 body 子树观察器：toaster 可能晚于 bridge 挂载，toast 清空时 ol 也会
+    // 卸载。不要按 body 变更反复 disconnect / observe —— 那会丢掉同一批
+    // MutationRecord（例如最早一条从 hidden 变 visible），它永远不登记。
+    // 只处理 toaster / toast 相关变更，避免终端等 DOM 抖动每帧重读 3 条几何。
+    const observer = new MutationObserver((records) => {
+      if (records.some(isToastMutation)) {
+        scheduleSync();
+      }
     });
-    bodyObserver.observe(document.body, { childList: true, subtree: true });
-    rebindToasterObservers();
+    observer.observe(document.body, {
+      attributeFilter: [
+        "data-expanded",
+        "data-front",
+        "data-mounted",
+        "data-removed",
+        "data-styled",
+        "data-visible",
+      ],
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
     sync();
 
     return () => {
-      if (debounceTimer !== null) {
-        clearTimeout(debounceTimer);
+      if (syncFrame !== null) {
+        cancelAnimationFrame(syncFrame);
       }
-      toasterObserver.disconnect();
-      bodyObserver.disconnect();
+      observer.disconnect();
       for (const registration of registrations.values()) {
         registration.dispose();
       }
@@ -120,7 +186,7 @@ function SonnerToasterTerminalOverlayBridge(): null {
   return null;
 }
 
-const Toaster = ({ ...props }: ToasterProps) => {
+const Toaster = () => {
   const theme = useThemeStore((s) => s.resolvedTheme);
 
   return (
@@ -128,8 +194,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       <SonnerToasterTerminalOverlayBridge />
       <Sonner
         className="toaster group"
-        expand
-        gap={10}
+        gap={TOAST_GAP_PX}
         icons={{
           success: <StatusIcon kind="success" />,
           info: <StatusIcon kind="info" />,
@@ -141,8 +206,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
         }}
         offset={{
           // 形态 B 消息 toast 用 top-right 时需要 right；形态 A 只用 top。
-          right: "24px",
-          top: "calc(var(--app-titlebar-height) + 24px)",
+          right: `${TOAST_EDGE_INSET_PX}px`,
+          top: `calc(var(--app-titlebar-height) + ${TOAST_EDGE_INSET_PX}px)`,
         }}
         // 默认中间上方（确认型短提示）；消息型在 showNotificationToast 里传 position: top-right。
         position="top-center"
@@ -152,7 +217,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
             "--normal-text": "var(--toast-foreground)",
             "--normal-border": "transparent",
             "--border-radius": "9999px",
-            "--width": "min(420px, calc(100vw - 32px))",
+            "--width": `min(${TOAST_CENTER_MAX_WIDTH_PX}px, calc(100vw - 32px))`,
+            "--pier-toast-center-width": `${TOAST_CENTER_MAX_WIDTH_PX}px`,
+            "--pier-toast-capsule-height": `${TOAST_CAPSULE_HEIGHT_PX}px`,
+            "--pier-toast-lane-clearance": `${TOAST_LANE_CLEARANCE_PX}px`,
           } as CSSProperties
         }
         theme={theme}
@@ -164,7 +232,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
             cancelButton: "hidden",
           },
         }}
-        {...props}
+        visibleToasts={TOAST_STACK_DEPTH}
       />
     </>
   );

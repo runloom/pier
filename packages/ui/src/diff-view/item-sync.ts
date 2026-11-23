@@ -5,6 +5,10 @@ import {
   scheduleCodeViewLayoutFlush,
 } from "./code-view-runtime.ts";
 import {
+  captureDiffVirtualLayoutAnchor,
+  seedPendingDiffLayoutAnchor,
+} from "./item-anchor.ts";
+import {
   hasSameCodeViewItemIdOrder,
   planDiffViewItemTransition,
   planPathAlignedIdRenames,
@@ -219,6 +223,7 @@ export function applyCodeViewItemsAnchored(
 ): DiffViewAnchoredApplyResult {
   const instanceBefore = handle.getInstance();
   hardenCodeViewInstanceChanged(instanceBefore);
+  const layoutAnchor = captureDiffVirtualLayoutAnchor(instanceBefore);
   const viewportAnchor = captureCodeViewItemAnchor(instanceBefore);
   const contentChanged = codeViewItemsContentChanged(previousItems, nextItems);
   const accepted = syncCodeViewItems(handle, nextItems, previousItems);
@@ -247,6 +252,7 @@ export function applyCodeViewItemsAnchored(
     }
     return { accepted: true, disposition: "focused" };
   }
+  let anchorRepositioned = false;
   if (
     viewportAnchor !== null &&
     handle.getItem(viewportAnchor.id) === undefined
@@ -264,7 +270,13 @@ export function applyCodeViewItemsAnchored(
         previousItems ?? [],
         nextItems
       );
+      anchorRepositioned = true;
     }
+  }
+  // 显式锚点迁移 / focus 独占滚动时不播种；其余成员 / 正文提交在
+  // layout flush 前把锚点交回引擎。
+  if (!anchorRepositioned && layoutAnchor && (contentChanged || shouldFlush)) {
+    seedPendingDiffLayoutAnchor(instance, layoutAnchor);
   }
   if (shouldFlush) {
     flushCodeViewMembershipLayout(instance);

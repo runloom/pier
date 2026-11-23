@@ -12,6 +12,7 @@ import { createDiffViewUpdateItems } from "./handle-update-items.ts";
 import {
   captureDiffViewItemAnchor,
   captureDiffViewTopAnchor,
+  diffViewItemViewportOffset,
 } from "./item-anchor.ts";
 import { reconcileDiffVirtualHeights } from "./layout-apply.ts";
 import {
@@ -208,9 +209,7 @@ function createDiffViewHandle(deps: DiffViewHandleDeps): PierDiffViewHandle {
   return {
     captureItemAnchor: (id) =>
       captureDiffViewItemAnchor(codeViewRef.current?.getInstance(), id),
-    captureTopAnchor(): PierDiffViewAnchor | null {
-      return captureTopAnchor();
-    },
+    captureTopAnchor,
     getRenderedItemHeights(): ReadonlyMap<string, number> {
       const rendered =
         codeViewRef.current?.getInstance()?.getRenderedItems() ?? [];
@@ -227,8 +226,13 @@ function createDiffViewHandle(deps: DiffViewHandleDeps): PierDiffViewHandle {
       const container = resolveScrollContainer();
       return container ? container.scrollTop : null;
     },
-    getViewportLayoutKey(targetItemId?: string): string | null {
-      return getViewportLayoutKey(targetItemId);
+    getViewportLayoutKey,
+    getViewportOffsetForItem(id: string): number | null {
+      const viewer = codeViewRef.current?.getInstance();
+      return diffViewItemViewportOffset(
+        viewer?.getTopForItem(id),
+        viewer?.getScrollTop()
+      );
     },
     isViewportReady(): boolean {
       const container = resolveScrollContainer();

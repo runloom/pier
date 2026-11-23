@@ -1,6 +1,11 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  TOAST_CAPSULE_HEIGHT_PX,
+  TOAST_LANE_CLEARANCE_PX,
+  TOAST_LANE_COLLISION_MAX_WIDTH_PX,
+} from "@/lib/notifications/toast-metrics.ts";
 
 const ROOT = process.cwd();
 const SOURCE_FILE_RE = /\.(ts|tsx)$/;
@@ -202,6 +207,57 @@ describe("notification center governance", () => {
     expect(bareToasterBlock).toBeDefined();
     expect(bareToasterBlock).not.toMatch(/left:\s*50%/);
     expect(bareToasterBlock).not.toMatch(/translateX\(-50%\)/);
+  });
+
+  it("keeps sonner native overlapping stack (no expand / fixed depth / single geometry source)", () => {
+    const sonner = readFileSync(
+      join(ROOT, "src/renderer/components/primitives/sonner.tsx"),
+      "utf8"
+    );
+    const showNotification = readFileSync(
+      join(ROOT, "src/renderer/lib/notifications/show-notification-toast.tsx"),
+      "utf8"
+    );
+    const globalsCss = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+
+    // `expand` 会把 sonner 的折叠堆叠变成逐条排布；这是回退红线。
+    expect(sonner).not.toMatch(/\bexpand(?:ByDefault)?\b/);
+    expect(sonner).toContain("gap={TOAST_GAP_PX}");
+    expect(sonner).toContain("visibleToasts={TOAST_STACK_DEPTH}");
+    expect(sonner).toContain('"--pier-toast-lane-clearance"');
+    expect(sonner).toContain('"--pier-toast-capsule-height"');
+
+    // 胶囊必须有稳定高度，否则折叠层在文字/操作混排时错位。
+    expect(globalsCss).toContain(
+      `height: var(--pier-toast-capsule-height, ${TOAST_CAPSULE_HEIGHT_PX}px) !important`
+    );
+    expect(globalsCss).toContain(
+      `@media (max-width: ${TOAST_LANE_COLLISION_MAX_WIDTH_PX - 1}px)`
+    );
+    expect(globalsCss).toContain(
+      `margin-top: var(--pier-toast-lane-clearance, ${TOAST_LANE_CLEARANCE_PX}px)`
+    );
+
+    // 两列宽度同源：禁止一处 420 / 360、另一处再写死一套。
+    expect(showNotification).toContain("TOAST_MESSAGE_MAX_WIDTH_PX");
+    expect(showNotification).not.toContain("min(360px");
+    expect(sonner).not.toContain("min(420px");
+  });
+
+  it("keeps collapsed / hidden toasts out of tab order and terminal hole", () => {
+    const sonner = readFileSync(
+      join(ROOT, "src/renderer/components/primitives/sonner.tsx"),
+      "utf8"
+    );
+    expect(sonner).toContain('element.dataset.visible !== "false"');
+    expect(sonner).toContain('element.dataset.expanded === "true"');
+    expect(sonner).toContain('element.dataset.front === "true"');
+    expect(sonner).toContain('element.setAttribute("inert", "")');
+    expect(sonner).toContain('element.setAttribute("tabindex", tabIndex)');
+    expect(sonner).toContain("if (!visible) {");
   });
 
   it("locks focus-routed delivery: resolveDeliveryPlan + NCS owns OS", () => {

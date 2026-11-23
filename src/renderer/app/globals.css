@@ -2135,7 +2135,10 @@ body {
   display: flex !important;
   justify-content: center !important;
   align-items: flex-start !important;
-  width: min(420px, calc(100vw - 32px)) !important;
+  width: min(
+    var(--pier-toast-center-width, 420px),
+    calc(100vw - 32px)
+  ) !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
 }
@@ -2155,9 +2158,12 @@ body {
   flex-wrap: nowrap !important;
   align-items: center !important;
   width: max-content !important;
-  max-width: min(420px, calc(100vw - 32px)) !important;
-  height: auto !important;
-  padding: 6px 12px !important;
+  max-width: min(
+    var(--pier-toast-center-width, 420px),
+    calc(100vw - 32px)
+  ) !important;
+  height: var(--pier-toast-capsule-height, 28px) !important;
+  padding: 0 12px !important;
   gap: 6px !important;
   border-radius: 999px !important;
   border: none !important;
@@ -2177,6 +2183,10 @@ body {
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
+  min-width: 0;
+}
+
+[data-sonner-toast].pier-toast:not(.pier-msg-toast) [data-content] {
   min-width: 0;
 }
 
@@ -2228,6 +2238,22 @@ body {
 /* 胶囊隐藏 close（自动消失）；形态 B 由 .pier-msg-toast 自己显式控制 close。 */
 [data-sonner-toast].pier-toast:not(.pier-msg-toast) [data-close-button] {
   display: none !important;
+}
+
+/* 胶囊的 !important box-shadow 会压掉 Sonner 的 focus-visible；改用 outline。 */
+[data-sonner-toast].pier-toast:not(.pier-msg-toast):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/*
+ * 窄窗双列避让：A 展开足迹 104px（3 × 28 + 2 × 10）+ 16px gutter。
+ * 1219 = TOAST_LANE_COLLISION_MAX_WIDTH_PX - 1；B 列永久让位，避免跳动。
+ */
+@media (max-width: 1219px) {
+  [data-sonner-toaster][data-x-position="right"][data-y-position="top"] {
+    margin-top: var(--pier-toast-lane-clearance, 120px);
+  }
 }
 
 /* ── 形态 B · 消息型卡片（.pier-msg-toast）──────────────────────────
