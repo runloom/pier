@@ -1185,15 +1185,19 @@ body {
 }
 
 /*
- * Tab 条到边不回弹（权威：2026-08-11-tab-strip-scroll-ownership-gold-standard.md）。
- * dockview 7 默认自定义 Scrollbar：.dv-tabs-container 实际是 overflow: hidden，
- * 滚轮由 dockview JS 写 scrollLeft，弹性由 Pier 的冒泡阶段 wheel 守卫
- * （lib/workspace/tab-strip-wheel-guard.ts）取消；这条 CSS 只是将来改回
- * scrollbars: "native" 模式的防御，当前模式下对弹性无效。
- * 只关 x 轴：纵向 tab 条（pan-y）不在本决策内。
+ * Tab 条到边不回弹（权威：2026-08-11-tab-strip-scroll-ownership-gold-standard.md K10）。
+ * dockview 上游给 .dv-tabs-container 写的是 `overscroll-behavior: contain`，
+ * 它要的是「原生回弹视觉」。这里收紧为 none：只关 x 轴压不住 latch 之后按轴
+ * 判定的弹性，也挡不住将来改用 `scrollbars: "native"`。
+ *
+ * 实际回弹不在这条路径上：.dv-tabs-container 计算值是 overflow: hidden，
+ * 用户不能原生滚动它，位移全部来自 JS 写 scrollLeft；Electron 又把 compositor
+ * 弹性（root + 子滚动容器）放到 `--scroll-bounce` 开关后面，macOS 默认关。
+ * 主修复是 tab 条捕获守卫（lib/workspace/tab-strip-wheel-guard.ts）独占
+ * wheel → scrollLeft 写入；这条 CSS 是 native 模式与开关失效时的防御。
  */
 .dockview-theme-pier .dv-tabs-container {
-  overscroll-behavior-x: none;
+  overscroll-behavior: none;
 }
 
 /*
@@ -1270,9 +1274,12 @@ body {
 
 /* Tab 条自绘条：颜色/圆角对齐产品条；厚度保持 4px。
  * dockview 只在条 hover / 拖拇指时加 scrolling 类，滚轮不设该类。
- * 不要关掉 :hover 着色，否则溢出条在普通滚动里永远不出现。 */
+ * 不要关掉 :hover 着色，否则溢出条在普通滚动里永远不出现。
+ * 这一层同时是 tab 条的自定义 Scrollbar 包装（overflow: hidden）：显式
+ * overscroll-behavior: none，见上方 K10 注释块。 */
 .dockview-theme-pier .dv-tabs-and-actions-container .dv-scrollable {
   --dv-scrollbar-background-color: var(--shell-scrollbar-thumb);
+  overscroll-behavior: none;
 }
 
 .dockview-theme-pier .dv-tabs-and-actions-container .dv-scrollable .dv-scrollbar {

@@ -38,7 +38,10 @@ export interface TabStripScrollMemory {
   snapshotAllVisible: () => void;
 }
 
-const TABS_CONTAINER_SELECTOR = ".dv-tabs-container";
+export const TABS_CONTAINER_SELECTOR = ".dv-tabs-container";
+
+/** dockview marks vertical strips on the same element (`writing-mode`). */
+const VERTICAL_TABS_CONTAINER_CLASS = "dv-tabs-container-vertical";
 
 /** Soft settle attempt; hard cap before force-complete (issue 4). */
 const RESTORE_SOFT_TIMEOUT_MS = 250;
@@ -89,6 +92,47 @@ export function withProgrammaticTabStripScroll<T>(fn: () => T): T {
 
 export function isProgrammaticTabStripScroll(): boolean {
   return programmaticScrollDepth > 0;
+}
+
+/**
+ * Apply one wheel step to a tab strip: the **user-intent** writer (K2, the
+ * highest priority) and the only writer a wheel gesture is allowed to reach.
+ *
+ * Axis: the strip's own axis wins — `deltaX` on a horizontal header, `deltaY`
+ * on a vertical one. A horizontal trackpad swipe carries a residual `deltaY`
+ * (axis locking is never exact, and the momentum tail is noisier still);
+ * falling back to that residual, as dockview's `Scrollbar` does, drags the
+ * strip along the wrong axis.
+ *
+ * Clamp: the result always lands in `[0, max]`. dockview writes `scrollLeft`
+ * from two independent accumulators (`tabs.js` maps `deltaX || deltaY`;
+ * `Scrollbar` tracks `deltaY` only and replays a possibly stale offset on
+ * resize), so "the strip jumped to another position" is reachable today.
+ * A clamped, single-writer step cannot produce that jump.
+ */
+export function scrollTabStripByWheel(
+  container: Element,
+  deltaX: number,
+  deltaY: number
+): void {
+  const vertical = container.classList.contains(VERTICAL_TABS_CONTAINER_CLASS);
+  const primary = vertical ? deltaY || deltaX : deltaX || deltaY;
+  if (primary === 0) {
+    return;
+  }
+  if (vertical) {
+    const max = Math.max(container.scrollHeight - container.clientHeight, 0);
+    container.scrollTop = Math.min(
+      Math.max(container.scrollTop + primary, 0),
+      max
+    );
+    return;
+  }
+  const max = Math.max(container.scrollWidth - container.clientWidth, 0);
+  container.scrollLeft = Math.min(
+    Math.max(container.scrollLeft + primary, 0),
+    max
+  );
 }
 
 export function findTabsContainer(

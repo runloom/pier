@@ -64,6 +64,11 @@ describe("tab strip scroll ownership governance", () => {
     // 必须是 none（覆盖 dockview 上游的 contain），规格要记录这个偏离。
     expect(spec).toContain("overscroll-behavior");
     expect(spec).toContain("不回弹");
+    // 2026-11-25 修正：回弹来自 dockview 的两个 JS 写入者（tabs.js 到边放行 +
+    // Scrollbar 只认 deltaY 并回放旧 _scrollOffset），规格必须记住「单一写入者」
+    // 与「compositor 弹性已被 Electron 的 --scroll-bounce 门控排除」两个结论。
+    expect(spec).toContain("单一写入者");
+    expect(spec).toContain("scroll-bounce");
 
     const owner = readFileSync(
       join(ROOT, "src/renderer/lib/workspace/tab-strip-scroll.ts"),
@@ -95,13 +100,9 @@ describe("tab strip scroll ownership governance", () => {
     // 产品决策：到边不回弹——工作台 chrome 不是内容滚动面，回弹的「还有更多」
     // 信号已由 scroll-fade 和 ▾ 溢出菜单承担。
     //
-    // dockview 7 默认走自定义 Scrollbar：.dv-tabs-container 是 overflow:
-    // hidden，滚轮增量由 dockview JS 写 scrollLeft。CSS overscroll-behavior
-    // 对这种非原生滚动是惰性的，只对将来改回 scrollbars: "native" 的模式
-    // 有效；真正生效的守卫是 Pier 的捕获阶段 document wheel 监听，覆盖整个
-    // .dv-tabs-and-actions-container（标签 / 滚动条 / void / 右侧动作区），
-    // 取消浏览器默认动作；preventDefault 不阻断传播，dockview 自己的映射照常
-    // 执行，下游 stopPropagation 也无法把滚势放进原生滚动链。
+    // 三层（K10）：① tab 条捕获守卫独占 wheel → scrollLeft 写入（主轴 +
+    // clamp + stopPropagation，dockview 的 tabs.js 与 Scrollbar 都收不到）；
+    // ② 根滚动面 none 覆盖触摸板动量段；③ 逐容器 none 作为 native 模式防御。
     const css = readFileSync(
       join(ROOT, "src/renderer/app/globals.css"),
       "utf8"
@@ -110,9 +111,17 @@ describe("tab strip scroll ownership governance", () => {
       /\.dockview-theme-pier \.dv-tabs-container\s*\{[^}]*\}/
     );
     expect(override).not.toBeNull();
-    expect(override?.[0]).toContain("overscroll-behavior-x: none");
-    // 不能顺手把上游的 contain 全量放开或改成 none 之外的手段。
-    expect(override?.[0]).not.toContain("overscroll-behavior:");
+    // 必须是全量 none：上游 dockview 写的是 contain，contain 在 Chromium
+    // 里等同于 auto（保留本地弹性），只关 x 轴也压不住 latch 后的 y 轴判定。
+    expect(override?.[0]).toContain("overscroll-behavior: none");
+
+    // 自定义 Scrollbar 的 .dv-scrollable 包装层（tab 条自绘滚动条的宿主）
+    // 同样显式 none。
+    const scrollableOverride = css.match(
+      /\.dockview-theme-pier \.dv-tabs-and-actions-container \.dv-scrollable\s*\{[^}]*\}/
+    );
+    expect(scrollableOverride).not.toBeNull();
+    expect(scrollableOverride?.[0]).toContain("overscroll-behavior: none");
 
     const guard = readFileSync(
       join(ROOT, "src/renderer/lib/workspace/tab-strip-wheel-guard.ts"),
@@ -123,6 +132,8 @@ describe("tab strip scroll ownership governance", () => {
     expect(guard).toContain("capture: true");
     expect(guard).toContain("passive: false");
     expect(guard).toContain("event.preventDefault()");
+    expect(guard).toContain("event.stopPropagation()");
+    expect(guard).toContain("scrollTabStripByWheel");
 
     const behavior = readFileSync(
       join(ROOT, "src/renderer/components/workspace/tab-strip-behavior.ts"),
@@ -130,6 +141,34 @@ describe("tab strip scroll ownership governance", () => {
     );
     expect(behavior).toContain("installTabStripWheelGuard");
     expect(behavior).toContain("uninstallWheelGuard");
+  });
+
+  it("keeps tab strip wheel scrolling on a single clamped writer", () => {
+    // dockview 7 在 tab 条上有两个 JS 写入者：tabs.js 映射 deltaX || deltaY，
+    // 但到边直接 return（把滚势放走）；Scrollbar 只累加 deltaY，并用旧的
+    // _scrollOffset 回放 scrollLeft（实测把停在 max 的条回写成 0）。到边之后
+    // 事件落到第二个写入者，就是用户看到的「回弹」。守卫必须自己完成那次
+    // 写入并让二者都收不到事件；写入只经 scroll owner（主轴 + clamp）。
+    const guard = readFileSync(
+      join(ROOT, "src/renderer/lib/workspace/tab-strip-wheel-guard.ts"),
+      "utf8"
+    );
+    const preventAt = guard.indexOf("event.preventDefault()");
+    const scrollAt = guard.indexOf("scrollTabStripByWheel(container");
+    const stopAt = guard.indexOf("event.stopPropagation()");
+    expect(preventAt).toBeGreaterThan(-1);
+    expect(scrollAt).toBeGreaterThan(preventAt);
+    expect(stopAt).toBeGreaterThan(preventAt);
+    // 守卫不得自己写 scrollLeft / scrollTop：写入归属 scroll owner。
+    expect(guard).not.toMatch(/\.scroll(?:Left|Top)\s*=/);
+
+    const owner = readFileSync(
+      join(ROOT, "src/renderer/lib/workspace/tab-strip-scroll.ts"),
+      "utf8"
+    );
+    expect(owner).toContain("export function scrollTabStripByWheel(");
+    expect(owner).toContain("dv-tabs-container-vertical");
+    expect(owner).toContain("Math.min(");
   });
 
   it("forbids viewport elastic overscroll at the root scroller", () => {
