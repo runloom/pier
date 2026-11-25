@@ -52,6 +52,7 @@ import {
 import { PanelTabLeadingIcon } from "./panel-tab-leading-icon.tsx";
 import {
   PANEL_TAB_TOOLTIP_DELAY_MS,
+  PANEL_TAB_TOOLTIP_SIDE_OFFSET_PX,
   tabAriaLabel,
   tabStatusIndicator,
   tabTooltipText,
@@ -343,6 +344,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
         // single-line ellipsis (tab short may CSS-truncate; tooltip must not).
         className="max-w-[min(92vw,40rem)] items-start whitespace-normal text-left"
         side="bottom"
+        sideOffset={PANEL_TAB_TOOLTIP_SIDE_OFFSET_PX}
       >
         <span className="block max-w-full whitespace-pre-wrap break-words">
           {tooltipText}
