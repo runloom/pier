@@ -6,8 +6,8 @@
 
 1. 有未完成的用户交互显示 waiting；否则有工具执行显示 tool；其余已知进行中的工作显示 processing。
 2. advisory Stop 仅记录候选，不清除工具、交互、子智能体，不隐藏已有状态，也不把会话视作已结束。工具结束只结算该工具，不能证明主回合完成。
-3. 当前主回合的可信完成、中断或失败证据才可封账，并退休该回合残余工作。`ready` 表示当前空闲；`turnResult` 只承载该投影所属回合的可信 completed / interrupted / failed，完成通知不能仅凭变成 ready 触发。
-4. 子智能体事件只更新自己的计数，不能制造父会话空闲或完成事实，也不能延长主状态的可信期限。若父会话已有原生空闲事实，最后一个子工作结束后可据既有事实展示 ready。候选同样不能恢复已过期的状态。
+3. 当前主回合的可信完成、中断或失败证据才可封账，并退休该回合残余工作（仍在运行的后台子工作除外，见下节）。`ready` 表示当前空闲；`turnResult` 只承载该投影所属回合的可信 completed / interrupted / failed，完成通知不能仅凭变成 ready 触发。
+4. 子智能体事件只更新自己的计数，不能制造父会话空闲或完成事实，也不能延长主状态的可信期限。若父会话已有原生空闲事实，最后一个子工作结束后可据既有事实展示 ready。候选同样不能恢复已过期的状态。父回合已封账但子工作仍在运行时，展示状态按剩余子工作重算（见下节）。
 5. 旧回合消息不能结算新回合。适配器保留并验证原生回合身份；没有身份的旧格式仍遵循 owner 与 PromptSubmit 文件水位。恢复执行建立原生时间下界，拒绝下界之前的迟到终态。对账等待被工具超越时，同一活跃 ID 的迟到 Prompt 只确认主身份，不清工具、不回退时间。已有 transcript 软封解封规则继续适用。
 6. 静默超时只令状态失去置信度，绝不推断完成。启动时尚无证据的状态仍可缺席。
 
@@ -19,6 +19,17 @@
 - 快照同时投影当前状态与可信结果，二者必须来自同一 scope。原生空闲不通知；先空闲、后收到可信结果时，即使状态仍为 ready 也通知一次。
 
 检查点：`tests/unit/main/panel/turn-status/native-idle.test.ts`、`tests/unit/main/agents/claude/manual-compaction.test.ts`、通知分类与跨层轨迹测试。
+
+### 封账后仍在运行的后台子智能体
+
+Claude Code 的 async 子智能体可以在父回合 `Stop` 之后继续运行数十分钟：父回合先收到 transcript 终态并封账，9 个 `SubagentStop` 随后跨越多个新回合号陆续到达。若封账时把子工作一并退休，状态会立刻显示 ready，而终端仍在「等待后台智能体完成」。
+
+- **封账只退休父回合自己的工作**：可信终态封账退休工具与交互，但仍在运行的子工作不被退休，也不进 settled 别名；只有换代（新回合 reset、会话结束、换会话）才退休子工作关联。
+- **封账后子工作仍可结算自己的计数**：`SubagentStop` 不受 settled / abandoned / foreign-turn / sealed 闸门阻挡，`SubagentStop` 的原生回合号可以属于封账之后的任一回合。`SubagentStart` 仍受原有闸门约束——迟到的启动不能把已封账回合拖回忙碌。
+- **展示状态按剩余子工作重算**：封账后投影状态不能沿用封账瞬间的快照。有错误终态时保持 error；仍有子工作时展示 processing；最后一个子工作结束后才回到 ready。这条重算只影响展示，不解封回合、不改 `turnResult`、不延长 TTL。
+- **通知按状态变化走**：子工作全部结束后回到 ready 属于一次真实的状态变化，沿用既有完成通知规则；不为后台子工作新增独立通知类型。
+
+检查点：`tests/unit/main/panel/foreground-activity-background-subagents.test.ts`、`tests/unit/main/panel/foreground-activity-aggregator.test.ts`。
 
 ### Kimi 原生取消
 

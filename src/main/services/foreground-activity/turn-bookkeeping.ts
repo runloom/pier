@@ -11,6 +11,7 @@ import { isPlanApprovalToolName } from "./plan-approval.ts";
 import {
   clearActiveWork,
   reopenNamedWork,
+  retireTurnWorkKeepingSubagents,
   settleNamedWork,
   type TerminalRetiredWork,
 } from "./turn-ledger.ts";
@@ -225,6 +226,10 @@ export function applyTurnBookkeeping(
   evidenceSource: AgentEventEvidenceSource = "hook"
 ): TurnBookkeepingResult {
   const eventName = event.event;
+  // 子工作结束只结算自己的计数：封账、结算与换代闸门都不该挡住它，
+  // 否则封账时保留的子工作永远清不掉，状态会永久停在 processing。
+  // SubagentStart 仍受原有闸门约束——迟到的新子工作不能把已封账回合拖回忙碌。
+  const settlesSubagentWork = eventName === "SubagentStop";
   const eventTurnId = normalizeAgentTurnId(event.turnId);
   const isTerminalCorrection = isStrongerTerminalCorrection(
     scope,
@@ -256,6 +261,7 @@ export function applyTurnBookkeeping(
   if (
     eventTurnId &&
     !isTerminalCorrection &&
+    !settlesSubagentWork &&
     semantics.resetEvidence !== "explicit-prompt"
   ) {
     if (scope.recentSettledTurnIds.has(eventTurnId)) {
@@ -270,6 +276,7 @@ export function applyTurnBookkeeping(
     scope.currentTurnId &&
     eventTurnId !== scope.currentTurnId &&
     !scope.turnEnded &&
+    !settlesSubagentWork &&
     !scope.recentSettledTurnIds.has(scope.currentTurnId) &&
     semantics.resetEvidence !== "explicit-prompt" &&
     (scope.currentTurnAuthoritative ||
@@ -297,7 +304,8 @@ export function applyTurnBookkeeping(
     eventTurnId &&
     scope.currentTurnId &&
     eventTurnId !== scope.currentTurnId &&
-    semantics.category !== "turn-start"
+    semantics.category !== "turn-start" &&
+    !settlesSubagentWork
   ) {
     if (canAdoptUnsettledTurn(semantics)) {
       resetTurn(scope, event, at);
@@ -307,7 +315,7 @@ export function applyTurnBookkeeping(
       return reject("foreign-turn");
     }
   }
-  if (scope.turnEnded && !isTerminalCorrection) {
+  if (scope.turnEnded && !isTerminalCorrection && !settlesSubagentWork) {
     if (eventName !== "InteractionRequested") {
       return reject("sealed-turn");
     }
@@ -343,7 +351,10 @@ export function applyTurnBookkeeping(
     scope.terminalEvidenceSource = evidenceSource;
     scope.completionObserved = false;
     scope.completionObservedAt = undefined;
-    const terminalRetiredWork = clearActiveWork(scope);
+    // 可信终态只结算本回合自己的工具与交互；父回合封账后仍在跑的子智能体
+    // （Claude async agent 的 “Waiting for N background agents”）继续持有工作账，
+    // 否则状态会提前退回 ready，且它们结束时再无账可结算。
+    const terminalRetiredWork = retireTurnWorkKeepingSubagents(scope);
     return {
       accepted: true,
       transition: "terminal-trusted",
