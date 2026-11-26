@@ -10,6 +10,8 @@ import {
   PANEL_HOOK_SCOPE_KEY,
   type TimerCtx,
 } from "./entry.ts";
+import { hookScopeHasActiveSubagents } from "./turn-ledger.ts";
+import { statusForSealedTurn } from "./turn-status.ts";
 
 const STATUS_PRIORITY: Record<ActivityStatus, number> = {
   error: 2,
@@ -25,7 +27,13 @@ function statusPriority(status: ActivityStatus | undefined): number {
 }
 
 function projectedScopeStatus(scope: HookScope): ActivityStatus | undefined {
-  return scope.stale ? undefined : statusWithNativeIdle(scope, scope.status);
+  if (scope.stale) return;
+  // 封账后剩余子工作仍会改变展示状态（子工作结束要退回 ready），
+  // 不能沿用封账瞬间的状态快照。
+  if (scope.turnEnded) {
+    return statusForSealedTurn(scope);
+  }
+  return statusWithNativeIdle(scope, scope.status);
 }
 
 function projectedTurnResult(scope: HookScope): AgentTurnResult | undefined {
@@ -135,6 +143,17 @@ export function setHookScopeStatus(
   refreshHookProjection(hook, at);
 }
 
+/**
+ * 封账后仍持有子工作的 scope 继续受静默期限约束：子智能体不再上报时
+ * 只失去状态置信度，不能永久停在 processing，也不能凭超时伪造 ready。
+ */
+function keepsFreshnessDeadline(scope: HookScope): boolean {
+  if (scope.stale) {
+    return false;
+  }
+  return !scope.turnEnded || hookScopeHasActiveSubagents(scope);
+}
+
 /** hook 静默后只失去具体状态置信度，不得凭超时伪造 ready。 */
 export function armHookTtlTimer(key: string, ctx: TimerCtx): void {
   const hook = ctx.slots.get(key)?.hook;
@@ -147,7 +166,7 @@ export function armHookTtlTimer(key: string, ctx: TimerCtx): void {
   }
   const expiringScopes = [...hook.scopes.values()].filter(
     (scope) =>
-      !(scope.turnEnded || scope.stale) &&
+      keepsFreshnessDeadline(scope) &&
       scope.status !== undefined &&
       projectedScopeStatus(scope) !== "ready" &&
       scope.status !== "error"
@@ -169,7 +188,7 @@ export function armHookTtlTimer(key: string, ctx: TimerCtx): void {
       let changed = false;
       for (const scope of current.scopes.values()) {
         if (
-          !(scope.turnEnded || scope.stale) &&
+          keepsFreshnessDeadline(scope) &&
           scope.status !== undefined &&
           projectedScopeStatus(scope) !== "ready" &&
           scope.status !== "error" &&

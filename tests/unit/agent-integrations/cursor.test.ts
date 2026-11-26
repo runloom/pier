@@ -362,6 +362,19 @@ describe("withPierCursorHooks", () => {
       status: "processing",
       subagentCount: 1,
     } satisfies Partial<AgentActivity>);
+    // Cursor 的 Task 是同步子智能体：postToolUse 的 SubagentStop 先于 stop 到达，
+    // 回合封账时已没有残留子工作。
+    const stopRow = rows[1];
+    if (stopRow?.kind !== "agentEvent") {
+      throw new Error("expected agent event");
+    }
+    aggregator.ingestAgentEvent(
+      { ...stopRow, panelId: "p1", windowId: "w1" },
+      ingestOptions
+    );
+    expect(aggregator.snapshot().activities[0]).toMatchObject({
+      subagentCount: 0,
+    } satisfies Partial<AgentActivity>);
     aggregator.ingestAgentEvent(
       {
         agent: "cursor",

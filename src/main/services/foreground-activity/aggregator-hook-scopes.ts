@@ -42,7 +42,10 @@ function updateSubagentAssociationsAfterBookkeeping(
   identity: HookScopeIdentity,
   transition: TurnTransition
 ): void {
-  if (transition === "reset" || transition === "terminal-trusted") {
+  // 只有换代（新回合 / 换会话）才退休子工作关联。可信终态封账不退休：
+  // Claude 的 async 子智能体在父回合结束后才发 SubagentStop，提前退休会让
+  // 它们落进 settled 别名、`planSubagentWork` 返回 null，计数永远清不掉。
+  if (transition === "reset") {
     retireSubagentWorksForScope(hook, scope.key);
   }
   if (SUBAGENT_HOOK_EVENTS.has(event.event)) {

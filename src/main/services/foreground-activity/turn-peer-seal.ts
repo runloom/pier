@@ -67,7 +67,8 @@ export function sealMatchingTurnPeers(input: {
       nextStatusAfterTurnBookkeeping(peer, input.semantics),
       input.at
     );
-    if (result.transition !== "none") {
+    // 同前：只有换代才退休子工作关联，可信终态封账保留仍在跑的子工作。
+    if (result.transition === "reset") {
       retireSubagentWorksForScope(input.hook, peer.key);
     }
   }
