@@ -48,6 +48,7 @@ Chrome / loomdesk 窗口条在悬停时藏线，是因为悬停 tab **已经变�
 | K6 | 悬停主信号是底（`--list-hover-bg`）。**同时**把标题（`.dv-default-tab-content`）收到 `--foreground` | 只改底，muted 标题在洗底上仍发灰；只改字没有「可点」的块面。两者一起才是 VS Code 默认。文件类型图标保持 token 色 |
 | K7 | 悬停不得做成选中：禁止换 `--background`、禁止圆角页签、禁止再加顶线 | 选中语义只留给 S2/S3 |
 | K8 | 只给 inactive tab 悬停底。选择器必须压过 dockview `.dv-groupview > .dv-tabs-and-actions-container .dv-tabs-container > .dv-tab.dv-inactive-tab`（0,6,0）。选中 tab 已是内容底，不再叠洗 | 短 `.dv-inactive-tab:hover` 盖不住 dockview 的 transparent 底 |
+| K9 | tab 标题 tooltip 的 `sideOffset` 取 **2px**（`PANEL_TAB_TOOLTIP_SIDE_OFFSET_PX`），**不跟随**产品默认 `TOOLTIP_SIDE_OFFSET_PX = 6` | Radix 气泡位 = `sideOffset + 箭头高 6`，产品默认在 34px tab 条下把气泡推到条底 **13.5px**（6 + 6 + inline-flex 行盒漂移 1.5），箭头尖也浮空 8.5px，观感与 tab 脱开。2px 实测：气泡距条 **9.5px**、箭头尖距条 **4.5px**。只收紧 tab 条这一处调用点，其它表面仍走 6px 金标准 |
 
 ---
 
@@ -72,5 +73,6 @@ Chrome / loomdesk 窗口条在悬停时藏线，是因为悬停 tab **已经变�
 
 - `tests/unit/renderer/styles/dockview-tab-focus-css.test.ts`：锁 K1–K8 选择器 / padding / `--list-hover-bg` / 悬停藏两侧短线
 - `tests/component/app/panel-tab-header.test.tsx`：锁真实节点存在
+- `tests/unit/renderer/workspace/tab-strip/tooltip-gap-governance.test.ts`：锁 K9（产品默认仍 6px、tab 条只走具名常量 2px）
 
 实现禁令：禁止把短线 `left` 写进内容 padding 里用负值猜接缝；悬停藏线必须同时藏自己的线和右侧邻居的线，禁止只藏一边。

@@ -23,6 +23,18 @@ export const PANEL_TAB_TOOLTIP_DELAY_MS = 400;
  * Keeps tooltip visible-feeling when sweeping across the tab strip.
  */
 export const PANEL_TAB_TOOLTIP_SKIP_DELAY_MS = 500;
+/**
+ * Tab tooltip gap, tighter than the product default
+ * `TOOLTIP_SIDE_OFFSET_PX = 6` in `@pier/ui/tooltip.tsx`.
+ *
+ * Radix places the bubble at `sideOffset + arrow height`, so the product
+ * default puts the pill 13.5px below the strip's bottom edge (6 offset + 6
+ * caret + 1.5 inline-flex line-box drift) and floats the caret tip 8.5px
+ * clear of the tab — visibly detached on a 34px tab strip. 2px keeps the
+ * strip-scoped tip attached: measured bubble 9.5px, caret tip 4.5px. Chrome-
+ * specific decision (2026-11-25), not a global tooltip change.
+ */
+export const PANEL_TAB_TOOLTIP_SIDE_OFFSET_PX = 2;
 
 function localizedTooltipLabel(
   label: string,
